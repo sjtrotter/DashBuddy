@@ -1,10 +1,9 @@
-> **Detailed architecture reference — moved out of `CLAUDE.md` on 2026-09-07 (context-budget trim v3).**
-> This file is the full, receipt-level narrative for this layer: every rule, its issue/PR receipt, and the
-> reasoning that produced it. `CLAUDE.md` keeps the short summary an agent needs every session; this file is
-> where a change's history and invariants are recorded in depth. **The 'every PR ships with context updates'
-> rule applies here exactly as it does to `CLAUDE.md`:** when a PR changes an invariant described below, update
-> this file in the same PR (and the `CLAUDE.md` summary if it goes stale).
-> A `§N` reference below means the sibling numbered file here (or its `CLAUDE.md` summary).
+> **Detailed architecture reference** (moved out of `CLAUDE.md` by trim v3, 2026-09-07; trim v4, 2026-11-06,
+> moved the rest of the summary detail here). This file is the full, receipt-level narrative for this layer: every
+> rule, its issue/PR receipt, and the reasoning that produced it. `CLAUDE.md` keeps only the invariants that break
+> silently, plus a pointer here. When a PR changes an invariant described below, or adds or retires a rule, update
+> this file in the same PR; change a `CLAUDE.md` line only when the PR makes it wrong.
+> A `§N` reference below means the sibling numbered file here.
 
 # Sensor Pipelines (`core/pipeline/`)
 
@@ -1073,3 +1072,9 @@ pins that the id-less arm never steals an id-bearing target, mirrors the walk's 
 replays the shifted-ref sequence). Re-anchoring changed the bind's content-pinned capability key (#422), so
 consent is re-asked; the same corpus shows the real
 finds (`delivery_summary_expanded`/`_collapsed`, `waiting_for_offer`, `timeline`).
+
+## Carried from the CLAUDE.md summary (trim v4)
+
+- `SensitiveTextMarkers` drops the dasher's banking screens using `cloud.trotter.census.contract.SensitiveMarkerData`
+  from the `census-contract/` build (#1173).
+- `census.SkeletonPublisher` runs post-admission, after `captureScreen`, before the UNKNOWN filter (#1146).

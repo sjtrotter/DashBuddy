@@ -14,22 +14,14 @@ every decision with a single-user, single-device assumption until explicitly tol
 
 gig.log exists to give independent contractor delivery drivers the same information the
 platform already has about their own work. Mission: **driver sovereignty through
-transparent, on-device, user-owned tooling.**
+transparent, on-device, user-owned tooling.** Three pillars, each with its own architectural and
+licensing posture (detail, pricing and RFCs: `docs/ROADMAP.md` § Strategic pillars):
 
-The roadmap rests on three pillars, each defended by a separate architectural and licensing
-posture so neutralizing one does not collapse the others:
-
-1. **Driver Sovereignty (the product).** Free local tier (True Net Profitability, bubble HUD,
-   on-device session tracking, CSV export). Paid managed-cloud tier ($5/mo, $49/yr, $99
-   lifetime for first 500 users) for sync and aggregation-derived market context.
-   Source-available license; auditable byte-for-byte.
-2. **Distributed Integrity (the matchers).** Recognition layer published as a separate
-   Apache-2.0 repo, delivered to running app instances via signed JSON over CDN. Forkable;
-   if upstream is compromised, drivers can switch sources via configuration. See #192.
-3. **Academic Federation (the research).** Opt-in (k=10 cohort, on-device DP budget, edge
-   PII scrub) anonymized aggregation across university-hosted instances under IRB review.
-   No central corpus; only aggregate query results returned. AGPL-3.0 aggregator. See #193,
-   #194.
+1. **Driver Sovereignty (the product).** A free local tier and a paid managed-cloud tier; source-available.
+2. **Distributed Integrity (the matchers).** The recognition rules, licensed Apache-2.0 so they can be forked.
+   They stay in-tree in `matchers/`; the separate repo was closed as not planned.
+3. **Academic Federation (the research).** Opt-in, anonymized aggregation across university-hosted instances
+   under IRB review; only aggregate results are returned.
 
 **Pledges (non-negotiable).** All recognition / evaluation / economic computation happens
 on-device. We protect **the dasher** (our user): the dasher's own sensitive screens — banking /
@@ -42,7 +34,7 @@ info — so an alcohol delivery's ID-CHECK instruction screen and arrival card a
 hashed), only the literal scanner/signature surfaces are blocked. The dasher's own name in
 first-last-initial form (e.g. the main-menu greeting) is fine to process. Network access is opt-in
 per feature. PII scrubbing runs at the edge before any upload.
-`PRIVACY.md` (repo root) is the engineering ground-truth privacy document; a change to what the app reads, stores or sends updates it in the same PR. A change to a claim there updates the in-app privacy page (`privacy_*`) and every disclosure string that states it, in the same PR (#1457).
+`PRIVACY.md` (repo root) is the engineering ground-truth privacy document; a change to what the app reads, stores or sends updates it in the same PR. A change to a claim there updates the in-app privacy page (`privacy_*`) and every disclosure string that states it, in the same PR.
 
 **Framing discipline.** When writing public-facing material — issues, RFCs, README, grant
 copy, marketing — describe the academic pillar as **empirical measurement of the visible
@@ -51,53 +43,40 @@ The DoorDash ICA §15.4 prohibits reverse-engineering of the platform; gig.log d
 do that and our written material must not suggest otherwise. See `LEGAL.md` for the
 good-faith ICA interpretation that governs scope decisions.
 
-Cross-references: matchers infra RFC #192; aggregation RFC #193; academic federation RFC #194;
-UNKNOWN-screen census epic #1138 (privacy model ADR-0011 — hash-only skeletons, k-anonymous vocabulary,
-trusted installs; server #1157).
-(Monetization pricing is recorded in pillar 1 above; the cloud-data-platform RFC #141 was closed
-2026-07-12 with its un-built cloud half folded into the pillar epics.)
-
 ## Build Commands
 
-```bash
-# Build the app
-./gradlew :app:build
+**Local Gradle is small runs only, one at a time, through `~/dashbuddy/tools/pr-loop/gt.sh`'s memory guard. PR CI
+is the gate.** Never run the full gate below on the laptop, never start two Gradle runs at once, and never run a
+Claude analysis agent beside one; `./gradlew --stop` when a run finishes. Host rules and `JAVA_HOME` are in
+`CLAUDE.local.md`.
 
-# Run all unit tests (:domain is pure-JVM; censusContractTest bridges the included build)
+```bash
+# The full unit gate (PR CI runs it; locally run one module, e.g. ./gradlew :domain:test)
 ./gradlew testDebugUnitTest :domain:test censusContractTest
 
-# Run ONLY the ruleset/recognition regressions (fast pre-PR check — no state
-# machine / DB / UI). Side-effect-free; does NOT sort INBOX or re-triage UNKNOWN.
+# Ruleset/recognition regressions only (fast; does NOT sort INBOX or re-triage UNKNOWN)
 ./gradlew :app:testDebugUnitTest --tests "*AllMatchersSuite*"
 
-# Run a single recognition test (e.g. just the golden-corpus positive guard)
+# One recognition test (e.g. the golden-corpus positive guard)
 ./gradlew :app:testDebugUnitTest --tests "*GoldenSnapshotRegressionTest"
 
-# Re-run ONLY property/fuzz classes UNSEEDED at 10x samples (#878, #1275).
-# The flag also filters to all checkAll-owning classes (including their fixed regressions).
-# Every property pins a seed by default so PR CI is deterministic; this flag is the
-# exploration path — run it off the PR path (nightly/manual), and when it finds
-# something, paste the reported seed into that property's pinned SEED const. The flag also
-# raises runTest's 60 s body budget to 20 min for every property (build.gradle.kts forwards
-# kotlinx.coroutines.test.default_timeout); the nightly job's timeout-minutes bounds a hang.
+# Property/fuzz classes unseeded at 10x samples, off the PR path (nightly/manual). When it finds
+# something, paste the reported seed into that property's pinned SEED const (root build.gradle.kts explains the flag).
 ./gradlew :core:pipeline:testDebugUnitTest :app:testDebugUnitTest -Dgiglog.propExplore=true
 
-# Run instrumented tests (requires connected device/emulator)
+# Instrumented tests (connected device/emulator)
 ./gradlew :app:connectedAndroidTest
 
-# Build a specific core module
+# One module's build
 ./gradlew :core:database:build
 
-# Render the key-screen screenshots (#1463; PR CI does this after the gate and uploads screenshots-<pr>).
-# Without -PscreenShots=true the *ScreenshotsTest classes compile but never run, so the gate stays free of them.
-# PNGs land in feature/bubble/build/outputs/screenshots and app/build/outputs/screenshots.
+# Key-screen screenshots (PR CI renders them after the gate). Without -PscreenShots=true the
+# *ScreenshotsTest classes compile but never run.
 ./gradlew --continue :feature:bubble:testDebugUnitTest --tests '*ScreenshotsTest' \
   :app:testDebugUnitTest --tests '*ScreenshotsTest' -PscreenShots=true
 ```
 
-Dependencies are managed via the version catalog at `gradle/libs.versions.toml`. Min SDK is 30
-(guarded: `bubblePreference` API 31 falls back to `areBubblesAllowed` below 31), target SDK is 36,
-Kotlin 2.3.20, JVM 21.
+Versions live in the catalog `gradle/libs.versions.toml`. Min SDK 30, target SDK 36, JVM 21.
 
 ## Module Structure
 
@@ -119,729 +98,177 @@ The project uses modular Clean Architecture with a strict dependency graph:
 :feature:bubble    → :domain, :core:designsystem
 
 matchers (included build, not a :core module) ⇒ canonicalizes rules → :core:pipeline consumes as generated assets
-census-contract (included build, Apache-2.0) ⇒ the census wire contract + the rule-authoring contract (`authoring/`: vocabulary + `RuleDraft` generator, #1188) that the census dashboard and the app's round-trip gate share; :domain depends on it (api), the dashbuddy-census server includeBuilds it
+census-contract (included build, Apache-2.0) ⇒ the census wire contract + the rule-authoring contract (`authoring/`: vocabulary + `RuleDraft` generator) that the census dashboard and the app's round-trip gate share; :domain depends on it (api), the dashbuddy-census server includeBuilds it
 ```
 
-**Feature modules (MAD Phase 6 — complete; no extractions remain).** UI extracted per-feature under
-`:feature:*` (`cloud.trotter.log.gig.feature.<name>` namespace), depending only DOWN the graph
-(`:app → :feature:* → :domain / :core:*`); a feature module **never** depends on `:app` or on
-another feature. `:app` legitimately depends on each feature for its moved `@HiltViewModel`s and
-any screens/copy the app shell still hosts. Each module declares only the deps it uses (the
-honest-deps doctrine — `:feature:setup` carries no `:core:designsystem`, `:feature:dashboard` no
-Hilt/`:core:data`). Residency rule: the HOST and the injections decide ownership, not the source
-path — a ViewModel that injects `:app`/`:core:state` machinery (`DashboardViewModel`,
-`BubbleViewModel`) stays in `:app` rather than forcing an inversion (the honest-smaller-module
-doctrine), and a multi-consumer string/color is duplicated by choice into a module with the `:app`
-copy authoritative, documented at both sites (`common_content_desc_back` #99, `@color/white` #854).
-Shipped: `:feature:settings` (#99); `:feature:setup` (#98 — wizard VM/model/step cards; #1359 slice A made `wizard/vehicle/VehicleDraft` +
-`VehicleDraftState` the vehicle form's one owner — the EPA lookup cascade, type/class/powertrain and EV-trim changes, and the
-five vehicle-shaped user-set fields — rendered by `VehicleCard(step, draft, actions, …)`, hosted by the wizard and by the
-`:app` Garage editor (`ui/main/settings/garage/`, #1359 slice B); the Garage list is an Android two-part row
-(radio + name selects; divider + gear opens the details, where Retire lives) and honours the mid-dash swap lock (#1379);
-a saved vehicle's details page is the one live editor of its costs and name, addressed by id, with fixed identity
-in the heading and no Save button; Reset to estimates resets its costs, keeping name, identity and fuel economy;
-unfinished fields flush before leaving or retiring, and a failed write stops the transition (#1385);
-a snackbar offers Undo for the latest saved field, restoring its previous value or estimate; type and
-identity change only by adding a new vehicle; the shared number inputs save when an edited field is finished; retired vehicles sit in a Retired section and can be restored (#1383);
-the cost drafts stay in `WizardState` and land in the saved profile; the
-`WizardScreen` shell + `EconomyCostsCard` stay in `:app` with the shared `ui/components/economy/*`
-editor family, and the Dashboard-hosted `setup/consent/` #843 + `setup/permissions/` sheets stay in
-`:app`); `:feature:dashboard` (#97, reshaped by #977/#981/#1024 — Home's presentational composables
-over the shared `DashboardRow` vocabulary, pure data-in/lambdas-out over `:domain` +
-`:core:designsystem`; Home's review rows are the hub's own `reviewTexts`/`ReviewList` reused from
-`:app` as a composable slot, so flag thresholds/copy keep ONE owner, and `DashboardScreen`/
-`DashboardViewModel`/`DashboardUiState` stay in `:app`); and `:feature:bubble` (#96/#867 — the HUD's
-presentational content: the #1333 `hud/*` package (S2a: `HudScreen` with its live / offer / log / resting modes and
-three composable slots, the fixed chrome — phase strip, head, top row (Online, Miles), the earnings hero (#1443), the static goal pill, dock,
-dash ribbon — and the resting + first-run cards, each a pure data-in/lambdas-out composable over a pure mapper:
-`HudStateMapper`, `HudModeResolver`, `TopRowMapper`, `GoalPillMapper`, `DockMapper`, `RibbonMapper`/`RibbonLayout`;
-S2b: the state card family (`StateCardMapper` picks waiting / pickup navigating, arrived, shopping / dropoff navigating, at the door / receipt from the active card first, the flow second; `TrackMapper` per design §11 with the late rule; `StateHeadline`, `WaitingAnchor`, `ShopPace`); `PostTask.totalPay` is nullable (an unparsed receipt total is the em dash, never `$0.00`); S2c: the offer card (`OfferCardMapper` picks the standard card, the COMBINED add-on card when the job was minted from a known offer (a display-only `OfferEvaluator` run on the summed TOTAL quote, never persisted), or the raw-delta fallback; `PayBarMapper` with the two fixed in-bar pills and car = gross minus net in cents; `GaugeMapper` against the strategy's targets; `TripLineMapper` shape-only, capped at nine nodes; the card and notification render domain `OfferStory` facts without a score ring); the add-on drop-count rule has one owner, `domain.model.offer.AddOnStops`, which `:core:state`'s `JobAcceptFlow.appendAddOn` calls;
-S2d: the log (`LogMapper` over the pure `JobGrouper` (one card per job, an accepted offer joins its job by `jobOfferHashes` first), `CashTipFold` (amount from the delivery PROJECTION, time from the latest cash adjustment, a later tip moves the card to the tip time) and `LogChatFilter` (Dispatcher/System lines only, outcome/acknowledgement literals dropped, and a fail-closed guard over `PiiShapes`: a kept line never carries a name shape, a customer lead-in, a mask or a hash); expenses and fuel read the ledger projection, never a per-session event fold, so voids apply; `LogView` is a bottom-anchored reverse `LazyColumn` with a top fade, the compact hero + goal pill above it and the dock's Log block shown as Now while open; `BubbleViewModel.logData` follows `presentation.cardSources`, subscribed only by the log slot; `ChatViews.kt`/`BubbleHelpers.kt` deleted); S2e: the one-time goal-met sequence (pure `GoalMetSequence` phases, `GoalCelebrationResolver` over a persisted `app_state` mark `goal_met_mark` keyed by day, metric (`earned`, #1443) and goal cents, written at start; reduced motion via `ValueAnimator.areAnimatorsEnabled()`), `HudSheetHost` (the fixed hero-to-dock frame S3's sheets rise into) and the undo band, and `FontScaleTier` (labels beside at 1.3, the job column drops at 1.5, the compact hero at 1.8, of fontScale times glance); S2f: the odometer sheet (the first content of `HudSheetHost`: pure `OdometerSheet` over the shared `hud/keypad/` (3×4 grid, an optional point key, backspace; S3's money sheets reuse it), the shared vehicle chip and Add vehicle (Add vehicle and the empty-garage Odometer block open the Garage's Add-vehicle form in the app and close the bubble), `OdometerReadingCheck` copy that warns and never blocks, the 10 s saved notice in the undo band; the cue to log a reading is the dock's Odometer block lit in accent for the first ten minutes of a dash and after a dash until a reading, plus one "Log your odometer" line after the shift-start line in the session-start notification, one rule (`OdometerCue`) behind the `odometer_prompts` pref; the dock block, cue, start line and resting comparison follow the active vehicle's odometer capability: built in for motor vehicles, optional and off by default for e-bikes and bicycles, with a per-vehicle Odometer switch on its page (#1361)); vehicles live in the `vehicles` DataStore (`GarageRepository`, one active), readings are `ODOMETER_READING` events (`OdometerReadingRepository`, `sessionId` always null) and `MileageReconciliation` shows car / tracked / other miles on the resting footer; #1355 made the garage the dasher's vehicle list: a `Vehicle` carries a typed `VehicleProfile` (identity, consumption and applicable fuel, wear and fixed-cost figures) and a retired mark, the economy's vehicle-shaped values are owned by the ACTIVE vehicle; #1379 replaces the resting row and #1360 head label with the header vehicle chip (type icon + capped name, also in the reading sheet), a swap menu with "Add vehicle…", the mid-dash lock toast after any live dash passes ten minutes, and one `openInApp` route that collapses the bubble when Add vehicle or Settings opens the app (`collapseBubble()` sends the bubble's task to the back, as Accept/Decline do; finishing the activity would make Android remove the bubble). S3a: the cash tip sheet (`hud/cashtip/`, panels 11c/11e: the dash's latest delivery preselected, a `+`/`−` toggle and `$1 $5 $10 $20 Other` over the shared keypad, one button stating the commit; Other replaces the entered amount; a tip is the existing `DELIVERY_ADJUSTMENT` with `newCashTip = previous + entered`, written by `:app`'s `CashTipActions` and hosted by `CashTipHud` on the `OdometerHud` shape) and the undo strip (`hud/undo/UndoStrip`, the first content of S2e's undo band: what and where, Undo right, a 10 s drain on the frame clock; Undo is a second adjustment restoring the previous value; the delivery card's foot shows the tip as pending until its row reflects it); #1443: the hero is the displayed shift's earnings (`ShiftEarnings`), unlabelled, with its cash tips apart as `+$X cash`; expenses are a separate ledger that never enters the hero or the goal); S3b: `hud/expense/` supplies the compact six-tile subcard and keypad sheet, with required gallons for Gas (`FUEL_FILLUP`), `CAR_CARE` and recent labels derived from existing expense notes; `ExpenseHud`/`ExpenseActions` write through `LedgerRepository`, share S3a’s extracted `MoneyEntry` and undo strip, and use one three-sheet exclusive route and one newest-of-three undo-band decision; an expense is logged any time, and one with no owning dash is unassigned and still shows in the HUD log beside the dash of that day; an entry with no dash on a day with no dash is in the export); S3c: `hud/goal/GoalSheet` writes the sticky daily goal preference (`daily_goal_dollars` since #1443: app earnings across every app, no cash or costs) through `GoalHud`/`GoalActions`, with whole-dollar $5 steps, presets and No goal; both hero pills enter the same fixed frame, and all four entry sheets are exclusive),
-`formatters/*`,
-`cards/*`, and `session/*` (the pure `BubbleSessionResolver` — follow-active + manual switcher / pinned / merged —
-plus the stateless `PlatformSwitcherRow`); no Hilt/`:core:data`/`:core:state`, while `BubbleActivity`,
-`BubbleScreen` (hosts `HudScreen` and maps the ViewModel's flows into `HudUiState`; a sheet host such as S2f's `OdometerHud`, a remembered `@Stable` object with composable slot members, collects its own sheet-local state, the shape S3's sheets copy; since #1425 all four sheets register with one `BubbleSheetHost`, which owns exclusive open, Back delegation, the newest-undo band and completion routing: a save closes a sheet only while it is still open with the same `entryId`), `BubbleManager` and
-`BubbleViewModel` (`displayedShift`, `dailyGoal`, `todayEarned`) stay in `:app`, which consumes the moved renderers
-as a legal `:app → :feature` dependency). The analytics hub (`ui/main/analytics/*`) is a separate
-sibling surface, left for a future extraction. **Navigation (#1447):** a Material 3 bottom bar with three tabs, Home,
-Analytics and Playbook (`TopLevel`), over one flat graph (`mainGraph`, every `Screen.graphRoutes` entry); the tab
-navigator (`TopLevel`, `RouteTarget`/`routeTarget`, `MainNavigator`'s `NavController` extensions, `MainNavActions`,
-one method per intent) lives in `:app` `ui/main/navigation/`, the shell (`MainScaffold`, `MainNavHost`) in `ui/main/`;
-route changes animate through `ScreenTransitions` (fade through between tabs, shared axis inside a tab, none under
-reduced motion, #1524).
-Tab switches, parking (`popBackStack(root, inclusive, saveState)`) and fresh clears start only at a tab root and
-fail closed (WARN) elsewhere, so a parked tab is one lone root and no editor or draft is ever popped; a deep link off
-a root only pushes; Dashboard is never a saved-state key; never call `clearBackStack(String)` (in 2.9.7 it drops
-Dashboard's empty mapping and a later save then stacks another tab over Home). The hub's tab, Offers filter and page
-size live in its `SavedStateHandle`.
+**Feature modules.** UI lives per feature under `:feature:*` (`cloud.trotter.log.gig.feature.<name>`). A feature
+module depends only down the graph: never on `:app`, never on another feature. Each module declares only the deps it
+uses. The host and the injections decide where a ViewModel lives, not the source path: one that injects `:app` or
+`:core:state` machinery (`DashboardViewModel`, `BubbleViewModel`) stays in `:app`. Before changing a `:feature:*`
+module, the bubble HUD, the Garage or navigation, read
+[`docs/architecture/06-ui-modules.md`](docs/architecture/06-ui-modules.md) (it also holds the full module catalogue).
 
-- **`:domain`** — Pure Kotlin library. Domain models, state regions, evaluation logic,
-  the #1194 `region` package (offline county-subdivision internal points (~36k), county→CBSA join, `RegionCell`, `PrimaryCellPolicy`;
-  the cell id is the only location-shaped value that may ever leave the device),
-  pipeline/provider contracts, the capture contracts (`CaptureBus`, `EnvelopeBuilder`,
-  capture schemas/DTOs), the `PlatformPreferences` read interface (#355), and the
-  number/money/duration formatting SSOT (`format.Formats` money/decimal/**percent** — #942 pulled
-  the `(x * 100).roundToInt()` shape down off four UI call sites — + `format.TimeFormats`
-  `formatDuration`/`formatCountdown` — the locale policy, #358/#456/#467; lives here so both the
-  UI and the state layer route through one definition; the Compose time helpers
-  `rememberNow`/`rememberTimeFormatter` stay in `:core:designsystem`). No Android
-  dependencies. (Repository *implementations* and Hilt bindings live in `:core:data`.) The census wire contract now lives in the
-  **`census-contract/` included build** (`cloud.trotter.census.contract`, Apache-2.0, #1173;
-  `:domain` depends on it with `api`; owns `sha256OrNull`, `AnonymousWrappers`, `SensitiveMarkerData`).
-  `domain.privacy.PiiShapes` stays in `:domain` (app licence), the
-  promoted customer-PII pattern SSOT that the test-side `SnapshotRedactor` delegates to and the census
-  filter reads.
-- **`:core:pipeline`** — Accessibility pipeline, notification pipeline, JSON rule engine
-  (RuleCompiler, Ruleset, JsonRuleInterpreter), observation classifier. Reads third-party UI.
-- **`:core:state`** — Multi-region state machine (StateMachine, FlowRegionStepper,
-  PlatformRegionStepper, CrossPlatformRegionStepper), effect map, `TransitionPolicy` (screen-
-  authoritative mode resolution + commit graces; replaced the old `HealingPolicy`), crash
-  recovery (StateManagerV2). Defines `EffectExecutor` and `MetadataProvider` interfaces. (#715
-  struck the dormant Expected/Unexpected `outcomes` classification — schema key, compiler support,
-  `TransitionPolicy.classify()`, `TransitionKind`, `PlatformRegion.lastTransitionKind`: no ruleset
-  ever declared `outcomes`, so `Unexpected` was unreachable. `#438`'s Offline→Online healing edge
-  never depended on it.)
-- **`:core:database`** — Room entities, DAOs, and database setup. **Data-safety posture (#690):
-  no `fallbackToDestructiveMigration`.** `app_events` is the analytics source of truth (the
-  read-model tables are a rebuildable projection of it), so an upgrade that Room has no path for must
-  **fail loud** (`IllegalStateException`) rather than silently DROP-and-recreate the log — the dev
-  backs up + resolves instead of losing history. The supported upgrade base is **v8+**: on-disk
-  versions below v8, and downgrades (on-disk newer than the code), are an **intentional loud crash at
-  startup**, each preceded by a fresh pre-crash snapshot. `DatabaseModule` **eagerly opens** the DB
-  at injection time (`openHelper.writableDatabase`) so the failure is a deterministic startup crash,
-  not a lazy first-query one that the projector/recovery supervision would swallow; just before the
-  open it takes a pre-open file snapshot (`DatabaseBackup`, WAL-aware version read, dedup-marked,
-  version-prefixed dirs, last 2, failure-tolerant) whenever the on-disk version ≠ the code version. Schema version is one SSOT const
-  (`GigLogDatabase.VERSION`). **Release checklist when changing the schema: bump
-  `GigLogDatabase.VERSION` → regenerate the exported schema JSON (`exportSchema`) → add the
-  `AutoMigration` (or a manual `Migration`) covering the new edge → add its `MigrationTestHelper`
-  case** (`core/database/src/androidTest`). Two **real gates** enforce this: the CI
-  `Schemas committed (Room export drift)` step fails if the build regenerated an uncommitted schema
-  JSON, and `SchemaVersionGuardTest` (unit) source-scans the `@Database` migration edges (it's BINARY
-  retention) to prove they chain v8 → `VERSION` with no gap — the forgotten-`AutoMigration` class the
-  retired fallback used to mask. Migration-*correctness* tests are instrumented (`connectedAndroidTest`)
-  and do NOT gate the unit-only PR CI.
-- **`:core:data`** — Repository implementations, mappers, data sources. Bridges domain interfaces to
-  concrete data layers; census Keystore credentials, bounded file spool, debug upload sink (#1182), trusted-envelope sink + spool (debug), and the identity reset + upload lock (#1185).
-- **`:core:network`** — Retrofit clients, OkHttp interceptors, EIA gas price API integration, signed census transport (#1182).
-- **`:core:location`** — Play Services GPS tracking.
-- **`:core:datastore`** — Preferences DataStore (twelve single-concern stores behind Hilt
-  qualifiers: ten in `DataStoreModule` — app prefs, strategy, dev settings, odometer, app state,
-  platforms, rule-capability grants, the #1151 event-receipt consent, the #981 **weekly plan**, and
-  the #1333 S2f **vehicles** store (the saved vehicles and the active one, a user artifact like the
-  plan, backed up) — plus `census_credentials` and the census health store in `:core:data`'s
-  `CensusCredentialsModule`, beside the Keystore sealer). The weekly-plan store is deliberately
-  NOT a Room table: a saved plan is a **user artifact** (nothing in `app_events` implies it, and
-  nothing can rebuild it), so it must not live in the read-model DB that a `PROJECTOR_VERSION`
-  bump wipes — see §5.
-- **`:core:designsystem`** — Brand system (no project deps): fixed dark/light palette (`AppColors`),
-  Hanken Grotesk + Space Grotesk fonts (tabular numerals), `AppTheme` + `LocalGlance` (the public
-  theme wrapper is `GigLogTheme`, named for the app; #1411 renamed the app from DashBuddy to gig.log and retired
-  the last `Dash*` brand symbols), and the shared component library (`AppCard`, `AppChip`, `AppStatTile`,
-  `AppGaugeRing`, `AppSegmented`, `AppSlider`, `AppBarChart`, `AppAccordion`). The design-system
-  brand vocabulary is `App*`, not `Dash*` (#468) — no platform-flavoured names. No M3 dynamic
-  color. Feature-specific composables stay with their feature (Package by Feature); only generic,
-  data-in/lambdas-out components live here. It also owns the shared **display vocabulary** two
-  modules would otherwise copy: the Compose time helpers (`time.TimeKit` — `rememberNow`,
-  `rememberTimeFormatter`) and the em-dash no-value placeholder (`text.EMPTY_VALUE`, #942 — the
-  `:app` analytics hub and `:feature:dashboard` each held a copy, and a feature module can never
-  reach an `:app` owner).
-- **`:app`** — UI (Compose + overlays), side effect handlers (SideEffectEngine, odometer, screenshots,
-  TTS, tips), Hilt DI wiring, and the `GigLogApplication` entry point.
-- **`matchers/`** — the recognition **ruleset** source, as a self-contained **included Gradle build**
-  (`includeBuild("matchers")` in the root `settings.gradle.kts`), NOT a `:core:*` project module. Owns the
-  per-platform **JSON5 rule source** and the kotlinx-serialization canonicalizer. A platform source is
-  EITHER a flat `matchers/rules/<platform>.json5` file (uber) OR a `matchers/rules/<platform>/` **directory of
-  human-readable surface sub-files** (doordash — `_manifest.json5` metadata (`format_version`/`platform_id`) + per-surface
-  `sensitive`/`offer`/`dash-lifecycle`/`pickup`/`dropoff`/`nav-comms`/`ratings-feedback`/`chrome`
-  + `notifications.json5`) that the canonicalizer **merges** (sub-files sorted by name,
-  arrays concatenated) into ONE canonical `assets/rules/<platform>.json` (#639); the merge fails the build
-  loud on a duplicate rule id across sub-files (the canonicalize-time analog of the runtime #624/#633 rejects).
-  `:core:pipeline:importMatchersRules` imports the canonical output into generated `assets/rules/*.json` — the
-  app loader/tests/runtime are unchanged, still one file per platform (there are no committed `assets/rules/*.json`).
-  See §"JSON Rule Engine" below + ADR-0009. It is **licensed
-  Apache-2.0** (`matchers/LICENSE`, dual-licensed against the app's PolyForm Shield) so the eventual split to
-  a separate forkable repo needs no relicensing — but that split (#192/#637) is **deferred; the ruleset is
-  kept in-tree for now** (2026-07-03 decision) and developed directly from the JSON5 source.
+- **`:domain`**: pure Kotlin, no Android dependencies. Domain models, state regions, evaluation logic, the
+  pipeline, provider and capture contracts, the `PlatformPreferences` read interface, and the number, money and
+  duration formatting owner (`format.Formats`, `format.TimeFormats`). The `region` package's cell id is the only
+  location-shaped value that may ever leave the device. Repository implementations and Hilt bindings live in
+  `:core:data`. The census wire contract lives in the `census-contract/` included build; `domain.privacy.PiiShapes`
+  stays here.
+- **`:core:pipeline`**: accessibility and notification pipelines, the JSON rule engine, the observation
+  classifier. Reads third-party UI.
+- **`:core:state`**: the multi-region state machine, effect map, `TransitionPolicy`, crash recovery
+  (`StateManagerV2`). Defines the `EffectExecutor` and `MetadataProvider` interfaces.
+- **`:core:database`**: Room. **No `fallbackToDestructiveMigration`:** `app_events` is the source of truth, so an
+  upgrade Room has no path for must fail loud. A schema change bumps `GigLogDatabase.VERSION`, regenerates the
+  exported schema JSON, adds the `AutoMigration` (or `Migration`) and its `MigrationTestHelper` case; CI's
+  `Schemas committed` step and `SchemaVersionGuardTest` enforce it. Before changing the schema, read
+  `docs/architecture/05-analytics-read-model.md` § Database safety posture.
+- **`:core:data`**: repository implementations and mappers. **`:core:network`**: Retrofit/OkHttp, EIA gas prices,
+  the census transport. **`:core:location`**: Play Services GPS.
+- **`:core:datastore`**: Preferences DataStore, one store per concern behind Hilt qualifiers. A user artifact that
+  nothing in `app_events` can rebuild (the weekly plan, the vehicles) lives here, never in Room, because a
+  `PROJECTOR_VERSION` bump wipes the read model.
+- **`:core:designsystem`**: the brand system and the shared `App*` components (no project deps, no M3 dynamic
+  color, no `Dash*` names), plus the shared display vocabulary (`time.TimeKit`, `text.EMPTY_VALUE`). Only generic
+  data-in/lambdas-out components live here; feature-specific composables stay with their feature.
+- **`:app`**: the UI shell and overlays, side-effect handlers, Hilt wiring, the `GigLogApplication` entry point.
+- **`matchers/`**: an included build, not a `:core` module. It owns the per-platform JSON5 rule source and the
+  canonicalizer; `:core:pipeline:importMatchersRules` generates `assets/rules/<platform>.json`, and no rule asset is
+  committed. Apache-2.0, kept in-tree.
 
 ## Architecture: Recognition Pipeline + State Machine
 
-The core architectural challenge is understanding a third-party app's UI without an API. The
-solution is a multi-stage pipeline. Each subsection below is the
-**summary an agent needs every session** — the invariants and where they live; the full receipt-level
-narrative (every rule with its issue/PR history and rationale) lives in `docs/architecture/0N-*.md`, one
-file per subsection, and is maintained under the same every-PR context-update rule as this file:
+gig.log reads a third-party app's UI without an API: sensor pipelines, then JSON rules, then a multi-region state
+machine, then side effects, then an analytics read model. Each subsection below lists only the invariants that break
+silently. The full rules, with the issue behind each, live in `docs/architecture/0N-*.md`.
 
 ### 1. Sensor Pipelines (`core/pipeline/`)
 
-Full reference: [`docs/architecture/01-sensor-pipelines.md`](docs/architecture/01-sensor-pipelines.md).
+Before changing a pipeline gate, capture, a redaction entry, a backstop or the census, read
+[`docs/architecture/01-sensor-pipelines.md`](docs/architecture/01-sensor-pipelines.md).
 
-`AccessibilityListener`/`AccessibilitySource` capture `AccessibilityEvent`s; `AccessibilityNodeMapper`
-normalizes a window into an immutable `UiNode` tree (`:domain`). Per-event-type sub-pipelines
-(`ContentChangedPipeline` coalesced as one burst, `StateChangedPipeline`, `WindowsChangedPipeline`, clicks — #1148: 150/300 ms quiet/max with a leading edge; the active enabled window is the ground truth, else the readable enabled application window in front (own bubble and PiP skipped) or the frame is refused and counted, and the windows pipeline emits at most one window, by the event path's rules; an enabled platform offer overlay on top is the frame while it is up, #1152 — detail in the reference; the package-less `WINDOWS_CHANGED` reaches the #1148 D2 `ListenerGate` only when the dasher's **event-receipt consent** is ALLOWED — the listener clears `packageNames` via the pure `ServiceInfoPolicy`, in debug AND release, #1151) and the
-parallel `NotificationPipeline` emit `PipelineEvent`s. The UNKNOWN-screen census skeleton (ADR-0011, #1145) is built by the pure `census.SkeletonBuilder` over the `cloud.trotter.census.contract` (the `census-contract/` build) wire types (sharing `domain.privacy.PiiShapes` with `SnapshotRedactor`) and published by `census.SkeletonPublisher` (#1146: post-admission, after `captureScreen`, before the UNKNOWN filter, UNKNOWN platform screens only, fail-open, only while the bound `CensusSink` is enabled — debug binds `HttpCensusSink` behind the developer toggle; release binds `NoOpCensusSink` and stays inert by construction (#1182); `census{…}` in `PipelineStats`) and posts daily recognition health per platform/app version (#1197). #1189 adds `NotificationSkeletonBuilder` and the notification publisher overload in `NotificationPipeline`,
-after admission/dedup/capture and before UNKNOWN rejection, independent of capture enablement. The builder
-scans original five fields AND action labels (also whitespace-joined) with `SensitiveMarkerScan` before
-customer lead-in scrubbing and the shared two-pass field filter. Notifications have five slots and a
-contract-grammar channel; actions are refusal-only. Both kinds share the debug sink/spool/worker and
-server-authoritative 300/day ledger with common 429 deferral; published only when the server's policy advertises the schema; batches are per schema. Before the first policy, only screens are accepted. A pending identity reads the policy before enrolling and declares only the schemas it accepts (screens only when the read fails, #1522). Release `NoOpCensusSink` stays inert.
-Census failures cannot change recognition, and INFO has counts/reason/kind names only, never text or
-channel ids. Notification counters extend `census{…}`. Trusted envelope pairing remains screen-only;
-CLICK skeletons stay OUT until clicks reliably carry a screen fingerprint (ADR-0011 §10).
-The census server's **classify-and-draft tool** (#1188, v0.11.0) lets a trusted operator classify an UNKNOWN cluster in the `Flow` vocabulary and draft a rule from the trusted capture's wireframe; the generator and its vocabulary live in `census-contract/authoring/` (Apache-2.0: `RuleAuthoringVocabulary`, `EnvelopeWalk`, `RuleDraft`), and the APP suite is the gate — `CensusDraftRoundTripTest` generates from fixed selections against three known screens and requires compile → source recognition → UNKNOWN on the negative corpus → plaintext redaction coverage ⊇ production → compile merged at the lowest free rank. `RuleAuthoringSemanticParityTest` (#1207) pins emitted predicates and peer decisions to the real compiler, plus pre-order `find`; existing ID/class trimming discrepancies are explicit exceptions (see §2 reference). `AccessibilityPipeline.output()` gates in order:
-**rulesets-not-loaded** (fail-closed, #432) → **sensitive/noise** (#399) → **disabled platform** →
-**UNKNOWN** (captured to disk for triage, never forwarded to the state machine). Snapshots are attributed
-to the window's *real* package, so our own overlay is dropped. `FrameGate` admits frames (identity dedup +
-UNKNOWN hash suppression, #360); `CaptureWriter` assembles envelopes (#361) and applies the matched
-rule's **`redact`** block (#598) — **envelope-only**: recognition, parse and dedup run on the original
-tree, and a click's `contentHash` stays on the original node. `PipelineV2.events` is a HOT `shareIn` stream (side effects never
-double-run); the upstream is supervised with restart backoff (#430); `PipelineStats` counts every gate
-decision and prints a periodic INFO summary whose head carries `app=<versionName>` (`<base>+<git sha>`,
-PR #1066 — read a pull's build from the logs, never infer it).
-
-**Redaction invariants (Pledge — for an id-less, prefix-less slot a recognized rule that forgets to redact has NO backstop; `CustomerTextMarkers` still scrubs lead-in prefixes on recognized frames, `ID_MARKERS` runs on UNKNOWN only):**
-- Mask is `[redacted:<4hex>]` = first 4 hex of sha256 of the stripped/trimmed token (#623); a
-  customer-NAME entry flagged `normalize: customerName` hashes the canonical key (#733) so the mask hex
-  equals the parse's `customerNameHash` prefix across name FORMS ("Brandy S"/"Brandy Smith"). Fail-closed to
-  plain `[redacted]`.
-- `plainMask` (#795) opts a bounded-ALPHABET value (4-digit PIN, subpremise/unit number, length-bounded
-  note) into hash-less `[redacted]` — #987 gives the flat-string NOTIFICATION whole-field mask the same
-  flag (rejected beside a capture `match`); the rule-independent **short-token floor** (#889) does the same for
-  any sub-4-char token (`normalize: customerName` entries exempt). `plainMask`+`normalize` together is a
-  compile reject. A structural scan over both platforms' assets forces `plainMask` on every subpremise
-  entry (#986/#934); the split `Apt/Suite: <n>` form anchors on its label sibling (#1039).
-- `maskNode` is **first-match-wins**: blanket/plain entries sit AHEAD of generic shape entries, or a
-  digit-leading value gets claimed and hashed by the street shape.
-- **Combined-frame class (#993):** a redact protects only frames its OWN rule wins, so a banner that can
-  inflate over another rule's frame (`arriving_at_title`) is declared by EVERY rule in `dropoff.json5`
-  plus `navigation_generic` (parity test). The Google-Nav maneuver cluster is masked on dropoff-phase nav
-  rules + `navigation_generic`; `pickup_navigation`'s MERCHANT address stays raw by design (#886), while a phase-ambiguous slot
-  over-masks toward privacy — `timeline_task_detail` (#985) anchors on `Copy address` text AND
-  `Close sheet` contentDescription, BOTH required, and masks the merchant render too (store names raw).
-- The id-less **name shape** joins tokens with `\s{1,4}` (never a literal space, #885) and is byte-SSOT
-  with `SnapshotRedactor.FIRST_LAST_INITIAL_PATTERN`. A sub-flow sibling copies the entry verbatim so
-  the hex stays equal (#992/#1031; #1123 — `dropoff_pre_arrival` OUT-RANKS the id-less workflow sheet
-  on its header-bearing render, so it carries the sheet's name entry too, and the sheet's anchor is ANY
-  stable row under the host fragment, #1122); #1309 pins every arrived-pickup rule to the NAME-id reference entries (parity test). A name entry enumerates every conjugation a surface renders;
-  `timeline`'s redact/parse prefix lists diverge only by documented exclusion (guard test, #994/#998).
-- Coverage spans screen surfaces AND notification envelopes (#620; #987 masks the earnings-deposit
-  push — the dasher's own FIGURE and the #599 Crimson clause — to `Your Dasher earnings for [redacted]`).
-  A receipt-scan camera is recognize-and-redact, not blocked (#995); so is 8.97.8's "Drop off steps"
-  wrapper, whose `description_text_view` instruction body plain-masks whole (#1107, `ID_MARKERS` too). Sensitive rules prefer **view-id anchors** (locale-immune,
-  #938/#924/#1059); `SensitiveSurfaceBlockTest` pins claimed-by-rule + `sensitive.known` + dropped at
-  the content gate.
-- **Recognize-only is NOT state-inert** (it moves `FrameGate.lastIdentity`); "no `state` block" buys
-  lifecycle neutrality, asserted by `FlowlessRecognitionNeutralityTest`.
-
-**Backstops (rules-independent, cross-platform DATA):** `SensitiveTextMarkers` drops the dasher's
-banking screens using `cloud.trotter.census.contract.SensitiveMarkerData` from the `census-contract/`
-build (#1173); `CustomerTextMarkers` (#624/#806) scrubs a node/field carrying a customer-PII marker on
-recognized AND UNKNOWN screen/notification/click envelopes, plus `ID_MARKERS` (view-id suffixes whose
-VALUE is PII, `hasIdSuffix`, #910/#993/#1058) on UNKNOWN screen + click envelopes only — the census kind
-table `ID_MARKER_TABLE` is the one owner of "what kind of value an id carries", and `ID_MARKERS` is its
-ALWAYS runtime-scrub projection (#1160 adds `order_cx_name`, `tvTitle`, `tvLastMessage` — `tvTitle`
-fails closed on the id alone, so an UNKNOWN sheet title under it loses its triage line — on EVERY
-platform, since the suffix is a generic Hungarian name an Uber `…:id/tvTitle` also matches; #1314 adds `gift_recipient_name`), #919 adds `message_input` and a
-CLASS rule — any text-input node (`UiNode.isTextInput`: the editable flag or an `EditText` class) is
-plain-masked whole, subtree included, on UNKNOWN screen + click envelopes; the already-masked skip is
-`MaskTokens.endsWithMask`, never substring presence (a recognized
-frame keeps its rule's deliberate decisions); #1116 adds `UnknownAddressBackstop` on the same UNKNOWN
-envelopes — rule/id/platform-independent, O(N) — which plain-masks a street → `City, ST ZIP` pair in one
-projected sibling list plus every quote-led note and 1–6-digit code in the block's scope (and a code/note
-directly above a city line), recognition untouched, plus a GATED runtime `Return ` lead-in
-(`ReturnTaskLine`, a linear per-line parse — never a regex — that needs the ` to <store>` tail and rejects a
-name slot opening with the word `to`, so `Return to dash` never matches) that masks only the name and keeps the store — asymmetric with the intake gate, which also demands the name shape. A click envelope inherits the SCREEN rule's redact
-(`Observation.Click.screenRuleId`, #910). Candidate text markers are vetted against the corpus
-(`CaptureBackstopCorpusTest`); chrome-ambiguous prefixes are rejected and the rule redact is the primary
-control. Intake prefixes (`SnapshotRedactor.NAME_PREFIXES`) are deliberately asymmetric with the runtime
-markers, with a floor (#1064): a chrome-ambiguous intake prefix carries a tail predicate
-(`GATED_NAME_PREFIXES`); `PiiShapes.customerLeadIn` is the one owner, where longest match wins (#1021),
-preserving `Deliver to door of ` over `Deliver to `. Hand-written fixture
-pseudonyms are exempted by the byte-exact `CorpusDecoys` list, and a raw-pseudonym assertion is pinned
-to files BY VALUE, never folder-wide. Field-enumeration SSOTs keep a new model field from missing a
-scrub site: `RawNotificationData.textFields()` (#666 — the 5 flat text fields; `actionLabels` is
-deliberately outside it and scrubbed separately) and `UiNodeTextField` +
-`UiNode.scrubbableStrings()` (#835; `stateDescription` is scrubbed but `UiNode.allText` — what rules
-match on — still excludes it: widening a scrub layer must never move a classification; #1147 widened
-it to pane/role/hint/tooltip/error/clickLabel/uid — `allText` still text+desc only). Rules skip a
-file with duplicate ids and a later file re-declaring an id (#624/#633). Release binds `NoOpCaptureBus`
-(#346); UNKNOWN captures are the documented debug-only exception.
-
-**English-device assumption (#938):** anchors and both marker SSOTs are English literals; on a non-`en`
-device recognition falls to UNKNOWN and the Pledge layers thin. `ID_MARKERS` is the one locale-immune
-defence. `RecognitionLocale` (`:domain`) + `LocaleBoundaryNotifier` (`:app`) make it loud: one WARN per
-sensor start + a once-per-install notice (`app_state` flag `locale_boundary_notice_shown`). Translating
-anchors is deliberately NOT done until a non-English corpus exists.
-
-**Liveness (#937/#1036, the #909 silent-death family) — every piece fail-OPEN and inert to frame
-processing; a diagnostic failure must never become a recognition gate:** `PlatformAppVersions` stamps the observed
-app's `versionName` onto `ReplayMetadata.platformAppVersion` (additive, nullable, no test may require
-it); `RecognitionHealth` trips one WARN + notice per platform per process when a full 50-frame admitted
-window is ≥ 0.80 UNKNOWN. `Ruleset.matchFirst` reports a `ParseShortfall` when a matched branch parsed
-nothing usable — every evidence field unresolved, or a shape-REQUIRED field null — judged per field by
-`ParseFieldKind` (`CONSTANT` excluded, `NULLABLE` null, `COLLECTION` empty), measured pre-validate and
-even when a `Skip` validator discards the branch; counted post-admission in `PipelineStats` (per-rule
-`parseShortfall{…}` + one WARN per rule per process, tag `ParseHealth`, rule ids only; the benign baseline — rules whose one evidence field is legitimately optional, incl.
-the 8.95.6 `earnings_pill` carousel on `waiting_for_offer` — is listed in the reference). **An OPTIONAL
-`bind` target that resolves no node on a matched frame is the third trigger (#1093)** — the receipt's
-`expandButton` anchored on an id 8.93.7 removed, and because the bind was optional the
-`EXPAND_EARNINGS` tap was simply never emitted, for weeks, with no trace; it rides the same
-`ParseShortfall` (`unresolvedOptionalBindings`) into its OWN census (`bindShortfall{<rule>.<bind>=n}`, one
-WARN per rule+bind per process) and never moves the parse count; two sibling censuses (#1149) cover action
-targets that DID resolve — `bindUnprovable{}` (a bind-time label fingerprint that cannot be proven) and
-`bindRefused{}` (no clickable owner in the package: target withheld) — same grain, tag `ParseHealth`. The #1063 first-frame offer card
-(Decline not yet rendered) is an expected, bounded tripper. The tap side of #1093: a bounds-derived
-click candidate must carry the bind's hashed subtree labels (`NodeRef.labelHintHashes`, all of them,
-letter-bearing only) — geometry is never identity for a label-free action; details in the reference. Notices share
-`AppNoticeChannel` (ids 102 locale / 103 recognition / 105 TTS; 104 is `weekly_plan_channel`).
+- `PipelineV2.events` is a hot `shareIn` stream, so side effects never double-run.
+- `AccessibilityPipeline.output()` gates in order: rulesets not loaded (fail closed) → sensitive/noise → disabled
+  platform → UNKNOWN (captured to disk for triage, never forwarded to the state machine). Snapshots carry the window's
+  real package, so our own overlay is dropped.
+- Redaction is envelope-only: recognition, parse and dedup run on the original tree, and `CaptureWriter` applies the
+  matched rule's `redact` block to the envelope.
+- The mask is `[redacted:<4hex>]` (the first 4 hex of the token's sha256), fail-closed to plain `[redacted]`.
+  `maskNode` is first-match-wins, so blanket and plain entries sit ahead of generic shape entries.
+- A redact protects only frames its own rule wins. A banner that can inflate over another rule's frame is declared
+  by every rule it can land on; parity tests pin these.
+- For an id-less, prefix-less slot, a recognized rule that forgets to redact has no backstop. The backstops
+  (`SensitiveTextMarkers`, `CustomerTextMarkers`, `ID_MARKERS`, `UnknownAddressBackstop`) are rules-independent
+  data; `ID_MARKERS` and the address backstop run on UNKNOWN envelopes only.
+- Recognize-only is not state-inert: it moves `FrameGate.lastIdentity`. Only a rule with no `state` block is
+  lifecycle-neutral.
+- Release binds `NoOpCaptureBus` and `NoOpCensusSink`; UNKNOWN captures are the debug-only exception. A census
+  failure never changes recognition.
+- Liveness diagnostics (`RecognitionHealth`, the `ParseShortfall` censuses, `PlatformAppVersions`) fail open: a
+  diagnostic failure must never become a recognition gate.
+- Anchors and marker lists are English literals. On a non-`en` device recognition falls to UNKNOWN; `ID_MARKERS` is
+  the one locale-immune defence.
+- The `PipelineStats` INFO summary starts with `app=<versionName>` (`<base>+<git sha>`). Read a pull's build from
+  the logs; never infer it.
 
 ### 2. JSON Rule Engine (`core/pipeline/.../rules/` + generated `assets/rules/`)
 
-Full reference: [`docs/architecture/02-rule-engine.md`](docs/architecture/02-rule-engine.md).
+Before editing `matchers/rules/` or the rule compiler, read
+[`docs/architecture/02-rule-engine.md`](docs/architecture/02-rule-engine.md).
 
-Recognition is **data, not code**. Source is per-platform **JSON5** under `matchers/rules/` (spec
-ADR-0001, schema `docs/rules.schema.json`; sub-files use `docs/rules.fragment.schema.json`), owned by the
-included `matchers` build (ADR-0009). `:core:pipeline:importMatchersRules` canonicalizes/merges it into
-**generated** `assets/rules/<platform>.json` consumed by both the APK and the unit tests
-(`TestRulesetFactory`); there are **no committed** rule assets, so a JSON5 edit flows straight into
-recognition tests. Rule order within a file is inert (unique priorities per section). `RuleCompiler`
-compiles, `ObservationClassifier` matches. `state.offerSurface` and `state.idleSurface` are
-load-validated rule data carried through branch overrides, classification, and the journal;
-`idleSurface: no_orders` requires `flow: idle` and is declared only by Finding-offers (#1312).
-Drafts generated from census captures are gated by `CensusDraftRoundTripTest` (compile alone →
-recognise the source frame → stay UNKNOWN on the negative corpus → compile merged).
-
-- **Partitions:** `matchFirst` evaluates the non-overrideable partition first, then the overrideable
-  one, each priority-ordered (#419). `sensitive.known` is priority 0 + `overrideable: false`;
-  `sensitive.catchall` is priority 999 + overrideable.
-- **Additional-tip pushes (#1002):** DoorDash accepts timestamped and short forms; both parse
-  amount/store, with nullable `deliveredAt` absent in the short form.
-- **Click screen gate:** `screenIs` names the screen target(s) a click branch may match on — a string
-  OR (since #1104) a non-empty ARRAY, compiled to `Set<String>?`; empty/non-string forms are loud
-  compile rejects. The array exists because a tap can be classified BEFORE its own screen is admitted.
-- **Blocks:** `require` predicates, `bind`, `parse` (typed via `ParsedFieldsFactory`), `redact`
-  (#598 — a screen rule using the `sha256` transform MUST declare a non-empty `redact`; branch-level
-  `redact` is rejected). Rule-level `reject` checks are prepended to every branch's own rejects (#1222).
-  Effect `dedupeKey`s interpolate `{field}` against the branch's RAW parse, plus two DERIVED
-  reserved tokens the classifier resolves post-factory (`DedupeTokens`, the lint's SSOT):
-  `{parsedHash}` (content identity, #427) and `{presentationHash}` (presentation identity, #859 —
-  fail-closed to `offerHash` when `presentationKey` is null). A derived field is never an ordinary
-  `{field}` template.
-- **8.97.8 Compose offer card (#1114):** `offer_popup` has three branches — branch 0 the legacy View
-  card verbatim, branch 1 the id-less Compose card anchored on its own chrome (route-summary shape,
-  currency figure, disclaimer, merchant-holder + address sibling); `side_nav_drawer` rejects that
-  signature; `parseTotalMinutes` feeds `timeToCompleteMinutes` (an estimate, never a deadline). Compose
-  taps produced no click envelopes in the field — accept is inferred from the pickup-phase exit.
-- **Compose add-on (#1121):** branch 2 pairs delta pay/route inside `offerBody`; `quoteBasis: incremental` requires `offerScope: add_on` at compile time: no verdict, derived economics, or click-less accept.
-- **#1147 node predicates:** `hasPaneTitle*`, `hasRoleDescription`, `hasClickActionLabel*`,
-  `hasHintText*` and the flags `isVisibleToUser`/`isSelected`/`isCheckable`/`isHeading`/`hasClickAction`
-  read the TalkBack-study fields (none in `allText`, no regex forms); no shipped rule uses them yet.
-  Predicate values are strictly typed (a string predicate takes only a JSON string, a flag only an
-  unquoted boolean — review X3).
-- **No actuation from rules (#425):** click/gesture verbs are compile-rejected; rules expose target
-  bindings (`acceptButton`, `declineButton`, `confirmDeclineButton`, `expandButton`) that the app-owned
-  `RuleAction` registry consumes (`docs/design/rule-capability-consent.md`); a screen rule binding any
-  of them declares the enabled actions at its top level (`enables: [...]`, #1167 — the consent unit, a
-  compile reject when bound ≠ declared).
-- New rule↔state vocabulary goes through the enumerated, load-validated contract —
-  `ParsedFieldsFactory.REQUIRED_FIELDS_BY_SHAPE` plus `StateMachineContract.EFFECT_INTENTS` /
-  `.REQUIRED_FIELDS_BY_FLOW` — enforced at compile per file (principle 8).
-
-**Rule regexes run on RE2J (#1053, ADR-0010).** Every rule pattern — predicate, parse `find`, redact
-`match`, `nextSiblingMatchingRegex` — compiles through the ONE seam `RegexSafety.compileRegex` →
-`BoundedRegex`, a linear-time NFA (no backtracking), replacing the unsound #418 heuristic and the #590
-watchdog (which could never fire on Android). Pattern language is **RE2 syntax**: no lookaround,
-backreferences, possessive/atomic groups. Bounded ingestion is three gates: (1) a coarse pre-compile
-guard — `MAX_REGEX_LENGTH` 200 (as written), `MAX_REPEAT` 200, `MAX_GROUP_DEPTH` 16, `\Q…\E` and
-leading-zero bounds rejected, `(?i:…)` accepted, cost estimate ≤ 200 000 whose only job is to keep the
-compile from exhausting memory; (2) the compile wrapped in `catch (Throwable)` → loud
-`RuleCompileException`, whole-file rejection; (3) the **MEASURED** bound `Pattern.programSize()` ≤
-`MAX_PROGRAM_SIZE` = **1 000** (corpus max 240, printed by `RuleCorpusCompileBudgetTest`). Never
-estimate a compiled program size from pattern text — measure it. The cap bounds EXPOSURE to match-time
-stack overflow (recursion grows with nullable nesting, not instruction count); the backstop is
-`RegexEvaluationFailed` (raised by `BoundedRegex.evaluating`, one WARN per pattern per process), which
-**each consumer answers**: recognition treats the rule as no-match, parse yields null, **redaction masks
-the WHOLE node/field** with plain `[redacted]` — a `false` default is fail-OPEN for a redact selector.
-The catch is deliberately NOT in `PredicateCompiler`. The Perl classes are TRANSLATED toward ART's
-Unicode classes at the seam (`\d`→`\p{Nd}`, `\s`→`[\s\p{Z}\x{0B}\x{85}]`,
-`\w`→`[\p{L}\p{M}\p{N}\p{Pc}\x{200C}\x{200D}]`, negations likewise; `\S`/`\W` inside a class rejected) —
-an APPROXIMATION, not parity: Unicode-table lag (Adlam), simple vs full case folding, ASCII `\b`,
-listed in #1086 (closed 2026-10-05 — accepted residuals + an RE2J dependency watch, ADR-0010; the device
-linear-time test is proven to execute on the nightly). Authors keep writing `\d`; byte-SSOT pins are on source bytes. Guards:
-`RuleRegexEngineGuardTest` (no `java.util.regex` in the rule package; every `Regex(…)` literal-only,
-frozen count ledger), `RuleCorpusCompileBudgetTest` (50 ms load budget + program-size max), instrumented
-`RuleRegexIsLinearTimeTest` (nightly on ART). The one corpus cost: uber's `^Going to (?!\d)` became
-`^Going to (?:\D|$)`.
-
-**Two bounded primitives for id-less renders (#1029, DoorDash 8.93.7 shipped its money surfaces with no
-view ids):** (1) the **`parseGlyphCurrency` transform** reads an animated digit-wheel fused by `read:
-allText` — rejects any non-ASCII digit and any `-`/`−`/`(` (#1052), keeps only `$`/digit/`.`/`,`, then
-full-matches `CurrencyShape` (`$` + a bare `0` or 1–4 digits with NO leading zero, or one
-`[1-9],\d{3}` thousands group, + exactly 2 decimals — `$016.70` is out of shape) or returns
-null (bounded 256 chars, fail-closed — ~1 in 5 fielded reads is mid-animation; `parseCurrency` is WRONG on
-that shape). (2) the **`nextSiblingMatchingRegex(<pattern>[, <cap>])` navigate** scans ≤ `MAX_SIBLING_SCAN`
-= 8 following siblings for the first whose text full-matches (pattern compiled at rule load; cap outside
-1..8 or unparsable isolates the rule); the three DoorDash money scans declare `2` as a CORRECTNESS control
-(an unbounded scan returns the NEXT row's money as this one's). The sibling walk has one owner,
-`UiNode.followingSiblings()`/`precedingSibling()`, by REFERENTIAL identity (`UiNode.equals` ignores
-children). `CurrencyShape` is the ONE definition of a well-formed figure, byte-pinned by
-`CurrencyShapePinTest` over the generated assets. Neither primitive catches a well-FORMED mid-spin read;
-that is the settle gate's job (§3).
+- Recognition is data, not code. Source is per-platform JSON5 under `matchers/rules/` (spec ADR-0001, schema
+  `docs/rules.schema.json`, sub-files `docs/rules.fragment.schema.json`); a DoorDash sub-file merge fails the build
+  on a duplicate rule id. Rule order within a file is inert.
+- `matchFirst` evaluates the non-overrideable partition first, then the overrideable one, each by priority.
+  `sensitive.known` is priority 0 and non-overrideable.
+- Rules cannot actuate: click and gesture verbs are compile-rejected. Rules expose target bindings that the app-owned
+  `RuleAction` registry consumes, and a screen rule that binds one declares it in `enables: [...]`.
+- New rule↔state vocabulary goes through the load-validated contract (`ParsedFieldsFactory.REQUIRED_FIELDS_BY_SHAPE`,
+  `StateMachineContract.EFFECT_INTENTS` and `REQUIRED_FIELDS_BY_FLOW`), never a magic string in a Kotlin `when`.
+- A screen rule using the `sha256` transform must declare a non-empty `redact`.
+- **Rule regexes are RE2 syntax** (RE2J, linear time): no lookaround, backreferences, or possessive or atomic groups.
+  Every pattern compiles through `RegexSafety.compileRegex`: length ≤ 200, and the compiled program is measured,
+  `programSize()` ≤ 1 000. Never estimate a program size from pattern text. On `RegexEvaluationFailed`, recognition
+  treats the rule as no-match, parse yields null, and redaction masks the whole node (a `false` default would ship it
+  raw).
+- `CurrencyShape` is the one definition of a well-formed money figure. `parseGlyphCurrency` and
+  `nextSiblingMatchingRegex` read id-less money renders, but neither catches a well-formed mid-spin read; the settle
+  gate (§3) does.
+- A rule drafted from a census capture passes `CensusDraftRoundTripTest`.
 
 ### 3. Multi-Region State Machine (`core/state/`)
 
-Full reference: [`docs/architecture/03-state-machine.md`](docs/architecture/03-state-machine.md).
+Before changing a stepper, a grace, a timer, recovery or the offer lifecycle, read
+[`docs/architecture/03-state-machine.md`](docs/architecture/03-state-machine.md).
 
-Observations reduce into `AppState(regions)` (`:domain`): **`FlowRegion`** (R0 — ground-truth screen
-interpretation, NOT offers), one **`PlatformRegion`** per platform (session/task lifecycle + that
-platform's offers), **`CrossPlatformRegion`** (derived aggregates). The steppers are pure and driven by
-`obs.timestamp` — never a wall clock — so crash recovery replays observations over the last snapshot.
-`StateManagerV2` hosts the reduction and crash recovery; `EffectMap` turns prev/next plus the step's `StepDecisions` (that step's re-price and retired task; never persisted, rebuilt by replay) into `AppEffect`s (#1423).
-No `Platform` branch anywhere (principle 8); per-platform values ride `GraceConfig` through
-`TransitionPolicy`.
-
-**Settle gate (#1029/#1052/#1054) — a parsed running total moves `Session.runningEarnings` only after
-standing unchallenged on its own surface for `sessionPaySettleMs` (3 s).** `PlatformRegion.pendingSessionPay`
-parks the read; commit is `SessionPaySettleGate.lapse`, called by the stepper and woken by a
-`SESSION_PAY_SETTLE` timer (the idle dedup hash folds `sessionPay` into `Observation.identity()`, so a
-repeat can never arrive — repetition was REJECTED as the discriminator). Rules: (a) a park is owned by
-(FLOW, PLATFORM), checked on both prior and
-resulting R0; losing either DROPS it; (b) BOTH wheel feeds are gated (`IdleFields.sessionPay`,
-`PostTaskFields.sessionEarnings` — and `PostTaskFields.dedupeHash` folds in `sessionEarnings` so the
-settled re-render is admittable at all), and the RECEIPT feed is admitted only while this session
-OWNS the receipt's job (`activeJob` live, or `lastClosedJobReceipt` set — both cleared by
-`endSession`), one owner `SessionPaySettleGate` with a private `ownsReceiptJob()` shared by the
-reads and the expiry's contradiction check:
-#1103 had the previous dash's receipt, still on screen 14 ms after `DASH_START`, park its $40.14 and
-commit it into a 0-delivery dash; (c) every non-gated writer supersedes older parks; (d) comparisons are
-cent-tolerant; (e) a pending's OWN wake lapses it by IDENTITY, a frame lapses a grace strictly PAST its
-deadline and a park at-or-past — and ORDER matters: a flow frame runs the expiry FIRST (a park that
-stood its window commits on the departure frame), a flow-LESS observation checks ownership first; (f) a contradicting read on the expiring frame supersedes the park; (g) a
-`$0.00` read never overwrites a positive total. A park is FROZEN while the dash is not `Mode.Online` and
-re-based UNCONFIRMED on the way back (a fresh agreeing read on its own surface is required to commit).
-Crash recovery DROPS any restored park. `Session.runningEarnings` /
-`accumulatedDeliveryPay` are nullable — null is never-parsed and renders as the em dash, never `$0.00`
-(#1041); a receipt re-entered straight from its offer overlay is not added again (#1460: same job, subject and total within one unbroken receipt/overlay episode; a key match alone is not identity, since a job with missed task screens names the previous job's drop).
-
-**Timer identity (#1054):** every arm from `ModeEffects.diffDeadlineTimer` carries
-`ObservationPayload.GraceWake(wakeId)`, a per-region generation from `PlatformRegion.wakeSeq` via
-`mintWakeId()` (a deadline is not unique); `GraceExpiry.isWakeFor`/`graceLapsed` is the one rule; a fire
-from a replaced pending is inert. An id is a `WakeId` minted at install through `WakeInstall.kt`;
-snapshots without a positive id are discarded on decode (#1427). There is no re-arm logic.
-Arms carry `deadlineMs` (`OFFER_EXPIRY`/`SETTLE_UI` do not yet — #1076).
-
-**Recovery (#1052/#1054) — evidence is dropped, a decision in flight is re-armed.** `AppState.recoveryHygiene`
-runs ONCE on the FINAL state after the journal tail fold (never on the snapshot): drops the settle park and
-the graced resume; re-bases `pendingDestructive` to its REMAINING window
-(`base = servedFrom ?: windowFrom ?: since`; `servedFrom` makes the re-base a fixed point across a crash
-loop; a live deadline MOVE re-anchors via `windowFrom`); `pendingDeadlineTimers()` re-arms that grace and
-the **pause-safety net** (`PlatformRegion.pauseSafetyDeadline`, real state since #1054). A replayed
-REGION timer is never executed (`SideEffectEngine` skips `REGION_TIMERS` while `recovering`); the
-reconcile is their sole armer. Replay stamps each journal row's own `correlationVersion`; the cleaned
-state is CHECKPOINTED (`SnapshotStore.checkpoint`, retried once, then ERROR + pending-retry on every
-live observation). **A snapshot never gets ahead of effects (#1271 scenario 4):** every cadence/major snapshot
-queues behind the step's effects via `EffectExecutor.afterProcessed`; the recovery checkpoint first
-`awaitProcessed()`s the replay's re-issued effects, and its live retry re-writes that drained state at its
-OWN version, synchronously, before the live row is journalled — a snapshot of step N landing before N's `LogEvent`s ran made them unreachable to a
-crash in between; a lagging snapshot is safe (keyed replay dedupes). `initialize()` awaits the collector's subscription before `restoreState`. A legacy
-payload-less `SESSION_PAUSED_SAFETY` fire is honoured when no armed net exists or it lands at/after
-the armed deadline. Open gaps: #1076 (tail-replayed offers), #1083.
-
-**Manual end (#1533).** A dasher can end a live shift by hand from Home: a journaled `UiInput` (`end_shift`) naming the
-session and the end time, handled before lazy expiry, emitting `DASH_STOP` with source `manual`; backdating does not
-repair miles already accrued.
-
-**Notification neutrality (#1224).** `NotificationNeutralityTest` enumerates stateless, non-effect-intent
-push rules through the real classifier + state machine; lifecycle and pause/resume timers stay unchanged.
-The #1090 push→screen replay pins the screen as the sole pause/deadline writer.
-
-**Graces.** Destructive commits use the unified `pendingDestructive` + `GRACE_COMMIT` (#431: dash summary,
-delivery receipt, task retire); `pendingModeResume`/`MODE_RESUME_COMMIT` debounces a screen-implied
-Paused→Online resume (#605) and a HINT-ONLY Offline→Online within `postEndHintGraceWindowMs` of a dash end
-(#1311 — the dash-controls sheet re-shown after the summary). The receipt window is SHAPE-keyed (#1033): a COLLAPSED receipt
-(`parsedPay == null`) arms `receiptExpandGraceMs` (8 s); an EXPANDED frame keeps 2.5 s and tightens via
-`minOf`; a PostTask frame that parses NO receipt at all keeps the pre-#1033 timing. Layer 1 is the ONLY path that lands an expansion in the STACKED shape (§5's re-price refuses it). A `SESSION_END` arming over a live `TASK_RETIRE` ABSORBS it — both its `since` AND its `deadline`, which floors the end's own so a commit is never pulled ahead of the retire's window (and re-bases with it on recovery) — and `endSession` honors it as a completion once that deadline MATURES (#1078), stamping `completedAt` at the absorbed instant and MARKING the task (`Task.honoredRetireAt`, durable history) while the step returns the honored task as its `retiredTaskId` decision (#1423) — that decision, never the stamp's value, is how `mintQualified` recognizes an honored completion (equal timestamps made the force-stamp indistinguishable), so every stepper refusal turns the mint off by construction. Only through `absorbableRetire`: a provenanced retire (`armedFromFlow` non-null, neither `OfferPresented` nor `PostTask`) over an EVIDENCED (arrived, or tap-witnessed, #1315) un-unassigned DROPOFF; a `task:unassigned` frame — on the commit OR in-window — disowns it (clears the value + marks the task); an arrival-ONLY "rule 2" was REJECTED (fail-null), as are the residuals #1101 tracks (a missed arrival with no surviving tap witness, a null-provenance restored retire). `JobReceiptAnchors.exitMintedTaskIds` records a PostTask exit's mint per task (written from the emitter's own `exitMintCandidate`) and is #1095 tripwire EVIDENCE only, never a mint gate — a gate would fail toward a lost row under a crash, while a duplicate raw emission is one durable row. Every close-step emitter names the session through one rule (`closingSession`: `next` while it survives, `prev` when it ends) while NEW-task edges keep the live read. The #810 tripwire covers every close edge, single-accept floor lifted only on the lost-drop shape — session ended ∧ no qualified completion ∧ an arrived or tap-witnessed drop (#1095/#1315).
-
-**Offers are platform-owned** (`PlatformRegion.pendingOffers`, #438 B3; `OfferLifecycle.kt`/`OfferEffects.kt`).
-Identity is RULESET-DECLARED (#830/#1069): `presentationKey` = sha256 of a parsed `assignmentId`
-(with the `assignment|` prefix) when the rule parses one (DoorDash's View card), else the rule's
-`presentationIdentity` literal — `store` (the stable subset `storeNames|orders.size|orderTypes`,
-Uber's live re-quote) or `economics` (null key → replace on any hash change, the fail-closed DEFAULT;
-the 8.97.8 Compose card renders no id and never re-quotes in-presentation); a same-key different-hash frame is an **enrich-as-variant** (keep
-`presentedAt`, click latches, speak-once; re-eval; `OFFER_EXPIRY` stays anchored on the original
-`presentedAt`), a null key degrades to replace-on-any-change (a false MERGE is impossible). `offerKind`
-(`match|direct`, #881) is a read-through — never a scoring input, never in `offerHash` or
-`presentationKey`; DIRECT over MATCH logs "Superseded by
-direct offer" and suppresses the replaced bubble. Display store reads go through
-`ParsedOffer.displayStores`/`displayStoreText` (#882; the `orders[]` list deliberately keeps the
-`Delivery (N)` chip so `presentationKey` is immune to store cycling).
-
-**Outcomes on transition evidence (#1104/#1114):** Compose controls emit no click event for a human tap, so
-`resolveOfferOutcome(obs, prev, next)` also reads an accepted survivor in the post-step region (click-less
-accept → `OFFER_ACCEPTED`, not TIMEOUT) and `PendingOffer.declineSheetSeenAt` (set by a screen whose rule
-declares `state.offerSurface: decline_confirm` → `OFFER_DECLINED`, only within `declineSheetWindowMs`
-(15 s) of the LAST sighting, only with a read countdown, never when the exit coincides with the card's own
-countdown end (`countdownExpiresAt`, parsed on both card generations — also the ONE anchor for the
-`OFFER_EXPIRY` arm and the HUD bar; `presentedAt + countdown` fired early on a refreshing card) or arrives
-via the `OFFER_EXPIRY` timer); every accept arm and every
-observed tap outranks the sheet; a click-less accept is inferred only over a NON-task `returnFlow` (a
-click-less add-on accept fails null); recovery drops the sighting; the journal persists `offerSurface` and `idleSurface`;
-inferred outcomes are named in the event description.
-
-**Incremental quotes (#1121):** non-null `NOTHING`/`UNKNOWN`; raw deltas only, no net/rates/time estimates or partial job blend; an explicit add-on accept mints `stopCount − new pickups` dropoffs, never one per listed row (#1304), floor 1; a new standalone accept closes a stale job (un-arrived drops/unconfirmed pickups unassigned, arrived drops marked complete, active task cleared), while owned re-accepts do nothing and legacy scope follows quote basis (#1119 slice 1).
-
-**Accept survives the offer-presentation edge** as an `acceptedAt`-marked pending entry; the task edge
-mints the survivor (`acceptInputsFromPending`). The accept grace is per-platform (`GraceConfig.acceptGraceMs`,
-#762 D2), which also added the phase-less `task:active` flow (`Flow.TaskActive`, `toTaskPhase()` → null;
-leaving offer-presentation to it infers a click-less accept ONLY from a non-task `returnFlow`).
-A per-offer `OFFER_EXPIRY` timer resolves an overlay offer that vanishes without a frame and no-ops on
-an accept-latched offer.
-
-**Placeholders and store lineage.** An accepted offer pre-creates symmetric placeholders (one dropoff per
-order + one pickup per distinct store; dropoffs stamped `Task.mintedByOfferHash`, a HINT not an identity,
-#997); a CONFIRMED pickup never absorbs a same-store add-on (#1315).
-`Task.confirmedAt` records the pickup→dropoff sweep edge; a pickup displaced only by another pickup remains open.
-Screens resolve onto them by hint/customer-hash; a dropoff's store is re-attributed from pickup
-lineage via the normalized **customer-hash join** (#526/#733/#745: single store → resolve; ≥2 stores →
-earliest-confirmed only when this is the sole activated drop with that hash; else fall back to store-name
-tokens, never outside the lineage; fail-null beats fail-wrong). `JobCompleteness.kt`'s per-customer
-coverage arm (#749) proves completion from the pickup side when the strict arm fails — ONLY when pickups
-map 1:1 to orders (one trip per order, including confirmed-store re-visits; their hash set IS the customer set) and every customer hash has a
-finished drop with arrival evidence (or a complete-steps tap with no later navigation to a different screen on that drop, `completionStepsAt`, #1315);
-single-shop arrival projections are display-only — see
-[Arrival re-evaluation (#823 Phase 2)](docs/architecture/03-state-machine.md#arrival-re-evaluation-823-phase-2).
-A stacked or add-on job's rows land at its completion edge (T1 or T2), so its quote counts once the whole job is judged delivered (#1458).
-
-**Unassign-via-help** (`Flow.TaskUnassigned`, #736/#752) is an inline ungraced abandon: `Task.unassignedAt`
-set, `completedAt` null; the `unassignedAt == null` filters in the `PICKUP_CONFIRMED` close-out sweep and
-`isJobPhysicallyComplete` are load-bearing. The abandoned drop's placeholder is retired by `taskId` for a dropoff-phase abandon (never a
-hash join that could over-remove a sibling), by customer hash for a pickup-phase one; the cross-frame
-retro-mark is edge-gated to the ENTRY into `task:unassigned` and leaves `completedAt` intact;
-`Job.tasks` is reconciled every step as the non-unassigned lineage mirror; one `TASK_UNASSIGNED` event per
-`taskId`; a misread self-heals only while the job stayed open; a `task:unassigned` frame
-followed by the Finding-offers screen (`state.idleSurface: no_orders`) arms a 5 s per-platform
-`JOB_ABANDON` grace (task cancels, offer preserves, PostTask yields to #596; commit stamps the idle instant)
-when `modeHint` is online and no task is active. Bare Idle (including navigation) and offline frames do not.
-Open means no `isDeliveredEvidenced()` for a dropoff or no `confirmedAt` for a pickup; displacement
-stamps stay intact. The abandon step evicts nothing from `recentTasks`, preserving older delivered
-drops for the close sweep, and emits one bubble for the batch plus one unassign event per task.
-The job closes so the next accept mints fresh (#1312).
+- Observations reduce into `AppState(regions)`: `FlowRegion` (the screen interpretation, not offers), one
+  `PlatformRegion` per platform (session and task lifecycle, plus that platform's offers), and `CrossPlatformRegion`
+  (derived aggregates).
+- Steppers are pure and driven by `obs.timestamp`, never a wall clock, so recovery replays observations over the last
+  snapshot. `EffectMap` turns prev/next plus the step's `StepDecisions` into `AppEffect`s; decisions are never
+  persisted. No `Platform` branch anywhere: per-platform values ride `GraceConfig` through `TransitionPolicy`.
+- Settle gate: a parsed running total moves `Session.runningEarnings` only after standing unchallenged on its own
+  surface for 3 s (`SessionPaySettleGate`). The total is nullable: null renders as the em dash, never `$0.00`, and a
+  `$0.00` read never overwrites a positive total.
+- Every grace arm carries a `WakeId`; a fire from a replaced pending is inert. There is no re-arm logic.
+- Recovery drops evidence and re-arms decisions in flight: `recoveryHygiene` runs once on the final state, a replayed
+  region timer is never executed, and a snapshot never gets ahead of its step's effects
+  (`EffectExecutor.afterProcessed`).
+- Destructive commits (dash summary, delivery receipt, task retire) go through `pendingDestructive` and
+  `GRACE_COMMIT`.
+- Offers are platform-owned (`PlatformRegion.pendingOffers`) and their identity is ruleset-declared
+  (`presentationKey`). A null key replaces on any hash change, so a false merge is impossible.
+- Outcomes come from transition evidence, because Compose taps emit no click event. A click-less accept is inferred
+  only over a non-task `returnFlow`.
+- An accepted offer pre-creates placeholder tasks. Store lineage joins on the customer hash and fails null rather
+  than wrong.
+- Stateless notification pushes with no effect intent never change the lifecycle (`NotificationNeutralityTest`);
+  the screen is the sole pause and deadline writer. An overdue grace may still expire when any observation,
+  a push included, arrives.
 
 ### 4. Side Effect Engine (`app/.../state/effects/`)
 
-The offer card, heads-up, chat line and voice render one `:domain` `OfferStory` (#1442). Titles use
-`Platform.appName` ("DoorDash offer", "Uber add-on"); facts, missing inputs and rule notes replace
-scores and verdicts on every offer surface. The heads-up keeps the pay-bar bitmap and Accept/Decline
-actions, with a one-line note replacing both gauge images. `AddOnSpeech` in Developer options selects
-job totals (default) or quoted deltas across all four surfaces; the story retains both. Voice truncates
-displayed cents through `Formats.wholeDollars`, names losses, and speaks once per presentation. The dasher's
-minimum net, max distance and max items become limit notes ("Net under $7.00", "Over 10.0 mi", "Over 30 items"),
-judged on the shown figures at displayed precision, never on an add-on's deltas; `OfferStory.preferences()` is the one
-order (store and shopping rules, limits, Protect last): the pop-up note and voice take the first (voice speaks one
-clause, never items or Protect), the card badges and chat line list all. One chat row per presentation: `PostOfferChat`,
-emitted beside `SpeakOffer` under the same once-per-presentation rule, external (skipped on replay).
-Re-quotes update the heads-up without adding a chat row. The evaluator and stored score/action/quality
-columns, folds and analytics readers remain unchanged.
+Before changing an effect handler, a tap, an offer surface, the offer voice or the evaluator, read
+[`docs/architecture/04-side-effect-engine.md`](docs/architecture/04-side-effect-engine.md).
 
-Full reference: [`docs/architecture/04-side-effect-engine.md`](docs/architecture/04-side-effect-engine.md).
+- `SideEffectEngine` executes `AppEffect`s with `effects_fired` idempotency (recovery-aware) and owns the fail-closed
+  action gates: the live `PermissionTierChecker` and the capability consent gate, with no auto-grant.
+- `UiInteractionHandler` is the only path that ever clicks a third-party app. It resolves the clickable owner,
+  re-verifies at fire time, and aborts on any failed check (`TapAbortPolicy`).
+- `AppEffect.LogEvent` is the only writer of `app_events`. The engine must never die silently: the per-item catch is
+  `Throwable` and the drain loop is supervised.
+- The evaluator fails closed on a missing distance: no `?: 1.0` fallback. Consumers branch on
+  `OfferEvaluation.hasDistanceMetrics` and never render placeholders as measurements.
+- Every offer surface (card, heads-up, chat line, voice) renders one `OfferStory`: facts, missing inputs and rule
+  notes, never scores or verdicts.
+- `OdometerFixPolicy` gates every odometer fix; a lat/long is never logged.
+- **Write `\}`, never `}`, in a main-source `Regex(…)` literal.** The ICU/JVM divergence once destroyed most of an
+  evening's data; `IcuRegexGuardTest` fails on a bare `}`.
 
-`SideEffectEngine` executes `AppEffect`s with `effects_fired` idempotency (recovery-aware), runs the
-evaluation loopback, and owns the fail-closed action gates (#417): live `PermissionTierChecker` + the
-capability consent gate (`RuleCapabilityRepository`; **no auto-grant, #843**). Handlers:
-`OdometerEffectHandler`, `ScreenShotHandler`, `TipEffectHandler`, `TtsEffectHandler`,
-`UiInteractionHandler` (the only path that ever clicks a third-party app, #425; #1149: resolves the clickable
-OWNER first — `isClickable` OR advertised `ACTION_CLICK`, one predicate with bind time's `UiNode.takesClick`,
-bounded walk, one generic `actionOwner` walk shared by bind and fire since #1424 — refreshes owner AND matched evidence BEFORE verifying, never lets a container borrow a clickable
-descendant's labels (one bind/fire label-horizon rule, `LabelHorizon`, in `:domain`), and re-finds a bind whose ref carries a
-PROVABLE exact fingerprint (`NodeRef.hasExactFingerprint`; bind side = the bound node's action OWNER's region,
-package- and readability-aware) by those labels BEFORE geometry, bounded by the mapper's `TreeLimits`. Its go/abort ladder is the pure `TapAbortPolicy` (#1424). One
-outcome rule (`decideSemanticOutcome`) over the deciding set — the active platform window when it has a hit,
-else every window (#788), roots and active root from ONE enumeration: no hit → strategy 3; hit(s) with an
-incomplete deciding window or an unprovable hit → abort; twins → abort; a refused bind (foreign / no owner)
-emits no reference at all), `OfferActionReceiver`.
+### 5. Analytics Read-Model (`core/data/.../analytics/`, `core/database/.../analytics/`)
 
-- **Every odometer fix is gated (#1057/#918).** The pure `:domain` `OdometerFixPolicy` judges each fix
-  against the last ACCEPTED one (`MIN_DELTA_METERS` 5, `MAX_ACCURACY_METERS` 50, `MAX_SPEED_MPS` 67,
-  `MAX_DELTA_WITHOUT_TIME_METERS` 2 000) → Accept / Reference / Ignore / Reject; neither Ignore nor Reject
-  moves the reference; `INVALID_FIX` (NaN/out-of-range) is checked FIRST; elapsed time uses the monotonic
-  clock where both fixes carry one; an Ignore refreshes the reference's TIMING only; rejection logging is
-  episode-gated (numbers + reason enum only — a lat/long is never logged). The pre-fix +905 mi offset is
-  not auto-repaired (dev decision).
-- **Typed vehicle economics (#1358):** `VehicleEconomyInputs.from(profile, shared)` reduces each vehicle
-  to energy, wear, depreciation and fixed cost per mile plus a travel profile; `UserEconomy.from`
-  adds the shared phone share once. EVs pay kWh × tariff, e-bikes pay Wh / 1 000 × tariff and battery
-  replacement wear, bicycles pay no propulsion cost. `VehiclePresets` owns the estimated defaults;
-  sedan defaults retain the previous cost per mile. Vehicle travel seeds survive platform resolution.
-- **The evaluator fails CLOSED on a missing distance (#936):** no `?: 1.0` fallback; an offer that would
-  be scored without one returns the no-verdict shape (`NOTHING` / score 0 / `UNKNOWN`) after the three
-  distance-independent verdicts (shopping opt-out, protect-stats, merchant BLOCK).
-  The returned economics keep the REAL gross and the economy's real `operatingCostPerMile` (zeroing cpm
-  would make the session's deliveries look cost-free) with `netPayAmount == gross` and every
-  distance-derived figure an explicit `0.0` placeholder; `OfferEvaluation.hasDistanceMetrics` is the one
-  predicate consumers branch on so placeholders are never rendered as measurements, and the offer fold
-  persists the frozen estimates as NULL, not zero.
-- **A tap that never landed is not a fire (#1102):** the 1 000 ms action throttle is stamped before a
-  `PerformRuleAction` and, for AUTOMATION taps, RESTORED when the handler resolves nothing, so a re-armed tap
-  from a later admitted frame (the settled receipt sheet) is judged against the last tap that actually
-  landed; a USER tap keeps its stamp even on failure (its bounded retry must not be restarted by a queued
-  duplicate). Raising
-  the settle delay cannot fix a mid-slide-frozen bind; a label-only re-find was reviewed and withdrawn.
-- **Dedupe granularity is the rule's to declare (#859):** a rule effect with `throttleMs` opts out of the
-  48 h `effects_fired` row into its own wall-clock window (in-memory; a restart re-arms it). Evidence
-  filenames are sanitized at the one gate (`EvidenceFilename.sanitizePrefix`).
-- **The engine must never die silently (#909):** `AppEffect.LogEvent` is the ONLY writer of `app_events`.
-  The per-item catch is `Throwable` (only `CancellationException` rethrown); the drain loop is supervised
-  with capped backoff; a wedged worker WARNs after ~60 s (#913). The ICU/JVM regex divergence (an
-  `ExceptionInInitializerError` destroyed 91.7 % of an evening's data) is caught by source scan —
-  `IcuRegexGuardTest` fails on a bare `}` in any
-  main-source `Regex(…)` literal. **Write `\}`, never `}`.** Rule-authored patterns don't run on that
-  engine at all (§2, RE2J).
-- **The offer voice (#991):** `TtsEffectHandler` builds its engine from a `TtsEngineFactory` seam; every
-  way an utterance can be lost escalates through the pure `TtsRecoveryPolicy` (rebuild → backoff → a
-  once-per-process `TtsHealthNotifier` notice after 3 losses ∧ ≥2 rebuilds ∧ ≥60 s); a `speak()` SUCCESS means only QUEUED, so the
-  streak resets on `onDone`; notify and rebuild COMPOSE (telling the dasher never skips the rebuild);
-  engine identity is generation-checked; the rebuild is detached from the drain worker.
+Before changing a fold, a DAO read, a correction event, the ledger or an Analytics screen, read
+[`docs/architecture/05-analytics-read-model.md`](docs/architecture/05-analytics-read-model.md).
 
-### 5. Analytics Read-Model (`core/data/.../analytics/`, `core/database/.../analytics/`, #314)
-
-Full reference: [`docs/architecture/05-analytics-read-model.md`](docs/architecture/05-analytics-read-model.md)
-— the receipt-level history of every fold rule, migration and surface below.
-
-**CQRS:** `app_events` is the source of truth; `delivery_records`/`session_records`/`offer_records`
-(+ `stores`/`pickup_records`) are a rebuildable projection. `AnalyticsProjector` (`:core:data`, every
-launch, supervised) folds via the pure `RecordFolds`/`SessionFoldContext`/`CorrectionFolds` (`:domain`)
-**exactly-once** (records + watermark in one transaction, PK = source `sequenceId`); a `PROJECTOR_VERSION`
-bump wipes + refolds the whole log. **Ordering contract (#732):** `sequenceId` is the fold/order key;
-`occurredAt` may lag it (`PICKUP_CONFIRMED`); "when did it really happen" reads the payload.
-
-**Economics are FROZEN per record, never recomputed** (dev decision): `netProfit`, `frozenCostPerMile` and
-the fuel/non-fuel split (#659) are computed at projection time against the offer's own frozen
-`OfferEvaluation` cpm; `NetProfit` (`:domain`) is the one cost-math SSOT; `AnalyticsRepository` is
-**DAO-only** (no economy dependency). `cashTip` stays outside `realizedPay`/`netProfit` and is added to gross/net only at the read
-sites, so the reconciliation's Σ-attributed stays cash-free (#688);
-`originalPayBasis` is stamped at first fold and never rewritten (#703).
-#254 materializes per-platform time constants from eligible read-model drops, separately from user overrides, using measured transit pace and combined pickup/dropoff dwell; `odometerAtArrival` is stamped from the `DELIVERY_ARRIVED` metadata in the fold (#1310, projector v15), never by the reducer.
-A pay-less row that drove miles carries `net = −cost` (#1133; `realizedPay` stays null).
-A paid null-net row retains its gross pay; `payWithoutNet` excludes that pay from MoneyWentModel's
-`gross − net` car-cost calculation (#1108 saturation), with cash already cancelling separately.
-
-The bubble's headline (#1443) is the displayed shift's earnings, one owner `ShiftEarnings` (`:domain`): live, the larger of the running total and `SessionDetail.recordedPay` (null unless a delivery is priced); ended, the effective report (`SessionReportRule`), else recorded pay; cash tips show apart, expenses and fuel never enter it or the goal. `BubbleViewModel.displayedShift` reads one platform's latest row (`HudShiftDao`) inside one `flatMapLatest` and never shows an older shift during projection lag (a row that ended before the region's `lastSessionEndedAt` is rejected); the goal is `TodayEarnings` across every app for the local day. New expenses and fill-ups belong to the active dash, else none; existing rows keep their attribution. Car-care expenses and fill-ups record the saved vehicle they are for (`vehicleId`, default active), with a per-entry pick that never switches the active or dash vehicle (#1388; Room v21, nullable columns, no refold). Other categories and older entries have no vehicle. CSV export adds `expenses.csv` and `fuel.csv` with final `vehicle_id`/`vehicle_label` columns and voided rows retained, and non-voided ledger totals in `summary.csv`.
-
-**Pay basis ladder:** real pay from `DeliveryPayload.dropRealizedPay`/`totalPay` (#528); a receipt with
-no itemization still prices its drops because `buildPostTask` SYNTHESIZES `ParsedPay` from the receipt's
-scalars on the flat 8.93.7 layout (#1029; a COLLAPSED receipt stays `parsedPay == null`); else a
-`PayBasis.OFFER_PAY` ESTIMATE from `offerPayShare` (#691), consumed only if no sibling drop already
-folded a real receipt. Two mint sites, two policies: the INLINE (PostTask-exit) mint keeps the
-conservative pooled split over the QUOTED owed orders (`OfferPayFallback.shareFor`); the whole
-attribution ladder runs ONCE at the terminal close (`OfferPayFallback.closeAttribution`, #996/#997):
-eligible-owed shrink (proven-complete jobs drop never-mintable placeholders; UNASSIGNED never shrunk;
-an `endSession` bail can never prove completeness — it force-stamps `completedAt`) →
-store ladder (`PER_OFFER_STORE` / `SUB_POOLED_STORE` / `STAMP_FALLBACK` / `CONSOLIDATED_CUSTOMER`,
-matched through `StoreKeys.normalizedChain`) → wholesale `JOB_POOLED` degrade. Σ stamped ≤ Σ quotes is
-structural. **A receipt speaks only for the drops it described when read (#1073):** `ReceiptCoverage` is
-captured with the cached receipt and intersects the mint apportion, the attach and the re-price
-denominator (one owner); completion eligibility is NEVER coverage-gated. Subject = the ACTIVE dropoff,
-else the job's last completed drop (`receiptSubjectTaskId()`); residual #1081.
-
-**Late-expanded receipt re-price (#1033 layer 2):** `EffectMap.diffReceiptReprice` emits one
-`DELIVERY_RECEIPT_REPRICE` per delivered drop of the job, decided as a pure STEPPER transition
-(`decideReceiptReprice`, at every itemized receipt frame, at the job close, and at `endSession`), keyed
-`…:<taskId>:<jobId>:r<repriceRevision>`. Ownership is ONE temporal question — has any acceptance
-resolved since this receipt appeared (`lastAcceptResolvedAt` vs `receiptSeenAt`) — so the STACKED
-late-expand shape is refused (fail-null, #745). Stepper state: `lastDecidedPay` is compared STRUCTURALLY
-(a hash collided), and `lastAcceptResolvedAt` survives both the survivor's expiry and the mint.
-The re-price travels in the returned `StepDecisions`, never in region state; replay reconstructs it (#1423). The projector
-applies by (jobId, taskId) — itemization only on the receipt's sole drop (`soleDropOfReceipt`),
-`payBasis` → `DROP_SHARE`, net against the row's own frozen cpm, a missing row is a counted skip —
-no-ops when the row already matches, never overwrites a DRIVER-owned row
-(`MANUAL`/`USER_CORRECTED`/`driverAdjustedAt`, Room v16); a later driver adjustment wins the pay while
-`receiptRepricedAt` survives, and the drill-down discloses "re-priced from the receipt" whenever it is set.
-
-**#1030 — `RecordFolds.reportedEarningsOf` is the rule's one owner:** a `totalEarnings` of `0.0` is a
-report only when the end source is the summary screen; the stamp is `takeIf { > 0.0 }`, the fold
-normalizes, `SessionEndedFields.totalEarnings` is nullable, and the DAO mirrors the source-keyed rule on
-every `reportedEarnings` arm (a blanket `NULLIF` was rejected).
-#1459: on a non-summary end, `SessionReportRule` floors a positive running total at the shift's recorded pay
-(`max`, at read time, past shifts included; "above" means by more than `ANALYTICS_MONEY_EPSILON`, one predicate
-`recordedPayAbove` and its SQL twin); SET wins, CLEAR is no report, a summary total stays authoritative even when
-lower, and an absent or non-positive running total stays no report; `ReportSource.RECORDED_PAY` names the case. Every
-`s`-anchored read joins `SessionReportSql.SESSION_DELIVERY_JOIN_SQL` for the recorded pay.
-
-**Store entity resolution (#159, #773, #887, #1000):** pure `StoreResolver`/`StoreKeys`; deterministic
-`storeKey = platform|normalizedChain|runningKey`; resolve-from-rows inside the batch transaction;
-receipt key > address (`@`-prefixed street number) key > chain-only, monotonic upgrades only; a driver
-correction pins (`storeKeyPinned`); superseded zero-reference identity rows are swept STRICTLY LAST
-(fails toward keeping), and a driver rename sweeps its own prior key (#906);
-a pickup-less job still stamps the exact offer link (`linkOfferToJobIfUnlinked`).
-Per-store reads group on the resolved key.
-
-**Corrections are append-only events**, folded non-destructively and rebuild-faithfully (the single-row pay, delivery and re-price decisions are the pure `DeliveryCorrections` in `:core:data`, tested as plain tables; the projector keeps the reads, writes, skips, logs and the post-write store sweep, #1420):
-`MANUAL_DELIVERY`, `DELIVERY_ADJUSTMENT` (a machine row's `payBasis` → `USER_CORRECTED` iff pay changes,
-a MANUAL row stays MANUAL; net recomputes only when pay/miles change, against the row's OWN frozen cpm;
-`newCompletedAt` banned; new UI never writes legacy `PAY_ADJUSTMENT`), `DELIVERY_SESSION_ASSIGN`
-(attribution ONLY — `sessionId` + `sessionAssigned`, no re-pricing — behind five fail-closed guards:
-row exists, row is null-session or already-assigned, target is a real ENDED session, platform
-coherence, no cash-bearing unassign; the session `deliveries` counter moves by a relative ±1; #660),
-`SESSION_REPORT_CORRECTION` (CLEAR / SET / RESTORE_MACHINE — a dash's platform-reported total;
-machine column never rewritten; `SessionReportRule` is the one owner the DAO's CASE mirrors (floors a non-summary total at recorded pay, #1459); Room v17, #1134),
-`SESSION_MILES_CORRECTION` (SET / RESTORE_MACHINE: a shift's miles, one nullable `session_records.milesOverride`;
-the odometer anchors are never rewritten; `SessionMilesRule` and its SQL twin `SessionMilesSql.EFFECTIVE_MILES_SQL`
-are the one owner of every shift-miles read, guarded by a source scan; Room v22, #1535),
-and `OFFER_OUTCOME_CORRECTION` / Tier-1 `JobAcceptMismatchResolver` writing `outcomeResolved` (#810 B2:
-Tier 1 resolves only when EXACTLY one accepted offer is store-unaccounted and all others accounted —
-anything else is INCONCLUSIVE → driver attestation; `EffectMap` emits `JOB_ACCEPT_MISMATCH` AFTER the
-closing job's final `DELIVERY_COMPLETED` because the reconcile reads only earlier rows). The outcome,
-funnel and list reads exclude a resolved orphan; `WorkGaps` deliberately KEEPS it (the accept is the
-instant waiting ended). **Per-leg mileage (#688 B):** lifecycle odometer stamps fold into
-`milesToStore`/`milesToDropoff` with claim-once store legs; #1108 allocates `realizedMiles` from
-per-job AND per-session budgets; positive-delta accumulation re-anchors after odometer resets.
-Arrived drops get min(leg sum, job remaining), legacy drops get job remaining, both capped by session
-remaining; untracked or unanchored zero-measured legacy drops stay null. The 128-job budget map evicts
-the oldest delivered job at capacity. `MilesBasis` is an enum (Room name, unknown-string fallback);
-the drill-down discloses BUDGET_CAPPED and LEGACY_SPAN beside mileage. `LegState` alone owns the
-serialized completion high-water. Session/period/IRS/CSV totals stay span-anchored (or the shift miles a driver set, #1535); a driver
-`newMiles` edit wins `realizedMiles`/net but the machine leg columns are never rewritten (provenance);
-`session_records.legStateJson` keeps incremental ≡ refold. The **"(No session)" bucket** counts in gross and per-day (#660 piece 1).
-
-ADR-0012 adds the append-only `EXPENSE_LOGGED`, `FUEL_FILLUP`, and `LEDGER_ENTRY_VOIDED` events, projected into `expense_records` and `fuel_records` through `LedgerApply.kt` (#1333); folds carry no session context, so bookkeeping cannot re-upsert a session row; `appendUserEvent`, `LedgerRepository.logExpense`, and `logFuel` return the sequence id for a later `void` (Unit); one void per entry (first wins); `ExpenseCategorySerializer` maps unknown payload categories to `OTHER` without dropping the expense; expenses and fuel remain a separate ledger. #1359 makes Settings → Garage the Settings home of the vehicle list, with selection, retirement (readings kept), and Add using the wizard's `VehicleCard`/`VehicleDraft`; saved details keep type and identity fixed and save name and costs live field by field (#1385); the Economy screen edits shared settings only and links to the active vehicle's details (or Garage with no active vehicle). #1355 made the ACTIVE garage vehicle the owner of the economy's vehicle-shaped values; #1358 made the vehicle TYPED: a sealed `VehicleProfile` (gas car by class, hybrid, EV, motorcycle, scooter or moped, e-bike, bicycle) each producing the one `VehicleEconomyInputs` (energy, wear, depreciation and fixed cost per mile plus a travel profile) that `UserEconomy.from(inputs, shared)` assembles with the shared items (gas price, electricity tariff, shop pace, phone plan); every preset number is an estimate in one `VehiclePresets` object; `VehicleStorage` is versioned (v2) with a legacy reader that keeps every typed figure and unknown key; the sedan's cost per mile is pinned unchanged to the cent; the current Room learning observations have no vehicle provenance, so production still writes platform-only medians pending a learning-sample provenance decision (dash stamps do not relabel historical samples); switching vehicles changes costs and travel seeds from then on while frozen records keep theirs; `GarageSeeder` copies the wizard's saved car into the garage once at startup (an `app_state` flag), attaching it to the active vehicle rather than adding a duplicate when the garage already has one; the `app_prefs` vehicle keys are still written for one release and are removed in a later cleanup. #1333 S2f adds `ODOMETER_READING` (the typed car reading, the vehicle id and the app's own GPS total at that moment; `sessionId` always null; in `RecordFolds.BOOKKEEPING_EVENTS` with an explicit no-row arm, so it never advances a session): the GPS odometer stays the mileage source of every fold, a reading is a COMPARISON, the cue to log one is the dock's Odometer block lit in accent (the first ten minutes of a dash, and after a dash until a reading; behind the `odometer_prompts` pref) plus one "Log your odometer" Dispatcher line after the shift-start line in the session-start notification under the same rule (`OdometerCue`, one owner), and `MileageReconciliation` (`:domain`) compares the vehicle's two most recent readings, never a dash, to report car, tracked and other miles over that span with its start date, where other miles are a figure, never an error, a lower later reading is null, and the comparison is withheld when another vehicle has a reading inside a span before the first stamped dash (or whenever dash attribution cannot cover it; a switch without a reading remains undetected in that fallback). #1360 adds `DASH_VEHICLE` bookkeeping (no session row or advance): every dash the app sees gets a `START` stamp, with an unknown (null) vehicle when none is active or the dash is first seen after `OdometerCue`'s window. The latest stamp wins inside the first stamp's window, the first retains the dash's time and GPS start, and covered comparisons count per-vehicle miles on the GPS axis. An unknown dash still bounds the preceding dash; a span overlapping it keeps today's reconciliation computation and withholding rule.
-
-**Read surfaces (the Analytics HUB's sources are all window-anchored — the Playbook's heatmap,
-leaderboard and plan are deliberately LIFETIME under a declaring badge; one assembly path each):** `AnalyticsWindow` +
-`PeriodBounds.of(window|period)` (#970; Monday weeks, fixed bounds for a paged window, selection persisted
-as `AnalyticsWindowSelection`); pay mix + platform split through the same `assemble` (#973; #1135 PR 1 made the
-bar an EXACT decomposition of Earned — base + tips (cash labelled) + recorded-not-itemized (offer-estimate subset
-named) + reported-not-matched − recorded-above-reported, no residue, no floor, `"bonus"` never said; `ReportSource`
-+ `GrossSources` name WHERE each dash's reported total came from, mirrored by `SessionReportSql.REPORT_SOURCE_SQL`);
-Offers tab (#975;
-`AnalyticsTab` order is declaration order, selection transient; estimate-vs-reality keeps the DAO's
-unfiltered accepted-offer LEFT JOIN as the stated denominator, applies its exclusions in the pure factory —
-null estimate, unlinked offer, a stack, missing realized net/minutes — and renders both bars as a MEAN of
-per-offer rates; `MAX_OFFER_PAGE` 250); Home = "Today" (#977; `DayPlanner` over the lifetime
-heatmap, `MIN_SAMPLED_HOURS` 5, `Recap →` writes the persisted selection, then opens Analytics fresh, #1447); heatmap
-Rate/Hours toggle + store leaderboard (#979, outlier ≥ 1.5× fleet median p50 dwell, ≥3 stores); **Weekly
-Plan (#981)** — `HourOfWeekSampler` (per-day (date, hour) samples off the heatmap's two lifetime reads) + `WeeklyPlanner`
-(median ranking with `MIN_SAMPLE_DAYS` 3 separate days per cell, ≥2 h/≤4 h runs, edits REPLAYED, every
-weekday reported with a measured reason), `SavedWeeklyPlan` FROZEN at
-save in the `weekly_plan` DataStore (a user artifact, deliberately NOT a Room table), `WeeklyPlanWorker`
-grades Sunday 18:00 on its own channel 104 — planned vs actual INSIDE the planned windows only, money
-outside reported separately, never folded in; Time tab (#983; `WorkGaps` pairs a completion with the next
-accept in the same dash — never across dashes or days, an accept past the dash's effective end is
-dropped, a dash's last drop is a tail not a gap, a gap ≥ 2 h is counted and STATED never excluded;
-`sequenceId` for "which", timestamps for "how long"; while-working vs
-whole-shift net/hr, null never `$0.00/hr`; `HourComposition` states coverage as a field); the **three
-destinations (#1024)**, the bottom bar's three tabs since #1447: Home = today, the hub (Money · Offers · Time) =
-the past, the Playbook = the next move. **Two presentation tiers (#1255)** share the `app_prefs.analytics_show_more` boolean (default false):
-compact tiles on the hub, and the plan summary, Rate heatmap and top three stores on the Playbook;
-More numbers reveals the remaining figures and controls. Both ViewModels read the same preference flow,
-with no optimistic local copy. `HowNumbersWorkFooter` owns base and screen-specific notes in one disclosure;
-`PlanProgress` remains a VIEW of `WeeklyPlanGrade`. Home uses a neutral prior-week total; an in-progress
-hub window suppresses percentage changes, while completed windows retain them. Every §9 thin-data state states its reason in a named place. The free-tier **CSV
-export** (#319) is a row-level read (merchant names exported, customer/address hashes excluded); sessions carry
-the dash's vehicle id and label, and the summary splits deductible miles per vehicle per tax year (#1387).
+- CQRS: `app_events` is the source of truth; `delivery_records`, `session_records`, `offer_records`, `stores` and
+  `pickup_records` are a rebuildable projection. `AnalyticsProjector` folds exactly once (records and watermark in
+  one transaction); a `PROJECTOR_VERSION` bump wipes and refolds. `sequenceId` is the fold and order key; "when it
+  really happened" reads the payload.
+- **Economics are frozen per record, never recomputed.** `NetProfit` is the one cost-math owner, and
+  `AnalyticsRepository` is DAO-only. `cashTip` stays outside `realizedPay` and `netProfit` and is added only at read
+  sites.
+- Corrections are append-only events, folded non-destructively; a machine re-price never overwrites a driver-owned
+  row.
+- Pay comes from the receipt, else an `OFFER_PAY` estimate. A receipt speaks only for the drops it described
+  (`ReceiptCoverage`).
+- `ShiftEarnings` is the one owner of the bubble's headline. Expenses and fuel are a separate ledger that never
+  enters earnings or the daily goal.
+- Analytics reads are window-anchored (`AnalyticsWindow`, Monday weeks); the Playbook's heatmap, leaderboard and plan
+  are lifetime under a declaring badge. The CSV export excludes customer and address hashes.
 
 ## Development Principles
 
-Every new feature or refactor holds to these — they are forefront design inputs, not afterthoughts:
+Every new feature or refactor holds to these; they are design inputs, not afterthoughts. Code cites them by number.
 
 1. **UDF (Unidirectional Data Flow).** State flows down, events flow up. Steppers/reducers are
    pure (no Android dependencies, no wall clock — `obs.timestamp` only); side effects happen at
@@ -850,151 +277,64 @@ Every new feature or refactor holds to these — they are forefront design input
    events/intents — it never writes to repositories directly. The Reactive UI rules below are the
    Compose-facing half of this.
 2. **MAD (Modern Android Development).** Kotlin-first, Compose-first, coroutines + Flow for async,
-   Hilt for DI, Room / Proto DataStore for persistence, version catalog for dependencies.
-   Modularization follows the MAD roadmap (the milestones are literally named "MAD Phase N"):
-   layer modules under `:core:*` / `:domain`, feature modules under `:feature:*` (Phase 6),
-   Package-by-Feature inside each.
-3. **Clean code / single responsibility.** Small, focused files and classes — the #237 family
-   exists because three files were allowed to grow past ~900 lines; don't add to an oversized
-   file, split it first. No god objects (the original `SettingsRepository` was decomposed for
-   exactly this; keep repositories domain-scoped). Composables stay small and stateless with
+   Hilt for DI, Room / Preferences DataStore for persistence, version catalog for dependencies.
+   Layer modules under `:core:*` / `:domain`, feature modules under `:feature:*`, Package-by-Feature inside each.
+3. **Clean code / single responsibility.** Small, focused files and classes: don't add to a file past ~900 lines,
+   split it first. No god objects; keep repositories domain-scoped. Composables stay small and stateless with
    hoisted state; shared components take pure data + lambdas.
 4. **Kotlin/Android best practices.** Idiomatic Kotlin (data/sealed types over stringly-typed
-   values — see #283), structured concurrency (scoped coroutines; `SharingStarted.WhileSubscribed`
+   values), structured concurrency (scoped coroutines; `SharingStarted.WhileSubscribed`
    for shared flows), locale-safe machine string ops (`Locale.ROOT`), immutability by default.
+   Translate only into `en` (default), `es` and `fr`, language-level, never a regional variant such as `es-rUS`
+   (`LocaleAllowlistGuardTest`). Guard an API call above minSdk 30 with `Build.VERSION.SDK_INT >= …`; never suppress
+   `NewApi` (the root `lint.xml` makes it fatal in `lintVitalRelease`).
 5. **Single source of truth (SSOT).** Every piece of state, configuration, logic, or copy has
    exactly one owner; everything else *derives* from it (reactively, where it can change). No
    hand-maintained second copies — a private cache of a preference, a re-implemented formatter,
-   a duplicated constant, or a parallel UI assembly is a divergence bug waiting to fire (the
-   campaign receipts: #356 enabled-platform caches, #358 twin `formatDuration`s, #362 duplicated
-   sha256, #357 drifted economy editors). When two surfaces need the same thing, extract one
-   definition
-   and point both at it; when a value can be computed from an owned anchor, compute it —
-   don't store it twice.
-User-facing copy follows `docs/design/copy-style.md` (label not sentence beside a number, one disclosure per screen, plain repeated nouns, no adverbs/marketing).
-Screen design follows `DESIGN.md` (repo root): the bubble's glance rules versus the main app's, how the app uses Material 3 and where it departs, the colour-role map, and the settled and open design decisions.
+   a duplicated constant, or a parallel UI assembly is a divergence bug waiting to fire. When two surfaces need the
+   same thing, extract one definition and point both at it; when a value can be computed from an owned anchor,
+   compute it — don't store it twice.
+6. **Security & privacy first.** The Pledges above are design inputs; every feature is measured against them before
+   it ships. Working rules:
+   - **Treat third-party UI and any remote rule source as untrusted input:** bounded ingestion (size, depth, node and
+     regex caps, §2), fail-closed validation, and a remote rule source signature-verified before compile
+     (`RulesetVerifier`; detail in `docs/architecture/02-rule-engine.md`).
+   - **The dasher's sensitive screens are blocked, never parsed or stored**, in both sensor pipelines, and the gate
+     fails closed beyond rule coverage: frames drop until rulesets load, every platform shipping screen rules must
+     ship sensitive rules (load-time check), and UNKNOWN captures pass the `SensitiveTextMarkers` backstop.
+     **Customers are hashed, not blocked.** A recognition change must not be able to downgrade the block side, nor
+     start storing raw customer PII on the hash side.
+   - **PII is hashed at the edge before it is persisted or could be uploaded** (`sha256`, fail-closed: never echo
+     plaintext on failure). Captures are debug-only (release binds `NoOpCaptureBus`). Evidence screenshots need
+     `EvidenceConfig`'s master toggle (default off) AND a per-category toggle; an uncategorized capture never fires.
+   - **Secrets never reach logs** (the EIA `api_key` is redacted); network logging is debug-gated.
+   - **Capability gates fail closed.** An effect whose permission tier is not granted (live OS state) does not fire.
+     Taps are app-owned `RuleAction`s verified at fire time (package scope, label allowlist, strict click); any
+     failed check aborts to manual. An automation tap also needs a granted capability key, one per (rule, action),
+     pinned to the sorted set of every branch's binding definition. **There is no auto-grant:** every capability
+     lands undecided, and only an explicit user act grants; a denial is durable. A dasher-pressed Accept/Decline is
+     its own consent. Wide event receipt is a separate feature consent, not a capability grant. Before changing
+     consent, read `docs/design/rule-capability-consent.md`.
+   - When a change touches recognition, capture, network, or effects, state its security/privacy posture in the PR:
+     what's trusted, what's gated, what's scrubbed.
+7. **Semantic, PII-safe logging.** Levels carry meaning, and the log is two products: an on-device DEBUG firehose
+   (`app.log`) and an INFO+ slice the dasher exports as a bug report (`shareable.log`, Settings → Data & Privacy →
+   Export Data).
+   - **VERBOSE**: per-frame trace (`SCREEN:` lines). Firehose only; never shipped or exported.
+   - **DEBUG**: single reducer/effect steps, gate decisions, capture writes. Firehose only.
+   - **INFO**: user-meaningful milestones (offer received/accepted/declined, delivery completed, crash recovery,
+     periodic `PipelineStats`). **PII-safe by construction:** economics, counters, state names and `sha256` hashes
+     only, **no raw store, customer or address text** (the dasher's own first + last-initial is fine). Raw
+     third-party UI text lives at DEBUG/VERBOSE only.
+   - **WARN**: a defended invariant fired (a suppressed ghost, a fail-closed denial, a grace waking a commit). If it
+     is benign and frequent, it is VERBOSE.
+   - **ERROR**: lost data or a crashed subsystem. Always shipped and exported.
 
-6. **Security & privacy first.** The non-negotiable Pledges above (on-device computation,
-   sensitive screens blocked at the matcher layer, opt-in network, edge PII scrub) are design
-   inputs, not afterthoughts — every feature is measured against them before it ships. Working
-   rules:
-   - **Treat third-party UI and (eventually) downloaded rules as untrusted input.** The
-     accessibility tree comes from another app; once the matchers split (#192) lands, rule JSON
-     comes from a CDN. Both get bounded ingestion (size/depth/node/regex caps — for a rule regex
-     that means length 200, repeat/depth caps, and the compiled program **measured** at
-     `programSize()` ≤ 1 000, since a linear-time MATCH says nothing about COMPILE cost or
-     match-time stack DEPTH and RE2J has no program-size ceiling), a **linear-time regex engine** so
-     an accepted pattern's match time is bounded by construction rather than by a watchdog, an
-     evaluation failure that is a distinguishable exception each boundary answers safely
-     (**redaction masks the whole node**, never ships it raw), and the Perl classes translated at
-     compile so device class semantics are **approximated** rather than silently narrowed to ASCII
-     (residual differences listed — #1053 / ADR-0010, §2), fail-closed
-     validation, and — for any remote rule source — **signature/integrity verification before
-     compile** (#416, in-tree): `RulesetVerifier` (ECDSA P-256/SHA-256, no new crypto dep) gates
-     `JsonRuleInterpreter.load`, which now accepts only a `VerifiedRulesetBytes` mintable solely by
-     a passing signature check — compile-from-remote-bytes is structurally unreachable without
-     verification against the *configured source's* pinned key; bundled assets are exempt (APK
-     signature covers them). Signing tooling: `matchers/tools/`.
-   - **The dasher's sensitive screens are blocked, never parsed or stored** (the dasher's banking /
-     DasherDirect / payment / own identity docs) — plus **document-image capture surfaces** (the
-     license-scan camera, the signature pad), regardless of whose, since they're an image of an ID /
-     a signature — at the matcher layer, in both sensor pipelines (#399). The gate fails CLOSED
-     beyond rule coverage (#432): frames are dropped entirely until rulesets load, every platform
-     shipping screen rules must ship sensitive rules (load-time check), and UNKNOWN captures are
-     scrubbed by a rules-independent text-marker backstop (`SensitiveTextMarkers`, the SSOT the test
-     scanner shares). **Customers are hashed, not blocked** (#463): customer-facing delivery screens
-     — incl. an alcohol delivery's ID-CHECK instruction + arrival card — are *recognized*, with the
-     customer name/address `sha256`'d in the parse, so only the literal scanner/signature surfaces
-     are sensitive. A recognition change must not be able to downgrade the block side, nor start
-     storing raw customer PII on the hash side.
-   - **PII is hashed at the edge before it is persisted or could be uploaded** (`sha256`,
-     fail-closed — never echo plaintext on failure, #362). This is how customers are
-     differentiated without keeping their info; the dasher's own name (first + last-initial) is
-     acceptable to process. Captures are debug-only (release binds
-     `NoOpCaptureBus`, #346). Evidence screenshots are gated by `EvidenceConfig` at the engine
-     edge (#426): master toggle AND per-category toggle, and an uncategorized capture never
-     fires — the master default is OFF.
-   - **Secrets never reach logs** (EIA api_key redaction, #348); network logging is debug-gated.
-   - **Capability gates fail closed.** An effect whose permission tier isn't granted does not
-     fire — tiers back onto real OS state (live accessibility-service handle, runtime location
-     grant; #417 removed the always-true stub). Rules cannot request actuation at all (#425) —
-     taps are app-owned `RuleAction`s aimed by ruleset target bindings and verified at fire
-     time (package scope + label allowlist + strict click); any failed check aborts to manual.
-     Automation-initiated taps must additionally be covered by a granted, content-pinned
-     capability key (#417) — **one key per (rule, action) since #1167**, pinned to the SORTED
-     SET of every branch's binding definition (a repointed predicate in any branch re-enters
-     consent; a new card layout re-prompts once; reordering branches does not), and a screen
-     rule that binds an action target MUST declare it at the top level (`enables`, load-validated
-     both ways like `REQUIRED_FIELDS_BY_FLOW`): rule loads enumerate capabilities and publish
-     them to the grant store *before* rules go live, but **grant NOTHING — there is no auto-grant
-     (#843)**. Every
-     capability, bundled (asset) OR remote, lands *undecided* (three states: granted / denied /
-     undecided; only an explicit user act grants; the gate fires only on granted). Per Google
-     Play policy the user opts into EACH automation individually. A dasher-pressed Accept/Decline
-     is its own consent (integrity checks still apply). Consent is collected by a **prompt**
-     (`ConsentPromptPage` in the `FrontDoorSheet`, #843/#1151 — the app's front door, joining the a11y/notification permission
-     chain: fires on app foreground whenever `capabilities − granted − denied ≠ ∅` among actions with
-     an automatic trigger (`RuleAction.hasAutomaticTrigger`, #1457: not Accept/Decline, whose
-     AUTOMATION fire `SideEffectEngine` refuses), one Allow /
-     Don't-allow row per undecided capability, no "allow all"; "Not now" defers, a denial is
-     durable) and reviewed/revoked in Settings → Data & Privacy → **Automation & Consent**
-     (`CapabilityConsentScreen`/`ViewModel`, writing through `RuleCapabilityGrants.setGranted`);
-     the settings screen is a consent *record*, never a second gate — enforcement stays at the
-     `PerformRuleAction` seam, and a denial persists so a later load can't silently re-grant it
-     (fail-closed); each decision carries a receipt — time, app version,
-     `PrivacyDisclosure.REVISION` of `PRIVACY.md` — written in the same DataStore edit (#170).
-     The consent stores and the debug logs are excluded from Android backup (#1236, dev ruling
-     2026-10-07: re-consent on a new device; the database follows the user).
-     A one-shot schema migration (`RuleCapabilityDataSource`; v1 #843 cleared pre-consent
-     auto-grants and kept denials, v2 #1167 changed the key shape so it clears grants, denials AND
-     receipts together) lands every capability undecided for the prompt to re-collect consent.
-     **Wide event receipt is a separate FEATURE consent (#1151)**, never a capability grant: one
-     value (`EventReceiptPreferences`, `:domain` → DataStore in `:core:data`), opt-in (UNDECIDED =
-     filtered), a durable decline, asked as the FIRST step of the permission chain — BEFORE the
-     accessibility grant, which is offered only after a decision (dev ruling 2026-09-30) — and
-     recorded on the Automation & Consent screen; enforced only by `AccessibilityListener`. A debug
-     build that is DECLINED disables its own service (`disableSelf()`) and blocks the whole shell
-     (`DebugEventReceiptShell` replaces the NavHost).
-   When a change touches recognition, capture, network, or effects, state its security/privacy
-   posture in the PR — what's trusted, what's gated, what's scrubbed.
-7. **Semantic, PII-safe logging.** Log levels carry *meaning*, not volume convenience, and the log is
-   two products: an on-device **DEBUG firehose** for us, and an **INFO+ slice a user can export as a
-   bug report** to send to the developer. Pairs with #6 (the export is a privacy surface). The
-   receipt was a 110k-line dash log under one Timber tag (`App`), per-frame `SCREEN:` spam at INFO
-   drowning the real WARNs, and raw merchant names already leaking into INFO+ lines. The level
-   taxonomy:
-   - **VERBOSE** — per-frame trace (`SCREEN:` lines, tree-mapper `👻 NULL CHILDREN`). Firehose only;
-     never shipped or exported.
-   - **DEBUG** — single reducer/effect steps (`PROCESSING: <Event>`, grace-resume, gate decisions,
-     capture writes). Firehose only.
-   - **INFO** — user-meaningful milestones (offer received/accepted/declined, delivery completed,
-     crash recovery, periodic `PipelineStats`). This is the **shareable** stream and **must be PII-safe
-     by construction**: economics, counters, state names, `sha256` hashes only — **no raw
-     store/customer/address text** (the dasher's own first + last-initial is fine). Raw third-party UI
-     text lives at DEBUG/VERBOSE only.
-   - **WARN** — a defended invariant fired (a suppressed phantom/ghost, a fail-closed gate denial, a
-     grace timer waking a commit, an unhandled event). Must not be drowned by benign noise — if it's
-     benign and frequent, it's VERBOSE.
-   - **ERROR** — lost data or a crashed subsystem (pipeline restart, snapshot/journal write or decode
-     failure, recovery failure). Always shipped/exported.
-
-   Every component logs under its own **stable tag** (`Timber.tag("Pipeline")`, `"StateMachine"`,
-   `"Effects"`…), never the catch-all `App`. The tag rule is **enforced by a ratchet guard**
-   (#764, `TimberTagGuardTest` in `:app` unit tests): any new bare `Timber.i/w/e/wtf(` (incl. the
-   `Timber.Forest.*` form) in a main-type source set fails the build; the frozen allowlist
-   (`app/src/test/resources/timber-tag-guard-allowlist.txt`, 19 files as of #1271) is the visible debt list —
-   tag a file's sites, shrink its entry (counts dropping below the frozen number also fail, so the
-   list only burns down). The INFO-must-be-PII-safe rule is **fail-closed and
-   tested** (reuse `SensitiveTextMarkers`): a raw merchant/customer string in an INFO+ line is a
-   privacy defect of the same class as leaking it to disk — gate the shareable-export sink behind that
-   test, do not trust call-site discipline. When a change adds or moves a log site, state its level and
-   (for INFO+) confirm it carries no raw PII. Shipped as two sinks in `LogRepository` (#551): the
-   verbatim DEBUG firehose (`app.log`, on-device only) and the PII-safe INFO+ `shareable.log` a user
-   exports as a bug report (Settings → Data & Privacy → Export Data), where every INFO+ line passes a
-   **fail-closed scrub at the sink** — an injected `LogScrubber` bound to `SensitiveTextMarkers` (one
-   marker SSOT, no `:core:data`→`:core:pipeline` edge), a hit/throw/unbound scrubber redacting to a
-   `[scrubbed:<marker>]` placeholder rather than trusting call sites (the #590 replay gate patrols
-   upstream; the sink is the last line).
+   Every component logs under its own stable tag (`Timber.tag("Pipeline")`), never the catch-all `App`;
+   `TimberTagGuardTest` ratchets its allowlist (`app/src/test/resources/timber-tag-guard-allowlist.txt`) down only.
+   Every INFO+ line passes a fail-closed `LogScrubber` at the sink (`LogRepository`), bound to `SensitiveTextMarkers`,
+   which redacts to `[scrubbed:<marker>]`; do not trust call-site discipline. When a change adds or moves a log site,
+   state its level and, for INFO+, confirm it carries no raw PII.
 8. **Platform-agnostic core.** The recognition→state→effects spine never encodes a specific gig
    platform. Recognition is data (per-platform rulesets), not code; platform identity resolves
    only through the `Platform` registry (`fromRuleId`/`fromPackage`/`fromWire`) — never a literal
@@ -1002,23 +342,13 @@ Screen design follows `DESIGN.md` (repo root): the bubble's glance rules versus 
    varies by platform — vocabulary, required parse fields, effect-bearing intents, grace timing,
    offer slots, lifecycle-edge anchors, learned rate models — is either ruleset data validated at
    load or state keyed by `Platform`, never a global tuned to whichever platform we field-test
-   most. New rule↔state vocabulary goes through the enumerated, load-validated contract
-   (`ParsedFieldsFactory.REQUIRED_FIELDS_BY_SHAPE`, plus `StateMachineContract`'s #762 `EFFECT_INTENTS`
-   (effect-bearing notification intent → its required parse fields) and `REQUIRED_FIELDS_BY_FLOW`
-   (deliberately empty today — every `task:*` flow has a legitimate parse-less rule), both enforced
-   at compile by `RuleCompiler` as *declaration* checks, fail-loud per file; unknown intents stay
-   informational by construction, so an OTA ruleset can't smuggle an effect), not a magic string
-   consumed by a Kotlin `when`. The acceptance test: adding a platform means shipping a ruleset + corpus with **zero**
-   `:core:state` / `:core:pipeline` / `:domain` edits. DoorDash-heavy field testing *masks*
-   violations (a global slot never collides while only one platform runs), so this is enforced at
-   PR-review time — see *Every PR gets a design-goal review* under Git Workflow, and the drift
-   catalog #585 → #762 (both closed; D2 resolved as the phase-less `task:active` flow +
-   per-platform accept grace, ADR-0002's 2026-07-15 amendment REJECTING a peer
-   `TaskPhase.TRANSIT`; the corpus-gated Uber notification-flow enrichment lives on as #785),
-   plus the per-platform ownership pack #438 for the known seams and receipts.
+   most. New vocabulary goes through the load-validated contract (§2), so an OTA ruleset cannot smuggle an effect.
+   The acceptance test: adding a platform means shipping a ruleset + corpus with **zero** `:core:state` /
+   `:core:pipeline` / `:domain` edits. DoorDash-heavy field testing masks violations, so the design-goal review
+   enforces this.
 
 If a change genuinely can't satisfy one of these, say so explicitly in the PR description instead
-of silently violating it. The design-goal review below exists to catch exactly that before merge.
+of silently violating it.
 
 ## Reactive UI Principles
 
@@ -1028,577 +358,168 @@ Every UI element that depends on time, state, or external data should re-render 
 that input changes. No manual refresh, no waiting for the next state-machine transition to update
 something the user is looking at right now.
 
-**Core rules:**
-
 1. **State drives UI continuously, not just on transitions.** Anything time-derived — timers,
    countdowns, deadlines, relative timestamps — must tick. A composable that renders
    `formatDuration(now - arrivedAt)` once at state-change time is broken; it freezes the moment the
    reducer last fired.
-2. **State classes hold the anchor, the UI derives the value.** Store `arrivedAt: Long?` on
-   `OnPickup`, not `secondsAtStore: Int`. Store `pickupDeadlineMs: Long?`, not
-   `"7 min left"`. The composable reads the anchor + a ticker and computes the display string.
-   Keeps the state minimal, lets the UI stay fresh without reducer churn.
-3. **The 1-Hz ticker is a `produceState` loop.** Cheap, idiomatic, scoped to the composable:
-
-   ```kotlin
-   @Composable
-   fun rememberNow(tickMs: Long = 1000L): State<Long> {
-       val clock = LocalNowProvider.current
-       return produceState(initialValue = clock.millis(), clock, tickMs) {
-           value = clock.millis()
-           while (true) {
-               delay(tickMs)
-               value = clock.millis()
-           }
-       }
-   }
-   ```
-
-   Then `val now by rememberNow()` and derive whatever you need. Don't roll your own
-   `LaunchedEffect` + `mutableStateOf` for each timer — use the helper.
-4. **Don't conflate "state changed" with "UI updated".** Compose recomposes when any observed
-   state changes — including a `now: Long` flow. Time-sensitive views are driven by the ticker, not
-   by waiting for a `StateManagerV2` emission.
+2. **State classes hold the anchor, the UI derives the value.** Store `arrivedAt: Long?`, not
+   `secondsAtStore: Int`; store `pickupDeadlineMs: Long?`, not `"7 min left"`. The composable reads the anchor + a
+   ticker and computes the display string.
+3. **The ticker is `rememberNow()`** (`:core:designsystem` `time.TimeKit`, a `produceState` loop): `val now by
+   rememberNow()` and derive from it. Don't roll your own `LaunchedEffect` + `mutableStateOf` per timer.
+4. **Don't conflate "state changed" with "UI updated".** Time-sensitive views are driven by the ticker, not by
+   waiting for a `StateManagerV2` emission.
 5. **Bubble HUD has the strictest reactivity bar.** If a value can change while the dasher is
    looking at it, it must re-render without a state transition. Treat any frozen-looking value as
    a defect, not a styling choice.
 6. **One clock, and tests own it.** A composable never reads `System.currentTimeMillis()`; it reads time
-   from `rememberNow()` (ticking values) or `LocalNowProvider.current` (a one-off read), both
-   `:core:designsystem`, a `java.time.Clock` that defaults to the system clock. Compose tests live in
-   `src/testDebug` (the test host activity is a debug dependency), provide a clock they control, set
-   `mainClock.autoAdvance = false`, move the clock and call `mainClock.advanceTimeBy(2_000)`: one tick of
-   1,000 ms rounds to whole frames and can miss the recomposition (see the `ComposeSmokeTest`s in
-   `:feature:bubble` and `:app`). Motion runs on the Compose frame clock (`mainClock.advanceTimeBy`), wall time on
-   `LocalNowProvider`, and a one-time effect persists its mark at start, never at its end.
+   from `rememberNow()` (ticking values) or `LocalNowProvider.current` (a one-off read), a `java.time.Clock` that
+   defaults to the system clock. Compose tests provide a clock they control (how: `docs/architecture/06-ui-modules.md`
+   § Compose tests). A one-time effect persists its mark at start, never at its end.
 
 When in doubt: would the dasher believe a stale value? If yes, it's reactive-broken.
 
-## Snapshot Regression Testing
+## Snapshot and replay tests
 
-Tests are data-driven using captured UI hierarchy JSON files under
-`app/src/test/resources/snapshots/`.
+Before adding snapshot fixtures, changing a rule's parse output, or writing a replay test, read
+[`app/src/test/README.md`](app/src/test/README.md). Four rules hold every time:
 
-**Adding new test cases (Inbox Workflow):**
-
-1. Drop raw UI hierarchy `.json` files into `snapshots/INBOX/` (gitignored).
-2. Run `InboxProcessorTest` — it auto-sorts recognized screens into category folders, fails on PII,
-   and prints an X-Ray report for unknowns.
-3. For **unknown screens**: read the X-Ray report, add or broaden a rule in the platform's JSON5
-   source — the flat `matchers/rules/<platform>.json5` (uber) or the matching surface sub-file under
-   `matchers/rules/<platform>/` (doordash, e.g. `pickup.json5`) — canonicalized/merged into generated
-   assets by `:core:pipeline:importMatchersRules` (#635/#639), re-run.
-4. For **sensitive screens**: manually redact the JSON, run it through `SnapshotRedactor.sanitizeProvenance`
-   (the hand-move bypasses `SnapshotLibrarian`, so the provenance placeholders are NOT applied for you — the
-   corpus guard fails on a real fingerprint), move to `snapshots/SENSITIVE/`, verify with
-   `AllMatchersSuite` (the golden guard asserts every `SENSITIVE/` snapshot is caught by a
-   sensitive rule or flagged toxic by `SnapshotSecurityScanner`).
-5. Commit only the sorted files from their category folders (never from `INBOX/`). Intake also rewrites capture provenance (#1206): `SnapshotRedactor.sanitizeProvenance` sets `deviceFingerprint` / `captureId` to fixed placeholders, and `CaptureRedactionCorpusTest` fails on any committed fixture carrying a real `Build.FINGERPRINT` or capture UUID. The parse-golden dead-template ratchets are keyed per FIXTURE (`snapshots/<folder>/<file>|<rule>|<field>`, #1045), so a template that dies on one more frame fails instead of hiding under a `rule:field` pin.
-6. New corpus changes the parse-output golden — regenerate it deliberately (next section, step 4)
-   and the census conformance golden (`./gradlew :app:testDebugUnitTest --tests "*CensusGoldenExportTest*" -DexportCensusGolden=true`,
-   then review the diff of `census-contract/conformance/skeletons.jsonl.gz` — both goldens pin the
-   corpus the working tree holds, so regenerate after sorting, before committing).
-   Commit `snapshots/approved-parse-output.json` and the census golden together with the new snapshots.
-
-**The intake tools MUTATE the corpus, and are excluded from a plain sweep (#941).**
-`InboxProcessorTest` and `UnknownScreenAnalysisTest` redact/move/prune/delete files under
-`snapshots/` as their normal operation, so `app/build.gradle.kts` excludes them from an UNFILTERED
-`testDebugUnitTest` run (alongside the pre-existing `*Suite` exclusion) — "a sweep never rewrites
-the corpus" is structural. Run them deliberately by name:
-`./gradlew :app:testDebugUnitTest --tests "*InboxProcessorTest"`. Naming a test sets Gradle's
-`commandLineIncludePatterns`, which turns the whole exclusion block off.
-
-**Corpus reads fail LOUD (#941).** `TestResourceLoader.loadSnapshots` THROWS on an unparseable
-file for every directory except the two *staging* areas (`INBOX/`, `UNKNOWN/`), where a malformed
-raw pull is expected traffic — otherwise a corrupt committed fixture sits in git looking like
-coverage while no test reads it. `snapshots/UNKNOWN/negative/` is committed corpus and therefore
-strict: the leaf directory name decides.
-
-**The pruner keeps the NEWEST, and never evicts an incumbent to admit a newcomer (#929/#941).**
-`SnapshotLibrarian.pruneFolder` caps a folder at 15 distinct content variants. It sorts by the
-capture timestamp *parsed out of the filename* (both conventions: legacy `20260128_155954_491_…`
-and current `2026-07-17_18-08-53-720__…`, whose lexical orders are inverted against their real
-chronology — PR #926 deleted 9 fixtures over exactly that). And when the folder was already at cap
-**before** the run, the file the run just added is the one dropped: incumbents are never evicted to
-make room (PR #800's capped-additions-only discipline). Below cap, a fresher
-capture of identical content still replaces the stale one — that is the retention policy working.
-
-**The negative corpus (`snapshots/UNKNOWN/negative/`, #941).** Over-match is the dangerous
-recognition failure: under-match only drops a frame to UNKNOWN, but over-match *forges state*
-(#857/#874/#875 claimed `modeHint: offline` from absence and split live dashes; #858 minted an
-offer out of a "no longer available" banner). `NegativeCorpusStaysUnknownTest` (an
-`AllMatchersSuite` member) asserts every committed frame there still classifies UNKNOWN under its
-own platform partition, with a minimum-count floor so an emptied folder fails instead of
-green-passing. To add one: sweep it for PII, keep the `__<platformWire>__` capture-naming token,
-and drop it in. The parent `snapshots/UNKNOWN/` stays gitignored staging; `negative/` is
-un-ignored by an explicit negation, and the subfolder placement is load-bearing — the flat
-staging loaders list files, so they can never graduate or prune a committed negative frame.
-
-**Adding or changing a recognition rule** (there are no matcher classes to register — rules are data):
-
-1. Edit the platform's JSON5 rule source — the flat `matchers/rules/<platform>.json5` (uber) or the
-   relevant surface sub-file under `matchers/rules/<platform>/` (doordash); `$schema` gives editor
-   autocomplete/validation (the full `docs/rules.schema.json`, or `docs/rules.fragment.schema.json` for a
-   sub-file). Golden-corpus folder name == expected intent.
-2. Tests compile the **canonicalized production** rule files via `TestRulesetFactory` (which reads the
-   generated `assets/rules/`, populated by `:core:pipeline:importMatchersRules`) — nothing else to wire up.
-3. Run `InboxProcessorTest` (sorting) and then `AllMatchersSuite` (golden guard + parse-output
-   golden + ruleset + classifier regressions) to verify.
-4. If the change legitimately alters **parse output** (`ParseOutputGoldenTest` fails, #433):
-   regenerate with `./gradlew :app:testDebugUnitTest --tests "*ParseOutputGoldenTest*"
-   -DupdateParseGolden=true`, then **review the diff of `approved-parse-output.json`** — that
-   review is the regression gate — and commit it with the rule change. The same test also
-   ratchets corpus coverage (new intents should ship with corpus) and lints dedupeKey
-   `{field}` templates against fields the rule actually parses. The coverage ratchet is keyed
-   by **platform + intent** (#941) and measured by classifying the corpus inside each
-   platform's rule partition — not by "a folder with that intent's name exists" — so a
-   DoorDash-populated folder can no longer mark the same-named Uber intent covered.
-
-### Session replay (capture sequence → recognition → state machine)
-
-The snapshot tests above are **per-frame** (does this screen recognize/parse right, in isolation).
-To reproduce a **field bug that's emergent across a session** — a ghost offer, a re-mint, doubled
-dropoffs — `SessionReplay` (`app/src/test/.../test/util/SessionReplay.kt`) replays a *chronological
-sequence* of real device `CaptureEnvelope`s: `replayRecognition` (Level A → `List<Observation>` via
-the production rules), `reduce` (Level B → folds through the real `StateMachine`, returning a
-per-frame trace of `{frame, observation, stateAfter, events}` where events match the db `app_events`
-shape), and `reduceMixed` (Level B with **click + grace-timer injection** — a timestamp-ordered mix of
-real screens, real/synthetic clicks, and synthetic `GRACE_COMMIT` timers folded through one
-`StateMachine` + one classifier wired to both screen and click rulesets).
-The captured session's db `app_events` is a **characterization** oracle (it *encodes* the bug), so
-Level-B assertions are hand-authored correct-behaviour invariants, **never `replay == db`**.
-`GhostOfferReplayTest` (Level A/B, #498) and `SingleDeliveryReplayTest` (click+timer injection:
-accept-click → pickup → dropoff → complete, exactly one dropoff, #498/#503/#518) are the worked
-examples, both green. Remaining frontier (on-device review tool, verdict export, eval-loopback net
-economics, GoPuff multi-drop repro) is tracked under epic #505.
-
-**End-to-end (#1271):** `E2ESessionReplay` (`test/util/`, Robolectric under `ReplayApplication`) goes
-past `StateMachine.step`: the production classifier → `StateManagerV2` → the real `SideEffectEngine`
-and handlers → in-memory Room → `AnalyticsProjector`, on ONE `TestCoroutineScheduler` whose virtual
-clock every production seam reads (defaulted `java.time.Clock` params, system UTC bound in
-`DomainModule`). Only external edges are fake (`ReplayEdges`: clock, memory DataStores, GPS, TTS engine,
-accessibility tree, notification UI); no evaluation, event row or timeout is ever injected, and time
-moves only by `advanceTo` (never `advanceUntilIdle`). `DoorDashFullDashE2ETest` is scenario 1
-(`DoorDashFullDashJourney` documents its splices, and exposes them as timed `steps()`); `InfoLogPiiGateE2ETest` is the INFO+ PII gate, which
-REQUIRES handler-written INFO+ lines; `CrashRestartE2ETest` is scenario 4 — a disk-backed DB +
-surviving stores (`ReplayEdges.DurableStores`), `crash()` mid-grace / mid-commit, a relaunched harness,
-and the same durable outcome as the uninterrupted run.
-`PrivacyExportE2ETest` / `PrivacyExportReplay` is scenario 6: real sensor → capture → census spool → worker → signed request bytes, plus the shareable log.
-Fakes: Android accessibility service/nodes and notifications, Keystore (reversible sealer), HTTP (recording interceptor), memory preference stores, the upload scheduler and replay metadata, and platform preferences.
-Release DI, Android event delivery and screenshots are out of scope.
-
-## Key Technologies
-
-- **DI:** Hilt 2.59.2 with KSP
-- **UI:** Jetpack Compose (BOM 2026.03.00), Material 3, custom `BubbleActivity` floating overlay
-- **Async:** Kotlin Coroutines 1.10.2 + Flows
-- **DB:** Room 2.8.4 (KSP)
-- **Prefs:** DataStore Preferences 1.2.1
-- **Network:** Retrofit 3.0.0 + OkHttp 5.3.2
-- **Testing:** JUnit 4, Mockito-Kotlin 6.3.0, Robolectric 4.16.1, Compose UI test (`ui-test-junit4`, Robolectric)
-- **Logging:** Timber 5.0.1
+- **A pushed fixture is public.** A branch that adds snapshot fixtures runs the intake and corpus privacy tests
+  locally before its first push. Commit sorted files only, never from `INBOX/`.
+- **`InboxProcessorTest` and `UnknownScreenAnalysisTest` mutate the corpus.** A plain sweep excludes them; run them
+  by name only.
+- A change that alters parse output regenerates `snapshots/approved-parse-output.json` and the census golden
+  deliberately; reviewing their diff is the regression gate.
+- In a session-replay test the captured `app_events` encode the bug: assert hand-written correct behaviour, **never
+  `replay == db`**.
 
 ## Agent skills
 
 ### Issue tracker
 
-GitHub issues in `sjtrotter/DashBuddy`; every issue is labelled and added to the Roadmap project. See `docs/agents/issue-tracker.md`.
+GitHub issues in `sjtrotter/DashBuddy`; every issue is labelled and added to the Roadmap project. Before filing or
+editing an issue, read `docs/agents/issue-tracker.md` (labels, board, blocking).
 
 ### Domain docs
 
 Single-context: a root `GLOSSARY.md` (created when the first term is settled) and `docs/adr/`. See `docs/agents/domain.md`.
 
+### Copy style
+
+User-facing copy follows `docs/design/copy-style.md` (label not sentence beside a number, one disclosure per screen,
+plain repeated nouns, no adverbs or marketing). Screen design follows `DESIGN.md`: the bubble's glance rules versus the
+main app's, how the app uses Material 3 and where it departs, the colour-role map, and the settled and open design
+decisions.
+
 ### Delivery chain
 
-The user skills under `~/.claude/skills` run the PR loop in this repo, in this order:
+The user skills under `~/.claude/skills` run the PR loop in this repo, in this order. Before spawning a subagent, or
+when CI will not start, a PR needs its artifacts, or you work from a remote session, read `docs/agents/workflow.md`
+(model policy, CI logs and artifacts, escape hatches).
 
-1. **Plan:** `grilling`, then `to-spec` and `to-tickets` (the developer starts those two). The builder spec for
-   each ticket follows `codex-harness` §3 (the spec shape serves any builder).
-2. **Build and prove:** an Opus subagent builds (model policy rule 3); the session pushes the branch behind a draft PR, and PR CI
-   (`pr-check.yml`, `build-and-test`) is the gate (#1450: the laptop cannot run the full gate safely). Read a red run
-   with `gh run view <id> --log-failed` and its `gate-summary.txt` (`gh run download <id> -n junit-results-<pr>`;
-   `tools/ci/junit_summary.py` reads downloaded XML). Local Gradle is only small runs (`:domain:test`, one module's
-   compile) through `~/dashbuddy/tools/pr-loop/gt.sh`'s memory guard (what the skills' `free -m` check means here),
-   never the full gate; a branch that adds snapshot fixtures runs the intake and corpus privacy tests locally before
-   its first push, because a pushed fixture is public. Bugs go through `diagnosing-bugs` and `tdd`.
-   Screens: `gh run download <id> -n screenshots-<pr>` (light and dark PNGs of the key screens, recorded only, never
-   compared; #1463). The same run renders them after the gate, also when the gate is red as long as the build compiled;
-   `tools/ci/screenshots.txt` lists the expected files and `tools/ci/check_screenshots.py` fails the job only on a
-   missing or undecodable one (`screenshots-summary.txt` in the artifact names a crashed render).
-3. **Finish the PR's contents:** the CLAUDE.md, `docs/architecture/` and field-testing checklist updates below go
-   into the branch before a round's push (steps 2 and 4 repeat per round, and step 3's edits ride the next push), and
-   the author writes the design-goal review (the PR template's block). `deslop` the diff.
-4. **Review:** `sol-loop` (the standing adversarial review; seats and brief additions in `.claude/council.md`) on
-   the full diff, side by side with PR CI (dev, 2026-10-31, #1455): each round is one push of committed work, and
-   that head's CI run and Sol round start together on the same SHA; the worktree is not edited while the round runs.
-   Fix both sets of findings, then push once, which starts the next round. Any push that changes the diff starts a
-   round, a CI-only fix included, so a clean verdict never carries onto changed code. Stop at the first round whose
-   head is both CI-green and Sol-clean; the three-round cap counts every round, and at the cap with no such head the
-   developer decides. Sol cannot compile, so its compile claims are candidates CI settles; CI cannot judge design. The
-   brief names the head's SHA and run and, once it ends, its `gate-summary.txt`. `blast-radius` when the change
-   touches a shared path.
+1. **Plan:** `to-spec` and `to-tickets` (the developer starts those two). Design questions go to the council; ask the
+   developer only the low-confidence or split ones. The builder spec follows `codex-harness` §3.
+2. **Build and prove:** an Opus subagent builds; the session pushes the branch behind a draft PR, and PR CI
+   (`pr-check.yml`, `build-and-test`) is the gate. Read a red run with `gh run view <id> --log-failed` and its
+   `gate-summary.txt`. Bugs go through `diagnosing-bugs` and `tdd`.
+3. **Finish the PR's contents:** the CLAUDE.md, `docs/architecture/` and field-testing checklist updates go into the
+   branch before a round's push (steps 2 and 4 repeat per round, and step 3's edits ride the next push), and the
+   author writes the design-goal review (the PR template's block). `deslop` the diff.
+4. **Review:** `sol-loop` on the full diff, side by side with PR CI. Each round is one push of committed work; that
+   head's CI run and Sol round start together on the same SHA, and any push that changes the diff starts a new round.
+   Stop at the first round whose head is both CI-green and Sol-clean; at the three-round cap with no such head, the
+   developer decides. `blast-radius` when the change touches a shared path. Before a review round, read
+   `.claude/council.md` (seats, attack axes, round rules).
 5. **File:** `file-pr`, which fills `.github/pull_request_template.md` with both review blocks into the existing
    draft (`gh pr edit`, then `gh pr ready`).
-6. **Watch and merge:** `babysit-pr` (`pr-wait --until green`); the `master` ruleset requires `build-and-test`
-   on the head and allows merge commits only. Once it passes,
-   merge with `~/dashbuddy/tools/pr-loop/post-merge.sh <issue|-> <pr>`: it runs `gh pr merge --merge`, removes
-   the worktree, deletes the branch locally and on the remote, pulls master, sets the board to Done and drops
-   `in-progress`. Merging needs no "full send" in this repo: the developer is the only author (dev, 2026-10-27).
-   Then update the memory notes. `full-stop` and `full-send` do not know steps 3 and 6; they apply here all the same.
+6. **Watch and merge:** `babysit-pr` (`pr-wait --until green`). Once `build-and-test` passes on the head, merge with
+   `~/dashbuddy/tools/pr-loop/post-merge.sh <issue|-> <pr>`: it runs `gh pr merge --merge`, removes the worktree,
+   deletes the branch locally and on the remote, pulls master, sets the board to Done and drops `in-progress`.
+   Merging needs no "full send" here: the developer is the only author. Then update the memory notes. `full-stop`
+   and `full-send` do not know steps 3 and 6; they apply here all the same.
 
 ## Git Workflow
 
-**Before creating a branch**, mark the issue(s) as **In Progress** in the GitHub project board
-**and add the `in-progress` label** to the issue(s). See `CLAUDE.local.md` for the command to
-update the project Status field.
+- **Before creating a branch**, set the issue(s) to In Progress on the project board and add the `in-progress`
+  label (`~/dashbuddy/tools/pr-loop/start-issue.sh` does both; ids in `CLAUDE.local.md`).
+- **Always create a branch**; never commit feature or fix work directly to `master`. Never modify git config.
+- Never hardcode workstation paths, ids or command paths in this file; they live in the gitignored `CLAUDE.local.md`.
+- Branch naming: `<type>/<issue-number(s)>-<short-description>` with every issue the branch covers, e.g.
+  `feature/110-bubble-offer-mode` or `feature/79-80-offer-bubble-net-pay`. Types: `feature/`, `fix/`, `refactor/`, `chore/`, `test/`, `ci/`, `docs/`.
+- **Merge commits only, never `--squash`**, and always prune the branch: `post-merge.sh` (delivery chain step 6)
+  does both. A remote session (web or mobile) cannot delete branches: see `docs/agents/workflow.md`.
+- **Builders never open `~/dashbuddy/logs` or raw captures. No personal data goes into an issue, a PR or a commit.**
 
-**Always create a branch** before starting work on any issue or set of issues. Never commit
-feature/fix work directly to `master`.
+**Every PR ships with context updates.** As part of preparing or merging any PR:
 
-Branch naming: `<type>/<issue-number(s)>-<short-description>`, e.g. `feature/110-bubble-offer-mode` or `fix/42-crash-on-startup`. Common types:
+1. **Memories:** update the persistent memory (see *Claude Memory Upkeep*) with what the PR changed and what it means
+   for project status. Every merged PR changes status, so this always applies.
+2. **CLAUDE.md holds rules and pointers only.** Edit a line only when the PR makes it wrong, and prefer deleting to
+   adding. Never add an issue number, a date or a "since #N" history here. A new invariant goes into its reference
+   file; it earns a line here only if breaking it does silent damage that no test catches. CI fails a PR when this
+   file passes 40,000 bytes (`claude-md-budget.yml`); raising the budget is a reviewed one-line change.
+3. **`docs/architecture/`**: a PR that changes an invariant, adds a rule, or retires one records it, with its
+   history, in the layer's reference file.
 
-| Type | Use for |
-|---|---|
-| `feature/` | New functionality |
-| `fix/` | Bug fixes |
-| `refactor/` | Code restructuring, no behavior change |
-| `chore/` | Housekeeping, dependency bumps, config |
-| `test/` | Adding or fixing tests |
-| `ci/` | CI/CD pipeline changes |
-| `docs/` | Documentation only |
+**Every PR gets a design-goal review.** Before the adversarial review (it can be written while PR CI runs), review the
+full diff against the Development Principles and record it in the PR description under `### Design-goal review`:
 
-Include all relevant issue numbers when a branch covers multiple issues, e.g. `feature/79-80-offer-bubble-net-pay`.
+1. For each principle 1–8 the diff touches (plus the Reactive UI rules for UI diffs), one line: how it conforms, or
+   the explicit, justified violation (never silent).
+2. Principle 8 applies to every PR touching `:core:state`, `:core:pipeline`, `:domain` or rule JSON: no new platform
+   literals in logic, new vocabulary through the load-validated contract, per-platform values keyed by `Platform`.
+3. Fix in-PR what can be fixed in-PR. A violation that cannot be fixed there is filed as an issue and linked from the
+   review block; a PR never merges with an unrecorded violation.
+4. When the PR changes CLAUDE.md, one line: "CLAUDE.md delta: +N/-M bytes, why it must be inline".
 
-**Always merge PRs with `--merge`** (a true merge commit), never `--squash`. Squash loses
-per-commit history and makes it harder to bisect or attribute changes. **Always pass
-`--delete-branch`** so the merged branch is pruned automatically — without it, merged branches
-pile up on the remote.
+**Then the adversarial review:** `sol-loop`, run as delivery chain step 4. Its axes, reviewer strength and round
+rules live in `.claude/council.md`.
 
-```bash
-gh pr merge <NUMBER> --merge --delete-branch
-```
-
-On this workstation, where each issue's branch lives in a linked worktree (`~/dashbuddy-wt/<n>`), use
-`~/dashbuddy/tools/pr-loop/post-merge.sh <issue|-> <pr>` instead: `gh`'s local branch delete fails while the
-branch is checked out in a worktree, so the script merges with `--merge`, removes the worktree first, then deletes
-the branch locally and on the remote.
-
-(The `gh` binary path and all project/field IDs are workstation-specific — they live in
-`CLAUDE.local.md`, which is gitignored. Never hardcode workstation paths in this file.)
-
-**Branch deletion is workstation-only. Field/remote agents MUST NOT attempt to delete their own
-branch.** Agents in the remote execution environment (Claude Code on web/mobile) reach GitHub
-through a local auth proxy that **refuses ref deletions** — every form of the delete hangs the
-connection, then reports a misleading `Everything up-to-date`. The GitHub MCP server exposes no
-branch/ref-delete tool and `merge_pull_request` has no delete-branch option, so there is **no
-method available to a remote agent to delete a branch**. Do not run the delete in
-any form and do not retry it — repeated failing attempts are just noise. After merging via MCP,
-leave the branch and note in your final reply that it needs manual cleanup (the PR page's "Delete
-branch" button, or the workstation agent's `gh pr merge … --delete-branch`).
-
-**Every PR ships with context updates — no exceptions.** As part of preparing/merging ANY PR:
-
-1. **Memories** — update the persistent memory (see *Claude Memory Upkeep*) to record what the
-   PR changed and what it means for project status. Every merged PR changes status by
-   definition, so this step always applies.
-2. **CLAUDE.md** — re-check the sections the change touches (architecture, modules, workflows,
-   commands, labels, principles); if the PR makes any statement in this file stale, fix it
-   **in the same PR**.
-3. **`docs/architecture/`** — the five per-layer reference files hold the receipt-level detail the
-   §1–§5 summaries point at. A PR that changes an invariant, adds a rule, or retires one records it
-   there (the summary here only if it goes stale). Keep this file's summaries SHORT — the context
-   budget is why the detail moved (trim v3, 2026-09-07).
-
-A PR that skips these is incomplete — future agents inherit their entire context from these
-two places.
-
-**Every PR gets a design-goal review — no exceptions.** Before the adversarial review (it can be written
-while PR CI runs), review the **full diff** against the Development Principles and record the result
-in the PR description under a `### Design-goal review` heading (append it if the PR was opened
-without one):
-
-1. Walk principles 1–8 (UDF, MAD, single responsibility, Kotlin/Android practices, SSOT,
-   security & privacy, semantic logging, platform-agnostic core) — plus the Reactive UI rules for
-   UI-touching diffs. For each goal the diff **touches**, write one line: how the change conforms,
-   or the explicit, justified violation (never silent). Goals the diff doesn't touch need no line.
-2. The platform-agnosticism check (principle 8) applies to **every** PR touching `:core:state`,
-   `:core:pipeline`, `:domain`, or rule JSON: no new platform literals in logic; new vocabulary
-   goes through the enumerated, load-validated contract (never a magic string + a Kotlin `when`);
-   per-platform values are keyed by `Platform`, not stored as globals.
-3. Fix in-PR what can be fixed in-PR. A violation that legitimately can't be fixed there is
-   filed as an issue (labels + board, per the sections below) and linked from the review block —
-   a PR never merges with an unrecorded violation.
-
-This loop moves detection from post-hoc audit to merge time — the audits kept finding drift PR
-review could have caught (#356, #585).
-
-**Then an adversarial review — an independent reviewer, not self-attestation (#589).** The
-design-goal review above is the *author* walking their own diff, and self-review shares the
-author's blind spots. So after it, and before
-the PR is filed, run the **`sol-loop`** skill: a read-only Sol (`gpt-6.1-sol`, xhigh) review of the
-diff (Sol may also read the field pulls under `~/dashbuddy/logs` when a claim rests on them, dev 2026-10-27), with the round ledger, the 3-round cap and the stopping rule below, adjudicated by the session (dev
-standing rule since 2026-10-27, replacing the `/code-review` + `/security-review` + Astra trio). The seats and
-the brief additions live in `.claude/council.md`; the full `council` (Claude, Sol, Fable when the budget
-allows, Astra when added) runs only when the developer says "council". The adversary works three axes it must **not** take the author's framing on:
-
-1. **Correctness** — bugs, edge cases, broken callers, reuse/simplification.
-2. **Design principles** — walk principles 1–8 + the Reactive UI rules hunting for violations the
-   author *missed or rationalized away*. **Platform-agnosticism (#8) is mandatory** for any diff
-   touching `:core:state` / `:core:pipeline` / `:domain` / rule JSON.
-3. **Security** — for diffs touching the untrusted-input boundaries
-   (rule compile/ingest, accessibility-tree mapping, regex, PII/sensitive handling, capture/effects)
-   confirm the fail-closed + bounded-ingestion + no-plaintext-leak properties still hold, backed by
-   the security property/fuzz suite (#590). **That suite is seeded (#878)** — every kotest property
-   pins an explicit `PropSeeds.config(SEED)`, so PR CI draws the same samples on every run and a red
-   property is a reproducible finding, never a re-run-and-move-on flake. Bump a site's `SEED`
-   **deliberately** to explore new samples, NEVER to turn a red run green; the
-   unseeded breadth lives behind `-Dgiglog.propExplore=true` (10× samples, off the PR path).
-
-**Reviewer strength:** the reviewer runs at its highest effort (Sol at xhigh) and the session
-adjudicates every finding against the source; an adversary weaker than the author is theater. Record the
-outcome in the `### Adversarial review` block of the PR description (`file-pr`'s review record); fix
-findings in-PR or file + link them. A PR merges only once the adversarial pass is clean or its findings
-are triaged. `sol-loop`'s ledger, round cap and escalation rules implement (b)–(f) below, with one override for
-this repo: every round, round 2 and 3 included, gets the full base diff (rule (f)), not only the open findings and
-the changed code.
-
-**Review-loop convergence (2026-09-30 audit of PRs #1149 (15 rounds) and #1160 (17 rounds); revised 2026-10-07).**
-Those loops were productive for their first ~5 rounds (real Pledge defects) and then oscillated: on #1160 four
-rule decisions were each re-decided 4–10 times. The signal is not the round number but the PATTERN of findings.
-Rules for every review round: (a) superseded by (f): every round reviews the full diff, and later rounds also get the
-delta since the last adjudicated head and the finding ledger;
-(b) fix follow-ups IN the PR that found them (dev rule 2026-10-07) — file an issue only when the follow-up is
-wildly out of scope for that PR (a different subsystem or a multi-PR design), and say why in the PR; (c) a finding
-that REVERSES an earlier accepted fix, or grows the PR's scope (a new build task, a new generated resource, a new
-subsystem), is escalated to the developer, never applied by the coordinator; (d) a round whose verdict is MERGE /
-MERGE WITH FIXES with no confirmed defect is the last round, provided its head is also CI-green (delivery chain
-step 4: a later push that changes the diff is a new round). **(f) The stopping rule (dev, 2026-10-19, after S2f's 17 and 13 review rounds):** keep every review on the full diff, stop at the first clean independent round on a CI-green head (delivery chain step 4 is the one definition), cap at three rounds per reviewer, and treat a reviewer that never returns zero as miscalibrated rather than as evidence of defects; every reviewer answers "would you block this merge, and why", and the adjudicator fixes blocking findings in the PR and records the rest. **(e) Oscillation means redesign (dev, 2026-10-07):**
-when a round finds a new defect of the SAME CLASS the previous fix was meant to close (widen an anchor → it
-over-matches; narrow it → the leak returns), stop patching. Write down what the rounds taught, then restart on a
-fresh branch with a redesigned approach that removes the fragile dependency (receipts: #1264's every-window
-screenshot check became a 495-lines-smaller lean check; #1265's recognize-to-redact anchor gave way to a
-rule-independent backstop). Prefer the cheap design on hot paths (the app is an observer and must be fast). The
-adjudicator's job is to reject, not to relay.
-
-**Docs-only / non-code PRs can skip CI.** The `pr-check.yml` workflow skips the
-`build-and-test` job when the **PR description (body)** contains the literal
-string **`[skip ci]`**. So for a PR that touches no compiled code (only
-Markdown/docs), put `[skip ci]` in the PR body to avoid a pointless ~13-minute
-build. The token is read when a run starts: a code branch's early draft body must not carry it, and a later body
-edit (`file-pr`) neither re-runs CI nor skips it. Note the exact token is `[skip ci]` in the **body** — not `[no-ci]`, not a
-comment, not a label. Only use it when the diff genuinely has no code; when in
-doubt, let CI run. **Footgun (#902/#928):** the check is a bare `contains()`, so
-a code PR whose body merely *describes* the token skips its own CI — either
-paraphrase ("the skip-ci token") or add the override token **`[force ci]`** to
-the body, which forces the run back on. And if Actions ever **refuses to
-dispatch** runs for a PR's tree (the 2026-07-27 class — no run object across
-shas/branches), use the `workflow_dispatch` escape hatch: Actions → PR Check →
-Run workflow → enter the PR number; it builds that PR's merge ref and reports a
-real `build-and-test` commit status onto the PR head it tested (pinned before the build, #1450),
-satisfying the required check without an admin override. **`master` is protected by a ruleset (#1450):** a PR is
-required, merge commits only, `build-and-test` must pass (a skipped run counts), no approvals, and the admin
-bypass applies to PRs only. The signing secrets live in the `release` environment, which only `v*.*.*` tags can
-use.
-
-**PR CI gates `:app:lintVitalRelease` (#907).** `pr-check.yml` used to build/test only the
-**debug** variant, so a release-only break (`ExtraTranslation` errors from the #98
-`:feature:setup` extraction orphaning `values-es-rUS` translations in `:app`) shipped invisibly
-and broke `./gradlew :app:build` on master. The `build-and-test` job now runs
-`./gradlew :app:lintVitalRelease` after the unit-test step, and a source-scan guard
-(`LocaleAllowlistGuardTest`, the `TimberTagGuardTest`/`IcuRegexGuardTest` doctrine)
-enforces the dev's locale allowlist — translate into `en` (default)/`es`/`fr` only,
-language-level, never a regional variant (`es-rUS`) — so the orphaned-translation class
-can't recreate itself silently. `values-es` is intentionally incomplete (no count here: it drifts every PR)
-until the translation-completion work lands; that completeness gate is deferred, not
-forgotten. **Vital lint gates `NewApi` across every module (#1162):** vital lint evaluates FATAL
-issues only and `NewApi` is ERROR by default, so two real minSdk-30 crash classes shipped unseen
-(`AccessibilityNodeInfo#getChecked`, API 36 — #1161, recognition dead below Android 16 — and
-`Geocoder.GeocodeListener`, API 33). The root `lint.xml` promotes `NewApi` to fatal (lint discovers
-it for every module — a DSL `fatal +=` in `:app` never reached the library modules' analysis) and
-`:app`'s `lint { checkDependencies = true }` folds the library modules into the ONE existing
-`lintVitalRelease` run — which also means a local `:app:build`/`assembleRelease` pays the multi-module vital pass (accepted). Only the `NewApi` id is promoted; `InlinedApi` is benign by construction. Guard a new API call with `Build.VERSION.SDK_INT >= …`; never suppress it.
+**Docs-only PRs can skip CI:** put the literal `[skip ci]` in the PR **body** when the diff has no code. The check is a
+bare `contains()`, so a code PR whose body merely describes the token skips its own CI: paraphrase it, or add
+`[force ci]` to force the run.
 
 ## Session Orientation
 
 At the start of a session or before picking up new work:
 
-1. **Check open issues and their blocking relationships** — don't just look at what's open, look at
-   what's blocking what.
-2. **Prioritize blockers first** — if issue A is blocking issues B, C, and D, resolve A before
-   starting B, C, or D.
-3. **Determine logical next steps** from the milestone/phase ordering, then check those candidates
-   for unresolved blockers before committing to a direction.
-4. **Update the project-state memory** (`project_state_<date>.md` in the memory directory —
-   see *Claude Memory Upkeep* below) if the current state has drifted from what's recorded.
-5. Check the last `Property Exploration (nightly)` run (`gh run list --workflow prop-explore.yml --limit 1`); a red run names a property and a seed, and it stays red until someone reads it (it ran red 09-30 → 10-19 unnoticed).
+1. Check open issues and what blocks what; resolve a blocker before the issues it blocks.
+2. Pick next steps from the milestone and phase ordering, then check those candidates for unresolved blockers.
+3. Read the current-state memory (the "RESUME HERE" line at the top of `MEMORY.md`) and update it if the state has
+   drifted.
+4. Check the last `Property Exploration (nightly)` run (`gh run list --workflow prop-explore.yml --limit 1`); a red
+   run names a property and a seed, and it stays red until someone reads it.
 
 ## Claude Memory Upkeep
 
-The persistent memory directory (path in `CLAUDE.local.md` § Local workstation) is shared state
-for **every** Claude agent and session that works on this repo — orientation quality next session
-depends on what got written down this session. **Keeping memories current is part of finishing
-any piece of work, not an optional extra.** Whenever your work changes project status — merging
-a PR, closing / re-scoping / filing issues, completing a milestone phase, locking a design
-decision, running an audit, or discovering that something a memory records is no longer true —
-update the relevant memory file(s) **in the same session**, and keep the `MEMORY.md` index in
-sync (one pointer line per memory).
+The persistent memory directory (path in `CLAUDE.local.md` § Local workstation) is shared state for every agent and
+session on this repo. **Keeping memories current is part of finishing any piece of work.** Whenever your work changes
+project status (merging a PR, closing, re-scoping or filing issues, completing a phase, locking a design decision,
+running an audit, or finding that a memory is no longer true), update the memory files in the same session and keep
+the `MEMORY.md` index in sync, one pointer line per memory.
 
-Rules of thumb:
-
-- **A stale memory is worse than no memory** — it actively misleads the next agent. Correct or
-  delete wrong memories on sight; deleting a wrong memory is as valuable as writing a new one.
-- The dated `project_state_<date>.md` snapshot is **replaced** when a newer full audit
-  supersedes it (delete the old file, update the `MEMORY.md` pointer) — don't accumulate
-  stale snapshots.
-- Don't duplicate what the repo already records (code, git history, issues, ADRs, this file) —
-  memories hold status, decisions, and context that are *not* derivable from the repo.
+- **A stale memory is worse than no memory.** Correct or delete wrong memories on sight.
+- The current-state memory is replaced, not accumulated, when a newer full audit supersedes it (delete the old file,
+  update the `MEMORY.md` pointer).
+- Memories hold status, decisions and context the repo does not record; don't duplicate code, git history, issues,
+  ADRs or this file.
 
 ## Claude Subagent Model Policy
 
-**The intended shape of substantial work is a three-phase pipeline: PLAN AND VET AT FABLE →
-BUILD WITH LOWER TIERS → VALIDATE AT FABLE.** The developer deliberately pays the fable cost
-at both ends: idea-building, design, and vetting happen rich and up front (waiting out a
-usage reset is an accepted side effect — the developer prefers spending more on initial
-planning over cheap plans), and the PR checks close the loop at the top tier. A well-vetted
-plan with sharp boundaries is precisely what makes the build safely delegable, and the fable
-check is what makes a cheap build trustworthy. **"Reserve fable" therefore means one thing:
-don't burn the scarce tier on mechanical execution in the middle.** It does NOT mean skimping
-on planning, design, vetting, or review. Never dip into usage credits or pay-by-token on the
-developer's behalf (the 2026-06-25 mid-workflow session-limit collapse — 36 agents dead, all
-spend wasted — is the receipt for budget awareness).
-
-Rules, in precedence order:
-
-1. **PR checks run at full strength.** The adversarial pre-merge review is `sol-loop` (Sol at
-   xhigh, see Git Workflow), and every verdict that gates a merge is adjudicated by the session at
-   its top tier, no exceptions. The reviewer is the safety net for everything built below it,
-   and it has repeatedly caught author-missed defects (PRs #609/#610/#611). Save budget on
-   the builder, never on the reviewer.
-2. **Planning, design, and vetting run at fable by design.** Usually that is the main loop
-   itself; fable *subagents* are also legitimate in this phase — adversarial design vetting,
-   judge panels, final adjudication of conflicting evidence, pledge/security-critical
-   verdicts — name the phase when spawning one. The deliverable of this phase is a plan
-   bounded enough to hand down: named files, the expected change shape, acceptance criteria,
-   and what the tests/review must prove.
-3. **The default BUILDER for everything else is a Claude Opus subagent (`model: opus`, set
-   explicitly, never omit-to-inherit) — dev decision 2026-10-31.** From 2026-09-30 it was the
-   codex CLI (`gpt-6-astra`), chosen after the third usage-limit collapse (06-25, 08-09, 09-30);
-   Astra's #1442 build then reached PR CI with compile breaks that CI found one per ~13-minute run.
-   Fable writes the bounded spec to a scratchpad file (named files, exact change shape, done
-   criteria, which suites must go green); the Opus subagent builds it in the PR's worktree, may run
-   a small compile or one module's tests through `gt.sh`'s memory guard (never the full gate, never
-   beside another Gradle run or a Claude analysis agent), and does not commit; the session commits, pushes to the draft PR and
-   reads PR CI. Builders never open `~/dashbuddy/logs` or raw captures (Sol reviews may, see Git
-   Workflow). The builder spends Claude budget again, so rule 5 applies at every delegation; when the
-   budget is tight, the codex Astra builder (`timeout N codex exec -m gpt-6-astra -s workspace-write
-   -c 'model_reasoning_effort="high"' … - < spec.md`, no network, no repo memory, a self-contained
-   spec) is the fallback.
-4. **Delegating to any lower tier — codex or sonnet — is allowed only for building
-   well-bounded implementations from an already-vetted plan**, and only when confident the
-   builder can execute: named files, an explicit expected change shape, and cheap
-   verification (existing tests and/or the fable PR check will catch a failure
-   inexpensively — boundedness is what makes verification cheap, which is what makes the
-   delegation actually save anything). Haiku only for trivially mechanical scans. Never hand
-   a lower tier open-ended research, design, root-cause analysis, or judgment work —
-   boundedness is the control that limits hallucinations and expansive errors. If the plan
-   isn't bounded enough to delegate, that is a phase-2 gap: sharpen the plan at fable, don't
-   promote the builder.
-5. **Weigh the usage limit at the moment of delegation.** There is no meter to read, so:
-   treat fable scarcity as a standing assumption, not a measurement; if limit errors have
-   appeared this session, or the developer has signaled they need their usage (e.g. about
-   to dash), shrink or defer the work, or ask before launching — a workflow that dies
-   mid-fan-out wastes everything it already spent. When the budget is tight, **economize in
-   the middle phase**: the plan/vet and validate ends keep fable priority (the developer
-   prefers waiting for a reset over cheap planning or cheap review).
+Opus subagents build (`model: opus`, set explicitly), `sol-loop` reviews, and the session adjudicates every finding
+that gates a merge. Codex Astra is the fallback builder when the budget is tight. Hand any builder only a bounded,
+already-vetted plan. Before spawning a subagent, read `docs/agents/workflow.md` § Model policy.
 
 ## Field Testing Logs
 
-**At the START of a field-testing session** — when the developer signals they're about to
-dash or are starting a field test (e.g. "starting a field test", "about to dash", "heading
-out", "field testing now", "what should I look for") — **first read §1 of the index
-`docs/field-testing/CHECKLIST.md` and the item files it links (each item is a file under
-`docs/field-testing/checklist/open/`; `grep -l '^status: must-watch' docs/field-testing/checklist/open/*`
-lists the must-watch ones), and report it back concisely**: tell the developer, in plain terms, what to watch for and how to
-tell if each item is working. This is the primary job of a field-testing agent launched on
-the phone before a dash. Keep it short and glanceable — they're about to be driving.
-
-**Each checklist item needs two independent field confirmations before it's validated** — a
-single dash can pass by luck or miss the edge case. Track with the `- Confirmed: N/2` line
-in the item's file under `docs/field-testing/checklist/open/` (that line is the only place the count lives),
-noting each sighting's date/conditions on a dated sub-line. At 2/2, close it: `git mv` the file to
-`checklist/closed/`, change its `status:` line to `field-validated`, and in `CHECKLIST.md` move its index line
-to §5 with the link pointing at `checklist/closed/`; record the evidence in the dated session log; report broken findings there immediately for triage. For the long tail, agents may PROPOSE desk closure (fable's proposed bar — 1/2
-desk-verified + 3 clean incidental dashes — pending the dev's confirmation); never record an unwitnessed confirmation.
-An item untouched 6 weeks at 0/2 is `[review]`, never auto-retired; closures are the dev's.
-
-**Closing the loop — add items when work needs field validation.** Whenever you open a PR or
-close an issue for a change that **needs or would benefit from field validation** — on-dash
-behavior, bubble/HUD changes, recognition rules or parsers, or anything verified only against
-captured data — **also add a matching item: a new file in `docs/field-testing/checklist/open/`
-(a `status:` line (the only place the status lives) and an `issues:` line, a blank line, then the item as a
-`- **title** …` bullet) plus a `- [title](checklist/open/<file>.md)` line under its section in the
-`docs/field-testing/CHECKLIST.md` index** (what to watch + how to tell it's working + the PR/issue number, starting at
-`Confirmed: 0/2`). Treat this as part of finishing the PR/closing the issue, not an
-afterthought — it's how field-validation work reaches the developer on the next dash.
-
-When the developer narrates observations from an active or just-completed dashing session —
-any of: "this is a field testing log", "dashing log", "field log", "on-dash testing notes",
-or just rattling off bugs/UX observations from time spent driving — the right action is to
-**record, not fix**:
-
-1. **Add a new file `docs/field-testing/sessions/YYYY-MM-DD-<slug>.md` and its line at the top of
-   the `## Sessions` index in `docs/field-testing/README.md`**, following the format documented at
-   the top of that README (Date / Platform(s) tested / Branch under test / Field
-   conditions / sectioned observations). Item numbers are session-local — reset to #1 each
-   session.
-2. **Don't start implementing — but desk-side exploration is encouraged.** Reading the
-   code, tracing the suspect flow, citing file/line refs, and proposing what the cause
-   *might* be is welcome inside the log entry. **What's not welcome is framing any of it as
-   a concluded answer or a fix to apply.** Phrase everything as a **hypothesis**: "likely
-   cause", "one possibility", "would need to confirm X by capturing Y". Never write
-   "Proposed fix:" followed by a concrete action and never push code changes. The developer
-   decides what's actually wrong and what to do about it; the log entry feeds that decision,
-   it does not pre-empt it.
-3. **Match the structure of prior entries.** Existing sections include Bugs / Field UX
-   context / Open questions / Meta / architecture / Research / design / Verification TODOs.
-   Omit sections that don't apply for the session.
-4. **Branch under test** — if not stated, infer from the most recent merge commit on `master`
-   and label it (e.g. "`master` at `<sha>` (post-#NNN merge)"); the developer can correct it.
-
-## GitHub Issues — Labels & Project
-
-**Always** add every new issue to the DashBuddy Roadmap project. See `CLAUDE.local.md` for the
-project number, owner, and `gh` CLI path used to do this.
-
-**Always** apply at least one label. Available labels and when to use them:
-
-| Label           | Use for                                                |
-|-----------------|--------------------------------------------------------|
-| `enhancement`   | New user-facing features                               |
-| `refactor`      | Code restructuring with no behavior change             |
-| `bug`           | Something broken                                       |
-| `architecture`  | Design decisions, RFCs, interface definitions          |
-| `offer-engine`  | Offer evaluation, scoring, UserEconomy, OfferEvaluator |
-| `testing`       | Test infrastructure, regression tests, coverage        |
-| `ci/cd`         | GitHub Actions, build pipelines, release automation    |
-| `chore`         | Housekeeping, non-feature maintenance                  |
-| `cleanup`       | Code hygiene, removing dead code, string extraction    |
-| `documentation` | Docs improvements                                      |
-| `data-enrichment`  | Parser fields for event sourcing fidelity / replay  |
-| `on-dash-testing`  | Bug or behavior discovered while actively dashing in the field |
-| `in-progress`   | Actively being worked / partially landed (pairs with board Status = In Progress) |
-
-Apply multiple labels when appropriate (e.g. `refactor` + `architecture`, `testing` +
-`offer-engine`).
-
-## GitHub Issues — Blocking Relationships
-
-When one issue is pre-work for or directly blocks another, **always set the blocking relationship**
-so the dependency is visible in the GitHub UI. Use the `addBlockedBy` GraphQL mutation — see
-`CLAUDE.local.md` for the exact command.
-
-Convention: if you say "pre-work for #X" or "blocked by #Y" in an issue description, make it real.
-
-## Device Setup Note
-
-To run on a physical device, manually enable gig.log under **Android Settings → Accessibility →
-Downloaded Apps**. The app requires `ACCESSIBILITY_SERVICE` and `ACCESS_FINE_LOCATION` permissions.
+- **About to dash** ("starting a field test", "about to dash", "heading out", "what should I look for"): read §1 of
+  `docs/field-testing/CHECKLIST.md` and the item files it links (`grep -l '^status: must-watch'
+  docs/field-testing/checklist/open/*`), and report back concisely what to watch for and how to tell each item is
+  working. They are about to drive: keep it short and glanceable.
+- **A narrated dash** ("field testing log", "dashing log", "field log", or a run of bugs and UX notes from driving):
+  **record, do not fix.** Write a session file with every cause phrased as a hypothesis, never a concluded answer or
+  a fix, and push no code. Before writing it, read `docs/field-testing/README.md` § Writing a session log.
+- **A PR or issue whose change needs field validation** (on-dash behaviour, bubble/HUD, recognition rules or parsers,
+  anything verified only against captured data) also adds a checklist item at `Confirmed: 0/2`. Before adding,
+  confirming or closing an item, read `docs/field-testing/CHECKLIST.md` §0. Closures are the developer's; never
+  record a confirmation you did not witness.

@@ -52,6 +52,27 @@ For items with multiple sub-concerns at different statuses, use one
 
 ---
 
+## Writing a session log (agents)
+
+When the developer narrates observations from an active or just-completed dash ("this is a field testing log",
+"dashing log", "field log", "on-dash testing notes", or a run of bugs and UX notes from driving), record, do not fix:
+
+1. Add a new file `sessions/YYYY-MM-DD-<slug>.md` and its line at the top of the `## Sessions` index below, in the
+   format above (Date / Platform(s) tested / Branch under test / Field conditions / sectioned observations). Item
+   numbers are session-local and reset to #1 each session.
+2. Do not start implementing, but desk-side exploration is welcome: reading the code, tracing the suspect flow,
+   citing file and line refs, and proposing what the cause might be. Never frame any of it as a concluded answer or a
+   fix to apply. Phrase everything as a hypothesis ("likely cause", "one possibility", "would need to confirm X by
+   capturing Y"). Never write "Proposed fix:" followed by a concrete action, and never push code changes. The
+   developer decides what is actually wrong and what to do; the log entry feeds that decision, it does not pre-empt
+   it.
+3. Match the structure of prior entries (Bugs / Field UX context / Open questions / Meta / architecture / Research /
+   design / Verification TODOs). Omit sections that do not apply.
+4. Branch under test: if not stated, infer it from the most recent merge commit on `master` and label it (for
+   example "`master` at `<sha>` (post-#NNN merge)"); the developer can correct it.
+
+The checklist item lifecycle (adding, confirming, closing) is in [`CHECKLIST.md`](CHECKLIST.md) §0.
+
 ## Next field test — things to look for
 
 The pre-dash checklist lives in [`CHECKLIST.md`](CHECKLIST.md).

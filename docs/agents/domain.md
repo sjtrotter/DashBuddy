@@ -5,12 +5,13 @@ How the engineering skills read this repo's domain documentation. Layout: **sing
 ## Before exploring, read these
 
 - **`GLOSSARY.md`** at the repo root, when it exists. It does not exist yet; `domain-modeling` creates it when the
-  first term is settled. Until then the domain vocabulary lives in `CLAUDE.md` (architecture summaries §1–§5) and
-  `docs/architecture/0N-*.md`.
+  first term is settled. Until then the domain vocabulary lives in `CLAUDE.md` (§ Architecture, the short invariants per layer) and
+  `docs/architecture/0N-*.md` (the full rules).
 - **`docs/adr/`**: the ADRs that touch the area you are about to work in. Files are named
   `ADR-NNNN-slug.md`; copy the newest one's header block (Status, Issue, Date, Builds on) and its Context /
   Decision / Consequences sections.
-- **`docs/architecture/`**: the per-layer reference that CLAUDE.md's §1–§5 summaries point to.
+- **`docs/architecture/`**: the per-layer reference (01–05 for the five layers, 06 for modules and UI features)
+  that CLAUDE.md's § Architecture points to.
 
 If a file does not exist, proceed silently. Do not suggest creating it up front.
 

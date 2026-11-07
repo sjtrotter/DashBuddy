@@ -18,6 +18,26 @@ counts installs per label hash, posts daily recognition health, and gives the op
 triage unfamiliar screens — the upstream half of rule distribution (#192). DoorDash is the fielded
 platform; Uber recognition exists but is thin (#826 accept undetectable, #251 multi-offer).
 
+## Strategic pillars (detail)
+
+`CLAUDE.md` keeps the mission and one line per pillar; this is the detail (moved from `CLAUDE.md`, trim v4,
+2026-11-06). Each pillar is defended by a separate architectural and licensing posture, so neutralizing one does not
+collapse the others.
+
+1. **Driver Sovereignty (the product).** Free local tier (True Net Profitability, bubble HUD, on-device session
+   tracking, CSV export). Paid managed-cloud tier ($5/mo, $49/yr, $99 lifetime for the first 500 users) for sync and
+   aggregation-derived market context. Source-available licence; auditable byte-for-byte.
+2. **Distributed Integrity (the matchers).** The recognition rules, licensed Apache-2.0 (`matchers/LICENSE`) so they
+   can be forked. They stay in-tree in the `matchers/` included build; the separate repo (#637) was closed as not
+   planned on 2026-10-04. Signed remote rule delivery is supported by the in-tree `RulesetVerifier` (#416); the design keeps rules forkable, so if an upstream source is ever compromised, drivers can switch sources via configuration (ADR-0009). RFC #192.
+3. **Academic Federation (the research).** Opt-in (k=10 cohort, on-device DP budget, edge PII scrub) anonymized
+   aggregation across university-hosted instances under IRB review. No central corpus; only aggregate query results
+   returned. AGPL-3.0 aggregator. RFCs #193 (aggregation) and #194 (academic federation).
+
+Related: the UNKNOWN-screen census epic #1138 (privacy model ADR-0011: hash-only skeletons, k-anonymous vocabulary,
+trusted installs; server #1157). The cloud-data-platform RFC #141 was closed 2026-07-12 with its un-built cloud half
+folded into the pillar epics.
+
 ## Now / in flight (2026-10-04)
 
 - **#1200 (app PR #1201 + server PR #43)** — trusted-install envelope uploader + the cluster-page
