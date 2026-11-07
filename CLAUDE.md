@@ -222,8 +222,9 @@ Before changing a stepper, a grace, a timer, recovery or the offer lifecycle, re
   only over a non-task `returnFlow`.
 - An accepted offer pre-creates placeholder tasks. Store lineage joins on the customer hash and fails null rather
   than wrong.
-- Notification pushes are lifecycle-neutral (`NotificationNeutralityTest`); the screen is the sole pause and
-  deadline writer.
+- Stateless notification pushes with no effect intent never change the lifecycle (`NotificationNeutralityTest`);
+  the screen is the sole pause and deadline writer. An overdue grace may still expire when any observation,
+  a push included, arrives.
 
 ### 4. Side Effect Engine (`app/.../state/effects/`)
 
@@ -442,6 +443,7 @@ when CI will not start, a PR needs its artifacts, or you work from a remote sess
 - **Before creating a branch**, set the issue(s) to In Progress on the project board and add the `in-progress`
   label (`~/dashbuddy/tools/pr-loop/start-issue.sh` does both; ids in `CLAUDE.local.md`).
 - **Always create a branch**; never commit feature or fix work directly to `master`. Never modify git config.
+- Never hardcode workstation paths, ids or command paths in this file; they live in the gitignored `CLAUDE.local.md`.
 - Branch naming: `<type>/<issue-number(s)>-<short-description>` with every issue the branch covers, e.g.
   `feature/110-bubble-offer-mode` or `feature/79-80-offer-bubble-net-pay`. Types: `feature/`, `fix/`, `refactor/`, `chore/`, `test/`, `ci/`, `docs/`.
 - **Merge commits only, never `--squash`**, and always prune the branch: `post-merge.sh` (delivery chain step 6)
