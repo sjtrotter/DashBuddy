@@ -76,8 +76,9 @@ as a legal `:app → :feature` dependency).
 The analytics hub (`ui/main/analytics/*`) is a separate
 sibling surface, left for a future extraction.
 
-**Navigation (#1447):** a Material 3 bottom bar with three tabs, Home,
-Analytics and Playbook (`TopLevel`), over one flat graph (`mainGraph`, every `Screen.graphRoutes` entry); the tab
+**Navigation (#1447):** a Material 3 bottom bar with three icon-only tabs, Home,
+Recap and Plan (`TopLevel`, enum names `ANALYTICS` and `PLAYBOOK`; each name is the icon's content description and
+its long-press tooltip), over one flat graph (`mainGraph`, every `Screen.graphRoutes` entry); the tab
 navigator (`TopLevel`, `RouteTarget`/`routeTarget`, `MainNavigator`'s `NavController` extensions, `MainNavActions`,
 one method per intent) lives in `:app` `ui/main/navigation/`, the shell (`MainScaffold`, `MainNavHost`) in `ui/main/`;
 route changes animate through `ScreenTransitions` (fade through between tabs, shared axis inside a tab, none under

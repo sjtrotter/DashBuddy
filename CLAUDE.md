@@ -247,7 +247,7 @@ Before changing an effect handler, a tap, an offer surface, the offer voice or t
 
 ### 5. Analytics Read-Model (`core/data/.../analytics/`, `core/database/.../analytics/`)
 
-Before changing a fold, a DAO read, a correction event, the ledger or an Analytics screen, read
+Before changing a fold, a DAO read, a correction event, the ledger or a Recap or Plan screen, read
 [`docs/architecture/05-analytics-read-model.md`](docs/architecture/05-analytics-read-model.md).
 
 - CQRS: `app_events` is the source of truth; `delivery_records`, `session_records`, `offer_records`, `stores` and
@@ -263,8 +263,8 @@ Before changing a fold, a DAO read, a correction event, the ledger or an Analyti
   (`ReceiptCoverage`).
 - `ShiftEarnings` is the one owner of the bubble's headline. Expenses and fuel are a separate ledger that never
   enters earnings or the daily goal.
-- Analytics reads are window-anchored (`AnalyticsWindow`, Monday weeks); the Playbook's heatmap, leaderboard and plan
-  are lifetime under a declaring badge. The CSV export excludes customer and address hashes.
+- Recap's reads are window-anchored (`AnalyticsWindow`, Monday weeks); Plan's heatmap, leaderboard and plan are
+  lifetime under a declaring badge. The CSV export excludes customer and address hashes.
 
 ## Development Principles
 
