@@ -302,6 +302,12 @@ data class FoldOutcome(
      * the orchestrator applies the stamp inside the batch transaction.
      */
     val offerOutcomeCorrection: OfferOutcomeCorrectionFold? = null,
+    /** A recorded unassign's stamp on its job's accepted offers ([OfferRepairFolds.unassign]). */
+    val offerUnassign: OfferUnassignFold? = null,
+    /** A missed delivery added from an accepted offer: the source link the projector validates and stores. */
+    val manualSourceLink: ManualSourceLinkFold? = null,
+    /** A hand-added delivery's removal ([OfferRepairFolds.removeManual]). */
+    val manualDeliveryRemove: ManualDeliveryRemoveFold? = null,
 )
 
 /**
@@ -447,6 +453,7 @@ object RecordFolds {
         AppEventType.FUEL_FILLUP,
         AppEventType.LEDGER_ENTRY_VOIDED,
         AppEventType.MANUAL_DELIVERY,
+        AppEventType.MANUAL_DELIVERY_REMOVED,
         AppEventType.DELIVERY_SESSION_ASSIGN,
         AppEventType.OFFER_OUTCOME_CORRECTION,
         AppEventType.SESSION_REPORT_CORRECTION,
@@ -506,9 +513,12 @@ object RecordFolds {
             // #736 unassign-via-help (#688 review Fix 2): a leg-state-only arm — purge the abandoned
             // task's pending legs so a surviving sibling can't inherit them, liveness advanced exactly
             // as the old catch-all `else` arm did (read-model row-inert; no record minted).
+            // The recorded unassign also stamps its job's accepted offers (`offer_records.unassignedAt`).
             AppEventType.TASK_UNASSIGNED -> LegFolds.foldTaskUnassigned(event, context)
+                .copy(offerUnassign = OfferRepairFolds.unassign(event))
             AppEventType.PICKUP_CONFIRMED -> DeliveryFolds.foldPickupConfirmed(event, context)
             AppEventType.MANUAL_DELIVERY -> CorrectionFolds.foldManualDelivery(event, context, currentCostPerMile)
+            AppEventType.MANUAL_DELIVERY_REMOVED -> OfferRepairFolds.removeManual(event, context)
             AppEventType.PAY_ADJUSTMENT -> CorrectionFolds.foldPayAdjustment(event, context)
             AppEventType.EXPENSE_LOGGED -> CorrectionFolds.foldExpenseLogged(event, context)
             AppEventType.ODOMETER_READING -> FoldOutcome()

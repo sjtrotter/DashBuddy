@@ -47,14 +47,17 @@ private fun String.isBlankOrNonNegative(): Boolean =
  * Add-a-missed-delivery dialog (#650/#688) — store (optional), pay (required, > 0), tip (optional,
  * ≥ 0 when present), cash tip (optional, ≥ 0 when present), note (optional). Confirm stays disabled
  * until pay is valid and any entered tip/cash is valid. Stateless w/ hoisted local field state.
+ * [initialStore] and [initialPay] prefill the fields when the delivery is added from an offer (#1517).
  */
 @Composable
 internal fun AddMissedDeliveryDialog(
     onDismiss: () -> Unit,
     onConfirm: (pay: Double, tip: Double?, cashTip: Double?, storeName: String?, note: String?) -> Unit,
+    initialStore: String = "",
+    initialPay: String = "",
 ) {
-    var store by remember { mutableStateOf("") }
-    var pay by remember { mutableStateOf("") }
+    var store by remember { mutableStateOf(initialStore) }
+    var pay by remember { mutableStateOf(initialPay) }
     var tip by remember { mutableStateOf("") }
     var cashTip by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
@@ -112,7 +115,12 @@ internal fun AdjustDeliveryDialog(
         note: String?,
     ) -> Unit,
     onUnassign: () -> Unit,
+    /** Removes a hand-added delivery after a confirm; null hides the action (every row that is not MANUAL). */
+    onRemove: (() -> Unit)? = null,
 ) {
+    // The remove confirm replaces this dialog's content in place, so the edit's fields survive a Cancel.
+    var confirmRemove by remember(target) { mutableStateOf(false) }
+    val confirming = confirmRemove && onRemove != null
     // All field state is keyed on [target] (F6): a mid-edit Room re-emission that produces a DIFFERENT
     // target snapshot re-initialises the fields from it, so the change-diff below never compares an
     // edit against a stale prefill. An equal re-emission (data-class equality) leaves the edit intact.
@@ -154,11 +162,15 @@ internal fun AdjustDeliveryDialog(
     val anyChange = storeChanged || payChanged || tipChanged || cashChanged || milesChanged || noteParsed != null
     val valid = payValid && tipValid && cashValid && milesValid && anyChange
 
+    // One dialog: while confirming a removal its slots hold "Remove this delivery? Its pay leaves this shift.", Remove
+    // and Cancel (back to the edit).
     AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.session_detail_adjust_dialog_title)) },
+        onDismissRequest = if (confirming) ({ confirmRemove = false }) else onDismiss,
+        title = { if (!confirming) Text(stringResource(R.string.session_detail_adjust_dialog_title)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (confirming) {
+                Text(stringResource(R.string.session_detail_remove_delivery_confirm))
+            } else Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 MoneyField(store, { store = it }, stringResource(R.string.session_detail_field_store_name), numeric = false)
                 MoneyField(
                     pay, { pay = it }, stringResource(R.string.session_detail_field_pay),
@@ -189,10 +201,17 @@ internal fun AdjustDeliveryDialog(
                         }
                     }
                 }
+                if (onRemove != null) {
+                    TextButton(onClick = { confirmRemove = true }, modifier = Modifier.align(Alignment.Start)) {
+                        Text(stringResource(R.string.session_detail_remove_delivery))
+                    }
+                }
             }
         },
         confirmButton = {
-            TextButton(
+            if (confirming) {
+                TextButton(onClick = onRemove) { Text(stringResource(R.string.session_detail_remove_button)) }
+            } else TextButton(
                 enabled = valid,
                 onClick = {
                     onConfirm(
@@ -206,7 +225,11 @@ internal fun AdjustDeliveryDialog(
                 },
             ) { Text(stringResource(R.string.session_detail_save_button)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.session_detail_cancel_button)) } },
+        dismissButton = {
+            TextButton(onClick = if (confirming) ({ confirmRemove = false }) else onDismiss) {
+                Text(stringResource(R.string.session_detail_cancel_button))
+            }
+        },
     )
 }
 

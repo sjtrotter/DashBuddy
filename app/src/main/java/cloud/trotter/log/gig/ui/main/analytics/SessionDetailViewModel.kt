@@ -7,6 +7,7 @@ import cloud.trotter.log.gig.core.data.analytics.AnalyticsRepository
 import cloud.trotter.log.gig.core.data.analytics.CorrectionRepository
 import cloud.trotter.log.gig.core.data.analytics.RecordsStatusRepository
 import cloud.trotter.log.gig.core.data.analytics.ShiftTimelineRepository
+import cloud.trotter.log.gig.domain.analytics.checks.ShiftChecks
 import cloud.trotter.log.gig.ui.main.navigation.Screen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Clock
@@ -82,7 +83,8 @@ class SessionDetailViewModel @Inject constructor(
             .distinctUntilChanged()
             .flatMapLatest { running -> shiftTimelineRepository.timeline(sessionId, running) }
         return combine(detail, timeline, recordsStatusRepository.status) { d, t, records ->
-            SessionDetailUiState(detail = d, timeline = t, loading = false, records = records)
+            val checks = d?.let { ShiftChecks.of(it, t) }.orEmpty()
+            SessionDetailUiState(detail = d, timeline = t, loading = false, records = records, checks = checks)
         }
     }
 
@@ -95,6 +97,32 @@ class SessionDetailViewModel @Inject constructor(
     fun addManualDelivery(pay: Double, tip: Double?, cashTip: Double?, storeName: String?, note: String?) {
         val session = uiState.value.detail?.session
         val completedAt = session?.endedAt ?: session?.startedAt ?: clock.millis()
+        appendManualDelivery(completedAt, pay, tip, cashTip, storeName, note, fromOffer = null)
+    }
+
+    /**
+     * "Add a missed delivery" from an accepted offer with no delivery: the same append, at the offer's time, naming
+     * the offer. The projector stores the link after its guards and the offer's card then shows this delivery.
+     */
+    fun addMissedDeliveryForOffer(
+        offerEventSequenceId: Long,
+        completedAt: Long,
+        pay: Double,
+        tip: Double?,
+        cashTip: Double?,
+        storeName: String?,
+        note: String?,
+    ) = appendManualDelivery(completedAt, pay, tip, cashTip, storeName, note, fromOffer = offerEventSequenceId)
+
+    private fun appendManualDelivery(
+        completedAt: Long,
+        pay: Double,
+        tip: Double?,
+        cashTip: Double?,
+        storeName: String?,
+        note: String?,
+        fromOffer: Long?,
+    ) {
         viewModelScope.launch {
             // F4c: never crash the launch on a rejected correction (a validation `require` throwing, a
             // codec/write failure). Alpha-acceptable silent reject — the record simply doesn't append;
@@ -109,6 +137,7 @@ class SessionDetailViewModel @Inject constructor(
                     completedAt = completedAt,
                     miles = null,
                     note = note,
+                    fromOfferEventSequenceId = fromOffer,
                 )
             } catch (e: CancellationException) {
                 throw e // cooperative cancellation — never swallow it
@@ -177,6 +206,48 @@ class SessionDetailViewModel @Inject constructor(
             } catch (e: Exception) {
                 // P7: counts/ids only.
                 Timber.tag(TAG).w(e, "unassignDelivery rejected for delivery seq %d", targetEventSequenceId)
+            }
+        }
+    }
+
+    /** "It was unassigned": the dasher's attestation for an accepted offer with no delivery (`OFFER_OUTCOME_CORRECTION`). */
+    fun markOfferUnassigned(offerEventSequenceId: Long) {
+        viewModelScope.launch {
+            try {
+                correctionRepository.correctOfferOutcome(offerEventSequenceId, attested = true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // P7: ids only.
+                Timber.tag(TAG).w(e, "markOfferUnassigned rejected for offer seq %d", offerEventSequenceId)
+            }
+        }
+    }
+
+    /** Undo "It was unassigned": the documented undo shape, `OFFER_OUTCOME_CORRECTION` with no resolution. */
+    fun undoOfferUnassigned(offerEventSequenceId: Long) {
+        viewModelScope.launch {
+            try {
+                correctionRepository.correctOfferOutcome(offerEventSequenceId, attested = false)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // P7: ids only.
+                Timber.tag(TAG).w(e, "undoOfferUnassigned rejected for offer seq %d", offerEventSequenceId)
+            }
+        }
+    }
+
+    /** Remove a delivery the dasher added by hand (`MANUAL_DELIVERY_REMOVED`); the projector deletes its row. */
+    fun removeManualDelivery(deliveryEventSequenceId: Long) {
+        viewModelScope.launch {
+            try {
+                correctionRepository.removeManualDelivery(deliveryEventSequenceId, sessionId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // P7: ids only.
+                Timber.tag(TAG).w(e, "removeManualDelivery rejected for delivery seq %d", deliveryEventSequenceId)
             }
         }
     }

@@ -64,7 +64,6 @@ fun AnalyticsScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     // "(No session)" categorize flow (#660 piece 2) — opened from the Money-tab callout.
     var showAssignSheet by remember { mutableStateOf(false) }
-    var showOrphanOfferSheet by remember { mutableStateOf(false) }
     // The #970 range picker (brief §3.2) — opened from the pager label or the `Custom…` chip.
     var showRangePicker by remember { mutableStateOf(false) }
 
@@ -85,7 +84,6 @@ fun AnalyticsScreen(
         onSelectGranularity = viewModel::setGranularity,
         onSelectTab = viewModel::setTab,
         onOpenNoSession = { showAssignSheet = true },
-        onOpenOrphanOffers = { showOrphanOfferSheet = true },
         onSelectFilter = viewModel::setOfferFilter,
         onShowAllOffers = viewModel::showAllOffers,
         onToggleShowMore = { viewModel.setShowMore(!uiState.showMore) },
@@ -101,14 +99,6 @@ fun AnalyticsScreen(
             candidateSessionsFor = viewModel::candidateSessionsFor,
             onAssign = viewModel::assignToSession,
             onDismiss = { showAssignSheet = false },
-        )
-    }
-
-    if (showOrphanOfferSheet && figuresShown) {
-        OrphanOfferAttestDialog(
-            groups = uiState.orphanOfferGroups,
-            onResolve = viewModel::resolveOrphanOffer,
-            onDismiss = { showOrphanOfferSheet = false },
         )
     }
 
@@ -149,7 +139,6 @@ internal fun AnalyticsContent(
     onSelectGranularity: (WindowGranularity) -> Unit,
     onSelectTab: (AnalyticsTab) -> Unit,
     onOpenNoSession: () -> Unit,
-    onOpenOrphanOffers: () -> Unit,
     onSelectFilter: (OfferFilter) -> Unit,
     onShowAllOffers: () -> Unit,
     onToggleShowMore: () -> Unit,
@@ -211,7 +200,6 @@ internal fun AnalyticsContent(
                     onSelectGranularity = onSelectGranularity,
                     onSelectTab = onSelectTab,
                     onOpenNoSession = onOpenNoSession,
-                    onOpenOrphanOffers = onOpenOrphanOffers,
                     onSelectFilter = onSelectFilter,
                     onShowAllOffers = onShowAllOffers,
                     onToggleShowMore = onToggleShowMore,
@@ -232,7 +220,6 @@ private fun ColumnScope.HubFigures(
     onSelectGranularity: (WindowGranularity) -> Unit,
     onSelectTab: (AnalyticsTab) -> Unit,
     onOpenNoSession: () -> Unit,
-    onOpenOrphanOffers: () -> Unit,
     onSelectFilter: (OfferFilter) -> Unit,
     onShowAllOffers: () -> Unit,
     onToggleShowMore: () -> Unit,
@@ -290,10 +277,8 @@ private fun ColumnScope.HubFigures(
                 platformSplit = uiState.platformSplit,
                 recentSessions = uiState.recentSessions,
                 dailyEarnings = uiState.dailyEarnings,
-                orphanOfferGroups = uiState.orphanOfferGroups,
                 onOpenSession = onOpenSession,
                 onOpenNoSession = onOpenNoSession,
-                onOpenOrphanOffers = onOpenOrphanOffers,
             )
 
             // #975: the Offers tab's list feed is its OWN StateFlow (a chip tap must not re-emit

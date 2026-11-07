@@ -24,7 +24,8 @@ import java.util.TimeZone
 
 /**
  * The shift page for PR CI's screenshots (#1463's procedure, [renderShot]): a stack and an add-on, the 47-offer
- * shape collapsed and with one run open, and a job's sheet, at 100 % and 200 % text, light and dark.
+ * shape collapsed and with one run open, a job's sheet, and an accepted offer with no delivery with its "What
+ * happened to this offer?" sheet, at 100 % and 200 % text, light and dark.
  */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = RobolectricDeviceQualifiers.Pixel7)
@@ -77,6 +78,23 @@ class ShiftPageScreenshotsTest(private val theme: String) {
     @Test @Config(fontScale = 2f)
     fun sheetFont200() = page("shift/sheet-font-200", stack, row = ShiftPageFixtures.STACK_KEY, window = true,
         expect = context.getString(R.string.shift_page_fix_delivery))
+
+    private val orphan get() = ShiftPageFixtures.orphanShift()
+    private val noDelivery get() = context.getString(R.string.shift_page_no_delivery)
+    private val question get() = context.getString(R.string.shift_offer_sheet_title)
+
+    /** An accepted offer with no delivery: its card last, the check line under the money check. */
+    @Test fun orphanCard() = page("shift/orphan-card", orphan, expect = noDelivery)
+
+    /** At 200 % the card is below the fold; a link to the run before it scrolls it into view. */
+    @Test @Config(fontScale = 2f)
+    fun orphanCardFont200() = page("shift/orphan-card-font-200", orphan, row = ShiftPageFixtures.ORPHAN_RUN_KEY, expect = noDelivery)
+
+    @Test fun orphanSheet() = page("shift/orphan-sheet", orphan, row = ShiftPageFixtures.ORPHAN_KEY, window = true, expect = question)
+
+    @Test @Config(fontScale = 2f)
+    fun orphanSheetFont200() =
+        page("shift/orphan-sheet-font-200", orphan, row = ShiftPageFixtures.ORPHAN_KEY, window = true, expect = question)
 
     private fun page(path: String, state: SessionDetailUiState, expect: String, row: String? = null, window: Boolean = false) =
         compose.renderShot(theme, path, window, assertion = {

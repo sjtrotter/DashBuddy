@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import cloud.trotter.log.gig.core.designsystem.theme.AppTheme
 import cloud.trotter.log.gig.domain.analytics.DailyEarnings
-import cloud.trotter.log.gig.domain.analytics.OrphanOfferGroup
 import cloud.trotter.log.gig.domain.analytics.PayMix
 import cloud.trotter.log.gig.domain.analytics.PeriodEconomics
 import cloud.trotter.log.gig.domain.analytics.PlatformEconomics
@@ -31,10 +30,8 @@ fun MoneyTab(
     platformSplit: List<PlatformEconomics>,
     recentSessions: List<SessionRecord>,
     dailyEarnings: List<DailyEarnings>,
-    orphanOfferGroups: List<OrphanOfferGroup>,
     onOpenSession: (String) -> Unit,
     onOpenNoSession: () -> Unit,
-    onOpenOrphanOffers: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -42,9 +39,7 @@ fun MoneyTab(
         NeedsALookCard(
             reviewItems(
                 economics = economics,
-                orphanOfferGroups = orphanOfferGroups,
                 onOpenNoSession = onOpenNoSession,
-                onOpenOrphanOffers = onOpenOrphanOffers,
             ),
         )
         if (showMore) {

@@ -19,7 +19,6 @@ import cloud.trotter.log.gig.domain.analytics.GapStats
 import cloud.trotter.log.gig.domain.analytics.HourComposition
 import cloud.trotter.log.gig.domain.analytics.NetPerHourPair
 import cloud.trotter.log.gig.domain.analytics.OfferFilter
-import cloud.trotter.log.gig.domain.analytics.OrphanOfferGroup
 import cloud.trotter.log.gig.domain.analytics.PayMix
 import cloud.trotter.log.gig.domain.analytics.PayMixParts
 import cloud.trotter.log.gig.domain.analytics.PeriodEconomics
@@ -146,16 +145,14 @@ class AnalyticsViewModel @Inject constructor(
                     ) { time, gaps -> time to gaps },
                     // The typed `combine` tops out at 5 flows, so every remaining window-anchored read
                     // rides ONE nested pair of sub-combines into the 5th slot: the per-day chart + the
-                    // "(No session)" orphan list (#660 piece 2) + the orphan-OFFER groups (#810 B2 Tier 2)
-                    // on one side, and the previous-window economics (#970 §7.2) + the pay-mix parts +
-                    // the platform split (#973 §4.2/§7.6) on the other. All window-anchored, so they
-                    // re-anchor atomically with everything else.
+                    // "(No session)" orphan list (#660 piece 2) on one side, and the previous-window economics
+                    // (#970 §7.2) + the pay-mix parts + the platform split (#973 §4.2/§7.6) on the other. All
+                    // window-anchored, so they re-anchor atomically with everything else.
                     combine(
                         combine(
                             analyticsRepository.dailyEarnings(w),
                             analyticsRepository.noSessionDeliveries(w),
-                            analyticsRepository.orphanOfferGroups(w),
-                        ) { daily, orphans, offerGroups -> Triple(daily, orphans, offerGroups) },
+                        ) { daily, orphans -> daily to orphans },
                         combine(
                             previousEconomics(w),
                             analyticsRepository.payMixParts(w),
@@ -165,8 +162,8 @@ class AnalyticsViewModel @Inject constructor(
                         // everything else here, so it re-anchors atomically with the funnel it sits under
                         // (a card claiming "N of M accepted offers" must never quote a different window's M).
                         analyticsRepository.estimateVsReality(w),
-                    ) { (daily, orphans, offerGroups), (previous, payMixParts, platforms), estVsReality ->
-                        WindowExtras(daily, orphans, offerGroups, previous, payMixParts, platforms, estVsReality)
+                    ) { (daily, orphans), (previous, payMixParts, platforms), estVsReality ->
+                        WindowExtras(daily, orphans, previous, payMixParts, platforms, estVsReality)
                     },
                 ) { economics, decisions, timeAndGaps, extras ->
                     WindowData(w, day, economics, decisions, timeAndGaps.first, timeAndGaps.second, extras)
@@ -209,7 +206,6 @@ class AnalyticsViewModel @Inject constructor(
                 netPerHour = NetPerHourPair.of(data.economics.netProfit, data.time, data.gaps),
                 dailyEarnings = data.extras.dailyEarnings,
                 noSessionDeliveries = data.extras.orphanDeliveries,
-                orphanOfferGroups = data.extras.orphanOfferGroups,
             )
         }
             .onStart { if (attempt > 0) emit(AnalyticsUiState(loaded = false)) }
@@ -416,33 +412,10 @@ class AnalyticsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * UDF intent (#810 B2 Tier 2) — attest that an accepted offer was invisibly unassigned (or UNDO)
-     * by appending an `OFFER_OUTCOME_CORRECTION`. The projector stamps `offer_records.outcomeResolved`
-     * (with its fail-closed guards) and Room invalidation refreshes the callout + the open-mismatch
-     * list — no optimistic local mutation. [attested] false is the undo (clears the resolution).
-     */
-    fun resolveOrphanOffer(offerEventSequenceId: Long, attested: Boolean) {
-        viewModelScope.launch {
-            try {
-                correctionRepository.correctOfferOutcome(
-                    targetOfferEventSequenceId = offerEventSequenceId,
-                    attested = attested,
-                )
-            } catch (e: CancellationException) {
-                throw e // cooperative cancellation — never swallow it
-            } catch (e: Exception) {
-                // P7: counts/ids only.
-                Timber.tag(TAG).w(e, "resolveOrphanOffer rejected for offer seq %d", offerEventSequenceId)
-            }
-        }
-    }
-
     /** The 5th-slot sub-combine's payload — window-anchored reads that don't fit the typed 5-arity. */
     private data class WindowExtras(
         val dailyEarnings: List<DailyEarnings>,
         val orphanDeliveries: List<DeliveryRecord>,
-        val orphanOfferGroups: List<OrphanOfferGroup>,
         val previousEconomics: PeriodEconomics?,
         val payMixParts: PayMixParts,
         val platformSplit: List<PlatformEconomics>,

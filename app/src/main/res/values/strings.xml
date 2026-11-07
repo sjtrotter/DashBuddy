@@ -472,7 +472,6 @@
     <string name="money_tab_no_session_callout_format">%1$s from %2$s %3$s not in a shift</string>
     <string name="money_tab_no_session_callout_click_label">Assign to a shift</string>
     <string name="money_tab_orphan_offers_callout_format">%1$s accepted offers with no delivery</string>
-    <string name="money_tab_orphan_offers_callout_click_label">Review these offers</string>
     <string name="money_tab_recent_sessions_title">LATEST SHIFTS, REPORTED TOTALS</string>
     <string name="money_tab_no_sessions_recorded_yet">No shifts recorded</string>
     <!-- Duplicated on purpose as :feature:bubble's hud_hero_cash (#1443); this copy is authoritative. -->
@@ -498,6 +497,10 @@
     <string name="session_detail_save_button">Save</string>
     <string name="session_detail_remove_from_dash">Remove from this shift</string>
     <string name="session_detail_remove_cash_locked_supporting">Clear the cash tip first, then remove</string>
+    <!-- A delivery the dasher added by hand: remove it, after a confirm. -->
+    <string name="session_detail_remove_delivery">Remove this delivery</string>
+    <string name="session_detail_remove_delivery_confirm">Remove this delivery? Its pay leaves this shift.</string>
+    <string name="session_detail_remove_button">Remove</string>
 
     <!-- The shift page: its money, then its timeline, and a job's sheet. -->
     <string name="shift_page_app_times_format">%1$s, %2$s to %3$s</string>
@@ -550,6 +553,25 @@
     <string name="shift_page_milestone_at_customer">At customer</string>
     <string name="shift_page_milestone_delivered">Delivered</string>
     <string name="shift_page_fix_delivery">Fix this delivery</string>
+    <!-- A recorded unassign on a card: "Unassigned 5:12 PM", or "Unassigned" with no time. -->
+    <string name="shift_page_unassigned_at_format">Unassigned %1$s</string>
+    <string name="shift_page_unassigned">Unassigned</string>
+    <string name="shift_page_marked_unassigned">You marked it unassigned</string>
+    <string name="shift_page_undo">Undo</string>
+    <!-- The shift's checks, one line each, under the money check. -->
+    <plurals name="shift_check_no_delivery">
+        <item quantity="one">%1$d accepted offer has no delivery recorded</item>
+        <item quantity="other">%1$d accepted offers have no delivery recorded</item>
+    </plurals>
+    <!-- One job, its accepted offers (always 2 or more) and its deliveries; the quantity is the deliveries. -->
+    <plurals name="shift_check_more_accepts">
+        <item quantity="one">1 job has %1$d accepted offers and %2$d delivery</item>
+        <item quantity="other">1 job has %1$d accepted offers and %2$d deliveries</item>
+    </plurals>
+    <!-- The sheet an accepted offer with no delivery opens. -->
+    <string name="shift_offer_sheet_title">What happened to this offer?</string>
+    <string name="shift_offer_sheet_unassigned">It was unassigned</string>
+    <string name="shift_offer_sheet_close">Close</string>
 
     <!-- main/analytics/NoSessionAssignDialogs.kt (#660 piece 2) -->
     <string name="no_session_assign_title">Deliveries without a shift</string>
@@ -562,15 +584,6 @@
     <string name="no_session_assign_session_deliveries_format">%1$s · %2$s %3$s</string>
     <string name="no_session_assign_close">Close</string>
     <string name="no_session_assign_back">Back</string>
-
-    <!-- main/analytics/OrphanOfferAttestDialog.kt (#810 B2 Tier 2) -->
-    <string name="orphan_offers_title">Unassigned offers</string>
-    <string name="orphan_offers_subtitle">These accepted offers have no delivery. Tap one you unassigned to mark it. Tap it again to undo.</string>
-    <string name="orphan_offers_empty">No accepted offers to review.</string>
-    <string name="orphan_offers_group_header">%1$s accepted, %2$s unassigned</string>
-    <string name="orphan_offers_resolved_caption">Unassigned, tap to undo</string>
-    <string name="orphan_offers_unknown_store">Unknown store</string>
-    <string name="orphan_offers_close">Close</string>
 
     <!-- bubble/cards/FlowCardItem.kt flow_card_* strings moved to :feature:bubble (#96) -->
 

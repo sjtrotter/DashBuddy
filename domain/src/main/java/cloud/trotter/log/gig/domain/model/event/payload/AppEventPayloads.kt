@@ -299,6 +299,12 @@ data class ManualDeliveryPayload(
     val miles: Double? = null,
     /** Driver-authored free text — driver-owned local data, never in INFO+ logs (P7). */
     val note: String? = null,
+    /**
+     * The accepted offer this missed delivery was added from (its `offer_records` PK), when the dasher added it from
+     * an offer with no delivery. The projector stores it as `delivery_records.sourceOfferSeq` after its guards; it
+     * never rewrites the offer row. Nullable-with-default: older events decode with null.
+     */
+    val fromOfferEventSequenceId: Long? = null,
 ) : AppEventPayload
 
 /**
@@ -600,6 +606,19 @@ data class FuelFillupPayload(
 
 @Serializable
 data class LedgerEntryVoidedPayload(val targetEventSequenceId: Long) : AppEventPayload
+
+/**
+ * Payload for `MANUAL_DELIVERY_REMOVED` (#1517): the dasher removes a delivery they added by hand. [targetEventSequenceId]
+ * is the `MANUAL_DELIVERY` event's sequence id (the delivery row's PK); [sessionId] is that delivery's shift. The
+ * projector deletes the row and lowers the shift's counts; the original event stays in the log. [note] is
+ * driver-authored text, never in INFO+ logs (P7).
+ */
+@Serializable
+data class ManualDeliveryRemovedPayload(
+    val targetEventSequenceId: Long,
+    val sessionId: String,
+    val note: String? = null,
+) : AppEventPayload
 
 /** Which saved vehicle drove a dash; the event itself has no session attribution. */
 @Serializable

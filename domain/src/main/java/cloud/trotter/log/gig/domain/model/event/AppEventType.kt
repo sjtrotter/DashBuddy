@@ -61,6 +61,8 @@ enum class AppEventType {
     DASH_VEHICLE,
     /** #1333: Voids an expense or fuel entry. */
     LEDGER_ENTRY_VOIDED,
+    /** #1517: Removes a hand-added (MANUAL) delivery; the MANUAL_DELIVERY event stays. */
+    MANUAL_DELIVERY_REMOVED,
     SESSION_REPORT_CORRECTION, // A driver states/clears/restores a dash's platform-reported total (#1134); the DASH_STOP stays
     SESSION_MILES_CORRECTION, // A driver sets or restores a shift's miles (#1535); the odometer anchors stay
     DELIVERY_SESSION_ASSIGN, // A driver assigns/unassigns an orphan "(No session)" delivery's session

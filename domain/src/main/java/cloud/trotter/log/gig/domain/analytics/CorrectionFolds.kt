@@ -26,6 +26,9 @@ import cloud.trotter.log.gig.domain.model.event.payload.SessionReportCorrectionP
  * top-level definition both new files derive from — the shared session helpers [resolveContext] /
  * [advance].
  */
+/** A hand-added delivery's job and task id is this prefix plus its `MANUAL_DELIVERY` sequence id. */
+internal const val MANUAL_JOB_PREFIX = "manual:"
+
 internal object CorrectionFolds {
 
     /**
@@ -107,7 +110,7 @@ internal object CorrectionFolds {
         // projector upserts every touched context in the same batch transaction, so a manual delivery
         // can never create a dangling-sessionId delivery row (the #661 invariant).
         val ctx = resolveContext(context, sid, e.occurredAt)
-        val jobId = "manual:" + event.sequenceId
+        val jobId = MANUAL_JOB_PREFIX + event.sequenceId
 
         // Frozen economy — the same waterfall as a captured completion (immutable historical fact).
         val (frozenCpm, costBasis) = when {
@@ -167,7 +170,9 @@ internal object CorrectionFolds {
             deliveredJobIds = ctx.deliveredJobIds + jobId,
             lastEventAt = maxOf(ctx.lastEventAt, p.completedAt),
         )
-        return FoldOutcome(context = newCtx, delivery = delivery)
+        // Added from an accepted offer: the projector validates the link against the offer row and stores it.
+        val sourceLink = p.fromOfferEventSequenceId?.let { ManualSourceLinkFold(event.sequenceId, sid, it) }
+        return FoldOutcome(context = newCtx, delivery = delivery, manualSourceLink = sourceLink)
     }
 
     /**

@@ -16,6 +16,9 @@ import cloud.trotter.log.gig.domain.analytics.FuelFillupFold
 import cloud.trotter.log.gig.domain.analytics.JobAcceptMismatchResolver
 import cloud.trotter.log.gig.domain.analytics.LegStateCodec
 import cloud.trotter.log.gig.domain.analytics.LedgerVoidFold
+import cloud.trotter.log.gig.domain.analytics.ManualDeliveryRemoveFold
+import cloud.trotter.log.gig.domain.analytics.ManualSourceLinkFold
+import cloud.trotter.log.gig.domain.analytics.OfferUnassignFold
 import cloud.trotter.log.gig.domain.analytics.OfferFold
 import cloud.trotter.log.gig.domain.analytics.OfferOutcomeCorrectionFold
 import cloud.trotter.log.gig.domain.analytics.OfferReconcileFold
@@ -257,6 +260,9 @@ class AnalyticsProjector @Inject constructor(
             outcome.sessionAssign?.let { adjustments += Adjustment.SessionAssign(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.offerReconcile?.let { adjustments += Adjustment.OfferReconcile(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.offerOutcomeCorrection?.let { adjustments += Adjustment.OfferOutcomeCorrect(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.offerUnassign?.let { adjustments += Adjustment.OfferUnassign(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.manualSourceLink?.let { adjustments += Adjustment.ManualSourceLink(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.manualDeliveryRemove?.let { adjustments += Adjustment.ManualDeliveryRemove(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.context?.let { ctx ->
                 contexts[ctx.sessionId] = ctx
                 touched += ctx.sessionId
@@ -322,6 +328,14 @@ class AnalyticsProjector @Inject constructor(
                     is Adjustment.SessionAssign -> applySessionAssign(adj.fold)
                     is Adjustment.OfferReconcile -> applyOfferReconcile(adj.fold, adj.sequenceId)
                     is Adjustment.OfferOutcomeCorrect -> applyOfferOutcomeCorrection(adj.fold)
+                    is Adjustment.OfferUnassign -> analyticsDao.applyOfferUnassign(adj.fold) // #1517
+                    is Adjustment.ManualSourceLink -> analyticsDao.applyManualSourceLink(adj.fold) // #1517
+                    is Adjustment.ManualDeliveryRemove -> {
+                        // #1517: the row goes; a store key only it held goes too (the #906 sweep).
+                        val removed = analyticsDao.applyManualDeliveryRemove(adj.fold)
+                        removed?.storeKey?.let { storeResolutionRunner.deleteStoreIfUnreferenced(it) }
+                        removed == null
+                    }
                 }
                 if (skipped) adjustmentSkips++
             }
@@ -407,6 +421,21 @@ class AnalyticsProjector @Inject constructor(
             override val sequenceId: Long,
             override val occurredAt: Long,
             val fold: OfferOutcomeCorrectionFold,
+        ) : Adjustment
+        data class OfferUnassign(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: OfferUnassignFold,
+        ) : Adjustment
+        data class ManualSourceLink(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: ManualSourceLinkFold,
+        ) : Adjustment
+        data class ManualDeliveryRemove(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: ManualDeliveryRemoveFold,
         ) : Adjustment
     }
 
@@ -745,8 +774,16 @@ class AnalyticsProjector @Inject constructor(
 
     // ── Restart-correct context hydration (the record tables ARE the fold state) ──
 
-    private suspend fun hydrate(sessionId: String): SessionFoldContext? {
-        val session = analyticsDao.sessionRecord(sessionId) ?: return null
+    private suspend fun hydrate(sessionId: String): SessionFoldContext? =
+        analyticsDao.sessionRecord(sessionId)?.let { hydrate(it) }
+
+    /**
+     * The one restart-correct context for a stored session row: the row plus the sets and anchors the folds read
+     * (delivered and receipted job ids, the last drop's odometer, the last offer's frozen cost basis). Every DB load
+     * goes through here, the inferred close included (#1517), so a fold sees the same context whichever path loaded it.
+     */
+    private suspend fun hydrate(session: SessionRecordEntity): SessionFoldContext {
+        val sessionId = session.sessionId
         val lastDelivery = analyticsDao.lastDeliveryInSession(sessionId)
         return session.toContext(
             deliveredJobIds = analyticsDao.deliveredJobIdsInSession(sessionId).toSet(),
@@ -787,7 +824,7 @@ class AnalyticsProjector @Inject constructor(
         // DB rows still open for this platform, not already handled in this batch.
         for (row in analyticsDao.openSessions(fresh.platform.wire)) {
             if (row.sessionId == fresh.sessionId || contexts.containsKey(row.sessionId)) continue
-            contexts[row.sessionId] = row.toContext().copy(endedAt = row.lastEventAt, endSource = INFERRED)
+            contexts[row.sessionId] = hydrate(row).copy(endedAt = row.lastEventAt, endSource = INFERRED)
             touched += row.sessionId
             inferred += row.sessionId to fresh.platform.wire
         }
@@ -835,13 +872,14 @@ class AnalyticsProjector @Inject constructor(
         legStateJson = LegStateCodec.encode(legState),
     )
 
+    /** Row to context; every input the row lacks is required, so only [hydrate] builds one. */
     private fun SessionRecordEntity.toContext(
-        deliveredJobIds: Set<String> = emptySet(),
-        receiptedJobIds: Set<String> = emptySet(),
-        prevDropOdometer: Double? = null,
-        lastEvaluatedCostPerMile: Double? = null,
-        lastEvaluatedFuelPerMile: Double? = null,
-        lastEvaluatedNonFuelPerMile: Double? = null,
+        deliveredJobIds: Set<String>,
+        receiptedJobIds: Set<String>,
+        prevDropOdometer: Double?,
+        lastEvaluatedCostPerMile: Double?,
+        lastEvaluatedFuelPerMile: Double?,
+        lastEvaluatedNonFuelPerMile: Double?,
     ) = SessionFoldContext(
         sessionId = sessionId,
         platform = Platform.fromWire(platform) ?: Platform.Unknown,
@@ -976,6 +1014,7 @@ class AnalyticsProjector @Inject constructor(
         // #1333: v16 refolded cash-only ownership and zero cash as no cash; v17 (S3b) stores a blank
         // expense note as null, so rows projected before the rule are rebuilt too.
         // 18: #1516 — offer_records.offerScope/quoteBasis and delivery/pickup_records.jobOfferHashes for the shift timeline
-        private const val PROJECTOR_VERSION = 18
+        // 19: #1517: offer_records.unassignedAt from TASK_UNASSIGNED and delivery_records.sourceOfferSeq from MANUAL_DELIVERY
+        private const val PROJECTOR_VERSION = 19
     }
 }

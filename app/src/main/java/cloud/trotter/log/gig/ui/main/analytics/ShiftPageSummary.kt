@@ -29,6 +29,7 @@ import cloud.trotter.log.gig.core.designsystem.theme.AppTheme
 import cloud.trotter.log.gig.core.designsystem.time.rememberNow
 import cloud.trotter.log.gig.domain.analytics.ANALYTICS_MONEY_EPSILON
 import cloud.trotter.log.gig.domain.analytics.SessionDetail
+import cloud.trotter.log.gig.domain.analytics.checks.MoneyCheck
 import cloud.trotter.log.gig.domain.format.Formats
 import cloud.trotter.log.gig.domain.format.formatClockTime
 

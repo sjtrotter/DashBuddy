@@ -135,6 +135,31 @@ interface AnalyticsDao {
     )
     suspend fun stampOfferOutcomeResolved(eventSequenceId: Long, resolved: String?)
 
+    /** #1517: a recorded unassign's stamp on the shift's accepted offers its job named; the first unassign wins. */
+    @Query(
+        "UPDATE offer_records SET unassignedAt = :unassignedAt WHERE sessionId = :sessionId AND outcome = :acceptedOutcome " +
+            "AND offerHash IN (:hashes) AND eventSequenceId < :beforeSequenceId AND unassignedAt IS NULL"
+    )
+    suspend fun stampOfferUnassigned(
+        sessionId: String,
+        hashes: List<String>,
+        acceptedOutcome: String,
+        beforeSequenceId: Long,
+        unassignedAt: Long,
+    ): Int
+
+    /** #1517: the shift's delivery rows sequenced before [beforeSequenceId], the missed-delivery link's evidence. */
+    @Query("SELECT * FROM delivery_records WHERE sessionId = :sessionId AND eventSequenceId < :beforeSequenceId")
+    suspend fun deliveryRecordsInSessionBefore(sessionId: String, beforeSequenceId: Long): List<DeliveryRecordEntity>
+
+    /** #1517: a removed hand-added delivery's row; returns the rows deleted. */
+    @Query("DELETE FROM delivery_records WHERE eventSequenceId = :eventSequenceId")
+    suspend fun deleteDeliveryRecord(eventSequenceId: Long): Int
+
+    /** #1517: the accepted offer a missed delivery was added from; the offer row is never rewritten. */
+    @Query("UPDATE delivery_records SET sourceOfferSeq = :offerSequenceId WHERE eventSequenceId = :deliverySequenceId")
+    suspend fun setDeliverySourceOffer(deliverySequenceId: Long, offerSequenceId: Long)
+
     /**
      * How many read-model rows still point at [storeKey] — the #887 supersession guard's evidence.
      * Counts ALL three tables that carry a resolved key (`pickup_records`, `delivery_records`,

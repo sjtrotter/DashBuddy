@@ -6,7 +6,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import cloud.trotter.log.gig.domain.analytics.DeliveryRecord
+import cloud.trotter.log.gig.domain.analytics.PayBasis
 import cloud.trotter.log.gig.domain.analytics.SessionDetail
+import cloud.trotter.log.gig.domain.analytics.timeline.OpenOffer
 
 /** Which correction dialog is open on the shift page, and its hoisted fields. One per shift. */
 @Stable
@@ -17,6 +19,8 @@ internal class ShiftPageDialogState {
     var showMiles by mutableStateOf(false)
     var milesText by mutableStateOf("")
     var showAdd by mutableStateOf(false)
+    /** "Add a missed delivery" from this accepted offer: the add dialog, prefilled from it. */
+    var addFromOffer by mutableStateOf<OpenOffer?>(null)
     var adjustTarget by mutableStateOf<DeliveryRecord?>(null)
 
     fun openReport(detail: SessionDetail) {
@@ -31,7 +35,10 @@ internal class ShiftPageDialogState {
     }
 }
 
-/** The page's correction dialogs: set the app total, correct miles, add a missed delivery, fix a delivery. */
+/**
+ * The page's correction dialogs: set the app total, correct miles, add a missed delivery (also from an offer, prefilled
+ * with its store and pay, at its time, naming it), fix a delivery.
+ */
 @Composable
 internal fun ShiftPageDialogs(detail: SessionDetail, state: ShiftPageDialogState, actions: ShiftPageActions) {
     if (state.showReport) {
@@ -74,6 +81,17 @@ internal fun ShiftPageDialogs(detail: SessionDetail, state: ShiftPageDialogState
             },
         )
     }
+    state.addFromOffer?.let { offer ->
+        AddMissedDeliveryDialog(
+            onDismiss = { state.addFromOffer = null },
+            onConfirm = { pay, tip, cashTip, store, note ->
+                actions.onAddDeliveryForOffer(offer.eventSequenceId, offer.decidedAt, pay, tip, cashTip, store, note)
+                state.addFromOffer = null
+            },
+            initialStore = offer.stores.orEmpty(),
+            initialPay = offer.pay?.toString().orEmpty(),
+        )
+    }
     state.adjustTarget?.let { target ->
         AdjustDeliveryDialog(
             target = target,
@@ -85,6 +103,14 @@ internal fun ShiftPageDialogs(detail: SessionDetail, state: ShiftPageDialogState
             onUnassign = {
                 actions.onUnassignDelivery(target.eventSequenceId)
                 state.adjustTarget = null
+            },
+            onRemove = if (target.payBasis == PayBasis.MANUAL) {
+                {
+                    actions.onRemoveDelivery(target.eventSequenceId)
+                    state.adjustTarget = null
+                }
+            } else {
+                null
             },
         )
     }

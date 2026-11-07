@@ -38,7 +38,9 @@ import cloud.trotter.log.gig.core.designsystem.component.CouldNotLoad
 import cloud.trotter.log.gig.core.designsystem.theme.AppTheme
 import cloud.trotter.log.gig.domain.analytics.RecordsStatus
 import cloud.trotter.log.gig.domain.analytics.SessionDetail
+import cloud.trotter.log.gig.domain.analytics.checks.MoneyCheck
 import cloud.trotter.log.gig.domain.analytics.timeline.JobCard
+import cloud.trotter.log.gig.domain.analytics.timeline.JobState
 import cloud.trotter.log.gig.domain.analytics.timeline.PassedOffer
 import cloud.trotter.log.gig.domain.analytics.timeline.PassedRun
 import cloud.trotter.log.gig.domain.format.formatWeekdayMonthDay
@@ -51,7 +53,9 @@ import java.time.ZoneId
  * The shift page: one shift's money above a timeline of its offers and deliveries. The title bar names the day;
  * under it the app and times, Earned, three figures, the money check (only with an independent total) and the
  * corrections; then the timeline in one `LazyColumn` keyed by the fold's stable keys. Tapping a job opens its
- * sheet. A `row` link scrolls to its item, opens the run that holds it, and opens a job's sheet.
+ * sheet; a job with an accepted offer and no delivery opens "What happened to this offer?" instead. The shift's
+ * checks ([SessionDetailUiState.checks]) sit under the money check. A `row` link scrolls to its item, opens the run
+ * that holds it, and opens a job's sheet.
  *
  * A review surface (Principle 1, state in, intents out): reactive through the read-model flows; the one ticking
  * value is a running shift's online time ([ShiftFigures]). Store names are merchants and may show; no customer
@@ -74,6 +78,10 @@ fun SessionDetailScreen(
             onUnassignDelivery = viewModel::unassignDelivery,
             onCorrectSessionReport = viewModel::correctSessionReport,
             onCorrectShiftMiles = viewModel::correctShiftMiles,
+            onMarkOfferUnassigned = viewModel::markOfferUnassigned,
+            onAddDeliveryForOffer = viewModel::addMissedDeliveryForOffer,
+            onRemoveDelivery = viewModel::removeManualDelivery,
+            onUndoMarkedUnassigned = viewModel::undoOfferUnassigned,
         ),
     )
 }
@@ -95,6 +103,22 @@ internal class ShiftPageActions(
     val onUnassignDelivery: (targetEventSequenceId: Long) -> Unit = {},
     val onCorrectSessionReport: (String, Double?, String?) -> Unit = { _, _, _ -> },
     val onCorrectShiftMiles: (Double?) -> Unit = {},
+    /** "It was unassigned" for an accepted offer with no delivery. */
+    val onMarkOfferUnassigned: (offerEventSequenceId: Long) -> Unit = {},
+    /** "Add a missed delivery" from an accepted offer: at the offer's time, naming it. */
+    val onAddDeliveryForOffer: (
+        offerEventSequenceId: Long,
+        completedAt: Long,
+        pay: Double,
+        tip: Double?,
+        cashTip: Double?,
+        storeName: String?,
+        note: String?,
+    ) -> Unit = { _, _, _, _, _, _, _ -> },
+    /** Removes a delivery the dasher added by hand. */
+    val onRemoveDelivery: (deliveryEventSequenceId: Long) -> Unit = {},
+    /** Undoes "It was unassigned" for one offer. */
+    val onUndoMarkedUnassigned: (offerEventSequenceId: Long) -> Unit = {},
 )
 
 /** The page's stateless body over [uiState]; tests and screenshots compose this. */
@@ -140,6 +164,7 @@ private sealed interface PageItem {
 
     data object Summary : PageItem { override val key = "summary" }
     data object Check : PageItem { override val key = "check" }
+    data object Checks : PageItem { override val key = "checks" }
     data object Corrections : PageItem { override val key = "corrections" }
     data object Empty : PageItem { override val key = "empty" }
     data class Card(val card: JobCard) : PageItem { override val key get() = card.key }
@@ -152,6 +177,7 @@ private fun pageItems(state: SessionDetailUiState, check: MoneyCheck?, expanded:
     add(PageItem.Summary)
     if (!state.figuresShown()) return@buildList
     if (check != null) add(PageItem.Check)
+    if (hasCheckLines(state.checks)) add(PageItem.Checks)
     add(PageItem.Corrections)
     if (state.timeline.isEmpty()) add(PageItem.Empty)
     for (item in state.timeline) {
@@ -229,6 +255,7 @@ private fun ShiftPageBody(
                         }
                     }
                     PageItem.Check -> check?.let { MoneyCheckBlock(it, detail.session.platform.displayName) }
+                    PageItem.Checks -> ShiftChecksBlock(state.checks)
                     PageItem.Corrections -> CorrectionButtons(
                         ended = detail.session.endedAt != null,
                         onAddMissed = { dialogs.showAdd = true },
@@ -240,7 +267,11 @@ private fun ShiftPageBody(
                         style = MaterialTheme.typography.bodyMedium,
                         color = AppTheme.colors.text2,
                     )
-                    is PageItem.Card -> JobCardRow(item.card, onOpen = { sheetKey = item.card.key })
+                    is PageItem.Card -> JobCardRow(
+                        item.card,
+                        onOpen = { sheetKey = item.card.key },
+                        onUndoMarked = { item.card.markedOfferSeqs.forEach(actions.onUndoMarkedUnassigned) },
+                    )
                     is PageItem.Run -> PassedRunRow(item.run, item.expanded, onToggle = {
                         expanded = if (item.expanded) expanded - item.run.key else expanded + item.run.key
                     })
@@ -252,7 +283,21 @@ private fun ShiftPageBody(
 
     if (!shown) return
     val sheetCard = sheetKey?.let { key -> state.timeline.firstOrNull { it.key == key } as? JobCard }
-    if (sheetCard != null) {
+    val question = sheetCard?.takeIf { it.state == JobState.NO_DELIVERY }?.openOffers?.firstOrNull()
+    if (question != null) {
+        OfferQuestionSheet(
+            offer = question,
+            onUnassigned = {
+                actions.onMarkOfferUnassigned(question.eventSequenceId)
+                sheetKey = null
+            },
+            onAddMissed = {
+                dialogs.addFromOffer = question
+                sheetKey = null
+            },
+            onDismiss = { sheetKey = null },
+        )
+    } else if (sheetCard != null) {
         ShiftJobSheet(
             card = sheetCard,
             day = shiftDay(detail),

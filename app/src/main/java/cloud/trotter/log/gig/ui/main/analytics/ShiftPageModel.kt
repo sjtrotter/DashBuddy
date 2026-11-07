@@ -2,13 +2,13 @@ package cloud.trotter.log.gig.ui.main.analytics
 
 import cloud.trotter.log.gig.domain.analytics.ANALYTICS_MONEY_EPSILON
 import cloud.trotter.log.gig.domain.analytics.RecordsStatus
-import cloud.trotter.log.gig.domain.analytics.ReportSource
 import cloud.trotter.log.gig.domain.analytics.SessionDetail
-import cloud.trotter.log.gig.domain.analytics.SessionReportRule
 import cloud.trotter.log.gig.domain.analytics.ShiftEarnings
+import cloud.trotter.log.gig.domain.analytics.checks.ShiftCheck
+import cloud.trotter.log.gig.domain.analytics.checks.ShiftChecks
+import cloud.trotter.log.gig.domain.analytics.checks.effectiveReport
 import cloud.trotter.log.gig.domain.analytics.timeline.JobCard
 import cloud.trotter.log.gig.domain.analytics.timeline.PassedRun
-import cloud.trotter.log.gig.domain.analytics.timeline.PaySource
 import cloud.trotter.log.gig.domain.analytics.timeline.TimelineItem
 import cloud.trotter.log.gig.domain.evaluation.NetProfit
 
@@ -24,55 +24,13 @@ data class SessionDetailUiState(
     val failed: Boolean = false,
     /** Where the records stand; REBUILDING holds the figures, the timeline and the corrections back. */
     val records: RecordsStatus = RecordsStatus.UP_TO_DATE,
+    /** What this shift needs checked ([ShiftChecks]); empty while it runs. */
+    val checks: List<ShiftCheck> = emptyList(),
 )
 
 /** True when the page may show the shift's figures, timeline and corrections. */
 internal fun SessionDetailUiState.figuresShown(): Boolean =
     !loading && !failed && records != RecordsStatus.REBUILDING
-
-/** Where this shift's effective total came from; [ReportSource] owns the rule. */
-internal fun shiftReportSource(detail: SessionDetail): ReportSource = with(detail.session) {
-    ReportSource.of(machineReportedEarnings, endSource, reportOverrideMode, reportOverride, detail.recordedPay)
-}
-
-/**
- * The money check: the shift's independent total against its delivery pay. Null unless the total is
- * [ReportSource.independent], so the fallback that equals delivery pay is never checked.
- */
-internal data class MoneyCheck(
-    val appTotal: Double,
-    /** Cash-free delivery pay ([SessionDetail.deliveredPay]). */
-    val deliveryPay: Double,
-    /** True when [deliveryPay] includes an estimated delivery pay. */
-    val deliveryPayEstimated: Boolean,
-) {
-    /** The higher side, or null when the two agree within half a cent. */
-    val higher: Higher? = when {
-        appTotal - deliveryPay > ANALYTICS_MONEY_EPSILON -> Higher.APP_TOTAL
-        deliveryPay - appTotal > ANALYTICS_MONEY_EPSILON -> Higher.DELIVERY_PAY
-        else -> null
-    }
-
-    val difference: Double get() = kotlin.math.abs(appTotal - deliveryPay)
-
-    enum class Higher { APP_TOTAL, DELIVERY_PAY }
-
-    companion object {
-        fun of(detail: SessionDetail): MoneyCheck? {
-            if (!shiftReportSource(detail).independent) return null
-            val total = effectiveReport(detail) ?: return null
-            return MoneyCheck(
-                appTotal = total,
-                deliveryPay = detail.deliveredPay,
-                deliveryPayEstimated = detail.deliveries.any { PaySource.of(it.payBasis, it.realizedPay, 1).estimated },
-            )
-        }
-    }
-}
-
-private fun effectiveReport(detail: SessionDetail): Double? = with(detail.session) {
-    SessionReportRule.effectiveReported(machineReportedEarnings, endSource, reportOverrideMode, reportOverride, detail.recordedPay)
-}
 
 /**
  * The shift's money for the top of the page. [earned] is the shift's earnings ([ShiftEarnings.rested]) plus its
@@ -90,7 +48,7 @@ internal data class ShiftMoney(val earned: Double?, val cash: Double, val profit
     companion object {
         fun of(detail: SessionDetail): ShiftMoney {
             val cash = detail.cashTips
-            val base = ShiftEarnings.rested(effectiveReport(detail), detail.recordedPay)
+            val base = ShiftEarnings.rested(detail.effectiveReport(), detail.recordedPay)
             val earned = if (base == null && cash <= ANALYTICS_MONEY_EPSILON) null else (base ?: 0.0) + cash
             val nets = detail.deliveries.mapNotNull { it.netProfit }
             val unattributed = detail.unattributedPay

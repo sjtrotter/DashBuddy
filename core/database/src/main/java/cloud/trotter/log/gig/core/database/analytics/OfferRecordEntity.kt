@@ -101,4 +101,11 @@ data class OfferRecordEntity(
     val offerScope: String? = null,
     /** `ParsedOffer.quoteBasis.name` (`TOTAL` / `INCREMENTAL`); null on rows folded before projector 18. */
     val quoteBasis: String? = null,
+
+    // ── Shift checks (#1517, v24) ───────────────────────────────────────────
+    /**
+     * When a `TASK_UNASSIGNED` named this accepted offer's job (its `jobOfferHashes`): the first such unassign's
+     * `unassignedAt`. Null otherwise and on rows folded before projector 19. The [outcome] column is never rewritten.
+     */
+    val unassignedAt: Long? = null,
 )

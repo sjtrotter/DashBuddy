@@ -8,6 +8,7 @@ import cloud.trotter.log.gig.domain.model.event.AppEventType
 import cloud.trotter.log.gig.domain.model.event.payload.DeliveryAdjustmentPayload
 import cloud.trotter.log.gig.domain.model.event.payload.DeliverySessionAssignPayload
 import cloud.trotter.log.gig.domain.model.event.payload.ManualDeliveryPayload
+import cloud.trotter.log.gig.domain.model.event.payload.ManualDeliveryRemovedPayload
 import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeCorrectionPayload
 import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeResolution
 import cloud.trotter.log.gig.domain.model.event.payload.SessionMilesCorrectionPayload
@@ -46,6 +47,9 @@ class CorrectionRepository @Inject constructor(
      * Validation (#705 F4b — parity with [adjustDelivery], which this method previously lacked
      * entirely): every money/miles value must be **finite** (a non-finite value would reach
      * `AppEventCodec` and throw a `SerializationException`), pay finite > 0, tip/cash/miles finite ≥ 0.
+     *
+     * [fromOfferEventSequenceId] names the accepted offer the delivery was added from (#1517); the projector
+     * stores it on the delivery row after its guards and never rewrites the offer row.
      */
     suspend fun addManualDelivery(
         sessionId: String,
@@ -56,6 +60,7 @@ class CorrectionRepository @Inject constructor(
         completedAt: Long,
         miles: Double?,
         note: String?,
+        fromOfferEventSequenceId: Long? = null,
     ) {
         require(pay.isFinite() && pay > 0.0) { "pay must be a finite positive amount" }
         require(tip == null || (tip.isFinite() && tip >= 0.0)) { "tip must be finite and non-negative" }
@@ -75,11 +80,32 @@ class CorrectionRepository @Inject constructor(
                     completedAt = completedAt,
                     miles = miles,
                     note = note,
+                    fromOfferEventSequenceId = fromOfferEventSequenceId,
                 ),
             ),
         )
         // P7: no note/store text — counts/ids only.
-        Timber.tag(TAG).i("MANUAL_DELIVERY appended for session %s", sessionId)
+        Timber.tag(TAG).i(
+            "MANUAL_DELIVERY appended for session %s (from offer=%b)", sessionId, fromOfferEventSequenceId != null,
+        )
+    }
+
+    /**
+     * Remove a delivery the dasher added by hand (#1517): appends `MANUAL_DELIVERY_REMOVED` naming the MANUAL row
+     * [targetEventSequenceId] of shift [sessionId]. The projector deletes the row and lowers the shift's counts, or
+     * skips (not a hand-added delivery of that shift, already removed); the `MANUAL_DELIVERY` event stays.
+     */
+    suspend fun removeManualDelivery(targetEventSequenceId: Long, sessionId: String, note: String? = null) {
+        appEventRepo.appendUserEvent(
+            AppEvent(
+                type = AppEventType.MANUAL_DELIVERY_REMOVED,
+                occurredAt = System.currentTimeMillis(),
+                sessionId = sessionId,
+                payload = ManualDeliveryRemovedPayload(targetEventSequenceId, sessionId, note),
+            ),
+        )
+        // P7: no note text, ids only.
+        Timber.tag(TAG).i("MANUAL_DELIVERY_REMOVED appended for delivery seq %d", targetEventSequenceId)
     }
 
     /**
