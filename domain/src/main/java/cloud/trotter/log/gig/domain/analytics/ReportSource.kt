@@ -17,6 +17,13 @@ enum class ReportSource(val wire: String) {
     DRIVER_SET("DRIVER_SET"),
     NONE("NONE");
 
+    /**
+     * A total that did not come from the shift's own delivery pay: captured from the app's summary or set by the
+     * dasher. Only such a total can be checked against delivery pay; a running total floored at recorded pay, or
+     * recorded pay standing in for a missing report, would always match. The shift page's money check reads this.
+     */
+    val independent: Boolean get() = this == DASH_SUMMARY || this == DRIVER_SET
+
     companion object {
         fun of(
             reportedEarnings: Double?,

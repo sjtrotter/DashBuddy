@@ -527,10 +527,8 @@ and the session cap leaves 0 for J1.
 budget whose job is in `deliveredJobIds` before inserting a new job; refuse with UNKNOWN only when
 all tracked jobs are live. All allocation state survives `legStateJson` boundaries.
 `MilesBasis` is a domain enum; Room stores its name, and the mapper reads unknown strings as UNKNOWN.
-The delivery drill-down shows one allocation disclosure for BUDGET_CAPPED or a zero-minute row in a
-job with multiple delivered drops: miles and time are allocated across the job's drops, followed by
-this drop's labeled store/door leg miles (unknown legs stay placeholders). Otherwise LEGACY_SPAN
-states that arrival was not seen, and LEG_SUM/UNKNOWN stay silent. Net uses allocated miles and frozen cpm.
+Net uses allocated miles and frozen cpm. (The old delivery drill-down disclosed BUDGET_CAPPED and LEGACY_SPAN
+beside each row; the shift page that replaced it (#1516) shows no per-delivery mileage.)
 
 An all-live budget map can still produce a paid UNKNOWN row with null miles and null net. Period
 aggregates retain its pay in gross and separately sum `payWithoutNet` over the same delivery population,
@@ -679,8 +677,8 @@ stamped by any monetary `DELIVERY_ADJUSTMENT`/`PAY_ADJUSTMENT`). That column is 
 TIP-ONLY edit deliberately leaves `payBasis` intact (#688 VET F1), so the basis test alone let a later
 re-price overwrite the driver's own tip. **Log-order rule:** a LATER driver `DELIVERY_ADJUSTMENT` wins
 the pay (the driver is the higher authority on their own money) while the `receiptRepricedAt` trail
-survives; an EARLIER one is never superseded. Read side: the drill-down shows "re-priced from the receipt" wherever
-`receiptRepricedAt != null` (the never-silent #689/#691 disclosure family). Named residual:
+survives; an EARLIER one is never superseded. Read side: `receiptRepricedAt` stays on the row (the old drill-down's
+"re-priced from the receipt" line went with it in #1516; the shift page names the pay's source word only). Named residual:
 `payoutStoreForms` is NOT back-stamped by a re-price, so a job whose only receipt arrived late keeps
 its pre-existing #159 store keys.
 
@@ -1106,6 +1104,16 @@ time, store pin and re-price time. Known pinned gap: `applyPay` has no suspect-r
   picked up, at customer, delivered) from the offer, pickup and delivery rows (missing ones absent). Cards sort by first offer, a card with no offer by its first delivery;
   every maximal stretch of declined and expired offers between cards is one `PassedRun` with separate counts. Ties
   fall to the event sequence id. The model has no estimate, score, rate or minutes field.
+- **Page (PR 2).** `SessionDetailScreen` / `SessionDetailViewModel` are the shift page: `sessionDetail`, the timeline
+  (folded as running while `endedAt` is null) and `RecordsStatus` in one `SessionDetailUiState`, with Retry.
+  `ShiftPageModel.kt` owns the page's pure pieces: `MoneyCheck` (only when `ReportSource.independent`, i.e.
+  DASH_SUMMARY or DRIVER_SET; RECORDED_PAY, IN_DASH_COUNTER and NONE get no check; half-cent tolerance through
+  `ANALYTICS_MONEY_EPSILON`), `ShiftMoney` (Earned = `ShiftEarnings.rested` + cash; Est. Profit = Σ frozen delivery
+  net + unattributed pay + cash, Recap's sum) and `RowLanding` (a `row` route argument `offer:<seq>` lands on the card
+  that holds that accepted offer and opens its sheet, or opens the run that holds that passed offer and scrolls to its
+  thin row, keyed `offer:<seq>` too). The old drill-down's per-delivery rows went with it, including their mileage
+  allocation, re-price and "assigned by you" disclosures; the sheet's "Fix this delivery" opens the same
+  `AdjustDeliveryDialog`, which keeps the unassign undo.
 
 ### Records status (#1512)
 

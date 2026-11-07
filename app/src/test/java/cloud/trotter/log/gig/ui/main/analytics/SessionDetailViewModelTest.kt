@@ -1,10 +1,14 @@
 package cloud.trotter.log.gig.ui.main.analytics
 
 import androidx.lifecycle.SavedStateHandle
-import cloud.trotter.log.gig.R
 import cloud.trotter.log.gig.core.data.analytics.AnalyticsRepository
 import cloud.trotter.log.gig.core.data.analytics.CorrectionRepository
+import cloud.trotter.log.gig.core.data.analytics.RecordsStatusRepository
+import cloud.trotter.log.gig.core.data.analytics.ShiftTimelineRepository
 import cloud.trotter.log.gig.domain.analytics.DeliveryRecord
+import cloud.trotter.log.gig.domain.analytics.PayBasis
+import cloud.trotter.log.gig.domain.analytics.RecordsStatus
+import cloud.trotter.log.gig.domain.analytics.ReportSource
 import cloud.trotter.log.gig.domain.analytics.SessionDetail
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
 import cloud.trotter.log.gig.domain.model.event.payload.SessionEndSource
@@ -13,6 +17,8 @@ import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.ui.main.navigation.Screen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -21,25 +27,38 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.mockito.kotlin.any
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.isNull
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 
 /**
- * #650 PR A — the per-dash drill-down ViewModel pulls its sessionId from [SavedStateHandle] and maps
- * [AnalyticsRepository.sessionDetail] into an immutable [SessionDetailUiState], loading → loaded.
- * Same stub-flow pattern as [AnalyticsViewModelTest].
+ * The shift page's ViewModel reads its sessionId and landing row from [SavedStateHandle] and assembles one
+ * [SessionDetailUiState] from the shift's detail, its timeline and the records status: loading, loaded, held back
+ * while rebuilding, failed with Retry. The money check's independent-total rule is pinned here too.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SessionDetailViewModelTest {
 
     private val analyticsRepository: AnalyticsRepository = mock()
     private val correctionRepository: CorrectionRepository = mock()
+    private val shiftTimelineRepository: ShiftTimelineRepository = mock {
+        on { timeline(any(), any()) } doReturn flowOf(emptyList())
+    }
+    private val recordsStatus = MutableStateFlow(RecordsStatus.UP_TO_DATE)
+    private val recordsStatusRepository: RecordsStatusRepository = mock { on { status } doReturn recordsStatus }
+    private val clock = Clock.fixed(Instant.parse("2026-11-07T12:00:00Z"), ZoneOffset.UTC)
 
     private fun session(id: String) = SessionRecord(
         sessionId = id, platform = Platform.DoorDash, startedAt = 1_700_000_000_000L,
@@ -55,10 +74,13 @@ class SessionDetailViewModelTest {
         realizedMinutes = 10.0, tip = 2.0, basePay = 6.0,
     )
 
-    private fun buildViewModel(sessionId: String) = SessionDetailViewModel(
-        SavedStateHandle(mapOf(Screen.SessionDetail.ARG_SESSION_ID to sessionId)),
+    private fun buildViewModel(sessionId: String, row: String? = null) = SessionDetailViewModel(
+        SavedStateHandle(mapOf(Screen.SessionDetail.ARG_SESSION_ID to sessionId, Screen.SessionDetail.ARG_ROW to row)),
         analyticsRepository,
+        shiftTimelineRepository,
+        recordsStatusRepository,
         correctionRepository,
+        clock,
     )
 
     @After
@@ -87,58 +109,125 @@ class SessionDetailViewModelTest {
         job.cancel()
     }
 
+    private fun detailWith(record: SessionRecord, vararg pays: Pair<Double?, String>) = SessionDetail(
+        record,
+        pays.mapIndexed { i, (pay, basis) -> delivery(record.sessionId).copy(eventSequenceId = i + 1L, realizedPay = pay, payBasis = basis) },
+    )
+
     @Test
-    fun `phantom counter and driver SET keep their source labels through the view model`() = runTest {
-        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        val cases = listOf(
-            session("counter").copy(reportedEarnings = 40.14, machineReportedEarnings = 40.14,
-                endSource = SessionEndSource.EARLY_OFFLINE) to R.string.session_detail_gross_source_counter,
-            session("set").copy(reportedEarnings = 12.5, machineReportedEarnings = 40.14,
-                endSource = SessionEndSource.EARLY_OFFLINE, reportOverrideMode = SessionReportOperation.SET,
-                reportOverride = 12.5) to R.string.session_detail_gross_source_driver,
-            session("clear").copy(reportedEarnings = null, machineReportedEarnings = 40.14,
-                reportOverrideMode = SessionReportOperation.CLEAR) to R.string.session_detail_gross_source_none,
-            session("zero").copy(reportedEarnings = 0.0, machineReportedEarnings = 0.0,
-                endSource = SessionEndSource.SUMMARY_SCREEN) to R.string.session_detail_gross_source_summary,
-            session("null-set").copy(reportedEarnings = null, machineReportedEarnings = 40.14,
-                reportOverrideMode = SessionReportOperation.SET, reportOverride = null) to R.string.session_detail_gross_source_none,
-        )
-        for ((record, label) in cases) {
-            whenever(analyticsRepository.sessionDetail(eq(record.sessionId)))
-                .thenReturn(flowOf(SessionDetail(record, emptyList())))
-            val viewModel = buildViewModel(record.sessionId)
-            val job = launch { viewModel.uiState.collect {} }
-            testScheduler.advanceUntilIdle()
-            val loaded = viewModel.uiState.value.detail!!
-            assertEquals(record, loaded.session)
-            assertEquals(label, sessionGrossSourceLabel(loaded))
-            assertNull(sessionGrossSourceSub(loaded))
-            job.cancel()
-        }
+    fun `the money check reads only an independent total`() {
+        val base = session("c").copy(machineReportedEarnings = null, reportedEarnings = null)
+        // The app's summary: checked, the app total higher.
+        val summary = detailWith(base.copy(machineReportedEarnings = 30.0, reportedEarnings = 30.0,
+            endSource = SessionEndSource.SUMMARY_SCREEN), 8.0 to PayBasis.DROP_SHARE)
+        assertEquals(ReportSource.DASH_SUMMARY, shiftReportSource(summary))
+        val summaryCheck = MoneyCheck.of(summary)!!
+        assertEquals(MoneyCheck.Higher.APP_TOTAL, summaryCheck.higher)
+        assertEquals(22.0, summaryCheck.difference, 1e-9)
+        // Set by the dasher: checked, delivery pay higher, estimated when an offer amount priced a delivery.
+        val set = detailWith(base.copy(machineReportedEarnings = 40.14, endSource = SessionEndSource.EARLY_OFFLINE,
+            reportOverrideMode = SessionReportOperation.SET, reportOverride = 5.0, reportedEarnings = 5.0),
+            8.0 to PayBasis.OFFER_PAY)
+        assertEquals(ReportSource.DRIVER_SET, shiftReportSource(set))
+        val setCheck = MoneyCheck.of(set)!!
+        assertEquals(MoneyCheck.Higher.DELIVERY_PAY, setCheck.higher)
+        assertTrue(setCheck.deliveryPayEstimated)
+        // The fallbacks: no report, a running total floored at recorded pay, a running total alone. No check.
+        assertNull(MoneyCheck.of(detailWith(base, 8.0 to PayBasis.DROP_SHARE)))
+        val floored = detailWith(base.copy(machineReportedEarnings = 6.0, reportedEarnings = 8.0,
+            endSource = SessionEndSource.EARLY_OFFLINE), 8.0 to PayBasis.DROP_SHARE)
+        assertEquals(ReportSource.RECORDED_PAY, shiftReportSource(floored))
+        assertNull(MoneyCheck.of(floored))
+        val counter = detailWith(base.copy(machineReportedEarnings = 12.0, reportedEarnings = 12.0,
+            endSource = SessionEndSource.EARLY_OFFLINE), 8.0 to PayBasis.DROP_SHARE)
+        assertEquals(ReportSource.IN_DASH_COUNTER, shiftReportSource(counter))
+        assertNull(MoneyCheck.of(counter))
+        val cleared = detailWith(base.copy(machineReportedEarnings = 12.0, reportOverrideMode = SessionReportOperation.CLEAR),
+            8.0 to PayBasis.DROP_SHARE)
+        assertNull(MoneyCheck.of(cleared))
     }
 
     @Test
-    fun `a stale early running total below recorded pay is labelled recorded pay (#1459)`() = runTest {
+    fun `totals within half a cent name no higher side`() {
+        assertNull(MoneyCheck(30.004, 30.0, deliveryPayEstimated = false).higher)
+        assertNull(MoneyCheck(0.30, 0.10 + 0.20, deliveryPayEstimated = false).higher)
+        assertEquals(MoneyCheck.Higher.APP_TOTAL, MoneyCheck(30.01, 30.0, deliveryPayEstimated = false).higher)
+        assertEquals(MoneyCheck.Higher.DELIVERY_PAY, MoneyCheck(30.0, 30.01, deliveryPayEstimated = false).higher)
+    }
+
+    @Test
+    fun `earned includes cash, profit adds unreported pay and cash, a shift with nothing known is unknown`() {
+        val record = session("m").copy(machineReportedEarnings = 30.0, reportedEarnings = 30.0,
+            endSource = SessionEndSource.SUMMARY_SCREEN)
+        val money = ShiftMoney.of(SessionDetail(record, listOf(delivery("m").copy(cashTip = 5.0))))
+        assertEquals(35.0, money.earned!!, 1e-9)
+        assertEquals(5.0, money.cash, 1e-9)
+        // Net 3.00 + the 22.00 the summary reported beyond delivery pay + 5.00 cash.
+        assertEquals(30.0, money.profit!!, 1e-9)
+        assertEquals(15.0, money.profitPerHour(7_200_000L)!!, 1e-9)
+        assertNull(money.profitPerHour(0L))
+        val empty = ShiftMoney.of(SessionDetail(record.copy(machineReportedEarnings = null, reportedEarnings = null,
+            endSource = null), emptyList()))
+        assertNull(empty.earned)
+        assertNull(empty.profit)
+    }
+
+    @Test
+    fun `the page loads its detail and timeline, folded as running until the shift ends`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-        // The repository's effective report is already floored at recorded pay (16); the machine column keeps 12.
-        val record = session("stale").copy(reportedEarnings = 16.0, machineReportedEarnings = 12.0,
-            endSource = SessionEndSource.EARLY_OFFLINE)
-        val detail = SessionDetail(record, listOf(
-            delivery("stale").copy(eventSequenceId = 1L, realizedPay = 10.0),
-            delivery("stale").copy(eventSequenceId = 2L, realizedPay = 6.0),
-        ))
-        whenever(analyticsRepository.sessionDetail(eq("stale"))).thenReturn(flowOf(detail))
-        val viewModel = buildViewModel("stale")
+        val running = SessionDetail(session("r").copy(endedAt = null), emptyList())
+        whenever(analyticsRepository.sessionDetail(eq("r"))).thenReturn(flowOf(running))
+        val viewModel = buildViewModel("r", row = "offer:7")
+        assertEquals("offer:7", viewModel.landingRow)
         val job = launch { viewModel.uiState.collect {} }
         testScheduler.advanceUntilIdle()
-        val loaded = viewModel.uiState.value.detail!!
-        assertEquals(R.string.session_detail_gross_source_recorded, sessionGrossSourceLabel(loaded))
-        assertEquals(R.string.session_detail_gross_source_recorded_sub, sessionGrossSourceSub(loaded))
-        assertEquals(0.0, loaded.overAttributedPay, 1e-9)
-        assertEquals(0.0, loaded.unattributedPay, 1e-9)
-        // A tie stays the running total.
-        val tie = SessionDetail(record.copy(reportedEarnings = 16.0, machineReportedEarnings = 16.0), detail.deliveries)
-        assertEquals(R.string.session_detail_gross_source_counter, sessionGrossSourceLabel(tie))
+        assertFalse(viewModel.uiState.value.loading)
+        assertTrue(viewModel.uiState.value.figuresShown())
+        verify(shiftTimelineRepository).timeline("r", true)
+        job.cancel()
+
+        whenever(analyticsRepository.sessionDetail(eq("e"))).thenReturn(flowOf(SessionDetail(session("e"), emptyList())))
+        val ended = buildViewModel("e")
+        assertNull(ended.landingRow)
+        val job2 = launch { ended.uiState.collect {} }
+        testScheduler.advanceUntilIdle()
+        verify(shiftTimelineRepository).timeline("e", false)
+        job2.cancel()
+    }
+
+    @Test
+    fun `rebuilding records hold the figures back, updating keeps them`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        whenever(analyticsRepository.sessionDetail(eq("s1"))).thenReturn(flowOf(SessionDetail(session("s1"), emptyList())))
+        val viewModel = buildViewModel("s1")
+        val job = launch { viewModel.uiState.collect {} }
+        recordsStatus.value = RecordsStatus.REBUILDING
+        testScheduler.advanceUntilIdle()
+        assertEquals(RecordsStatus.REBUILDING, viewModel.uiState.value.records)
+        assertFalse(viewModel.uiState.value.figuresShown())
+        recordsStatus.value = RecordsStatus.UPDATING
+        testScheduler.advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.figuresShown())
+        job.cancel()
+    }
+
+    @Test
+    fun `a failed read shows the failure and Retry reads again`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        var reads = 0
+        whenever(analyticsRepository.sessionDetail(eq("s1"))).thenReturn(flow {
+            reads++
+            if (reads == 1) error("disk") else emit(SessionDetail(session("s1"), emptyList()))
+        })
+        val viewModel = buildViewModel("s1")
+        val job = launch { viewModel.uiState.collect {} }
+        testScheduler.advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.failed)
+        assertFalse(viewModel.uiState.value.figuresShown())
+        viewModel.retry()
+        testScheduler.advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.failed)
+        assertNotNull(viewModel.uiState.value.detail)
         job.cancel()
     }
 

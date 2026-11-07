@@ -1,0 +1,137 @@
+package cloud.trotter.log.gig.ui.main.analytics
+
+import cloud.trotter.log.gig.domain.analytics.ANALYTICS_MONEY_EPSILON
+import cloud.trotter.log.gig.domain.analytics.RecordsStatus
+import cloud.trotter.log.gig.domain.analytics.ReportSource
+import cloud.trotter.log.gig.domain.analytics.SessionDetail
+import cloud.trotter.log.gig.domain.analytics.SessionReportRule
+import cloud.trotter.log.gig.domain.analytics.ShiftEarnings
+import cloud.trotter.log.gig.domain.analytics.timeline.JobCard
+import cloud.trotter.log.gig.domain.analytics.timeline.PassedRun
+import cloud.trotter.log.gig.domain.analytics.timeline.PaySource
+import cloud.trotter.log.gig.domain.analytics.timeline.TimelineItem
+import cloud.trotter.log.gig.domain.evaluation.NetProfit
+
+/**
+ * The shift page's state: one shift's [detail] (its record and deliveries) above its folded [timeline].
+ * [loading] is the pre-first-emission state; once loaded, a null [detail] means no such shift.
+ */
+data class SessionDetailUiState(
+    val detail: SessionDetail? = null,
+    val timeline: List<TimelineItem> = emptyList(),
+    val loading: Boolean = true,
+    /** A read failed: the page shows the failure pattern and Retry instead of the shift. */
+    val failed: Boolean = false,
+    /** Where the records stand; REBUILDING holds the figures, the timeline and the corrections back. */
+    val records: RecordsStatus = RecordsStatus.UP_TO_DATE,
+)
+
+/** True when the page may show the shift's figures, timeline and corrections. */
+internal fun SessionDetailUiState.figuresShown(): Boolean =
+    !loading && !failed && records != RecordsStatus.REBUILDING
+
+/** Where this shift's effective total came from; [ReportSource] owns the rule. */
+internal fun shiftReportSource(detail: SessionDetail): ReportSource = with(detail.session) {
+    ReportSource.of(machineReportedEarnings, endSource, reportOverrideMode, reportOverride, detail.recordedPay)
+}
+
+/**
+ * The money check: the shift's independent total against its delivery pay. Null unless the total is
+ * [ReportSource.independent], so the fallback that equals delivery pay is never checked.
+ */
+internal data class MoneyCheck(
+    val appTotal: Double,
+    /** Cash-free delivery pay ([SessionDetail.deliveredPay]). */
+    val deliveryPay: Double,
+    /** True when [deliveryPay] includes an estimated delivery pay. */
+    val deliveryPayEstimated: Boolean,
+) {
+    /** The higher side, or null when the two agree within half a cent. */
+    val higher: Higher? = when {
+        appTotal - deliveryPay > ANALYTICS_MONEY_EPSILON -> Higher.APP_TOTAL
+        deliveryPay - appTotal > ANALYTICS_MONEY_EPSILON -> Higher.DELIVERY_PAY
+        else -> null
+    }
+
+    val difference: Double get() = kotlin.math.abs(appTotal - deliveryPay)
+
+    enum class Higher { APP_TOTAL, DELIVERY_PAY }
+
+    companion object {
+        fun of(detail: SessionDetail): MoneyCheck? {
+            if (!shiftReportSource(detail).independent) return null
+            val total = effectiveReport(detail) ?: return null
+            return MoneyCheck(
+                appTotal = total,
+                deliveryPay = detail.deliveredPay,
+                deliveryPayEstimated = detail.deliveries.any { PaySource.of(it.payBasis, it.realizedPay, 1).estimated },
+            )
+        }
+    }
+}
+
+private fun effectiveReport(detail: SessionDetail): Double? = with(detail.session) {
+    SessionReportRule.effectiveReported(machineReportedEarnings, endSource, reportOverrideMode, reportOverride, detail.recordedPay)
+}
+
+/**
+ * The shift's money for the top of the page. [earned] is the shift's earnings ([ShiftEarnings.rested]) plus its
+ * cash tips, null when nothing is known; [cash] is the cash inside it. [profit] is Σ the deliveries' recorded
+ * profit plus pay the app reported beyond them plus cash, the same sum Recap uses; null when nothing is known.
+ */
+internal data class ShiftMoney(val earned: Double?, val cash: Double, val profit: Double?) {
+    /** [profit] over [onlineMillis], null when either is unknown. */
+    fun profitPerHour(onlineMillis: Long?): Double? {
+        val p = profit ?: return null
+        val ms = onlineMillis ?: return null
+        return NetProfit.perHour(p, ms / 3_600_000.0)
+    }
+
+    companion object {
+        fun of(detail: SessionDetail): ShiftMoney {
+            val cash = detail.cashTips
+            val base = ShiftEarnings.rested(effectiveReport(detail), detail.recordedPay)
+            val earned = if (base == null && cash <= ANALYTICS_MONEY_EPSILON) null else (base ?: 0.0) + cash
+            val nets = detail.deliveries.mapNotNull { it.netProfit }
+            val unattributed = detail.unattributedPay
+            val profit = if (nets.isEmpty() && unattributed <= ANALYTICS_MONEY_EPSILON) null else nets.sum() + unattributed + cash
+            return ShiftMoney(earned, cash, profit)
+        }
+    }
+}
+
+/** The shift's online time: ended, its span; running, up to [now]. */
+internal fun onlineMillis(detail: SessionDetail, now: Long): Long =
+    ((detail.session.endedAt ?: now) - detail.session.startedAt).coerceAtLeast(0L)
+
+/**
+ * Where a `row` link lands: the item to scroll to, the run to open first, and the job whose sheet opens.
+ * A row is an item key (`offer:<seq>`, `job:<id>`, `run:<seq>`); an `offer:<seq>` also lands on the card that
+ * holds that offer as an add-on, and on the run that holds that passed offer (whose thin row has the same key).
+ */
+internal data class RowLanding(val scrollKey: String, val expandRun: String?, val openJob: String?) {
+    companion object {
+        fun of(items: List<TimelineItem>, row: String): RowLanding? {
+            val seq = row.removePrefix(OFFER_KEY_PREFIX).takeIf { row.startsWith(OFFER_KEY_PREFIX) }?.toLongOrNull()
+            for (item in items) {
+                when (item) {
+                    is JobCard -> if (item.key == row || (seq != null && seq in item.offerEventSequenceIds)) {
+                        return RowLanding(item.key, null, item.key)
+                    }
+                    is PassedRun -> {
+                        if (item.key == row) return RowLanding(item.key, null, null)
+                        if (seq != null && item.offers.any { it.eventSequenceId == seq }) {
+                            return RowLanding(passedRowKey(seq), item.key, null)
+                        }
+                    }
+                }
+            }
+            return null
+        }
+    }
+}
+
+private const val OFFER_KEY_PREFIX = "offer:"
+
+/** A passed offer's thin-row key; distinct from every card key, which names an accepted offer's sequence. */
+internal fun passedRowKey(eventSequenceId: Long): String = "$OFFER_KEY_PREFIX$eventSequenceId"

@@ -267,6 +267,8 @@ Before changing a fold, a DAO read, a correction event, the ledger or a Recap or
   lifetime under a declaring badge. The CSV export excludes customer and address hashes.
 - Look-back screens read `RecordsStatus` (`RecordsStatusRepository`); never render $0.00 or an empty period while
   REBUILDING.
+- The shift page checks delivery pay only against an independent total (`ReportSource.independent`: the app's
+  summary or one the dasher set), never the fallback that equals delivery pay.
 
 ## Development Principles
 

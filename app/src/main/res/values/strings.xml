@@ -481,31 +481,9 @@
     <!-- main/analytics/SessionDetailScreen.kt -->
     <string name="session_detail_title">Shift details</string>
     <string name="session_detail_not_found">Shift not found</string>
-    <string name="session_detail_add_missed_delivery">Add missed delivery</string>
-    <string name="session_detail_deliveries_title">DELIVERIES</string>
-    <string name="session_detail_no_deliveries_yet">No deliveries recorded. Add a missed delivery.</string>
-    <string name="session_detail_gross_source_summary">From the shift summary</string>
-    <string name="session_detail_gross_source_counter">From the app\'s running total</string>
-    <string name="session_detail_gross_source_recorded">Recorded pay</string>
-    <string name="session_detail_gross_source_recorded_sub">Above running total</string>
-    <string name="session_detail_gross_source_driver">Entered by you</string>
-    <string name="session_detail_gross_source_none">Added up by gig.log, no total from the app</string>
+    <string name="session_detail_add_missed_delivery">Add a missed delivery</string>
     <string name="session_detail_stat_miles">Miles</string>
-    <string name="session_detail_stat_deliveries">Deliveries</string>
-    <string name="session_detail_duration_format">Duration %1$s</string>
-    <string name="session_detail_cash_tips_format">+%1$s cash tips</string>
     <string name="session_detail_unknown_store">Unknown store</string>
-    <string name="session_detail_tip_included_format">including %1$s tip</string>
-    <string name="session_detail_cash_format">+%1$s cash</string>
-    <string name="session_detail_est_offer_pay">estimated from the offer</string>
-    <!-- #1033 layer 2: the receipt was expanded after this delivery was already recorded, so the
-         row was re-priced from the receipt's own itemization instead of the offer-pay estimate. -->
-    <string name="session_detail_receipt_repriced">pay from the receipt</string>
-    <string name="session_detail_drop_allocation">split within the shift: %1$s mi to store, %2$s mi to door</string>
-    <string name="session_detail_miles_legacy_span">miles from the whole trip, arrival not seen</string>
-    <string name="session_detail_unpaid_drop">no pay recorded, vehicle costs only</string>
-    <string name="session_detail_net_format">profit %1$s</string>
-    <string name="session_detail_content_desc_adjust">Adjust delivery</string>
     <string name="session_detail_field_store_optional">Store (optional)</string>
     <string name="session_detail_field_pay">Pay</string>
     <string name="session_detail_field_tip_included">Tip (included in pay)</string>
@@ -518,9 +496,60 @@
     <string name="session_detail_field_pay_locked_supporting">Same receipt as another delivery. Edit that one.</string>
     <string name="session_detail_field_cash_tip">Cash tip</string>
     <string name="session_detail_save_button">Save</string>
-    <string name="session_detail_assigned_by_you">assigned by you</string>
     <string name="session_detail_remove_from_dash">Remove from this shift</string>
     <string name="session_detail_remove_cash_locked_supporting">Clear the cash tip first, then remove</string>
+
+    <!-- The shift page: its money, then its timeline, and a job's sheet. -->
+    <string name="shift_page_app_times_format">%1$s, %2$s to %3$s</string>
+    <string name="shift_page_app_since_format">%1$s, since %2$s</string>
+    <string name="shift_page_earned_label">Earned</string>
+    <string name="shift_page_cash_included_format">%1$s cash included</string>
+    <string name="shift_page_hours_online">hr online</string>
+    <string name="shift_page_miles_driven">mi driven</string>
+    <string name="shift_page_profit_per_hour">Est. Profit/hr</string>
+    <!-- "DoorDash total": the app's name, then "total". -->
+    <string name="shift_page_app_total_format">%1$s total</string>
+    <string name="shift_page_delivery_pay">Delivery pay</string>
+    <!-- "DoorDash total $23.50 higher" or "Delivery pay $23.50 higher". -->
+    <string name="shift_page_higher_format">%1$s %2$s higher</string>
+    <!-- An estimated amount: "$121.75 est." -->
+    <string name="shift_page_estimated_format">%1$s est.</string>
+    <string name="shift_page_set_app_total">Set the app total</string>
+    <string name="shift_page_could_not_load_what">this shift</string>
+    <string name="shift_page_timeline_empty">No offers or deliveries recorded</string>
+    <string name="shift_page_miles_format">%1$s mi</string>
+    <string name="shift_page_offered_format">Offered %1$s</string>
+    <string name="shift_page_added_format">Added +%1$s</string>
+    <string name="shift_page_added_miles_format">+%1$s mi</string>
+    <string name="shift_page_added_new_total_format">Added, new total %1$s</string>
+    <string name="shift_page_cash_format">+%1$s cash</string>
+    <string name="shift_page_accepted">Accepted</string>
+    <string name="shift_page_no_delivery">No delivery recorded</string>
+    <string name="shift_page_source_receipt">Receipt</string>
+    <string name="shift_page_source_receipt_split">Receipt split</string>
+    <string name="shift_page_source_offer_estimate">Offer amount, est.</string>
+    <string name="shift_page_source_no_pay">No pay found</string>
+    <string name="shift_page_source_you_entered">You entered</string>
+    <plurals name="shift_page_run_declined">
+        <item quantity="one">%1$d declined offer</item>
+        <item quantity="other">%1$d declined offers</item>
+    </plurals>
+    <plurals name="shift_page_run_expired">
+        <item quantity="one">%1$d expired offer</item>
+        <item quantity="other">%1$d expired offers</item>
+    </plurals>
+    <string name="shift_page_run_both_format">%1$d declined, %2$d expired</string>
+    <string name="shift_page_span_format">%1$s to %2$s</string>
+    <string name="shift_page_run_expanded">Expanded</string>
+    <string name="shift_page_run_collapsed">Collapsed</string>
+    <string name="shift_page_outcome_declined">Declined</string>
+    <string name="shift_page_outcome_expired">Expired</string>
+    <string name="shift_page_milestone_accepted">Accepted</string>
+    <string name="shift_page_milestone_at_store">At store</string>
+    <string name="shift_page_milestone_picked_up">Picked up</string>
+    <string name="shift_page_milestone_at_customer">At customer</string>
+    <string name="shift_page_milestone_delivered">Delivered</string>
+    <string name="shift_page_fix_delivery">Fix this delivery</string>
 
     <!-- main/analytics/NoSessionAssignDialogs.kt (#660 piece 2) -->
     <string name="no_session_assign_title">Deliveries without a shift</string>
@@ -787,8 +816,6 @@
     <string name="debug_event_receipt_block_open_settings">Open Automation &amp; consent</string>
     <string name="debug_event_receipt_block_exit">Exit</string>
     <string name="debug_event_receipt_loading_notice">Still reading the screen-events setting. If this does not clear, exit and reopen the app.</string>
-    <string name="session_detail_report_corrected">total corrected</string>
-    <string name="session_detail_correct_total">Correct total</string>
     <string name="session_report_dialog_title">Correct %1$s total</string>
     <string name="session_report_dialog_amount">Total reported</string>
     <string name="session_report_dialog_set">Set</string>
@@ -796,7 +823,6 @@
     <string name="session_report_dialog_restore">Use the total gig.log read</string>
     <string name="session_report_dialog_note">Note (optional)</string>
     <string name="session_detail_correct_miles">Correct miles</string>
-    <string name="session_detail_miles_corrected">Corrected by you</string>
     <string name="session_miles_dialog_title">Correct miles</string>
     <string name="session_miles_dialog_field">Miles for this shift</string>
     <string name="session_miles_dialog_save">Save</string>

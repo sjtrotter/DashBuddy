@@ -16,7 +16,14 @@ fun NavGraphBuilder.mainGraph(render: @Composable (route: String, entry: NavBack
     for (route in Screen.graphRoutes) {
         val arguments = when (route) {
             Screen.SessionDetail.route ->
-                listOf(navArgument(Screen.SessionDetail.ARG_SESSION_ID) { type = NavType.StringType })
+                listOf(
+                    navArgument(Screen.SessionDetail.ARG_SESSION_ID) { type = NavType.StringType },
+                    navArgument(Screen.SessionDetail.ARG_ROW) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                )
             Screen.VehicleEdit.route ->
                 listOf(navArgument(Screen.VehicleEdit.ARG) { type = NavType.StringType })
             else -> emptyList()
