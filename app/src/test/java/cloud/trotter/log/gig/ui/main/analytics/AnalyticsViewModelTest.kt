@@ -150,8 +150,6 @@ class AnalyticsViewModelTest {
             .thenAnswer { flowOf(dailyEarnings) }
         whenever(analyticsRepository.noSessionDeliveries(any<AnalyticsWindow>(), any<ZoneId>()))
             .thenReturn(flowOf(emptyList()))
-        whenever(analyticsRepository.orphanOfferGroups(any<AnalyticsWindow>(), any<ZoneId>()))
-            .thenReturn(flowOf(emptyList()))
         // #973: the Money tab's pay mix + platform split ride the same window fan-out.
         whenever(analyticsRepository.payMixParts(any<AnalyticsWindow>(), any<ZoneId>()))
             .thenAnswer { flowOf(payMixParts) }

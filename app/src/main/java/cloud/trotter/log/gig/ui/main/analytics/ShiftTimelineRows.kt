@@ -79,6 +79,11 @@ internal fun JobCardRow(card: JobCard, onOpen: () -> Unit) {
             when (card.state) {
                 JobState.ACCEPTED_NO_DELIVERY_YET -> add(stringResource(R.string.shift_page_accepted))
                 JobState.NO_DELIVERY -> add(stringResource(R.string.shift_page_no_delivery))
+                JobState.UNASSIGNED -> add(
+                    card.unassignedAt?.let { stringResource(R.string.shift_page_unassigned_at_format, formatClockTime(it)) }
+                        ?: stringResource(R.string.shift_page_unassigned),
+                )
+                JobState.MARKED_UNASSIGNED -> add(stringResource(R.string.shift_page_marked_unassigned))
                 JobState.NORMAL -> Unit
             }
         }

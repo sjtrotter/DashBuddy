@@ -46,6 +46,9 @@ class CorrectionRepository @Inject constructor(
      * Validation (#705 F4b — parity with [adjustDelivery], which this method previously lacked
      * entirely): every money/miles value must be **finite** (a non-finite value would reach
      * `AppEventCodec` and throw a `SerializationException`), pay finite > 0, tip/cash/miles finite ≥ 0.
+     *
+     * [fromOfferEventSequenceId] names the accepted offer the delivery was added from (#1517); the projector
+     * stores it on the delivery row after its guards and never rewrites the offer row.
      */
     suspend fun addManualDelivery(
         sessionId: String,
@@ -56,6 +59,7 @@ class CorrectionRepository @Inject constructor(
         completedAt: Long,
         miles: Double?,
         note: String?,
+        fromOfferEventSequenceId: Long? = null,
     ) {
         require(pay.isFinite() && pay > 0.0) { "pay must be a finite positive amount" }
         require(tip == null || (tip.isFinite() && tip >= 0.0)) { "tip must be finite and non-negative" }
@@ -75,11 +79,14 @@ class CorrectionRepository @Inject constructor(
                     completedAt = completedAt,
                     miles = miles,
                     note = note,
+                    fromOfferEventSequenceId = fromOfferEventSequenceId,
                 ),
             ),
         )
         // P7: no note/store text — counts/ids only.
-        Timber.tag(TAG).i("MANUAL_DELIVERY appended for session %s", sessionId)
+        Timber.tag(TAG).i(
+            "MANUAL_DELIVERY appended for session %s (from offer=%b)", sessionId, fromOfferEventSequenceId != null,
+        )
     }
 
     /**

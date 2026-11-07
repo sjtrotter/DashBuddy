@@ -47,14 +47,17 @@ private fun String.isBlankOrNonNegative(): Boolean =
  * Add-a-missed-delivery dialog (#650/#688) — store (optional), pay (required, > 0), tip (optional,
  * ≥ 0 when present), cash tip (optional, ≥ 0 when present), note (optional). Confirm stays disabled
  * until pay is valid and any entered tip/cash is valid. Stateless w/ hoisted local field state.
+ * [initialStore] and [initialPay] prefill the fields when the delivery is added from an offer (#1517).
  */
 @Composable
 internal fun AddMissedDeliveryDialog(
     onDismiss: () -> Unit,
     onConfirm: (pay: Double, tip: Double?, cashTip: Double?, storeName: String?, note: String?) -> Unit,
+    initialStore: String = "",
+    initialPay: String = "",
 ) {
-    var store by remember { mutableStateOf("") }
-    var pay by remember { mutableStateOf("") }
+    var store by remember { mutableStateOf(initialStore) }
+    var pay by remember { mutableStateOf(initialPay) }
     var tip by remember { mutableStateOf("") }
     var cashTip by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }

@@ -73,7 +73,7 @@ class RecordsStatusScreensTest {
         uiState = state,
         offersFeed = { ScreenshotData.offersFeed },
         onOpenSettings = {}, onExportCsv = {}, onOpenSession = {}, onStep = {}, onOpenPicker = {},
-        onSelectGranularity = {}, onSelectTab = {}, onOpenNoSession = {}, onOpenOrphanOffers = {},
+        onSelectGranularity = {}, onSelectTab = {}, onOpenNoSession = {},
         onSelectFilter = {}, onShowAllOffers = {}, onToggleShowMore = {}, onRetry = onRetry,
     )
 

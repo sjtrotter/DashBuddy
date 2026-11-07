@@ -16,6 +16,8 @@ import cloud.trotter.log.gig.domain.analytics.FuelFillupFold
 import cloud.trotter.log.gig.domain.analytics.JobAcceptMismatchResolver
 import cloud.trotter.log.gig.domain.analytics.LegStateCodec
 import cloud.trotter.log.gig.domain.analytics.LedgerVoidFold
+import cloud.trotter.log.gig.domain.analytics.ManualSourceLinkFold
+import cloud.trotter.log.gig.domain.analytics.OfferUnassignFold
 import cloud.trotter.log.gig.domain.analytics.OfferFold
 import cloud.trotter.log.gig.domain.analytics.OfferOutcomeCorrectionFold
 import cloud.trotter.log.gig.domain.analytics.OfferReconcileFold
@@ -257,6 +259,8 @@ class AnalyticsProjector @Inject constructor(
             outcome.sessionAssign?.let { adjustments += Adjustment.SessionAssign(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.offerReconcile?.let { adjustments += Adjustment.OfferReconcile(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.offerOutcomeCorrection?.let { adjustments += Adjustment.OfferOutcomeCorrect(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.offerUnassign?.let { adjustments += Adjustment.OfferUnassign(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.manualSourceLink?.let { adjustments += Adjustment.ManualSourceLink(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.context?.let { ctx ->
                 contexts[ctx.sessionId] = ctx
                 touched += ctx.sessionId
@@ -322,6 +326,8 @@ class AnalyticsProjector @Inject constructor(
                     is Adjustment.SessionAssign -> applySessionAssign(adj.fold)
                     is Adjustment.OfferReconcile -> applyOfferReconcile(adj.fold, adj.sequenceId)
                     is Adjustment.OfferOutcomeCorrect -> applyOfferOutcomeCorrection(adj.fold)
+                    is Adjustment.OfferUnassign -> analyticsDao.applyOfferUnassign(adj.fold) // #1517
+                    is Adjustment.ManualSourceLink -> analyticsDao.applyManualSourceLink(adj.fold) // #1517
                 }
                 if (skipped) adjustmentSkips++
             }
@@ -407,6 +413,16 @@ class AnalyticsProjector @Inject constructor(
             override val sequenceId: Long,
             override val occurredAt: Long,
             val fold: OfferOutcomeCorrectionFold,
+        ) : Adjustment
+        data class OfferUnassign(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: OfferUnassignFold,
+        ) : Adjustment
+        data class ManualSourceLink(
+            override val sequenceId: Long,
+            override val occurredAt: Long,
+            val fold: ManualSourceLinkFold,
         ) : Adjustment
     }
 
@@ -976,6 +992,7 @@ class AnalyticsProjector @Inject constructor(
         // #1333: v16 refolded cash-only ownership and zero cash as no cash; v17 (S3b) stores a blank
         // expense note as null, so rows projected before the rule are rebuilt too.
         // 18: #1516 — offer_records.offerScope/quoteBasis and delivery/pickup_records.jobOfferHashes for the shift timeline
-        private const val PROJECTOR_VERSION = 18
+        // 19: #1517: offer_records.unassignedAt from TASK_UNASSIGNED and delivery_records.sourceOfferSeq from MANUAL_DELIVERY
+        private const val PROJECTOR_VERSION = 19
     }
 }

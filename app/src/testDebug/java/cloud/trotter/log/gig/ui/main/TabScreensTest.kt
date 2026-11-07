@@ -112,7 +112,7 @@ class TabScreensTest {
                 offersFeed = { ScreenshotData.offersFeed },
                 onOpenSettings = { calls += "settings" }, onExportCsv = {}, onOpenSession = {}, onStep = {},
                 onOpenPicker = {}, onSelectGranularity = {}, onSelectTab = {}, onOpenNoSession = {},
-                onOpenOrphanOffers = {}, onSelectFilter = {}, onShowAllOffers = {}, onToggleShowMore = {},
+                onSelectFilter = {}, onShowAllOffers = {}, onToggleShowMore = {},
                 onRetry = {},
             )
         }

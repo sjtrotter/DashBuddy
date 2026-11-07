@@ -5,11 +5,13 @@ import cloud.trotter.log.gig.domain.analytics.OfferOutcome
 import cloud.trotter.log.gig.domain.analytics.PayBasis
 import cloud.trotter.log.gig.domain.analytics.SessionDetail
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
+import cloud.trotter.log.gig.domain.analytics.checks.ShiftChecks
 import cloud.trotter.log.gig.domain.analytics.timeline.ShiftTimeline
 import cloud.trotter.log.gig.domain.analytics.timeline.TimelineDelivery
 import cloud.trotter.log.gig.domain.analytics.timeline.TimelineItem
 import cloud.trotter.log.gig.domain.analytics.timeline.TimelineOffer
 import cloud.trotter.log.gig.domain.analytics.timeline.TimelinePickup
+import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeResolution
 import cloud.trotter.log.gig.domain.model.event.payload.SessionEndSource
 import cloud.trotter.log.gig.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.log.gig.domain.model.offer.OfferScope
@@ -32,6 +34,16 @@ internal object ShiftPageFixtures {
     private fun offer(seq: Long, minutes: Int, outcome: OfferOutcome, store: String, pay: Double, miles: Double,
                       scope: OfferScope? = OfferScope.STANDALONE, basis: OfferQuoteBasis? = OfferQuoteBasis.TOTAL) =
         TimelineOffer(seq, "h$seq", outcome, at(minutes), pay, miles, store, scope, basis, linkedJobId = null)
+
+    /** The orphan shift's accepted offer with no delivery, its run before it, and when it was accepted. */
+    const val ORPHAN_OFFER = 13L
+    const val ORPHAN_KEY = "offer:13"
+    const val ORPHAN_RUN_KEY = "run:12"
+    val orphanAcceptedAt: Long get() = at(97)
+    val orphanUnassignedAt: Long get() = at(104)
+
+    /** What became of the orphan shift's accepted offer with no delivery. */
+    enum class OrphanAnswer { OPEN, UNASSIGNED_RECORDED, MARKED_UNASSIGNED, MISSED_DELIVERY_ADDED }
 
     private fun record(seq: Long, job: String, store: String, minutes: Int, pay: Double?, basis: String,
                        net: Double?, cash: Double? = null) = DeliveryRecord(
@@ -99,6 +111,43 @@ internal object ShiftPageFixtures {
         return state(detail, ShiftTimeline.fold(offers, emptyList(), emptyList(), running = false))
     }
 
+    /**
+     * An ended shift with one delivered job and, last, an accepted offer with no delivery ([ORPHAN_OFFER], Sample
+     * Tacos, $7.50), as [answer] left it. The app's total is $13.75 against $6.25 of delivery pay until a missed
+     * delivery is added.
+     */
+    fun orphanShift(answer: OrphanAnswer = OrphanAnswer.OPEN): SessionDetailUiState {
+        val orphan = offer(ORPHAN_OFFER, 97, OfferOutcome.ACCEPTED, "Sample Tacos", 7.50, 2.6).let {
+            when (answer) {
+                OrphanAnswer.UNASSIGNED_RECORDED -> it.copy(unassignedAt = orphanUnassignedAt)
+                OrphanAnswer.MARKED_UNASSIGNED -> it.copy(outcomeResolved = OfferOutcomeResolution.UNASSIGNED_ATTESTED)
+                else -> it
+            }
+        }
+        val offers = listOf(
+            offer(10, 7, OfferOutcome.DECLINED, "Chick-fil-A", 6.50, 4.1),
+            offer(11, 20, OfferOutcome.ACCEPTED, "Sample Burgers", 6.25, 2.4),
+            offer(12, 60, OfferOutcome.DECLINED, "Sample Pizza", 5.00, 7.3),
+            orphan,
+        )
+        val records = buildList {
+            add(record(101, "job-1", "Sample Burgers", 45, 6.25, PayBasis.DROP_SHARE, 3.10))
+            if (answer == OrphanAnswer.MISSED_DELIVERY_ADDED) {
+                add(record(102, "manual:102", "Sample Tacos", 97, 7.50, PayBasis.MANUAL, 5.90))
+            }
+        }
+        val deliveries = records.map { r ->
+            TimelineDelivery(
+                r.eventSequenceId, r.jobId, r.storeName, arrivedAt = null, completedAt = r.completedAt,
+                realizedPay = r.realizedPay, payBasis = r.payBasis, cashTip = r.cashTip,
+                jobOfferHashes = if (r.jobId == "job-1") listOf("h11") else null, soleOfferHash = null,
+                sourceOfferSeq = if (r.payBasis == PayBasis.MANUAL) ORPHAN_OFFER else null,
+            )
+        }
+        val detail = SessionDetail(session(366, 13.75, SessionEndSource.SUMMARY_SCREEN, 22.0, records.size), records)
+        return state(detail, ShiftTimeline.fold(offers, emptyList(), deliveries, running = false))
+    }
+
     private fun state(detail: SessionDetail, timeline: List<TimelineItem>) =
-        SessionDetailUiState(detail = detail, timeline = timeline, loading = false)
+        SessionDetailUiState(detail = detail, timeline = timeline, loading = false, checks = ShiftChecks.of(detail, timeline))
 }

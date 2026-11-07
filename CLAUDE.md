@@ -269,6 +269,8 @@ Before changing a fold, a DAO read, a correction event, the ledger or a Recap or
   REBUILDING.
 - The shift page checks delivery pay only against an independent total (`ReportSource.independent`: the app's
   summary or one the dasher set), never the fallback that equals delivery pay.
+- `ShiftChecks` is the one owner of whether an ended shift needs a check. A recorded unassign stamps the offers it
+  names; a missed delivery added from an offer stores the offer on the delivery row, never rewriting the offer row.
 
 ## Development Principles
 

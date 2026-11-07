@@ -26,6 +26,10 @@ data class TimelineOffer(
     val quoteBasis: OfferQuoteBasis?,
     /** Store resolution's offer-to-job stamp; the fold's second join. */
     val linkedJobId: String?,
+    /** `offer_records.outcomeResolved`: an `OfferOutcomeResolution` value, null when not resolved. */
+    val outcomeResolved: String? = null,
+    /** When a recorded unassign named this offer's job (`offer_records.unassignedAt`); null when none. */
+    val unassignedAt: Long? = null,
 )
 
 /** One confirmed pickup of the shift. */
@@ -55,6 +59,8 @@ data class TimelineDelivery(
     val jobOfferHashes: List<String>?,
     /** The job's one offer hash, when it had exactly one (the pre-18 rows' only hash evidence). */
     val soleOfferHash: String?,
+    /** The accepted offer a missed delivery was added from (`delivery_records.sourceOfferSeq`); null otherwise. */
+    val sourceOfferSeq: Long? = null,
 ) {
     /** The hashes this row names: the full set, else the sole hash on an older row. */
     val offerHashes: List<String> get() = jobOfferHashes ?: listOfNotNull(soleOfferHash)

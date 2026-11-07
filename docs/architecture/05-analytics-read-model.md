@@ -1115,6 +1115,51 @@ time, store pin and re-price time. Known pinned gap: `applyPay` has no suspect-r
   allocation, re-price and "assigned by you" disclosures; the sheet's "Fix this delivery" opens the same
   `AdjustDeliveryDialog`, which keeps the unassign undo.
 
+### Shift checks and the missed-delivery repair (#1517, Room v24, projector 19)
+
+- **Columns.** `offer_records.unassignedAt` and `delivery_records.sourceOfferSeq`, both nullable (`AutoMigration(23, 24)`,
+  `AnalyticsMigration23to24Test`); the `PROJECTOR_VERSION` 18 to 19 refold fills them from the log.
+- **Unassign stamp.** `TASK_UNASSIGNED` still folds into leg state, and its arm also emits `OfferUnassignFold`
+  (`OfferRepairFolds.unassign`: the event's session, its distinct non-blank `jobOfferHashes`, `unassignedAt`, its own
+  sequence id). `OfferRepairApply.applyOfferUnassign` runs in the batch transaction in event order and sets
+  `unassignedAt` on the shift's `OFFER_ACCEPTED` rows with those hashes, sequenced before the unassign and not yet
+  stamped (the first unassign of a job wins). The `outcome` column is never rewritten. No context carries offers, so
+  nothing is mirrored. An unassign that names no row is a no-op, not a skip.
+- **Missed delivery from an offer.** `ManualDeliveryPayload.fromOfferEventSequenceId` (optional, default null) makes
+  `foldManualDelivery` emit `ManualSourceLinkFold` beside its MANUAL row. `applyManualSourceLink` stores the offer's
+  PK on the delivery row (`setDeliverySourceOffer`) and never touches the offer row (`stampOfferLink`'s claim guard
+  would refuse an offer already linked to a job with no delivery). It refuses, as a counted skip with a WARN of ids
+  only, keeping the delivery row without the link: a missing offer or delivery row, an offer not accepted, resolved
+  (`outcomeResolved`), unassigned (`unassignedAt`), of another session, already named by a delivery's hash (the
+  timeline's rule, `TimelineDelivery.offerHashes`), or already the source of another missed delivery (a duplicate).
+  The evidence is the session's delivery rows sequenced before this one; `linkedJobId` is not read, because store
+  resolution stamps it after the batch's corrections and the refold would decide differently.
+- **Timeline.** `TimelineOffer` carries `outcomeResolved` and `unassignedAt`, `TimelineDelivery` carries
+  `sourceOfferSeq`. A delivery whose source is an accepted offer of the shift joins that offer's card: the job the
+  offer joined by hash or `linkedJobId`, else the delivery's own `manual:<seq>` job, which the offer then joins. A
+  card's `openOffers` are its accepted offers with neither stamp. A card with no delivery is NO_DELIVERY (or
+  ACCEPTED_NO_DELIVERY_YET while running) while any offer is open; else UNASSIGNED ("Unassigned 5:12", from the first
+  `unassignedAt`, or no time for a Tier-1 inferred resolution) or MARKED_UNASSIGNED ("You marked it unassigned", an
+  attestation).
+- **One owner.** `domain.analytics.checks.ShiftChecks.of(session, timeline, moneyCheck)`: an ended shift raises
+  `NoDelivery(offerSeq)` for each open offer on a card with no delivery, `MoreAcceptsThanDeliveries(jobId, accepted,
+  delivered)` for a card with deliveries and more open offers than deliveries (one group; the app never picks which
+  offer was lost), and `MoneyDiffers(higher, amount)` from `MoneyCheck` (moved to `:domain` with
+  `SessionDetail.reportSource()` / `effectiveReport()`). A running shift raises none. The shift page computes it from its
+  own detail and timeline (`SessionDetailUiState.checks`); `ShiftChecksRepository.checks(sessionId)` is the read for
+  other screens.
+- **Page.** Under the money check, one line for the offers with no delivery ("1 accepted offer has no delivery
+  recorded") and one per group ("1 job has 2 accepted offers and 1 delivery"). A NO_DELIVERY card opens "What happened
+  to this offer?" (`OfferQuestionSheet`) for its first open offer: "It was unassigned" writes `OFFER_OUTCOME_CORRECTION`;
+  "Add a missed delivery" opens `AddMissedDeliveryDialog` prefilled with the offer's store and pay and writes
+  `MANUAL_DELIVERY` at the offer's decision time naming it; Close leaves it open. A group shows its line and no sheet.
+  The Money tab's orphan dialog (`OrphanOfferAttestDialog`) and its hub read are gone; Home's review row still reads
+  `orphanOfferGroups`, and Tier 1 (`JobAcceptMismatchResolver`) is unchanged.
+- **Not built.** There is no undo for a missed delivery: the existing remove path (`DELIVERY_SESSION_ASSIGN` to no
+  shift) refuses a session-bound MANUAL row, and moving it would keep its pay in "(No session)". The link lives on the
+  delivery row, so a future removal of that row restores the check by construction. The attestation also has no undo
+  on the shift page yet.
+
 ### Records status (#1512)
 
 Every look-back screen reads one value, `RecordsStatus` (`:domain`): REBUILDING, UPDATING or UP_TO_DATE. Its one

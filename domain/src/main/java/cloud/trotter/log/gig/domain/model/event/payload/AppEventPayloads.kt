@@ -299,6 +299,12 @@ data class ManualDeliveryPayload(
     val miles: Double? = null,
     /** Driver-authored free text — driver-owned local data, never in INFO+ logs (P7). */
     val note: String? = null,
+    /**
+     * The accepted offer this missed delivery was added from (its `offer_records` PK), when the dasher added it from
+     * an offer with no delivery. The projector stores it as `delivery_records.sourceOfferSeq` after its guards; it
+     * never rewrites the offer row. Nullable-with-default: older events decode with null.
+     */
+    val fromOfferEventSequenceId: Long? = null,
 ) : AppEventPayload
 
 /**

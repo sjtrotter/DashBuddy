@@ -64,7 +64,7 @@ internal object ReviewFlags {
         /** The "(No session)" bucket (#660) — deliveries not tied to any dash. Actionable. */
         NO_SESSION,
 
-        /** Accepted offers with no matching delivery (#810 B2 Tier 2). Actionable. */
+        /** Accepted offers with no matching delivery (#810 B2). Home's copy only; the shift page decides them (#1517). */
         ORPHAN_OFFERS,
     }
 
@@ -93,27 +93,20 @@ internal fun reviewTexts(
 
 /**
  * The window's review rows: [ReviewFlags.of] decides WHICH, [reviewRows] resolves each one's copy,
- * and this attaches the hub's own in-place actions.
+ * and this attaches the hub's own in-place actions. Accepted offers with no delivery are decided on the
+ * shift page (#1517), so the hub raises no orphan-offer row.
  */
 @Composable
 internal fun reviewItems(
     economics: PeriodEconomics,
-    orphanOfferGroups: List<OrphanOfferGroup>,
     onOpenNoSession: () -> Unit,
-    onOpenOrphanOffers: () -> Unit,
-): List<ReviewItem> = reviewRows(economics, orphanOfferGroups).map { (flag, item) ->
+): List<ReviewItem> = reviewRows(economics, emptyList()).map { (flag, item) ->
     when (flag) {
-        ReviewFlags.Flag.UNATTRIBUTED, ReviewFlags.Flag.OVER_ATTRIBUTED -> item
+        ReviewFlags.Flag.UNATTRIBUTED, ReviewFlags.Flag.OVER_ATTRIBUTED, ReviewFlags.Flag.ORPHAN_OFFERS -> item
         ReviewFlags.Flag.NO_SESSION -> item.copy(
             action = ReviewAction(
                 label = stringResource(R.string.money_tab_no_session_callout_click_label),
                 onClick = onOpenNoSession,
-            ),
-        )
-        ReviewFlags.Flag.ORPHAN_OFFERS -> item.copy(
-            action = ReviewAction(
-                label = stringResource(R.string.money_tab_orphan_offers_callout_click_label),
-                onClick = onOpenOrphanOffers,
             ),
         )
     }

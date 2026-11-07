@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.domain.analytics.timeline
 
 import cloud.trotter.log.gig.domain.analytics.OfferOutcome
+import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeResolution
 import cloud.trotter.log.gig.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.log.gig.domain.model.offer.OfferScope
 import cloud.trotter.log.gig.domain.model.offer.joinDisplayStores
@@ -11,6 +12,8 @@ import cloud.trotter.log.gig.domain.model.offer.joinDisplayStores
  *
  * - An accepted offer joins a job by hash first (its hash in exactly one job's delivery- or pickup-row hash set),
  *   then by `linkedJobId`. Nothing is inferred from time or store; an offer that joins nothing is a card of its own.
+ * - A missed delivery the dasher added from an accepted offer (`sourceOfferSeq`) joins that offer's card: the job
+ *   the offer joined, else the delivery's own job, which the offer then joins.
  * - A card with an offer is keyed by its first offer, so the key holds as the job gains a pickup and deliveries.
  * - Job cards sort by their first accepted offer, a card with no offer by its first delivery, and passed offers
  *   by their own decision; ties fall to the event sequence id, which is unique across the log.
@@ -29,17 +32,23 @@ object ShiftTimeline {
         running: Boolean,
     ): List<TimelineItem> {
         val sortedOffers = offers.filter { it.outcome != null }.sortedWith(offerOrder)
-        val deliveriesByJob = deliveries.sortedWith(deliveryOrder).groupBy { it.jobId }
         val pickupsByJob = pickups.sortedBy { it.eventSequenceId }.groupBy { it.jobId }
         val jobsByHash = (deliveries.flatMap { d -> d.offerHashes.map { it to d.jobId } } +
             pickups.flatMap { p -> p.jobOfferHashes.orEmpty().map { it to p.jobId } })
             .groupBy({ it.first }, { it.second })
             .mapValues { it.value.toSet() }
 
+        val accepted = sortedOffers.filter { it.outcome == OfferOutcome.ACCEPTED }
+        val ownJoin = accepted.associate { it.eventSequenceId to joinedJob(it, jobsByHash) }
+        // A delivery added from an accepted offer of this shift joins the job that offer joined, else its own job.
+        val sourcedJob = deliveries.mapNotNull { d -> d.sourceOfferSeq?.takeIf { it in ownJoin }?.let { it to d.jobId } }.toMap()
+        val deliveriesByJob = deliveries.sortedWith(deliveryOrder)
+            .groupBy { d -> d.sourceOfferSeq?.let { ownJoin[it] } ?: d.jobId }
+
         val offersByJob = LinkedHashMap<String, MutableList<TimelineOffer>>()
         val unjoined = mutableListOf<TimelineOffer>()
-        for (offer in sortedOffers.filter { it.outcome == OfferOutcome.ACCEPTED }) {
-            val jobId = joinedJob(offer, jobsByHash)
+        for (offer in accepted) {
+            val jobId = ownJoin[offer.eventSequenceId] ?: sourcedJob[offer.eventSequenceId]
             if (jobId != null) offersByJob.getOrPut(jobId) { mutableListOf() }.add(offer) else unjoined.add(offer)
         }
 
@@ -99,10 +108,14 @@ object ShiftTimeline {
         }
         val pays = drops.mapNotNull { it.realizedPay }
         val cash = drops.mapNotNull { it.cashTip }
+        val open = offers.filter { it.outcomeResolved == null && it.unassignedAt == null }
+        val unassignedAt = offers.mapNotNull { it.unassignedAt }.minOrNull()
         val state = when {
             drops.isNotEmpty() -> JobState.NORMAL
-            running -> JobState.ACCEPTED_NO_DELIVERY_YET
-            else -> JobState.NO_DELIVERY
+            open.isNotEmpty() || offers.isEmpty() -> if (running) JobState.ACCEPTED_NO_DELIVERY_YET else JobState.NO_DELIVERY
+            unassignedAt != null -> JobState.UNASSIGNED
+            offers.any { it.outcomeResolved == OfferOutcomeResolution.UNASSIGNED_ATTESTED } -> JobState.MARKED_UNASSIGNED
+            else -> JobState.UNASSIGNED
         }
         return JobCard(
             key = key,
@@ -117,6 +130,8 @@ object ShiftTimeline {
             cashTips = cash.takeIf { it.isNotEmpty() }?.sum(),
             state = state,
             offerEventSequenceIds = offers.map { it.eventSequenceId },
+            openOffers = open.map { OpenOffer(it.eventSequenceId, it.decidedAt, it.payAmount, it.merchantName) },
+            unassignedAt = unassignedAt,
             milestones = milestones(offers, base, offerLine, addOns, pickups, drops, lines),
         )
     }

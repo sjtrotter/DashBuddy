@@ -11,6 +11,8 @@ import cloud.trotter.log.gig.domain.analytics.RecordsStatus
 import cloud.trotter.log.gig.domain.analytics.ReportSource
 import cloud.trotter.log.gig.domain.analytics.SessionDetail
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
+import cloud.trotter.log.gig.domain.analytics.checks.MoneyCheck
+import cloud.trotter.log.gig.domain.analytics.checks.reportSource
 import cloud.trotter.log.gig.domain.model.event.payload.SessionEndSource
 import cloud.trotter.log.gig.domain.model.event.payload.SessionReportOperation
 import cloud.trotter.log.gig.domain.state.Platform
@@ -120,7 +122,7 @@ class SessionDetailViewModelTest {
         // The app's summary: checked, the app total higher.
         val summary = detailWith(base.copy(machineReportedEarnings = 30.0, reportedEarnings = 30.0,
             endSource = SessionEndSource.SUMMARY_SCREEN), 8.0 to PayBasis.DROP_SHARE)
-        assertEquals(ReportSource.DASH_SUMMARY, shiftReportSource(summary))
+        assertEquals(ReportSource.DASH_SUMMARY, summary.reportSource())
         val summaryCheck = MoneyCheck.of(summary)!!
         assertEquals(MoneyCheck.Higher.APP_TOTAL, summaryCheck.higher)
         assertEquals(22.0, summaryCheck.difference, 1e-9)
@@ -128,7 +130,7 @@ class SessionDetailViewModelTest {
         val set = detailWith(base.copy(machineReportedEarnings = 40.14, endSource = SessionEndSource.EARLY_OFFLINE,
             reportOverrideMode = SessionReportOperation.SET, reportOverride = 5.0, reportedEarnings = 5.0),
             8.0 to PayBasis.OFFER_PAY)
-        assertEquals(ReportSource.DRIVER_SET, shiftReportSource(set))
+        assertEquals(ReportSource.DRIVER_SET, set.reportSource())
         val setCheck = MoneyCheck.of(set)!!
         assertEquals(MoneyCheck.Higher.DELIVERY_PAY, setCheck.higher)
         assertTrue(setCheck.deliveryPayEstimated)
@@ -136,11 +138,11 @@ class SessionDetailViewModelTest {
         assertNull(MoneyCheck.of(detailWith(base, 8.0 to PayBasis.DROP_SHARE)))
         val floored = detailWith(base.copy(machineReportedEarnings = 6.0, reportedEarnings = 8.0,
             endSource = SessionEndSource.EARLY_OFFLINE), 8.0 to PayBasis.DROP_SHARE)
-        assertEquals(ReportSource.RECORDED_PAY, shiftReportSource(floored))
+        assertEquals(ReportSource.RECORDED_PAY, floored.reportSource())
         assertNull(MoneyCheck.of(floored))
         val counter = detailWith(base.copy(machineReportedEarnings = 12.0, reportedEarnings = 12.0,
             endSource = SessionEndSource.EARLY_OFFLINE), 8.0 to PayBasis.DROP_SHARE)
-        assertEquals(ReportSource.IN_DASH_COUNTER, shiftReportSource(counter))
+        assertEquals(ReportSource.IN_DASH_COUNTER, counter.reportSource())
         assertNull(MoneyCheck.of(counter))
         val cleared = detailWith(base.copy(machineReportedEarnings = 12.0, reportOverrideMode = SessionReportOperation.CLEAR),
             8.0 to PayBasis.DROP_SHARE)
@@ -265,7 +267,26 @@ class SessionDetailViewModelTest {
 
         // completedAt defaults to the loaded session's endedAt; miles is v1-null.
         verify(correctionRepository).addManualDelivery(
-            eq("s1"), eq("Chipotle"), eq(9.5), eq(2.0), eq(3.0), eq(1_700_003_600_000L), isNull(), eq("missed"),
+            eq("s1"), eq("Chipotle"), eq(9.5), eq(2.0), eq(3.0), eq(1_700_003_600_000L), isNull(), eq("missed"), isNull(),
+        )
+        job.cancel()
+    }
+
+    @Test
+    fun `the offer answers append the attestation or a missed delivery naming the offer at its time`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        whenever(analyticsRepository.sessionDetail(eq("s1"))).thenReturn(flowOf(SessionDetail(session("s1"), emptyList())))
+        val viewModel = buildViewModel("s1")
+        val job = launch { viewModel.uiState.collect {} }
+        testScheduler.advanceUntilIdle()
+
+        viewModel.markOfferUnassigned(13L)
+        viewModel.addMissedDeliveryForOffer(13L, 1_700_001_000_000L, 7.5, null, null, "Sample Tacos", null)
+        testScheduler.advanceUntilIdle()
+
+        verify(correctionRepository).correctOfferOutcome(13L, true, null)
+        verify(correctionRepository).addManualDelivery(
+            eq("s1"), eq("Sample Tacos"), eq(7.5), isNull(), isNull(), eq(1_700_001_000_000L), isNull(), isNull(), eq(13L),
         )
         job.cancel()
     }

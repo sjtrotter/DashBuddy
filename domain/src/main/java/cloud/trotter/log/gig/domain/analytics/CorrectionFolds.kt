@@ -167,7 +167,9 @@ internal object CorrectionFolds {
             deliveredJobIds = ctx.deliveredJobIds + jobId,
             lastEventAt = maxOf(ctx.lastEventAt, p.completedAt),
         )
-        return FoldOutcome(context = newCtx, delivery = delivery)
+        // Added from an accepted offer: the projector validates the link against the offer row and stores it.
+        val sourceLink = p.fromOfferEventSequenceId?.let { ManualSourceLinkFold(event.sequenceId, sid, it) }
+        return FoldOutcome(context = newCtx, delivery = delivery, manualSourceLink = sourceLink)
     }
 
     /**

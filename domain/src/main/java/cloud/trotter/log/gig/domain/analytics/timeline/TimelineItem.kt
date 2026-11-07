@@ -34,6 +34,10 @@ data class JobCard(
     val state: JobState,
     /** The accepted offers' sequence ids, so a link can land on this card. */
     val offerEventSequenceIds: List<Long>,
+    /** The accepted offers with no recorded unassign and no resolution, in decision order. */
+    val openOffers: List<OpenOffer> = emptyList(),
+    /** The first recorded unassign on the job ([JobState.UNASSIGNED]); null when none. */
+    val unassignedAt: Long? = null,
     /** The recorded milestones for the job's sheet, in time order; a milestone not recorded is absent. */
     val milestones: List<Milestone>,
 ) : TimelineItem
@@ -85,12 +89,25 @@ data class DeliveryLine(
     val cashTip: Double?,
 )
 
+/** An accepted offer on a card that nothing accounts for yet: what the "What happened" sheet asks about. */
+data class OpenOffer(
+    val eventSequenceId: Long,
+    val decidedAt: Long,
+    val pay: Double?,
+    /** The store text as recorded. */
+    val stores: String?,
+)
+
 enum class JobState {
     NORMAL,
     /** The shift is running and the job has no delivery yet. */
     ACCEPTED_NO_DELIVERY_YET,
-    /** The shift ended and the job has no delivery. */
+    /** The shift ended, the job has no delivery and an accepted offer is still open. */
     NO_DELIVERY,
+    /** No delivery, and a recorded unassign (or the app's store check) accounts for the offers. */
+    UNASSIGNED,
+    /** No delivery, and the dasher marked the offers unassigned. */
+    MARKED_UNASSIGNED,
 }
 
 /** In display order for equal times. */

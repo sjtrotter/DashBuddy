@@ -216,4 +216,9 @@ data class DeliveryRecordEntity(
      * MANUAL rows, and on rows folded before projector 18. The shift timeline joins offers to jobs by it.
      */
     val jobOfferHashes: String? = null,
+    /**
+     * The accepted offer (`offer_records` PK) a MANUAL row was added from (#1517, v24), stored by the projector
+     * once its guards pass; null otherwise. The offer row is never rewritten; the shift timeline joins by it.
+     */
+    val sourceOfferSeq: Long? = null,
 )

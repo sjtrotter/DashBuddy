@@ -50,6 +50,8 @@ internal fun OfferRecordEntity.toTimeline() = TimelineOffer(
     offerScope = OfferScope.entries.find { it.name == offerScope },
     quoteBasis = OfferQuoteBasis.entries.find { it.name == quoteBasis },
     linkedJobId = linkedJobId,
+    outcomeResolved = outcomeResolved,
+    unassignedAt = unassignedAt,
 )
 
 internal fun PickupRecordEntity.toTimeline() = TimelinePickup(
@@ -72,4 +74,5 @@ internal fun DeliveryRecordEntity.toTimeline() = TimelineDelivery(
     cashTip = cashTip,
     jobOfferHashes = StringListColumn.decode(jobOfferHashes),
     soleOfferHash = soleOfferHash,
+    sourceOfferSeq = sourceOfferSeq,
 )
