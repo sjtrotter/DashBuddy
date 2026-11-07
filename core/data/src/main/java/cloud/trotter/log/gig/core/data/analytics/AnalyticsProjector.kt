@@ -932,6 +932,7 @@ class AnalyticsProjector @Inject constructor(
         // 15: #1310 — odometerAtArrival from DELIVERY_ARRIVED metadata (backfills readings surviving the bounded map)
         // #1333: v16 refolded cash-only ownership and zero cash as no cash; v17 (S3b) stores a blank
         // expense note as null, so rows projected before the rule are rebuilt too.
-        private const val PROJECTOR_VERSION = 17
+        // 18: #1516 — offer_records.offerScope/quoteBasis and delivery_records.jobOfferHashes for the shift timeline
+        private const val PROJECTOR_VERSION = 18
     }
 }

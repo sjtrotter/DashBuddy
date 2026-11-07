@@ -95,4 +95,10 @@ data class OfferRecordEntity(
     /** Every parsed entry proves one order (a store name or a type chip explicitly counting 1). */
     val orderCountProven: Boolean? = null,
     val isShop: Boolean? = null,
+
+    // ── Shift timeline (#1516, v23) ─────────────────────────────────────────
+    /** `ParsedOffer.effectiveScope.name` (`STANDALONE` / `ADD_ON`); null on rows folded before projector 18. */
+    val offerScope: String? = null,
+    /** `ParsedOffer.quoteBasis.name` (`TOTAL` / `INCREMENTAL`); null on rows folded before projector 18. */
+    val quoteBasis: String? = null,
 )

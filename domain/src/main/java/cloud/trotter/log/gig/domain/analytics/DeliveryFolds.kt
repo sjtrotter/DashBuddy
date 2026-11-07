@@ -213,6 +213,7 @@ internal object DeliveryFolds {
             milesBasis = milesBasis,
             jobOfferCount = offerHashes?.size,
             soleOfferHash = offerHashes?.singleOrNull(),
+            jobOfferHashes = offerHashes,
             odometerAtArrival = legState.dropoffArrivalOdometers[p.taskId]
                 ?.takeIf { it.arrivedAt == p.arrivedAt }?.odometer,
         )

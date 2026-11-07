@@ -54,6 +54,7 @@ internal fun DeliveryFold.toEntity() = DeliveryRecordEntity(
     jobOfferCount = jobOfferCount,
     soleOfferHash = soleOfferHash,
     odometerAtArrival = odometerAtArrival,
+    jobOfferHashes = StringListColumn.encode(jobOfferHashes),
 )
 
 internal fun PickupFold.toEntity() = PickupRecordEntity(
@@ -98,4 +99,6 @@ internal fun OfferFold.toEntity() = OfferRecordEntity(
     orderCount = orderCount,
     orderCountProven = orderCountProven,
     isShop = isShop,
+    offerScope = offerScope,
+    quoteBasis = quoteBasis,
 )
