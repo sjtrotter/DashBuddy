@@ -99,7 +99,9 @@ PR CI (`pr-check.yml`, job `build-and-test`) is the gate because the laptop cann
 - If Actions refuses to dispatch runs for a PR's tree (the 2026-07-27 class: no run object across shas and
   branches), use the `workflow_dispatch` escape hatch: Actions → PR Check → Run workflow → enter the PR number. It
   builds that PR's merge ref and reports a real `build-and-test` commit status onto the PR head it tested (pinned
-  before the build, #1450), which satisfies the required check without an admin override.
+  before the build, #1450), which satisfies the required check without an admin override. A commit that changes the
+  tree (an empty commit does not) got `pull_request` runs again on 2026-11-08 (#1548), and a `ready_for_review` on a
+  refused tree starts no run either. From a shell: `gh workflow run pr-check.yml --ref <branch> -f pr=<pr>`.
 
 ## Branch protection, lint and release secrets
 
