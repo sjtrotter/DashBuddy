@@ -97,10 +97,10 @@ class RecapDaysTest {
         assertEquals(DayOfWeek.MONDAY, earned.firstDay)
         assertEquals(DayOfWeek.TUESDAY, earned.lastDay)
         assertEquals(120.0, earned.thisWeek, 1e-9)
-        assertEquals(75.0, earned.lastWeek, 1e-9)
+        assertEquals(75.0, requireNotNull(earned.lastWeek), 1e-9)
         val profit = requireNotNull(RecapComparisons.of(week, lastWeek, RecapMeasure.PROFIT, shiftRunning = false))
         assertEquals(72.0, profit.thisWeek, 1e-9)
-        assertEquals(45.0, profit.lastWeek, 1e-9)
+        assertEquals(45.0, requireNotNull(profit.lastWeek), 1e-9)
     }
 
     @Test fun `on a Monday of the current week there is no comparison`() {
