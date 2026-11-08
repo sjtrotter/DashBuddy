@@ -55,6 +55,18 @@ Rules, in precedence order:
 
 PR CI (`pr-check.yml`, job `build-and-test`) is the gate because the laptop cannot run the full gate safely (#1450).
 
+- Draft and ready (#1548): one job, named by the PR's state. A draft PR's run is `draft-check`: compile, the debug
+  APK, the unit tests and the schema check, with no `lintVitalRelease` and no screenshots. Marking the PR ready
+  (`gh pr ready`, a `ready_for_review` run) and every later push run the full `build-and-test`, as do master pushes
+  and dispatch runs. A draft never creates a `build-and-test` check, not even a skipped one, because a skipped
+  required check counts as passed: right after `gh pr ready` the head has no `build-and-test` until the full run
+  reports. Mark the PR ready before the round the session expects to be the last (Sol found nothing blocking, or only
+  small fixes), so that round's CI is the full run; marking it ready seconds before merging adds a full run at merge.
+  A break only release lint or the screenshots catch (`NewApi`, `ExtraTranslation`, a render crash) then shows at
+  ready and costs a round.
+- `pr-wait --until green` waits for the required `build-and-test`, so on a draft it never returns: watch a draft's run
+  with `gh run watch <id> --exit-status`.
+
 - Read a red run with `gh run view <id> --log-failed` and its `gate-summary.txt`
   (`gh run download <id> -n junit-results-<pr>`); `tools/ci/junit_summary.py` reads downloaded JUnit XML.
 - Local Gradle is only small runs (`:domain:test`, one module's compile) through `~/dashbuddy/tools/pr-loop/gt.sh`'s
@@ -63,9 +75,11 @@ PR CI (`pr-check.yml`, job `build-and-test`) is the gate because the laptop cann
   never compared (#1463). The same run renders them after the gate, also when the gate is red as long as the build
   compiled. `tools/ci/screenshots.txt` lists the expected files, and `tools/ci/check_screenshots.py` fails the job
   only on a missing or undecodable one (`screenshots-summary.txt` in the artifact names a crashed render). Locally the
-  PNGs land in `feature/bubble/build/outputs/screenshots` and `app/build/outputs/screenshots`. A draft PR's run
-  skips the render (#1547); for a draft's pictures, dispatch the run (`gh workflow run pr-check.yml -f pr=<pr>`),
-  which renders them.
+  PNGs land in `feature/bubble/build/outputs/screenshots` and `app/build/outputs/screenshots`. A draft's run
+  (`draft-check`) skips the render; for a draft's pictures, dispatch the full run (`gh workflow run pr-check.yml -f
+  pr=<pr>`).
+- A red "Schemas committed" step uploads the exported JSON as `room-schemas-<pr>`: download it, review it and commit
+  it, with no laptop build.
 - CI runs Gradle with `--parallel --max-workers=4 --build-cache` (#1547, CI command lines only; the laptop keeps its own
   limits). Master pushes and PR runs write the Gradle cache, and a PR reads master's and its own earlier runs'. Test
   tasks and `:core:database`'s KSP tasks are never cached (undeclared inputs and outputs), so a cache hit can never
@@ -90,8 +104,8 @@ PR CI (`pr-check.yml`, job `build-and-test`) is the gate because the laptop cann
 - `master` is protected by a ruleset (#1450): a PR is required, merge commits only, `build-and-test` must pass (a
   skipped run counts), no approvals, and the admin bypass applies to PRs only.
 - The signing secrets live in the `release` environment, which only `v*.*.*` tags can use.
-- PR CI also runs `:app:lintVitalRelease` (#907) after the unit tests; `:app`'s `lint { checkDependencies = true }`
-  folds the library modules into that one run, so a local `:app:build` or `assembleRelease` also pays the
+- The full gate (`build-and-test`, not a draft's `draft-check`) also runs `:app:lintVitalRelease` (#907) after the
+  unit tests; `:app`'s `lint { checkDependencies = true }` folds the library modules into that one run, so a local `:app:build` or `assembleRelease` also pays the
   multi-module vital pass (accepted). Only the `NewApi` id is promoted to fatal (root `lint.xml`, #1162);
   `InlinedApi` is benign by construction.
 - `values-es` is intentionally incomplete until the translation-completion work lands; that completeness gate is

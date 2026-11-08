@@ -436,9 +436,10 @@ when CI will not start, a PR needs its artifacts, or you work from a remote sess
    head's CI run and Sol round start together on the same SHA, and any push that changes the diff starts a new round.
    Stop at the first round whose head is both CI-green and Sol-clean; at the three-round cap with no such head, the
    developer decides. `blast-radius` when the change touches a shared path. Before a review round, read
-   `.claude/council.md` (seats, attack axes, round rules).
-5. **File:** `file-pr`, which fills `.github/pull_request_template.md` with both review blocks into the existing
-   draft (`gh pr edit`, then `gh pr ready`).
+   `.claude/council.md` (seats, attack axes, round rules). A draft's run is `draft-check` (no release lint, no
+   screenshots); `gh pr ready` before the round expected to be the last, so its head gets the full `build-and-test`.
+5. **File:** `file-pr`, which fills `.github/pull_request_template.md` with both review blocks into the PR
+   (`gh pr edit`).
 6. **Watch and merge:** `babysit-pr` (`pr-wait --until green`). Once `build-and-test` passes on the head, merge with
    `~/dashbuddy/tools/pr-loop/post-merge.sh <issue|-> <pr>`: it runs `gh pr merge --merge`, removes the worktree,
    deletes the branch locally and on the remote, pulls master, sets the board to Done and drops `in-progress`.
