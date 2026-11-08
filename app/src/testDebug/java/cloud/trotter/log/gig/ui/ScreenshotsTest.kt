@@ -513,7 +513,13 @@ class ScreenshotsTest(private val theme: String) {
         compose.onAllNodes(texts, useUnmergedTree = true).fetchSemanticsNodes().forEach { node ->
             val layouts = mutableListOf<TextLayoutResult>()
             node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
-            assertTrue("text under $tag overflows", layouts.none { it.hasVisualOverflow })
+            layouts.firstOrNull { it.hasVisualOverflow }?.let {
+                throw AssertionError(
+                    "text under $tag overflows: '${it.layoutInput.text}' size=${it.size} " +
+                        "width=${it.didOverflowWidth} height=${it.didOverflowHeight} constraints=${it.layoutInput.constraints} " +
+                        "lines=${it.lineCount} maxLines=${it.layoutInput.maxLines} overflow=${it.layoutInput.overflow}",
+                )
+            }
         }
     }
 

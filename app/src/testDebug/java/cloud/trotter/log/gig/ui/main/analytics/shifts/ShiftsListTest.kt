@@ -75,11 +75,11 @@ class ShiftsListTest {
         val lastWeek = thisWeek.minusWeeks(1)
         show(ScreenshotData.shifts(target = lastWeek))
         compose.onNodeWithTag("shifts-week-$lastWeek").assertIsDisplayed()
-        // The newer week sits above the first item in view, so the list never composed it.
+        // The newer week's header sits above the opening position, so the list never composed it. Its last rows can
+        // show above the target when too little follows the target to scroll it to the very top (LazyColumn clamps at
+        // the end; an accepted limit, #1515 PR B review): the target header is in view either way.
         compose.onNodeWithTag("shifts-week-$thisWeek").assertDoesNotExist()
-        compose.onNodeWithTag("shifts-row-s4").assertDoesNotExist()
         assertTrue("reported: $reported", reported.lastOrNull()?.contains(lastWeek) == true)
-        assertTrue("reported: $reported", thisWeek !in reported.last())
     }
 
     @Test fun `an empty target week shows its header and No shifts`() {

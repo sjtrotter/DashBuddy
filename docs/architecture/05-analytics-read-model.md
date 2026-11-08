@@ -326,8 +326,10 @@ the em dash when its pay was not seen, never $0.00. **Checks follow the screen, 
 view (`LazyListState.layoutInfo` through `snapshotFlow`, which emits only on a change) and the ViewModel reads
 checks only for the ended shifts of those weeks (`flatMapLatest`); a row whose week has not been read shows no
 reason line. A row with a check carries `allCheckLines`' first line and opens the shift page at `landingRowOf`.
-The list opens with the target week's header first (the list composes only once loaded) and never writes Recap's
-`AnalyticsWindowSelection`, so Back returns to Recap on the same week.
+The list opens with the target week's header first (the list composes only once loaded); when too little follows an
+old target to scroll it to the very top, `LazyColumn` clamps at the end and the newer week's last rows show above the
+header, which stays in view (an accepted limit). The list never writes Recap's `AnalyticsWindowSelection`, so Back
+returns to Recap on the same week. An empty visible set (not laid out yet) is never reported.
 
 **Home = "Today" (#977, stage 4).** A forward-looking glance over the SAME read-model, **zero** new
 queries: **So far today** is the rolling `TODAY` `periodEconomics` (replacing the old four-window
