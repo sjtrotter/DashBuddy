@@ -125,3 +125,4 @@ manual cleanup (the PR page's "Delete branch" button, or the workstation's `post
 On the workstation, each issue's branch lives in a linked worktree (`~/dashbuddy-wt/<n>`), and `gh pr merge
 --delete-branch` fails to delete a branch that is checked out there. That is why `post-merge.sh` merges with
 `--merge`, removes the worktree first, then deletes the branch locally and on the remote.
+
