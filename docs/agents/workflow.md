@@ -87,8 +87,10 @@ PR CI (`pr-check.yml`, job `build-and-test`) is the gate because the laptop cann
 
 ## Skip-ci, force-ci and the dispatch escape hatch
 
-- `pr-check.yml` skips `build-and-test` when the PR **body** contains the literal `[skip ci]` (not `[no-ci]`, not a
-  comment, not a label). Use it only when the diff has no code; when in doubt, let CI run.
+- `pr-check.yml` skips every step of `build-and-test` when the PR **body** contains the literal `[skip ci]` (not
+  `[no-ci]`, not a comment, not a label), and the job passes in seconds. Use it only when the diff has no code; when in
+  doubt, let CI run. The job itself always runs (`RUN_GATE`, #1548): a job skipped by a job-level `if` reports its
+  name expression unevaluated, so the dynamically named job would never produce the required `build-and-test`.
 - The token is read when a run starts: a code branch's early draft body must not carry it, and a later body edit
   (`file-pr`) neither re-runs CI nor skips it.
 - Footgun (#902/#928): the check is a bare `contains()`, so a code PR whose body merely describes the token skips its
