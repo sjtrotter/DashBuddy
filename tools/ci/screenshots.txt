@@ -55,6 +55,9 @@ recap/day-font-200 1078 2399
 recap/loading 1078 2399
 recap/rebuilding 1078 2399
 recap/failed 1078 2399
+shifts/list 1078 2399
+shifts/list-font-200 1078 2399
+shifts/busy-week-font-200 1078 2399
 playbook 1078 2399
 playbook-full 1078 5250
 playbook-empty 1078 2399

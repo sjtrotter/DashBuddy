@@ -8,4 +8,6 @@ issues: #1515
   a shift is running; "Cash included" appears only when the week had cash; Shifts to check lists the shift the shift
   page flags, and a tap lands on the flagged row. How to tell it works: the week's total equals the sum of the day
   bars, and nothing shows $0.00 for a day with no shift.
+  The Shifts row opens every shift at Recap's week: that week's header is at the top (an empty week reads "No
+  shifts"), a shift with a check carries its reason, and Back returns to Recap on the same week.
   - Confirmed: 0/2.

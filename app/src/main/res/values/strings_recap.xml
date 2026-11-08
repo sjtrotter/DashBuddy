@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Recap, the week (#1515), and the day page. -->
+<!-- Recap, the week (#1515), the day page and the Shifts list. -->
 <resources>
     <!-- A span of dates or days: "Oct 26 to Nov 1", "Mon to Sat". -->
     <string name="recap_range_format">%1$s to %2$s</string>
@@ -48,4 +48,13 @@
     <string name="recap_day_online">hr online</string>
     <string name="recap_day_miles">mi driven</string>
     <string name="recap_day_could_not_load_what">this day</string>
+    <!-- The Shifts list: every shift, by week. -->
+    <string name="shifts_title">Shifts</string>
+    <!-- Recap's Shifts row, read aloud: what a tap does. -->
+    <string name="shifts_open">Open all shifts</string>
+    <!-- A week with no shift, under its header. -->
+    <string name="shifts_week_none">No shifts</string>
+    <!-- A running shift: "DoorDash, 2:30 PM to now". -->
+    <string name="shifts_app_to_now_format">%1$s, %2$s to now</string>
+    <string name="shifts_could_not_load_what">your shifts</string>
 </resources>

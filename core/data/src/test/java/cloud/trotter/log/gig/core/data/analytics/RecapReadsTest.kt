@@ -15,6 +15,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -127,6 +128,22 @@ class RecapReadsTest {
         )
         assertEquals(listOf("zero", "nopay", "paid"), recap.shifts(week, zone).first().map { it.sessionId })
         assertTrue(recap.anyShift.first())
+    }
+
+    @Test
+    fun `the Shifts list reads every shift, newest first, open ones and their pay included`() = runBlocking {
+        val dao = db.analyticsDao()
+        dao.upsertSession(session("old", noon(0) - 30L * 24 * hour, endSource = null, reported = null))
+        dao.upsertSession(session("paid", noon(2), endSource = null, reported = null))
+        dao.upsertDelivery(delivery(1, "paid", noon(2) + 600_000, pay = 20.0, cashTip = 5.0))
+        dao.upsertSession(session("open", noon(9), endSource = null, reported = null).copy(endedAt = null))
+
+        val shifts = recap.allShifts().first()
+        assertEquals(listOf("open", "paid", "old"), shifts.map { it.sessionId })
+        assertNull(shifts[0].endedAt)
+        assertEquals(25.0, shifts[1].earned, 1e-9)
+        assertTrue(shifts[1].paySeen)
+        assertFalse(shifts[2].paySeen)
     }
 
     @Test

@@ -315,6 +315,20 @@ type: `offerOutcomes`, `offerScoreOutcomes`, `acceptedOfferRealizedRows`, `offer
 `periodEconomics(…, platform)` keeps its grouped by-platform fold. The paragraphs below on stages 2, 3 and 7 are
 the history of what those sections were.
 
+**The Shifts list (#1515, PR B).** Recap's Shifts row opens every shift, newest first, under one header per Monday
+week (`Screen.Shifts`, `ShiftsViewModel`). **The read** is one Flow, `RecapRepository.allShifts()` over
+`RecapDao.allShiftRows` (the `shiftDayRows` columns and the shared `SessionReportSql` gross / net / pay-seen
+fragments, no window, `ORDER BY startedAt DESC`); the pure `:domain` `recap.ShiftWeeks.of(shifts, target, zone)`
+groups it: a shift belongs to the Monday week of its local start day, newest week first, and the target week (the
+route's `week`, else this week) is inserted empty when it has none; no other week is ever empty. A row's Earned is
+the em dash when its pay was not seen, never $0.00. **Checks follow the screen, never every shift:**
+`ShiftChecksRepository.checks(ids)` builds two Room flows per id, so the list reports the Mondays of the weeks in
+view (`LazyListState.layoutInfo` through `snapshotFlow`, which emits only on a change) and the ViewModel reads
+checks only for the ended shifts of those weeks (`flatMapLatest`); a row whose week has not been read shows no
+reason line. A row with a check carries `allCheckLines`' first line and opens the shift page at `landingRowOf`.
+The list opens with the target week's header first (the list composes only once loaded) and never writes Recap's
+`AnalyticsWindowSelection`, so Back returns to Recap on the same week.
+
 **Home = "Today" (#977, stage 4).** A forward-looking glance over the SAME read-model, **zero** new
 queries: **So far today** is the rolling `TODAY` `periodEconomics` (replacing the old four-window
 `PeriodReview` selector, whose windows live on the #970 pager now); **This week** is

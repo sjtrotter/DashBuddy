@@ -109,7 +109,7 @@ class TabScreensTest {
             AnalyticsContent(
                 uiState = ScreenshotData.recap(),
                 onOpenSettings = { calls += "settings" }, onStep = {}, onSelectMeasure = {}, onOpenDay = {},
-                onOpenShift = { _, _ -> }, onOpenNoSession = {}, onRetry = {},
+                onOpenShift = { _, _ -> }, onOpenShifts = {}, onOpenNoSession = {}, onRetry = {},
             )
         }
         compose.onNodeWithContentDescription(back).assertDoesNotExist()

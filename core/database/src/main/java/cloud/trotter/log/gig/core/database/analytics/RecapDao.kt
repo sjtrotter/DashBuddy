@@ -9,7 +9,7 @@ import cloud.trotter.log.gig.core.database.analytics.SessionReportSql.SESSION_PA
 import kotlinx.coroutines.flow.Flow
 
 /**
- * #1515: Recap's shift reads, kept out of [AnalyticsDao] (past the size limit). Both re-emit on every projector
+ * #1515: Recap's shift reads, kept out of [AnalyticsDao] (past the size limit). Each re-emits on every projector
  * commit to `session_records` or `delivery_records` (Room invalidation).
  */
 @Dao
@@ -33,6 +33,24 @@ interface RecapDao {
            ORDER BY s.startedAt ASC"""
     )
     fun shiftDayRows(start: Long, end: Long): Flow<List<ShiftDayRow>>
+
+    /**
+     * Every shift ever recorded, newest first, open ones included (#1515, the Shifts list): the same columns and
+     * expressions as [shiftDayRows], with no window.
+     */
+    @Query(
+        """SELECT s.sessionId AS sessionId,
+                  s.platform AS platform,
+                  s.startedAt AS startedAt,
+                  s.endedAt AS endedAt,
+                  $SESSION_GROSS_SQL AS gross,
+                  $SESSION_NET_SQL AS net,
+                  $SESSION_PAY_SEEN_SQL AS paySeen
+           FROM session_records s
+           $SESSION_DELIVERY_JOIN_SQL
+           ORDER BY s.startedAt DESC"""
+    )
+    fun allShiftRows(): Flow<List<ShiftDayRow>>
 
     /** True once any shift has been recorded: Recap's "no shifts yet" state reads its negation. */
     @Query("SELECT EXISTS(SELECT 1 FROM session_records)")

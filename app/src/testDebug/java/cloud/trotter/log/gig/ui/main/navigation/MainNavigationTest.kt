@@ -622,7 +622,9 @@ class MainNavigationTest {
                     hubPreferences, hubStatus, stateManager, createSavedStateHandle(),
                 ).also { created += it }
             }
-            AnalyticsScreen(onOpenSettings = {}, onOpenSession = { _, _ -> }, onOpenDay = {}, viewModel = vm)
+            AnalyticsScreen(
+                onOpenSettings = {}, onOpenSession = { _, _ -> }, onOpenDay = {}, onOpenShifts = {}, viewModel = vm,
+            )
         })
         // The ViewModelStore a process death loses: the restored composition reads the replacement.
         var owner: ViewModelStoreOwner = Owner()
@@ -655,6 +657,44 @@ class MainNavigationTest {
         compose.waitForIdle()
         assertEquals(RecapMeasure.PROFIT, restored.uiState.value.measure)
         assertEquals(300f, scrollPosition(), 0.5f)
+    }
+
+    // ── (k) Recap's Shifts row ──────────────────────────────────────────
+
+    @Test fun `Recap's Shifts row opens the Shifts list at Recap's week, and Back returns there`() {
+        stubHub()
+        val lastWeek = AnalyticsWindowSelection(-1)
+        whenever(hubPreferences.analyticsWindow).thenReturn(MutableStateFlow(lastWeek))
+        realScreens = mapOf(Screen.Analytics.route to { _ ->
+            val vm = viewModel {
+                AnalyticsViewModel(
+                    hubRepository, recapRepository, shiftChecksRepository, ledgerRepository, mock<CorrectionRepository>(),
+                    hubPreferences, hubStatus, stateManager, createSavedStateHandle(),
+                )
+            }
+            AnalyticsScreen(
+                onOpenSettings = {}, onOpenSession = { _, _ -> }, onOpenDay = {}, onOpenShifts = { actions.openShifts(it) },
+                viewModel = vm,
+            )
+        })
+        show()
+        bar(TopLevel.ANALYTICS)
+
+        val row = compose.onNodeWithText(compose.activity.getString(R.string.recap_row_shifts))
+        assertEquals(
+            compose.activity.getString(R.string.shifts_open),
+            row.fetchSemanticsNode().config[SemanticsActions.OnClick].label,
+        )
+        row.performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitForIdle()
+
+        assertEquals(Screen.Shifts.route, current())
+        val recapWeek = lastWeek.resolve(java.time.LocalDate.now()).startDate.toString()
+        assertEquals(recapWeek, nav.currentBackStackEntry?.arguments?.getString(Screen.Shifts.ARG_WEEK))
+        assertEquals(stackOf(dashboard, analytics, Screen.Shifts.route), stack())
+        assertBarShown(false)
+        back()
+        assertEquals(analytics, current())
     }
 
     private val verticalScroll = SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange)

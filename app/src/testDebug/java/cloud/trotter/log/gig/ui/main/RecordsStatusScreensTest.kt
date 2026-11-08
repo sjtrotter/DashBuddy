@@ -70,7 +70,7 @@ class RecordsStatusScreensTest {
     @Composable
     private fun Hub(state: AnalyticsUiState, onRetry: () -> Unit = {}) = AnalyticsContent(
         uiState = state, onOpenSettings = {}, onStep = {}, onSelectMeasure = {}, onOpenDay = {},
-        onOpenShift = { _, _ -> }, onOpenNoSession = {}, onRetry = onRetry,
+        onOpenShift = { _, _ -> }, onOpenShifts = {}, onOpenNoSession = {}, onRetry = onRetry,
     )
 
     @Composable

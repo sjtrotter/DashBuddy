@@ -8,6 +8,7 @@ import cloud.trotter.log.gig.domain.analytics.recap.DayShift
 import cloud.trotter.log.gig.domain.analytics.recap.RecapComparisons
 import cloud.trotter.log.gig.domain.analytics.recap.RecapDays
 import cloud.trotter.log.gig.domain.analytics.recap.RecapMeasure
+import cloud.trotter.log.gig.domain.analytics.recap.ShiftWeeks
 import cloud.trotter.log.gig.domain.analytics.AnalyticsWindows
 import cloud.trotter.log.gig.domain.analytics.DailyEarnings
 import cloud.trotter.log.gig.domain.analytics.EarningsHeatmap
@@ -33,6 +34,7 @@ import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsUiState
 import cloud.trotter.log.gig.ui.main.analytics.ShiftToCheck
 import cloud.trotter.log.gig.ui.main.analytics.day.DayUiState
+import cloud.trotter.log.gig.ui.main.analytics.shifts.ShiftsUiState
 import cloud.trotter.log.gig.ui.main.dashboard.DashboardUiState
 import cloud.trotter.log.gig.ui.main.playbook.PlaybookUiState
 import cloud.trotter.log.gig.R
@@ -300,6 +302,38 @@ internal object ScreenshotData {
         ),
         shifts = weekFacts[1].shifts.sortedByDescending { it.startedAt },
     )
+
+    /**
+     * The Shifts list's shifts: this week's (Monday also an Uber shift, two apps on one date), last week's (Saturday's
+     * had no pay found), and one three weeks back; the week between has none. Monday's DoorDash shift has a check.
+     */
+    private val listShifts: List<DayShift> = weekFacts.flatMap { it.shifts } +
+        shift("u1", "2026-10-26T18:00:00Z", 3.0, 41.20, 30.10).copy(platform = Platform.Uber) +
+        lastWeekFacts.flatMap { it.shifts } +
+        shift("o1", "2026-10-07T16:00:00Z", 4.0, 92.15, 70.40)
+
+    /** The Shifts list opened at [target]'s week (this week by default). */
+    fun shifts(target: LocalDate = weekStart): ShiftsUiState = ShiftsUiState(
+        today = today,
+        targetWeek = ShiftWeeks.weekStart(target),
+        weeks = ShiftWeeks.of(listShifts, target, ZoneOffset.UTC),
+        checks = mapOf("s1" to listOf(ShiftCheck.NoDelivery(offerEventSequenceId = 77))),
+    )
+
+    /** Last week with 29 shifts (four a day, five on Monday), two apps taking turns: the 200 % text stress case. */
+    val busyWeek: ShiftsUiState by lazy {
+        val monday = weekStart.minusWeeks(1)
+        val shifts = (0 until BUSY_WEEK_SHIFTS).map { i ->
+            val date = monday.plusDays((i % 7).toLong())
+            val slot = i / 7
+            val hour = (7 + slot * 3).toString().padStart(2, '0')
+            shift("b$i", "${date}T$hour:00:00Z", 2.5, earned = 18.45 + (i * 7) % 30, profit = 13.90 + (i * 5) % 20)
+                .copy(platform = if (slot % 2 == 0) Platform.DoorDash else Platform.Uber)
+        }
+        ShiftsUiState(today = today, targetWeek = monday, weeks = ShiftWeeks.of(shifts, monday, ZoneOffset.UTC))
+    }
+
+    const val BUSY_WEEK_SHIFTS = 29
 
     fun playbook(showMore: Boolean) = PlaybookUiState(
         showMore = showMore,

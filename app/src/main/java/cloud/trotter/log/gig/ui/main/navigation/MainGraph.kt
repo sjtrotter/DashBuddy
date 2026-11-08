@@ -25,6 +25,14 @@ fun NavGraphBuilder.mainGraph(render: @Composable (route: String, entry: NavBack
                     },
                 )
             Screen.Day.route -> listOf(navArgument(Screen.Day.ARG_DATE) { type = NavType.StringType })
+            Screen.Shifts.route ->
+                listOf(
+                    navArgument(Screen.Shifts.ARG_WEEK) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                )
             Screen.VehicleEdit.route ->
                 listOf(navArgument(Screen.VehicleEdit.ARG) { type = NavType.StringType })
             else -> emptyList()
