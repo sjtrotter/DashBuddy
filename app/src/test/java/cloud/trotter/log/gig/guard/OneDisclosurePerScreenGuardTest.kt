@@ -20,9 +20,9 @@ class OneDisclosurePerScreenGuardTest {
     fun eachHostHasExactlyOneFooterAndAtMostOneToggle() {
         val footerCall = Regex("""\bHowNumbersWorkFooter\s*\(""")
         val toggleCall = Regex("""\bMoreNumbersToggle\s*\(""")
-        // SessionDetailScreen does not render a footer; these are the actual footer hosts.
+        // SessionDetailScreen does not render a footer, and Recap has none (#1515; the developer's 11-02 call: no
+        // "How these numbers work" on the look-back screens). These are the actual footer hosts.
         val hosts = listOf(
-            "app/src/main/java/cloud/trotter/log/gig/ui/main/analytics/AnalyticsScreen.kt",
             "app/src/main/java/cloud/trotter/log/gig/ui/main/playbook/PlaybookScreen.kt",
             "app/src/main/java/cloud/trotter/log/gig/ui/main/dashboard/DashboardScreen.kt",
         )
@@ -57,30 +57,11 @@ class OneDisclosurePerScreenGuardTest {
     }
 
     @Test
-    fun offerEstimateNoteBelongsOnlyToAnalytics() {
-        assertOwners(
-            listOf("offers_tab_frozen_disclosure"),
-            setOf("app/src/main/java/cloud/trotter/log/gig/ui/main/analytics/AnalyticsScreen.kt"),
-        )
-    }
-
-    @Test
     fun movedNotesBelongOnlyToScreenFooters() {
         assertOwners(
-            listOf(
-                "time_tab_rate_distinction",
-                "time_tab_typical_hour_derivation",
-                "time_tab_mileage_tax_disclosure",
-                "time_tab_unattributed_note",
-                "patterns_tab_stores_manual_note",
-                "money_tab_pay_mix_partial_detail",
-                "money_tab_where_went_no_split",
-                "money_tab_recent_scope_note",
-            ),
-            setOf(
-                "app/src/main/java/cloud/trotter/log/gig/ui/main/analytics/AnalyticsScreen.kt",
-                "app/src/main/java/cloud/trotter/log/gig/ui/main/playbook/PlaybookScreen.kt",
-            ),
+            // The hub's Money and Time notes went with their sections (#1515).
+            listOf("patterns_tab_stores_manual_note"),
+            setOf("app/src/main/java/cloud/trotter/log/gig/ui/main/playbook/PlaybookScreen.kt"),
         )
     }
 
