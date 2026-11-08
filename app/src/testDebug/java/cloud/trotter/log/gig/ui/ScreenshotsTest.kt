@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -282,7 +283,11 @@ class ScreenshotsTest(private val theme: String) {
     fun recapWeekFont200() = recap("recap/week-font-200", ScreenshotData.recap(), Formats.money(ScreenshotData.week.grossEarnings))
 
     /** Last week: every day has happened, so the comparison covers Monday to Sunday. */
-    @Test fun recapPastWeek() = recap("recap/past-week", ScreenshotData.recapPastWeek(), string(R.string.recap_day_no_pay))
+    /** Saturday had a shift with no pay found; a chart row speaks through its description, so that is what is checked. */
+    @Test fun recapPastWeek() = render("recap/past-week", assertion = {
+        text(string(R.string.analytics_screen_title)).assertExists()
+        compose.onAllNodes(hasContentDescription(string(R.string.recap_day_no_pay), substring = true))[0].assertExists()
+    }) { RecapBody(ScreenshotData.recapPastWeek()) }
 
     @Test fun recapWeekOff() = recap("recap/week-off", ScreenshotData.recapWeekOff(), string(R.string.recap_row_spending))
 
