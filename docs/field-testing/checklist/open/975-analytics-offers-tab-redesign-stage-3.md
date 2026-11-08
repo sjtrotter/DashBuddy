@@ -1,4 +1,4 @@
-status: review
+status: superseded?
 issues: #975, #976, #1024
 
 - **🆕 NEW — #975 — Analytics → Offers tab (redesign stage 3).** Open Analytics. The second tab is
@@ -22,3 +22,4 @@ issues: #975, #976, #1024
     UI evidence obtainable from this pull.)
   desk: needs field: inspect Offers-tab metrics and paging; #1024 part 1 changed the tab count, not all of these assertions.
   Triage source: first-line blame 2026-07-30 (`4b140112e`, original README L1018).
+  - 2026-11-08 proposal (#1515 PR A): the screen this item exercises (the hub's Money, Offers or Time section, or its More toggle) was removed when Recap became the week; proposed superseded, pending the dev.

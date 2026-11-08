@@ -1,4 +1,4 @@
-status: review
+status: superseded?
 issues: #659, #668, #1133, #1219
 
 - **🆕 NEW — Money tab 4-step waterfall: Fuel vs Non-fuel, with a clean fallback on mixed periods
@@ -14,3 +14,4 @@ issues: #659, #668, #1133, #1219
   - Confirmed: 0/2
   desk: needs field: compare all-split and mixed-period cost cards against #1133 / PR #1219's newer coverage guard; check the actual rendered fallback.
   Triage source: first-line blame 2026-07-05 (`005505088`, original README L1907).
+  - 2026-11-08 proposal (#1515 PR A): the screen this item exercises (the hub's Money, Offers or Time section, or its More toggle) was removed when Recap became the week; proposed superseded, pending the dev.

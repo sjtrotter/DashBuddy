@@ -1,4 +1,4 @@
-status: review
+status: superseded?
 issues: #983
 
 - **🆕 NEW — #983 — Time tab: the two hourly rates, your typical online hour, gap stats
@@ -35,3 +35,4 @@ issues: #983
     decide whether the card should say so.)
   desk: needs field: compare Time-tab bars and paging with the dash; the recorded gap-fold checks cover only the data half.
   Triage source: first-line blame 2026-07-30 (`efa9b14e6`, original README L894).
+  - 2026-11-08 proposal (#1515 PR A): the screen this item exercises (the hub's Money, Offers or Time section, or its More toggle) was removed when Recap became the week; proposed superseded, pending the dev.

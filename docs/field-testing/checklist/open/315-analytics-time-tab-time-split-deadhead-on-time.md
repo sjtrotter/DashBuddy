@@ -1,4 +1,4 @@
-status: active
+status: superseded?
 issues: #315, #689
 
 - **🆕 NEW — Analytics Time tab: time split, deadhead, on-time gauge, mileage & tax (#315 H4).**
@@ -19,3 +19,4 @@ issues: #315, #689
   deadline, or a crash opening the tab with no dashes yet.
   - Confirmed: 1/2 — 2026-07-05: viewed post-dash; no anomalies reported. (Mileage & tax card carries the #689 stale-rate issue.)
   Triage source: first-line blame 2026-07-05 (`9fc69bcb4`, original README L1931). Recorded first confirmation: 2026-07-05 (existing evidence only).
+  - 2026-11-08 proposal (#1515 PR A): the screen this item exercises (the hub's Money, Offers or Time section, or its More toggle) was removed when Recap became the week; proposed superseded, pending the dev.

@@ -1,4 +1,4 @@
-status: active
+status: superseded?
 issues: #315
 
 - **🆕 NEW — Analytics Decisions tab: offer funnel + value-of-saying-no + score-vs-outcome (#315 H3).**
@@ -15,3 +15,4 @@ issues: #315
   period, or a crash opening the tab with no offers yet.
   - Confirmed: 1/2 — 2026-07-05: viewed post-dash; funnel counts matched the dash (5 accepted / 3 declined, no timeouts).
   Triage source: first-line blame 2026-07-05 (`f5cac9467`, original README L1918). Recorded first confirmation: 2026-07-05 (existing evidence only).
+  - 2026-11-08 proposal (#1515 PR A): the screen this item exercises (the hub's Money, Offers or Time section, or its More toggle) was removed when Recap became the week; proposed superseded, pending the dev.

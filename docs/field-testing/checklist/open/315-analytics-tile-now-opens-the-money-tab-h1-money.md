@@ -1,4 +1,4 @@
-status: active
+status: superseded?
 issues: #315, #659, #694
 
 - **🆕 NEW — Analytics tile now opens the Money tab (#315 H1 / Money tab v1).**
@@ -15,3 +15,4 @@ issues: #315, #659, #694
   unattributed callout on a period with none.
   - Confirmed: 1/2 — 2026-07-05: all tabs viewed post-dash; Money figures re-anchored and matched reality (incl. the unattributed callout). Copy vocabulary note → #694.
   Triage source: first-line blame 2026-07-05 (`7534abd51`, original README L1894). Recorded first confirmation: 2026-07-05 (existing evidence only).
+  - 2026-11-08 proposal (#1515 PR A): the screen this item exercises (the hub's Money, Offers or Time section, or its More toggle) was removed when Recap became the week; proposed superseded, pending the dev.
