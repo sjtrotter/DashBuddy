@@ -58,8 +58,9 @@ internal fun allCheckLines(checks: List<ShiftCheck>, appName: String): List<Stri
         shiftCheckLines(checks)
 
 /**
- * Where a link to a shift with [checks] lands: the first offer with no delivery, else the page's top (null); the
- * money check and a job's group show at the top.
+ * Where a link to a shift with [checks] lands: the first offer with no delivery, else the first job with more accepts
+ * than deliveries, else the page's top (null), where the money check shows.
  */
 internal fun landingRowOf(checks: List<ShiftCheck>): String? =
     checks.firstNotNullOfOrNull { (it as? ShiftCheck.NoDelivery)?.let { check -> offerRowKey(check.offerEventSequenceId) } }
+        ?: checks.firstNotNullOfOrNull { (it as? ShiftCheck.MoreAcceptsThanDeliveries)?.let { check -> jobRowKey(check.jobId) } }

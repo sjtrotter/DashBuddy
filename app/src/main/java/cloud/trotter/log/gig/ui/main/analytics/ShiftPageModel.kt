@@ -74,7 +74,9 @@ internal data class RowLanding(val scrollKey: String, val expandRun: String?, va
             val seq = row.removePrefix(OFFER_KEY_PREFIX).takeIf { row.startsWith(OFFER_KEY_PREFIX) }?.toLongOrNull()
             for (item in items) {
                 when (item) {
-                    is JobCard -> if (item.key == row || (seq != null && seq in item.offerEventSequenceIds)) {
+                    is JobCard -> if (item.key == row || (seq != null && seq in item.offerEventSequenceIds) ||
+                        (item.jobId != null && row == jobRowKey(item.jobId))
+                    ) {
                         return RowLanding(item.key, null, item.key)
                     }
                     is PassedRun -> {
@@ -97,3 +99,6 @@ internal fun passedRowKey(eventSequenceId: Long): String = offerRowKey(eventSequ
 
 /** The `row` link that lands on the offer [eventSequenceId] (its card, or the run that holds it). */
 internal fun offerRowKey(eventSequenceId: Long): String = "$OFFER_KEY_PREFIX$eventSequenceId"
+
+/** A link to a job's card by its job id, whatever the card is keyed by (Recap's "more accepts" check, #1515). */
+internal fun jobRowKey(jobId: String): String = "job:$jobId"

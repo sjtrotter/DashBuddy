@@ -4,6 +4,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHasNoClickAction
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -48,7 +49,16 @@ class RecapDayTapTest {
         compose.mainClock.advanceTimeBy(2_000)
     }
 
-    private fun row(date: String) = compose.onNodeWithTag("recap-day-$date").performScrollTo()
+    /**
+     * `performScrollTo` animates its scroll, and on the frozen frame clock that animation never ends (the test hung
+     * until CI's job timeout). Frames advance only for the scroll; the wall clock stays [ScreenshotData.clock].
+     */
+    private fun row(date: String): SemanticsNodeInteraction {
+        compose.mainClock.autoAdvance = true
+        val node = compose.onNodeWithTag("recap-day-$date").performScrollTo()
+        compose.mainClock.autoAdvance = false
+        return node
+    }
 
     @Test fun `a one-shift day opens that shift`() {
         show(ScreenshotData.recap())

@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.ui.main.analytics.recap
 
+import cloud.trotter.log.gig.domain.analytics.recap.DayTime
 import cloud.trotter.log.gig.domain.analytics.recap.RecapDay
 import java.time.LocalDate
 
@@ -9,8 +10,8 @@ sealed interface DayTap {
     data class Day(val date: LocalDate) : DayTap
 }
 
-/** Null for a day with no shift (a day off, a day ahead): the row is not clickable. */
-fun RecapDay.tap(): DayTap? = when (shifts.size) {
+/** Null for a day with no shift or a day ahead (even one holding a shift): the row is not clickable. */
+fun RecapDay.tap(): DayTap? = if (time == DayTime.AHEAD) null else when (shifts.size) {
     0 -> null
     1 -> DayTap.Shift(shifts.single().sessionId)
     else -> DayTap.Day(date)

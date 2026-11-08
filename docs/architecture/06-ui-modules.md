@@ -168,7 +168,8 @@ test host activity is a debug dependency), provide a clock they control, set `ma
 the clock and call `mainClock.advanceTimeBy(2_000)`: one tick of 1,000 ms rounds to whole frames and can miss the
 recomposition (see the `ComposeSmokeTest`s in `:feature:bubble` and `:app`). Motion runs on the Compose frame clock
 (`mainClock.advanceTimeBy`), wall time on `LocalNowProvider`, and a one-time effect persists its mark at start, never
-at its end.
+at its end. `performScrollTo` animates, so on the frozen frame clock it never returns: switch `autoAdvance` on for the
+scroll only (`RecapDayTapTest.row`), or keep the node in view (#1515's first run hung until the job timeout).
 
 `rememberNow()` is a `produceState` loop over `LocalNowProvider.current` that re-reads the clock every `tickMs`
 (default 1,000 ms); `val now by rememberNow()` and derive from it.
