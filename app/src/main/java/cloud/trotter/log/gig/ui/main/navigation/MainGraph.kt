@@ -8,7 +8,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 
 /**
- * The app's one flat graph (#1447): every [Screen.graphRoutes] entry, with the two argument routes'
+ * The app's one flat graph (#1447): every [Screen.graphRoutes] entry, with the argument routes'
  * `navArgument`s, rendered by [render]. The NavHost passes the real screens and the navigation test
  * passes placeholders, so both run the same graph.
  */
@@ -24,6 +24,7 @@ fun NavGraphBuilder.mainGraph(render: @Composable (route: String, entry: NavBack
                         defaultValue = null
                     },
                 )
+            Screen.Day.route -> listOf(navArgument(Screen.Day.ARG_DATE) { type = NavType.StringType })
             Screen.VehicleEdit.route ->
                 listOf(navArgument(Screen.VehicleEdit.ARG) { type = NavType.StringType })
             else -> emptyList()

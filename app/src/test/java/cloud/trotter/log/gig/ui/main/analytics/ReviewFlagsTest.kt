@@ -10,7 +10,7 @@ import org.junit.Test
 /**
  * #973 / brief §4.2 — the "Needs a look" card's gating. The four stacked amber callouts became rows of
  * one card, and the value of this test is proving that was a **layout** change only: every flag fires
- * on exactly the condition its standalone callout fired on. Compose-free, per the [MoneyWentModel]
+ * on exactly the condition its standalone callout fired on. Compose-free, per the [NetDelta]
  * precedent (the copy is a separate concern; only the decision is tested here).
  */
 class ReviewFlagsTest {

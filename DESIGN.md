@@ -82,8 +82,12 @@ spoken offer follow the bubble's rules, because they are read or heard in the sa
   tab. Off a tab (from a screen below one) the plan notification opens the plan over the current screen, so no
   unsaved edit is lost (#1024, #1447).
 - **Two tiers of detail.** Compact by default; "More numbers" reveals the remaining figures and controls on
-  Recap and Plan (#1255). Home, Recap and Plan each end with one disclosure for the caveats
-  (`HowNumbersWorkFooter`); the shift page has none.
+  Plan (#1255). Home and Plan each end with one disclosure for the caveats (`HowNumbersWorkFooter`); Recap, its
+  day page and the shift page have none.
+- **Recap** (#1515) is the week: a period bar, the Earned / Est. Profit switch, the total with its completed-days
+  comparison (words, never a percent), one bar per weekday with last week's dot (today outlined, a day ahead keeps
+  its row with no value), two tiles, Shifts to check, and the rows. A day with one shift opens it; a day with more
+  opens the day page.
 - **The shift page** (#1516) is one shift's money above a timeline of its offers and deliveries, in one
   `LazyColumn`: Earned with the cash inside it, three figures (stacked at 200 % text), a money check only against
   an independent total (the app's summary or one the dasher set, never the fallback that equals delivery pay),
@@ -239,7 +243,7 @@ adds the gap below, and never leaves it worse.
 - **Words under 12 sp:** `labelSmall` is 10 sp and `bodySmall` 11 sp in `AppTypography`, and the `xs` number style
   is 11 sp.
 - **Targets under 48 dp:** keypad keys (38 dp), the offer pop-up's Accept and Decline (36 and 40 dp, in fixed-height
-  rows), expense label chips, goal buttons (44 dp), the hub's segments, "More numbers" and needs-a-look rows.
+  rows), expense label chips, goal buttons (44 dp), Recap's switch segments, "More numbers" and needs-a-look rows.
 - **Numbers outside a number style:** the setup sliders' values (`MetricSliderCard`, Material `displayMedium`) and
   the bubble's gas prices (`GasQuickEdit`, which also reads Material colour roles instead of `AppTheme.colors`).
 - **Bubble text the driving multiplier misses:** the offer card's literal `20.sp` text and `14.sp` countdown label

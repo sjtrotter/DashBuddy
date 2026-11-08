@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.domain.format
 
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -7,6 +8,7 @@ import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.time.format.TextStyle
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -94,6 +96,14 @@ fun formatMonthDay(date: LocalDate, locale: Locale = Locale.getDefault()): Strin
  */
 fun formatWeekdayMonthDay(date: LocalDate, locale: Locale = Locale.getDefault()): String =
     DateTimeFormatter.ofPattern("EEE, MMM d", locale).format(date)
+
+/** "Mon": a weekday's short name, for Recap's day rows and its comparison span ("Mon to Sat", #1515). */
+fun formatWeekdayShort(day: DayOfWeek, locale: Locale = Locale.getDefault()): String =
+    day.getDisplayName(TextStyle.SHORT, locale)
+
+/** "Monday": a weekday's full name, for a day row read aloud (#1515). */
+fun formatWeekdayFull(day: DayOfWeek, locale: Locale = Locale.getDefault()): String =
+    day.getDisplayName(TextStyle.FULL, locale)
 
 /**
  * "Monday, Jul 20" — the Home header's date line (#977 / brief §2).

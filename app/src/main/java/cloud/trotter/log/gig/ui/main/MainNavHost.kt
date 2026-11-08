@@ -17,6 +17,7 @@ import cloud.trotter.log.gig.feature.settings.PrivacyScreen
 import cloud.trotter.log.gig.feature.settings.StrategySettingsScreen
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsScreen
 import cloud.trotter.log.gig.ui.main.analytics.SessionDetailScreen
+import cloud.trotter.log.gig.ui.main.analytics.day.DayScreen
 import cloud.trotter.log.gig.ui.main.dashboard.DashboardScreen
 import cloud.trotter.log.gig.ui.main.navigation.MainNavActions
 import cloud.trotter.log.gig.ui.main.navigation.Screen
@@ -72,8 +73,8 @@ private fun MainScreen(route: String, actions: MainNavActions) {
         )
         Screen.Analytics.route -> AnalyticsScreen(
             onOpenSettings = actions::openSettings,
-            onExportCsv = actions::openExport,
             onOpenSession = actions::openSession,
+            onOpenDay = actions::openDay,
         )
         Screen.Playbook.route -> PlaybookScreen(
             onOpenSettings = actions::openSettings,
@@ -84,6 +85,7 @@ private fun MainScreen(route: String, actions: MainNavActions) {
         Screen.Ratings.route -> RatingsScreen(onBack = actions::back)
         Screen.WeeklyPlan.route -> WeeklyPlanScreen(onBack = actions::back)
         Screen.SessionDetail.route -> SessionDetailScreen(onBack = actions::back)
+        Screen.Day.route -> DayScreen(onBack = actions::back, onOpenSession = { actions.openSession(it) })
         Screen.Wizard.route -> WizardScreen(onComplete = actions::back, onExit = actions::back)
 
         // --- Settings ---

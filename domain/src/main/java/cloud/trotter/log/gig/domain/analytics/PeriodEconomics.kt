@@ -6,7 +6,7 @@ import cloud.trotter.log.gig.domain.state.Platform
  * Below this magnitude an analytics money figure is effectively zero — half a cent (#973).
  *
  * ONE owner for the threshold every read-side money comparison uses: the hub's review callouts, the
- * cash-tip marker, and [PayMix]'s negative-remainder test. It lives in `:domain` because both the
+ * cash-tip marker, and Recap's day marks. It lives in `:domain` because both the
  * pure models and the `:app` surfaces need it, and a threshold with two copies is one that can only
  * ever drift apart (the #942 consolidation, widened a module down).
  */
@@ -76,6 +76,11 @@ data class PeriodEconomics(
     val grossSources: GrossSources = GrossSources.EMPTY,
     /** Σ realized pay on null-net rows, excluded when deriving car costs from gross minus net. Cash cancels separately. */
     val payWithoutNet: Double = 0.0,
+    /**
+     * Σ cash tips of the period's deliveries, the shifts' and the no-shift deliveries' together (#1515, Recap's
+     * "Cash included"). Already inside [grossEarnings] and [netProfit]; never add it again.
+     */
+    val cash: Double = 0.0,
 ) {
     companion object {
         val EMPTY = PeriodEconomics(

@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /**
@@ -28,4 +29,12 @@ class ShiftChecksRepository @Inject constructor(
             .flatMapLatest { running -> shiftTimelineRepository.timeline(sessionId, running) }
         return combine(detail, timeline) { d, t -> d?.let { ShiftChecks.of(it, t) }.orEmpty() }
     }
+
+    /** #1515: each shift's [checks] in [sessionIds], keyed by id (Recap's Shifts to check). */
+    fun checks(sessionIds: List<String>): Flow<Map<String, List<ShiftCheck>>> =
+        if (sessionIds.isEmpty()) {
+            flowOf(emptyMap())
+        } else {
+            combine(sessionIds.map { id -> checks(id).map { id to it } }) { pairs -> pairs.toMap() }
+        }
 }

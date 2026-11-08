@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.ui.main.navigation
 
 import androidx.navigation.NavController
+import java.time.LocalDate
 
 /**
  * One method per navigation intent (#1447). The NavHost's screens call only these, so how each intent
@@ -22,8 +23,11 @@ class MainNavActions(private val nav: NavController) {
     fun openRatings() = nav.push(Screen.Ratings.route)
     fun openSettings() = nav.push(Screen.SettingsHome.route)
     fun openWizard() = nav.push(Screen.Wizard.route)
-    fun openExport() = nav.push(Screen.DataExport.route)
-    fun openSession(sessionId: String) = nav.navigate(Screen.SessionDetail.route(sessionId))
+    /** A shift's page; [row] lands it on a timeline item (Recap's Shifts to check). */
+    fun openSession(sessionId: String, row: String? = null) = nav.navigate(Screen.SessionDetail.route(sessionId, row))
+
+    /** Recap's day with two or more shifts. */
+    fun openDay(date: LocalDate) = nav.navigate(Screen.Day.route(date))
 
     /** A static route pushed over the current screen (the Settings menu, Garage, Costs). */
     fun open(route: String) = nav.push(route)

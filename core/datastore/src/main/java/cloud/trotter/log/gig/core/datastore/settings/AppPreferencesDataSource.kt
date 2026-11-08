@@ -107,8 +107,8 @@ class AppPreferencesDataSource @Inject constructor(
         // The hub's period pager selection, persisted so it survives tab switches AND app restarts.
         // Lives in APP PREFS (not app_state) because it is a UI preference the driver chose — the
         // same class of key as theme / glance mode — not machine state the state machine owns.
-        // Granularity is the `WindowGranularity` enum NAME; the offset applies to the relative
-        // granularities (0 = the current window) and the two epoch-day keys carry a CUSTOM range.
+        // Granularity is the `WindowGranularity` enum NAME (WEEK since #1515); the offset is weeks from this one.
+        // The two epoch-day keys held a custom range before #1515; a write clears them.
         val ELECTRICITY_PRICE_PER_KWH = doublePreferencesKey("electricity_price_per_kwh")
         val ANALYTICS_WINDOW_GRANULARITY = stringPreferencesKey("analytics_window_granularity")
         val ANALYTICS_WINDOW_OFFSET = intPreferencesKey("analytics_window_offset")
@@ -120,8 +120,6 @@ class AppPreferencesDataSource @Inject constructor(
     data class AnalyticsWindowPrefs(
         val granularity: String?,
         val offset: Int?,
-        val startEpochDay: Long?,
-        val endEpochDay: Long?,
     )
 
     /** One DataStore snapshot for the one-time garage import. Null means no saved car. */
@@ -233,8 +231,6 @@ class AppPreferencesDataSource @Inject constructor(
         AnalyticsWindowPrefs(
             granularity = it[Keys.ANALYTICS_WINDOW_GRANULARITY],
             offset = it[Keys.ANALYTICS_WINDOW_OFFSET],
-            startEpochDay = it[Keys.ANALYTICS_WINDOW_START_DAY],
-            endEpochDay = it[Keys.ANALYTICS_WINDOW_END_DAY],
         )
     }
 
@@ -338,30 +334,14 @@ class AppPreferencesDataSource @Inject constructor(
     }
 
     /**
-     * #970 — persist the analytics review-window selection as ONE atomic edit, so a granularity
-     * switch can never land next to a stale custom range. A relative selection clears the two
-     * epoch-day keys; a custom range clears the offset. Fail-closed by construction: a partially
-     * written state is unreachable.
+     * #970 — persist Recap's week as ONE atomic edit; it clears the pre-#1515 custom-range keys.
      */
-    suspend fun setAnalyticsWindow(
-        granularity: String,
-        offset: Int?,
-        startEpochDay: Long?,
-        endEpochDay: Long?,
-    ) {
+    suspend fun setAnalyticsWindow(granularity: String, offset: Int) {
         ds.edit {
             it[Keys.ANALYTICS_WINDOW_GRANULARITY] = granularity
-            if (offset == null) it.remove(Keys.ANALYTICS_WINDOW_OFFSET) else it[Keys.ANALYTICS_WINDOW_OFFSET] = offset
-            if (startEpochDay == null) {
-                it.remove(Keys.ANALYTICS_WINDOW_START_DAY)
-            } else {
-                it[Keys.ANALYTICS_WINDOW_START_DAY] = startEpochDay
-            }
-            if (endEpochDay == null) {
-                it.remove(Keys.ANALYTICS_WINDOW_END_DAY)
-            } else {
-                it[Keys.ANALYTICS_WINDOW_END_DAY] = endEpochDay
-            }
+            it[Keys.ANALYTICS_WINDOW_OFFSET] = offset
+            it.remove(Keys.ANALYTICS_WINDOW_START_DAY)
+            it.remove(Keys.ANALYTICS_WINDOW_END_DAY)
         }
     }
 

@@ -16,7 +16,6 @@ import cloud.trotter.log.gig.R
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import cloud.trotter.log.gig.core.designsystem.time.LocalNowProvider
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
-import cloud.trotter.log.gig.domain.analytics.TimeEconomics
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.ui.ScreenshotData
 import org.junit.Assert.assertEquals
@@ -127,34 +126,5 @@ class SessionMilesDialogTest {
     fun `a corrected shift with no tracked miles offers the restore without a number`() {
         show(shift(miles = 0.0, machineMiles = null, milesOverride = 0.0))
         compose.onNodeWithText(string(R.string.session_miles_dialog_restore)).assertExists()
-    }
-}
-
-/** #1535 D3: the empty miles card withholds its split, with the reason, when delivery miles exceed the shift miles. */
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
-class TimeTabMilesSplitTest {
-    @get:Rule val compose = createComposeRule()
-
-    private val context = RuntimeEnvironment.getApplication()
-
-    private fun show(time: TimeEconomics) {
-        compose.mainClock.autoAdvance = false
-        compose.setContent { GigLogTheme { DeadheadCard(time) } }
-        compose.mainClock.advanceTimeBy(2_000)
-    }
-
-    @Test
-    fun `delivery miles above the shift miles withhold the split and say why`() {
-        show(TimeEconomics.EMPTY.copy(miles = 2.5, deliveryMiles = 8.0))
-        compose.onNodeWithText(context.getString(R.string.time_tab_delivery_miles_exceed_total)).assertExists()
-        compose.onNodeWithText(context.getString(R.string.time_tab_deadhead_caption)).assertDoesNotExist()
-    }
-
-    @Test
-    fun `delivery miles within the shift miles keep the split`() {
-        show(TimeEconomics.EMPTY.copy(miles = 59.4, deliveryMiles = 8.0))
-        compose.onNodeWithText(context.getString(R.string.time_tab_deadhead_caption)).assertExists()
-        compose.onNodeWithText(context.getString(R.string.time_tab_delivery_miles_exceed_total)).assertDoesNotExist()
     }
 }

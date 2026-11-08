@@ -1,6 +1,5 @@
 package cloud.trotter.log.gig.domain.analytics
 
-import cloud.trotter.log.gig.domain.analytics.WindowGranularity.CUSTOM
 import cloud.trotter.log.gig.domain.analytics.WindowGranularity.DAY
 import cloud.trotter.log.gig.domain.analytics.WindowGranularity.LIFETIME
 import cloud.trotter.log.gig.domain.analytics.WindowGranularity.MONTH
@@ -23,13 +22,12 @@ import java.time.LocalDate
  *    March's predecessor is February (28 **or 29** days), and January's is the previous December.
  *  - **Forward is fenced.** `canStepForward` is false at (and past) the window containing today, so
  *    the pager can never select a future range.
- *  - **Selections resolve relatively.** A `Relative` selection re-resolves against whatever `today`
+ *  - **Selections resolve relatively.** The week selection re-resolves against whatever `today`
  *    is, which is what makes "this week" still mean this week after the app restarts a week later.
  */
 class AnalyticsWindowsTest {
     private val wednesday = LocalDate.of(2026, 7, 15)
     private fun date(value: String): LocalDate = LocalDate.parse(value)
-    private fun custom(start: String, end: String) = AnalyticsWindows.custom(date(start), date(end))
     private fun current(granularity: WindowGranularity, today: LocalDate = wednesday) =
         AnalyticsWindows.current(granularity, today)
 
@@ -66,7 +64,6 @@ class AnalyticsWindowsTest {
             Case("day back", current(DAY), -1, "2026-07-14", "2026-07-14", 1L),
             Case("month back", current(MONTH), -1, "2026-06-01", "2026-06-30", 30L),
             Case("January back", current(MONTH, date("2026-01-10")), -1, "2025-12-01", "2025-12-31", 31L),
-            Case("custom length", custom("2026-07-10", "2026-07-14"), -1, "2026-07-05", "2026-07-09", 5L),
             Case("lifetime back", AnalyticsWindows.LIFETIME, -3, null, null, null),
             Case("lifetime forward", AnalyticsWindows.LIFETIME, 3, null, null, null),
             Case("zero identity", current(WEEK), 0, "2026-07-13", "2026-07-19", 7L),
@@ -98,7 +95,6 @@ class AnalyticsWindowsTest {
             Case("leap March", current(MONTH, date("2028-03-15")), "2028-02-01", "2028-02-29", 29L),
             Case("January", current(MONTH, date("2026-01-31")), "2025-12-01", "2025-12-31", 31L),
             Case("day", current(DAY), "2026-07-14", "2026-07-14", 1L),
-            Case("custom", custom("2026-07-10", "2026-07-16"), "2026-07-03", "2026-07-09", 7L),
             Case("lifetime has no comparison", AnalyticsWindows.LIFETIME, null, null, null),
         ).forEach { (name, window, start, end, days) ->
             val previous = AnalyticsWindows.previous(window)
@@ -109,13 +105,12 @@ class AnalyticsWindowsTest {
                 assertEquals("$name start", date(start), previous.startDate)
                 assertEquals("$name end", end?.let(::date), previous.endDateInclusive)
                 assertEquals("$name length", days, previous.lengthDays)
-                if (window.granularity == CUSTOM) assertEquals(name, window.lengthDays, previous.lengthDays)
             }
         }
     }
 
     @Test fun `previous windows abut without gaps or overlaps`() {
-        (listOf(DAY, WEEK, MONTH).map { current(it) } + custom("2026-07-10", "2026-07-16"))
+        listOf(DAY, WEEK, MONTH).map { current(it) }
             .forEach { window ->
                 assertEquals("$window", window.startDate, AnalyticsWindows.previous(window)!!.endDateExclusive)
             }
@@ -128,10 +123,7 @@ class AnalyticsWindowsTest {
             listOf(Case("current $granularity", window, false, true),
                 Case("previous $granularity", AnalyticsWindows.step(window, -1), true, true))
         } + listOf(
-            Case("custom reaches today", AnalyticsWindows.custom(wednesday.minusDays(3), wednesday), false, true),
-            Case("custom ends yesterday", AnalyticsWindows.custom(wednesday.minusDays(3), wednesday.minusDays(1)), true, true),
             Case("lifetime", AnalyticsWindows.LIFETIME, false, false),
-            Case("single day custom", AnalyticsWindows.custom(wednesday, wednesday), false, true),
         )
         cases.forEach { (name, window, forward, back) ->
             assertEquals("$name forward", forward, AnalyticsWindows.canStepForward(window, wednesday))
@@ -139,56 +131,33 @@ class AnalyticsWindowsTest {
         }
     }
 
-    @Test fun `custom ranges include both endpoints`() {
-        val window = custom("2026-07-10", "2026-07-12")
-        listOf("2026-07-10" to true, "2026-07-12" to true, "2026-07-13" to false, "2026-07-09" to false)
-            .forEach { (day, expected) -> assertEquals(day, expected, window.contains(date(day))) }
-        listOf("three day range" to (window to 3L),
-            "single day range" to (AnalyticsWindows.custom(wednesday, wednesday) to 1L))
-            .forEach { (name, case) -> assertEquals(name, case.second, case.first.lengthDays) }
-    }
-
     @Test fun `invalid windows and selections are rejected`() {
         data class Case(val name: String, val exception: Class<out Throwable>, val create: () -> Any)
         listOf(
-            Case("CUSTOM has no current window", IllegalStateException::class.java) { current(CUSTOM) },
-            Case("backwards range", IllegalArgumentException::class.java) { custom("2026-07-12", "2026-07-10") },
-            Case("empty window", IllegalArgumentException::class.java) { AnalyticsWindow(CUSTOM, wednesday, wednesday) },
-            Case("relative CUSTOM", IllegalArgumentException::class.java) { AnalyticsWindowSelection.Relative(CUSTOM, 0) },
-            Case("backwards selection", IllegalArgumentException::class.java) {
-                AnalyticsWindowSelection.Custom(date("2026-07-12"), date("2026-07-10"))
-            },
+            Case("empty window", IllegalArgumentException::class.java) { AnalyticsWindow(DAY, wednesday, wednesday) },
+            Case("future week", IllegalArgumentException::class.java) { AnalyticsWindowSelection(1) },
         ).forEach { (name, exception, create) -> assertThrows(name, exception) { create() } }
     }
 
-    @Test fun `selections resolve relatively or preserve absolute bounds`() {
+    @Test fun `week selections resolve relatively`() {
         data class Case(val name: String, val selection: AnalyticsWindowSelection, val today: LocalDate,
                         val expected: AnalyticsWindow)
-        val relative = AnalyticsWindowSelection.Relative(WEEK, 0)
-        val absolute = AnalyticsWindowSelection.Custom(date("2026-03-02"), date("2026-03-08"))
+        val relative = AnalyticsWindowSelection(0)
         listOf(
             Case("default pay week", AnalyticsWindowSelection.DEFAULT, wednesday, current(WEEK)),
             Case("relative this week", relative, wednesday, AnalyticsWindow(WEEK, date("2026-07-13"), date("2026-07-20"))),
             Case("relative reopened next week", relative, wednesday.plusWeeks(1), AnalyticsWindow(WEEK, date("2026-07-20"), date("2026-07-27"))),
-            Case("relative two weeks back", AnalyticsWindowSelection.Relative(WEEK, -2), wednesday, AnalyticsWindow(WEEK, date("2026-06-29"), date("2026-07-06"))),
-            Case("absolute in July", absolute, wednesday, AnalyticsWindow(CUSTOM, date("2026-03-02"), date("2026-03-09"))),
-            Case("absolute next year", absolute, date("2027-01-01"), AnalyticsWindow(CUSTOM, date("2026-03-02"), date("2026-03-09"))),
+            Case("relative two weeks back", AnalyticsWindowSelection(-2), wednesday, AnalyticsWindow(WEEK, date("2026-06-29"), date("2026-07-06"))),
         ).forEach { (name, selection, today, expected) ->
-            val resolved = selection.resolve(today)
-            assertEquals(name, expected, resolved)
-            if (selection is AnalyticsWindowSelection.Custom) {
-                assertEquals("$name start", selection.startDate, resolved.startDate)
-                assertEquals("$name inclusive end", selection.endDateInclusive, resolved.endDateInclusive)
-            }
+            assertEquals(name, expected, selection.resolve(today))
         }
     }
 
-    @Test fun `rolling periods bridge to current windows and never CUSTOM`() {
+    @Test fun `rolling periods bridge to current windows`() {
         listOf(AnalyticsPeriod.TODAY to DAY, AnalyticsPeriod.THIS_WEEK to WEEK,
             AnalyticsPeriod.THIS_MONTH to MONTH, AnalyticsPeriod.LIFETIME to LIFETIME)
             .forEach { (period, granularity) ->
                 assertEquals(period.name, current(granularity), period.toWindow(wednesday))
             }
-        AnalyticsPeriod.entries.forEach { period -> assertTrue(period.name, period.toGranularity() != CUSTOM) }
     }
 }

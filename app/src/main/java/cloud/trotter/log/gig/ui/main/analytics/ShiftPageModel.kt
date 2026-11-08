@@ -93,4 +93,7 @@ internal data class RowLanding(val scrollKey: String, val expandRun: String?, va
 private const val OFFER_KEY_PREFIX = "offer:"
 
 /** A passed offer's thin-row key; distinct from every card key, which names an accepted offer's sequence. */
-internal fun passedRowKey(eventSequenceId: Long): String = "$OFFER_KEY_PREFIX$eventSequenceId"
+internal fun passedRowKey(eventSequenceId: Long): String = offerRowKey(eventSequenceId)
+
+/** The `row` link that lands on the offer [eventSequenceId] (its card, or the run that holds it). */
+internal fun offerRowKey(eventSequenceId: Long): String = "$OFFER_KEY_PREFIX$eventSequenceId"

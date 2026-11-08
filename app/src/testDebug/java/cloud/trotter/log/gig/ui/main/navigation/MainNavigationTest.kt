@@ -40,6 +40,10 @@ import androidx.navigation.compose.rememberNavController
 import cloud.trotter.log.gig.R
 import cloud.trotter.log.gig.core.data.analytics.AnalyticsRepository
 import cloud.trotter.log.gig.core.data.analytics.CorrectionRepository
+import cloud.trotter.log.gig.core.data.analytics.LedgerRepository
+import cloud.trotter.log.gig.core.data.analytics.RecapRepository
+import cloud.trotter.log.gig.core.data.analytics.ShiftChecksRepository
+import cloud.trotter.log.gig.core.state.StateManagerV2
 import cloud.trotter.log.gig.core.data.analytics.RecordsStatusRepository
 import cloud.trotter.log.gig.core.data.location.OdometerRepository
 import cloud.trotter.log.gig.core.data.settings.AppPreferencesRepository
@@ -52,18 +56,12 @@ import cloud.trotter.log.gig.core.datastore.settings.StoredPreference
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import cloud.trotter.log.gig.domain.analytics.AnalyticsWindow
 import cloud.trotter.log.gig.domain.analytics.AnalyticsWindowSelection
-import cloud.trotter.log.gig.domain.analytics.DailyEarnings
-import cloud.trotter.log.gig.domain.analytics.DecisionEconomics
-import cloud.trotter.log.gig.domain.analytics.EstimateVsReality
-import cloud.trotter.log.gig.domain.analytics.GapStats
-import cloud.trotter.log.gig.domain.analytics.OfferFilter
-import cloud.trotter.log.gig.domain.analytics.OfferListing
-import cloud.trotter.log.gig.domain.analytics.OfferOutcome
-import cloud.trotter.log.gig.domain.analytics.PayMixParts
 import cloud.trotter.log.gig.domain.analytics.PeriodEconomics
-import cloud.trotter.log.gig.domain.analytics.PlatformEconomics
 import cloud.trotter.log.gig.domain.analytics.RecordsStatus
-import cloud.trotter.log.gig.domain.analytics.TimeEconomics
+import cloud.trotter.log.gig.domain.analytics.recap.DayFacts
+import cloud.trotter.log.gig.domain.analytics.recap.DayShift
+import cloud.trotter.log.gig.domain.analytics.recap.RecapMeasure
+import cloud.trotter.log.gig.domain.state.AppState
 import cloud.trotter.log.gig.domain.evaluation.SharedEconomy
 import cloud.trotter.log.gig.domain.evaluation.UserEconomy
 import cloud.trotter.log.gig.domain.model.vehicle.FixedCosts
@@ -76,7 +74,6 @@ import cloud.trotter.log.gig.feature.setup.wizard.WizardViewModel
 import cloud.trotter.log.gig.state.vehicle.VehicleSwapLock
 import cloud.trotter.log.gig.ui.main.MainScaffold
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsScreen
-import cloud.trotter.log.gig.ui.main.analytics.AnalyticsTab
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsViewModel
 import cloud.trotter.log.gig.ui.main.settings.EconomySettingsScreen
 import cloud.trotter.log.gig.ui.main.settings.EconomySettingsViewModel
@@ -227,6 +224,22 @@ class MainNavigationTest {
         back()
         assertEquals(dashboard, current())
         assertExits()
+    }
+
+    @Test fun `Recap's day page and shift page push over Recap, and Back returns there`() {
+        show()
+        bar(TopLevel.ANALYTICS)
+        ui { actions.openDay(java.time.LocalDate.of(2026, 10, 27)) }
+        assertEquals(Screen.Day.route, current())
+        assertEquals("2026-10-27", nav.currentBackStackEntry?.arguments?.getString(Screen.Day.ARG_DATE))
+        assertBarShown(false)
+        ui { actions.openSession("s1", row = "offer:7") }
+        assertEquals(Screen.SessionDetail.route, current())
+        assertEquals("offer:7", nav.currentBackStackEntry?.arguments?.getString(Screen.SessionDetail.ARG_ROW))
+        assertEquals(stackOf(dashboard, analytics, Screen.Day.route, Screen.SessionDetail.route), stack())
+        back()
+        back()
+        assertEquals(analytics, current())
     }
 
     @Test fun `Back from Playbook returns Home, then leaves`() {
@@ -559,60 +572,57 @@ class MainNavigationTest {
         assertEquals(4.25f, vm.state.value.gasPrice, 0.001f)
     }
 
-    // ── (j) Process death keeps the hub's place ─────────────────────────
+    // ── (j) Process death keeps Recap's place ───────────────────────────
 
     private val hubRepository: AnalyticsRepository = mock()
+    private val recapRepository: RecapRepository = mock()
+    private val shiftChecksRepository: ShiftChecksRepository = mock()
+    private val ledgerRepository: LedgerRepository = mock()
+    private val stateManager: StateManagerV2 = mock()
     private val hubPreferences: AppPreferencesRepository = mock()
     private val hubStatus: RecordsStatusRepository = mock {
         on { status } doReturn MutableStateFlow(RecordsStatus.UP_TO_DATE)
     }
 
-    /** Holds the offers read back while false, as a slow Room query would after a restore. */
-    private val offersReady = MutableStateFlow(true)
+    /** Holds the week's day read back while false, as a slow Room query would after a restore. */
+    private val daysReady = MutableStateFlow(true)
 
-    /** `AnalyticsViewModelTest`'s stubs, every window read served, forty declined offers listed. */
+    /** Every read Recap collects, served; each day of the week holds one shift so the week is tall. */
     private fun stubHub() {
-        val listings = (1L..40L).map { seq ->
-            OfferListing(eventSequenceId = seq, platform = Platform.DoorDash, storeName = "Store $seq",
-                decidedAt = seq, payAmount = 8.0, distanceMiles = 3.0, estDollarsPerHour = 18.0, score = 6.0,
-                outcome = OfferOutcome.DECLINED)
-        }
-        // The Offers list sits in the More numbers tier (`OffersTab`), so the hub shows more.
-        whenever(hubPreferences.analyticsShowMore).thenReturn(MutableStateFlow(true))
         whenever(hubPreferences.analyticsWindow).thenReturn(MutableStateFlow(AnalyticsWindowSelection.DEFAULT))
-        with(hubRepository) {
-            whenever(periodEconomics(any<AnalyticsWindow>(), anyOrNull(), any<ZoneId>()))
-                .thenAnswer { flowOf(PeriodEconomics.EMPTY) }
-            whenever(decisionEconomics(any<AnalyticsWindow>(), any<ZoneId>())).thenAnswer { flowOf(DecisionEconomics.EMPTY) }
-            whenever(timeEconomics(any<AnalyticsWindow>(), any<ZoneId>())).thenAnswer { flowOf(TimeEconomics.EMPTY) }
-            whenever(gapStats(any<AnalyticsWindow>(), any<ZoneId>())).thenAnswer { flowOf(GapStats.EMPTY) }
-            whenever(dailyEarnings(any<AnalyticsWindow>(), any<ZoneId>())).thenAnswer { flowOf(emptyList<DailyEarnings>()) }
-            whenever(noSessionDeliveries(any<AnalyticsWindow>(), any<ZoneId>())).thenReturn(flowOf(emptyList()))
-            whenever(orphanOfferGroups(any<AnalyticsWindow>(), any<ZoneId>())).thenReturn(flowOf(emptyList()))
-            whenever(payMixParts(any<AnalyticsWindow>(), any<ZoneId>())).thenAnswer { flowOf(PayMixParts.EMPTY) }
-            whenever(platformEconomics(any<AnalyticsWindow>(), any<ZoneId>())).thenAnswer { flowOf(emptyList<PlatformEconomics>()) }
-            whenever(estimateVsReality(any<AnalyticsWindow>(), any<ZoneId>())).thenAnswer { flowOf(EstimateVsReality.EMPTY) }
-            whenever(offers(any<AnalyticsWindow>(), any(), any(), any(), any<ZoneId>()))
-                .thenAnswer { inv -> offersReady.filter { it }.map { listings.take(inv.getArgument<Int>(2)) } }
-            whenever(offerCount(any<AnalyticsWindow>(), any(), any<ZoneId>())).thenAnswer { flowOf(listings.size) }
-            whenever(recentSessions(any())).thenReturn(flowOf(emptyList()))
+        whenever(stateManager.state).thenReturn(MutableStateFlow(AppState()))
+        whenever(hubRepository.periodEconomics(any<AnalyticsWindow>(), anyOrNull(), any<ZoneId>()))
+            .thenAnswer { flowOf(PeriodEconomics.EMPTY.copy(grossEarnings = 120.0)) }
+        whenever(hubRepository.noSessionDeliveries(any<AnalyticsWindow>(), any<ZoneId>())).thenReturn(flowOf(emptyList()))
+        whenever(recapRepository.anyShift).thenReturn(flowOf(true))
+        whenever(recapRepository.days(any<AnalyticsWindow>(), any<ZoneId>())).thenAnswer { inv ->
+            val start = inv.getArgument<AnalyticsWindow>(0).startDate!!
+            val facts = (0L..6L).map { offset ->
+                val date = start.plusDays(offset)
+                DayFacts(date, listOf(DayShift("s-$date", Platform.DoorDash, 0L, 1L, 20.0, 12.0, paySeen = true)))
+            }
+            daysReady.filter { it }.map { facts }
         }
+        whenever(shiftChecksRepository.checks(any<List<String>>())).thenReturn(flowOf(emptyMap()))
+        whenever(ledgerRepository.spending(any<AnalyticsWindow>(), any<ZoneId>())).thenReturn(flowOf(0.0))
     }
 
     private class Owner : ViewModelStoreOwner {
         override val viewModelStore = ViewModelStore()
     }
 
-    @Test fun `process death keeps the hub's tab, filter, page and scroll`() {
+    @Test fun `process death keeps Recap's switch and scroll`() {
         stubHub()
         val correctionRepository: CorrectionRepository = mock()
         val created = mutableListOf<AnalyticsViewModel>()
         realScreens = mapOf(Screen.Analytics.route to { _ ->
             val vm = viewModel {
-                AnalyticsViewModel(hubRepository, correctionRepository, hubPreferences, hubStatus, createSavedStateHandle())
-                    .also { created += it }
+                AnalyticsViewModel(
+                    hubRepository, recapRepository, shiftChecksRepository, ledgerRepository, correctionRepository,
+                    hubPreferences, hubStatus, stateManager, createSavedStateHandle(),
+                ).also { created += it }
             }
-            AnalyticsScreen(onOpenSettings = {}, onExportCsv = {}, onOpenSession = {}, viewModel = vm)
+            AnalyticsScreen(onOpenSettings = {}, onOpenSession = { _, _ -> }, onOpenDay = {}, viewModel = vm)
         })
         // The ViewModelStore a process death loses: the restored composition reads the replacement.
         var owner: ViewModelStoreOwner = Owner()
@@ -624,19 +634,14 @@ class MainNavigationTest {
 
         bar(TopLevel.ANALYTICS)
         val first = created.last()
-        ui {
-            first.setTab(AnalyticsTab.Offers)
-            first.setOfferFilter(OfferFilter.DECLINED)
-            first.showAllOffers()
-        }
-        compose.onAllNodesWithText("Store 40", substring = true)[0].assertExists()
-        compose.onNode(verticalScroll).performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 600f) }
+        ui { first.setMeasure(RecapMeasure.PROFIT) }
+        compose.onNode(verticalScroll).performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, 300f) }
         compose.waitForIdle()
-        assertEquals(600f, scrollPosition(), 0.5f)
+        assertEquals(300f, scrollPosition(), 0.5f)
 
         bar(TopLevel.PLAYBOOK)
         owner = Owner()
-        offersReady.value = false
+        daysReady.value = false
         tester.emulateSavedInstanceStateRestore()
         compose.waitForIdle()
         assertEquals(playbook, current())
@@ -644,19 +649,12 @@ class MainNavigationTest {
         bar(TopLevel.ANALYTICS)
         val restored = created.last()
         assertNotSame(first, restored)
-        // The offers read is still pending: nothing scrollable is composed to clamp the offset.
+        // The day read is still pending: nothing scrollable is composed to clamp the offset.
         compose.onNode(verticalScroll).assertDoesNotExist()
-        offersReady.value = true
+        daysReady.value = true
         compose.waitForIdle()
-        assertEquals(AnalyticsTab.Offers, restored.uiState.value.selectedTab)
-        assertEquals(OfferFilter.DECLINED, restored.offersFeed.value.filter)
-        assertEquals(AnalyticsRepository.MAX_OFFER_PAGE.coerceAtMost(40), restored.offersFeed.value.offers.size)
-        assertEquals(600f, scrollPosition(), 0.5f)
-
-        ui { restored.setTab(AnalyticsTab.Time) }
-        bar(TopLevel.HOME)
-        bar(TopLevel.ANALYTICS)
-        assertEquals(AnalyticsTab.Time, created.last().uiState.value.selectedTab)
+        assertEquals(RecapMeasure.PROFIT, restored.uiState.value.measure)
+        assertEquals(300f, scrollPosition(), 0.5f)
     }
 
     private val verticalScroll = SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange)

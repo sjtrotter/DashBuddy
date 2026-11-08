@@ -143,9 +143,9 @@ class OrphanOfferResolutionTest {
         SessionStopPayload(sid, endedAt = at, source = SessionEndSource.SUMMARY_SCREEN, totalEarnings = 10.0),
     )
 
+    /** Accepted offers not resolved as unassigned: the population every read-side offer count uses. */
     private suspend fun acceptedCount(): Int =
-        analyticsDao.offerOutcomes(0, Long.MAX_VALUE).first()
-            .find { it.outcome == AppEventType.OFFER_ACCEPTED.name }?.count ?: 0
+        analyticsDao.acceptedOfferRecords(AppEventType.OFFER_ACCEPTED.name).first().count { it.outcomeResolved == null }
 
     // ── Tier 1 ──────────────────────────────────────────────────────────
 

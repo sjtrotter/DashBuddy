@@ -7,6 +7,7 @@ import cloud.trotter.log.gig.core.database.GigLogDatabase
 import cloud.trotter.log.gig.core.database.analytics.AnalyticsDao
 import cloud.trotter.log.gig.core.database.analytics.LedgerDao
 import cloud.trotter.log.gig.core.database.analytics.HudShiftDao
+import cloud.trotter.log.gig.core.database.analytics.RecapDao
 import cloud.trotter.log.gig.core.database.chat.ChatDao
 import cloud.trotter.log.gig.core.database.effects.EffectsFiredDao
 import cloud.trotter.log.gig.core.database.event.AppEventDao
@@ -105,6 +106,9 @@ object DatabaseModule {
 
     @Provides
     fun provideHudShiftDao(db: GigLogDatabase): HudShiftDao = db.hudShiftDao()
+
+    @Provides
+    fun provideRecapDao(db: GigLogDatabase): RecapDao = db.recapDao()
 
     @Provides
     fun provideAnalyticsDao(db: GigLogDatabase): AnalyticsDao {

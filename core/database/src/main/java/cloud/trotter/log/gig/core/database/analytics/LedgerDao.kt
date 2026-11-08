@@ -53,6 +53,18 @@ abstract class LedgerDao {
     """)
     abstract fun recentNotes(category: String, limit: Int): Flow<List<String>>
 
+    /**
+     * #1515: Σ expenses + Σ fuel fill-ups not voided, by their own `occurredAt` in `[start, end)` (Recap's Spending
+     * row). A separate ledger: it never enters earnings.
+     */
+    @Query(
+        """SELECT COALESCE((SELECT SUM(amount) FROM expense_records
+                            WHERE voidedAt IS NULL AND occurredAt >= :start AND occurredAt < :end), 0)
+                + COALESCE((SELECT SUM(totalAmount) FROM fuel_records
+                            WHERE voidedAt IS NULL AND occurredAt >= :start AND occurredAt < :end), 0)"""
+    )
+    abstract fun spendingBetween(start: Long, end: Long): Flow<Double>
+
     /** All projected rows, including voids, for the export trail. */
     @Query("SELECT * FROM expense_records ORDER BY occurredAt, eventSequenceId")
     abstract suspend fun allExpenses(): List<ExpenseRecordEntity>

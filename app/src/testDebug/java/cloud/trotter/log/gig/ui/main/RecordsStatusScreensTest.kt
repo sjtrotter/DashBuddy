@@ -27,7 +27,6 @@ import cloud.trotter.log.gig.domain.analytics.RecordsStatus
 import cloud.trotter.log.gig.ui.ScreenshotData
 import cloud.trotter.log.gig.ui.components.RECORDS_UPDATING_LINE_DELAY_MS
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsContent
-import cloud.trotter.log.gig.ui.main.analytics.AnalyticsTab
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsUiState
 import cloud.trotter.log.gig.ui.main.playbook.PlaybookContent
 import cloud.trotter.log.gig.ui.main.playbook.PlaybookUiState
@@ -41,7 +40,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 /**
- * The records states the hub and the Playbook share: REBUILDING holds every figure back, UPDATING is
+ * The records states Recap and the Playbook share: REBUILDING holds every figure back, UPDATING is
  * one line that follows the status, a failed read offers Retry, and the placeholder reads "Loading"
  * and holds still under reduced motion.
  */
@@ -70,11 +69,8 @@ class RecordsStatusScreensTest {
 
     @Composable
     private fun Hub(state: AnalyticsUiState, onRetry: () -> Unit = {}) = AnalyticsContent(
-        uiState = state,
-        offersFeed = { ScreenshotData.offersFeed },
-        onOpenSettings = {}, onExportCsv = {}, onOpenSession = {}, onStep = {}, onOpenPicker = {},
-        onSelectGranularity = {}, onSelectTab = {}, onOpenNoSession = {},
-        onSelectFilter = {}, onShowAllOffers = {}, onToggleShowMore = {}, onRetry = onRetry,
+        uiState = state, onOpenSettings = {}, onStep = {}, onSelectMeasure = {}, onOpenDay = {},
+        onOpenShift = { _, _ -> }, onOpenNoSession = {}, onRetry = onRetry,
     )
 
     @Composable
@@ -85,17 +81,18 @@ class RecordsStatusScreensTest {
     private fun assertAbsent(text: String) =
         compose.onAllNodesWithText(text, substring = true).assertCountEquals(0)
 
-    @Test fun `a rebuilding hub shows no zero total and no empty-period line`() {
-        // Empty economics: the figures this state would otherwise draw are "$0.00" and "Nothing recorded".
+    @Test fun `a rebuilding Recap shows no zero total and no empty week`() {
+        // Empty reads: the figures this state would otherwise draw are "No shifts" and "Last week $0.00".
         var state by mutableStateOf(AnalyticsUiState(records = RecordsStatus.UP_TO_DATE))
         show { Hub(state) }
-        compose.onNodeWithText(string(R.string.analytics_hero_no_data), substring = true).assertExists()
+        val noShifts = string(R.string.recap_week_off_format, "").trim()
+        compose.onNodeWithText(noShifts, substring = true).assertExists()
 
         change { state = state.copy(records = RecordsStatus.REBUILDING) }
         compose.onNodeWithText(string(R.string.records_rebuilding_title)).assertExists()
         compose.onNodeWithText(string(R.string.records_rebuilding_body)).assertExists()
         assertAbsent("$0.00")
-        assertAbsent(string(R.string.analytics_hero_no_data))
+        assertAbsent(noShifts)
     }
 
     @Test fun `a rebuilding Playbook shows no empty plan and no empty store list`() {
@@ -111,7 +108,7 @@ class RecordsStatusScreensTest {
     }
 
     @Test fun `a brief lag shows no updating line and a sustained one does, on both screens`() {
-        var hub by mutableStateOf(ScreenshotData.analytics(AnalyticsTab.Money, showMore = false))
+        var hub by mutableStateOf(ScreenshotData.recap())
         var playbook by mutableStateOf(ScreenshotData.playbook(showMore = false))
         var onHub by mutableStateOf(true)
         show { if (onHub) Hub(hub) else Playbook(playbook) }

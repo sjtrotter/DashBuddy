@@ -20,7 +20,6 @@ import cloud.trotter.log.gig.domain.config.OfferAutomationConfig
 import cloud.trotter.log.gig.feature.settings.StrategySettingsContent
 import cloud.trotter.log.gig.ui.ScreenshotData
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsContent
-import cloud.trotter.log.gig.ui.main.analytics.AnalyticsTab
 import cloud.trotter.log.gig.ui.main.dashboard.DashboardBody
 import cloud.trotter.log.gig.ui.main.playbook.PlaybookContent
 import cloud.trotter.log.gig.ui.main.settings.SettingsHomeContent
@@ -108,12 +107,9 @@ class TabScreensTest {
     @Test fun `Recap has a gear and no back button`() {
         show {
             AnalyticsContent(
-                uiState = ScreenshotData.analytics(AnalyticsTab.Money, showMore = false),
-                offersFeed = { ScreenshotData.offersFeed },
-                onOpenSettings = { calls += "settings" }, onExportCsv = {}, onOpenSession = {}, onStep = {},
-                onOpenPicker = {}, onSelectGranularity = {}, onSelectTab = {}, onOpenNoSession = {},
-                onSelectFilter = {}, onShowAllOffers = {}, onToggleShowMore = {},
-                onRetry = {},
+                uiState = ScreenshotData.recap(),
+                onOpenSettings = { calls += "settings" }, onStep = {}, onSelectMeasure = {}, onOpenDay = {},
+                onOpenShift = { _, _ -> }, onOpenNoSession = {}, onRetry = {},
             )
         }
         compose.onNodeWithContentDescription(back).assertDoesNotExist()

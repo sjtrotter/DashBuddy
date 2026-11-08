@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="recap_range_format">%1$s au %2$s</string>
+    <string name="recap_period_format">%1$s, %2$s</string>
+    <string name="recap_week_previous">Semaine précédente</string>
+    <string name="recap_week_next">Semaine suivante</string>
+    <string name="recap_measure_earned">Gagné</string>
+    <string name="recap_measure_profit">Bénéfice est.</string>
+    <string name="recap_comparison_this_format">%1$s %2$s</string>
+    <string name="recap_comparison_last_format">Semaine dernière, %1$s %2$s</string>
+    <string name="recap_cash_included_format">Espèces incluses %1$s</string>
+    <string name="recap_chart_earned_title">Gagné par jour</string>
+    <string name="recap_chart_profit_title">Bénéfice est. par jour</string>
+    <string name="recap_legend_in_progress">En cours</string>
+    <string name="recap_day_no_shift">Aucun service</string>
+    <string name="recap_day_no_pay">Aucun paiement trouvé</string>
+    <string name="recap_day_in_progress">en cours</string>
+    <string name="recap_day_last_week_format">semaine dernière %1$s</string>
+    <string name="recap_day_open_shift">Ouvrir le service</string>
+    <string name="recap_day_open_day">Ouvrir le jour</string>
+    <string name="recap_tile_profit_per_mile">Bénéfice est./mi</string>
+    <string name="recap_tile_hours_shifts_format">%1$s h en ligne, %2$s</string>
+    <string name="recap_tile_miles_format">%1$s mi</string>
+    <string name="recap_last_week_format">Semaine dernière %1$s</string>
+    <plurals name="recap_shift_count">
+        <item quantity="one">%1$d service</item>
+        <item quantity="other">%1$d services</item>
+    </plurals>
+    <plurals name="recap_checks_title">
+        <item quantity="one">%1$d service à vérifier</item>
+        <item quantity="other">%1$d services à vérifier</item>
+    </plurals>
+    <string name="recap_check_shift_format">%1$s %2$s, %3$s</string>
+    <string name="recap_row_shifts">Services</string>
+    <string name="recap_row_spending">Dépenses</string>
+    <string name="recap_no_shifts_yet">Connectez-vous à votre app de livraison avec gig.log ouvert. Votre premier service s\'affiche ici quand il se termine.</string>
+    <string name="recap_week_off_format">Aucun service %1$s</string>
+    <string name="recap_day_online">h en ligne</string>
+    <string name="recap_day_miles">mi parcourus</string>
+    <string name="recap_day_could_not_load_what">ce jour</string>
+</resources>
