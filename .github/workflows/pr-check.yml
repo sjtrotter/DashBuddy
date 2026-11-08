@@ -3,6 +3,8 @@ name: PR Check
 on:
   pull_request:
     branches: [ master ]
+    # #1548 — ready_for_review runs the full gate on the head a draft round already tested.
+    types: [ opened, synchronize, reopened, ready_for_review ]
   # #1450 — a master push writes the Gradle cache PRs restore read-only, and catches merge skew.
   push:
     branches: [ master ]
@@ -27,6 +29,11 @@ concurrency:
 
 jobs:
   build-and-test:
+    # #1548 — a draft PR's run is `draft-check`: compile, the debug APK, unit tests and the schema check, with no
+    # release lint and no screenshots. Every other run is `build-and-test`, the ruleset's required check. The name is
+    # the check's name, so a draft never creates a `build-and-test` check at all, not even a skipped one (a skipped
+    # required check counts as passed): after `gh pr ready` the head has no `build-and-test` until the full run does.
+    name: ${{ github.event.pull_request.draft && 'draft-check' || 'build-and-test' }}
     runs-on: ubuntu-latest
     # #1547 — run 41345313754 hung about 48 minutes on a Compose test; a full run takes 8 to 16.
     timeout-minutes: 30
@@ -37,22 +44,27 @@ jobs:
       contents: read
       statuses: write
       pull-requests: read
-    # Docs-only PRs skip via the literal token `[skip ci]` in the PR BODY (see docs/agents/workflow.md).
-    # #902 footgun guard: a PR whose body merely DESCRIBES the token (PR #928 documented the
-    # mechanism and silently skipped its own CI) can force the run back on with `[force ci]`.
-    # A workflow_dispatch run has no PR body — contains(null, …) is false — so it always runs.
-    if: ${{ !contains(github.event.pull_request.body, '[skip ci]') || contains(github.event.pull_request.body, '[force ci]') }}
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      # Docs-only PRs skip via the literal token `[skip ci]` in the PR BODY (see docs/agents/workflow.md).
+      # #902 footgun guard: a PR whose body merely DESCRIBES the token (PR #928 documented the
+      # mechanism and silently skipped its own CI) can force the run back on with `[force ci]`.
+      # A workflow_dispatch run has no PR body — contains(null, …) is false — so it always runs.
+      # #1548 — the job itself always runs and every step checks RUN_GATE: a job skipped at job level reports its
+      # name expression unevaluated (probe PR #1553), so a docs PR would never get its passing `build-and-test`.
+      RUN_GATE: ${{ !contains(github.event.pull_request.body, '[skip ci]') || contains(github.event.pull_request.body, '[force ci]') }}
       # #1547 — CI's Gradle flags, on every command line below and never in gradle.properties (the laptop keeps its
       # own limits). The runner has 4 cores. Test tasks stay uncacheable (root build.gradle.kts), so the cache
       # serves compile, resource and lint work only.
       GRADLE_CI_FLAGS: --parallel --max-workers=4 --build-cache
+      # #1548 — false only for a draft PR's run (draft-check): it skips release lint and the screenshots.
+      FULL_GATE: ${{ !github.event.pull_request.draft }}
       # #1547 — a draft PR skips the screenshot render; a ready PR, and a dispatch run, renders it.
       RENDER_SHOTS: ${{ github.event_name != 'push' && !github.event.pull_request.draft }}
 
     steps:
       - name: Checkout
+        if: ${{ env.RUN_GATE == 'true' }}
         uses: actions/checkout@v4
         with:
           # Empty ref (pull_request events) keeps the default merge-commit checkout; a
@@ -65,16 +77,18 @@ jobs:
         # #1450 — the merge ref's second parent IS the head this run tests; reading the head from the
         # API at report time could mark a commit pushed mid-run green.
         id: pin
-        if: ${{ github.event_name == 'workflow_dispatch' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && env.RUN_GATE == 'true' }}
         run: echo "head=$(git rev-parse --verify HEAD^2)" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK 21
+        if: ${{ env.RUN_GATE == 'true' }}
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
 
       - name: Set up Gradle
+        if: ${{ env.RUN_GATE == 'true' }}
         # #1547 — master pushes and PR runs write the cache (it carries the build cache, caches/build-cache-1, in the
         # Gradle home entry). GitHub scopes a PR's entries to that PR, which still reads master's, so a PR's second
         # push restores its first push's outputs. A dispatch run (it can test a fork's PR) restores read-only.
@@ -87,7 +101,7 @@ jobs:
         # One private key signs every test build, so CI APKs update the phone's install in place.
         # Only trusted code gets it: master pushes and pull requests from this repository. A fork PR
         # or a manual dispatch (which can build a fork's PR) signs with the default debug key.
-        if: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
+        if: ${{ (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && env.RUN_GATE == 'true' }}
         env:
           DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
         run: |
@@ -99,15 +113,18 @@ jobs:
           fi
 
       - name: Make gradlew executable
+        if: ${{ env.RUN_GATE == 'true' }}
         run: chmod +x gradlew
 
       - name: Compile (main and test sources, every module reports)
+        if: ${{ env.RUN_GATE == 'true' }}
         id: compile
         # #1450 — a broken build fails here in minutes instead of after the whole gate.
         shell: bash  # an explicit shell means -eo pipefail, so tee cannot mask the exit status
         run: ./gradlew $GRADLE_CI_FLAGS --continue compileDebugUnitTestKotlin :domain:compileTestKotlin 2>&1 | tee compile.log
 
-      - name: Gate (debug APK, unit tests, release lint)
+      - name: Gate (debug APK, unit tests, release lint on a full gate)
+        if: ${{ env.RUN_GATE == 'true' }}
         # One invocation with --continue (#1450): a red module no longer hides the rest.
         # :domain is pure-JVM — its task is `test`, which the Android aggregate does NOT
         # include; without it every :domain test is CI-invisible (#617 review / #590 gap).
@@ -120,18 +137,31 @@ jobs:
           DEBUG_KEYSTORE_PATH: ${{ steps.debugkey.outputs.path }}
           DEBUG_KEYSTORE_PASSWORD: ${{ (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && secrets.DEBUG_KEYSTORE_PASSWORD || '' }}
         run: |
+          lint=''; if [ "$FULL_GATE" = 'true' ]; then lint=':app:lintVitalRelease'; fi
           ./gradlew $GRADLE_CI_FLAGS --continue :app:assembleDebug testDebugUnitTest :domain:test censusContractTest \
-            :app:lintVitalRelease 2>&1 | tee gate.log
+            $lint 2>&1 | tee gate.log
 
       - name: Schemas committed (Room export drift)
+        if: ${{ env.RUN_GATE == 'true' }}
         # With the destructive fallback retired (#690), an uncommitted Room schema export is a
         # missing upgrade path that only crashes on a device. KSP regenerated the schemas during
         # the build/test steps above; if that produced a JSON diff (or a new untracked file) the
         # bump was committed without its schema — fail the job.
+        id: schemas
         run: |
           git diff --exit-code -- core/database/schemas && test -z "$(git status --porcelain core/database/schemas)"
 
+      - name: Upload the regenerated schemas (drift only)
+        # #1548 — the JSON the build exported, so the missing schema can be committed without a laptop build.
+        if: ${{ failure() && steps.schemas.outcome == 'failure' && env.RUN_GATE == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: room-schemas-${{ github.event.pull_request.number || inputs.pr || github.sha }}
+          path: core/database/schemas/
+          retention-days: 7
+
       - name: Upload debug APK
+        if: ${{ env.RUN_GATE == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: debug-apk-${{ github.event.pull_request.number || inputs.pr || github.sha }}
@@ -141,12 +171,12 @@ jobs:
       - name: Gate summary
         # #1450 — failing tests and compile errors on the run page and in gate-summary.txt, the one file
         # the session and the adversarial review read. Same script the session runs on downloaded results.
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && env.RUN_GATE == 'true' }}
         continue-on-error: true
         run: python3 tools/ci/junit_summary.py . compile.log gate.log | tee gate-summary.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Print 20 slowest test classes
-        if: always()
+        if: ${{ always() && env.RUN_GATE == 'true' }}
         continue-on-error: true
         run: |
           python3 - <<'PY'
@@ -172,7 +202,7 @@ jobs:
           PY
 
       - name: Upload JUnit results and timings
-        if: always()
+        if: ${{ always() && env.RUN_GATE == 'true' }}
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
@@ -195,7 +225,7 @@ jobs:
       # missing or broken picture.
       - name: Render screenshots
         id: shots
-        if: ${{ !cancelled() && steps.compile.outcome == 'success' && env.RENDER_SHOTS == 'true' }}
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' && env.RENDER_SHOTS == 'true' && env.RUN_GATE == 'true' }}
         timeout-minutes: 20
         shell: bash
         run: |
@@ -203,16 +233,16 @@ jobs:
             :app:testDebugUnitTest --tests '*ScreenshotsTest' -PscreenShots=true 2>&1 | tee screenshots.log
 
       - name: Screenshot summary
-        if: ${{ !cancelled() && steps.compile.outcome == 'success' && env.RENDER_SHOTS == 'true' }}
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' && env.RENDER_SHOTS == 'true' && env.RUN_GATE == 'true' }}
         continue-on-error: true
         run: python3 tools/ci/junit_summary.py . screenshots.log | tee screenshots-summary.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Check screenshots
-        if: ${{ !cancelled() && steps.shots.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.shots.outcome == 'success' && env.RUN_GATE == 'true' }}
         run: python3 tools/ci/check_screenshots.py feature/bubble/build/outputs/screenshots app/build/outputs/screenshots
 
       - name: Upload screenshots
-        if: ${{ !cancelled() && steps.compile.outcome == 'success' && env.RENDER_SHOTS == 'true' }}
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' && env.RENDER_SHOTS == 'true' && env.RUN_GATE == 'true' }}
         # Advisory: only a render crash or a checker failure turns the job red.
         continue-on-error: true
         uses: actions/upload-artifact@v4
@@ -232,7 +262,7 @@ jobs:
         # context onto the PR's HEAD sha (branch protection accepts a commit status of the
         # same name). A red dispatch run reports failure, not silence; a cancelled one reports nothing,
         # and the status goes only to the head pinned before the build (#1450).
-        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && env.RUN_GATE == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
