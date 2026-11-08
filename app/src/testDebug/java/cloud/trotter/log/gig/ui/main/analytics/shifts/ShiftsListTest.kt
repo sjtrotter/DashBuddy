@@ -58,6 +58,10 @@ class ShiftsListTest {
             }
         }
         compose.mainClock.advanceTimeBy(2_000)
+        // The visible-weeks collector resumes after the first layout; let it run on the frozen clock.
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
     }
 
     /** A lazy row is composed only once in view; scrolling to its key jumps there (no animation on the frozen clock). */
@@ -74,8 +78,8 @@ class ShiftsListTest {
         // The newer week sits above the first item in view, so the list never composed it.
         compose.onNodeWithTag("shifts-week-$thisWeek").assertDoesNotExist()
         compose.onNodeWithTag("shifts-row-s4").assertDoesNotExist()
-        assertTrue(reported.last().contains(lastWeek))
-        assertTrue(thisWeek !in reported.last())
+        assertTrue("reported: $reported", reported.lastOrNull()?.contains(lastWeek) == true)
+        assertTrue("reported: $reported", thisWeek !in reported.last())
     }
 
     @Test fun `an empty target week shows its header and No shifts`() {

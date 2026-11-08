@@ -56,6 +56,7 @@ import cloud.trotter.log.gig.ui.main.analytics.landingRowOf
 import cloud.trotter.log.gig.ui.main.analytics.recap.RecapNoShiftsYet
 import cloud.trotter.log.gig.ui.main.analytics.windowRange
 import java.time.LocalDate
+import kotlinx.coroutines.flow.filter
 
 /**
  * The Shifts list (#1515): every shift, newest first, under one header per Monday-to-Sunday week ("Oct 26 to Nov 1").
@@ -159,10 +160,11 @@ private fun ShiftsList(
     val currentEntries by rememberUpdatedState(entries)
     val report by rememberUpdatedState(onVisibleWeeks)
     LaunchedEffect(listState) {
-        // snapshotFlow emits only when the set changes, so a scroll inside one week reports nothing.
+        // snapshotFlow emits only when the set changes, so a scroll inside one week reports nothing. An empty set means
+        // the list has not laid out yet; reporting it would drop the checks being read for a frame.
         snapshotFlow {
             listState.layoutInfo.visibleItemsInfo.mapNotNull { currentEntries.getOrNull(it.index)?.week }.toSet()
-        }.collect { report(it) }
+        }.filter { it.isNotEmpty() }.collect { report(it) }
     }
     LazyColumn(
         state = listState,
