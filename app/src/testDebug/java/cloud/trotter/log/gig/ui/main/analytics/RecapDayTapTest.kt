@@ -41,7 +41,7 @@ class RecapDayTapTest {
                 CompositionLocalProvider(LocalNowProvider provides ScreenshotData.clock) {
                     AnalyticsContent(
                         uiState = state, onOpenSettings = {}, onStep = {}, onSelectMeasure = {}, onOpenDay = { taps += it },
-                        onOpenShift = { _, _ -> }, onOpenNoSession = {}, onRetry = {},
+                        onOpenShift = { _, _ -> }, onOpenShifts = {}, onOpenNoSession = {}, onRetry = {},
                     )
                 }
             }

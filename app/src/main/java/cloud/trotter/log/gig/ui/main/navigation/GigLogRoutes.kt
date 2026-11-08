@@ -49,6 +49,15 @@ sealed class Screen(val route: String) {
         fun route(date: LocalDate): String = "analytics/day/$date"
     }
 
+    /**
+     * The Shifts list (#1515): every shift, newest first, by week, opened from Recap's Shifts row; it sits on Recap's
+     * stack. The optional `week` is the ISO Monday it opens at ("2026-10-26"); absent, this week.
+     */
+    data object Shifts : Screen("analytics/shifts?week={week}") {
+        const val ARG_WEEK = "week"
+        fun route(weekStart: LocalDate? = null): String = "analytics/shifts" + (weekStart?.let { "?week=$it" } ?: "")
+    }
+
     // Settings Hierarchy
     // Note: We use "settings/home" as the landing page for settings
     data object SettingsHome : Screen("settings/home")
@@ -95,7 +104,7 @@ sealed class Screen(val route: String) {
          * the routes no external link may target — the wizard, Ratings and the argument routes.
          */
         val graphRoutes: Set<String> by lazy {
-            allRoutes + setOf(Wizard.route, Ratings.route, SessionDetail.route, Day.route, VehicleEdit.route)
+            allRoutes + setOf(Wizard.route, Ratings.route, SessionDetail.route, Day.route, Shifts.route, VehicleEdit.route)
         }
     }
 }

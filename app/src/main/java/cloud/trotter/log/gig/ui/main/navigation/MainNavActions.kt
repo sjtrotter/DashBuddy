@@ -29,6 +29,9 @@ class MainNavActions(private val nav: NavController) {
     /** Recap's day with two or more shifts. */
     fun openDay(date: LocalDate) = nav.navigate(Screen.Day.route(date))
 
+    /** Recap's Shifts row: every shift, opened at the Monday [weekStart]. */
+    fun openShifts(weekStart: LocalDate) = nav.navigate(Screen.Shifts.route(weekStart))
+
     /** A static route pushed over the current screen (the Settings menu, Garage, Costs). */
     fun open(route: String) = nav.push(route)
 

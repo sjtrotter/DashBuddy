@@ -39,4 +39,9 @@
     <string name="recap_day_online">h en línea</string>
     <string name="recap_day_miles">mi recorridas</string>
     <string name="recap_day_could_not_load_what">este día</string>
+    <string name="shifts_title">Turnos</string>
+    <string name="shifts_open">Abrir todos los turnos</string>
+    <string name="shifts_week_none">Sin turnos</string>
+    <string name="shifts_app_to_now_format">%1$s, %2$s hasta ahora</string>
+    <string name="shifts_could_not_load_what">tus turnos</string>
 </resources>

@@ -20,7 +20,8 @@ import kotlinx.coroutines.flow.map
 /**
  * #1515: Recap's reads that keep a day's state. [days] is the per-day series with "pay seen" kept (never coalesced
  * to $0, unlike [AnalyticsRepository.dailyEarnings], which stays Home's); [shifts] is the shifts that started in a
- * window. Read-model only, Room-invalidation Flows, session-anchored: a shift lands wholly on its start day.
+ * window, and [allShifts] every shift. Read-model only, Room-invalidation Flows, session-anchored: a shift lands
+ * wholly on its start day.
  */
 @Singleton
 class RecapRepository @Inject constructor(
@@ -36,6 +37,9 @@ class RecapRepository @Inject constructor(
         val bounds = PeriodBounds.of(window, zone)
         return recapDao.shiftDayRows(bounds.start, bounds.end).map { rows -> rows.map { it.toDomain() } }
     }
+
+    /** Every shift ever recorded, newest first, open ones included: the Shifts list's one read. */
+    fun allShifts(): Flow<List<DayShift>> = recapDao.allShiftRows().map { rows -> rows.map { it.toDomain() } }
 
     /**
      * One [DayFacts] per local day of [window], in order: the shifts that started that day and the deliveries with

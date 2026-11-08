@@ -15,12 +15,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import cloud.trotter.log.gig.R
@@ -60,6 +67,9 @@ import cloud.trotter.log.gig.ui.main.MainScaffold
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsContent
 import cloud.trotter.log.gig.ui.main.analytics.day.DayContent
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsUiState
+import cloud.trotter.log.gig.ui.main.analytics.shifts.SHIFTS_LIST_TAG
+import cloud.trotter.log.gig.ui.main.analytics.shifts.ShiftsContent
+import cloud.trotter.log.gig.ui.main.analytics.shifts.ShiftsUiState
 import cloud.trotter.log.gig.ui.main.dashboard.DashboardBody
 import cloud.trotter.log.gig.ui.main.dashboard.DashboardUiState
 import cloud.trotter.log.gig.ui.main.dashboard.EndShiftCandidate
@@ -86,6 +96,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -299,6 +311,32 @@ class ScreenshotsTest(private val theme: String) {
     @Test @Config(fontScale = 2f)
     fun recapDayFont200() = day("recap/day-font-200")
 
+    // ── The Shifts list (#1515) ──────────────────────────────────────────
+
+    /** Opened at this week: today's shift running, Monday's two apps and its check reason, then last week. */
+    @Test fun shiftsList() = shifts("shifts/list")
+
+    @Test @Config(fontScale = 2f)
+    fun shiftsListFont200() = shifts("shifts/list-font-200")
+
+    /**
+     * Last week's 29 shifts at 200 % text: every row is scrolled into view, shown, and its text has no overflow; the
+     * capture shows the week's last rows.
+     */
+    @Test @Config(fontScale = 2f)
+    fun shiftsBusyWeekFont200() = render("shifts/busy-week-font-200", assertion = {
+        val rows = ScreenshotData.busyWeek.weeks.single().shifts.map { it.shift.sessionId }
+        assertEquals(ScreenshotData.BUSY_WEEK_SHIFTS, rows.size)
+        rows.forEach { id ->
+            compose.mainClock.autoAdvance = true
+            compose.onNodeWithTag(SHIFTS_LIST_TAG).performScrollToKey("shift:$id")
+            compose.mainClock.autoAdvance = false
+            compose.onNodeWithTag("shifts-row-$id").assertIsDisplayed()
+            assertNoTextOverflow("shifts-row-$id")
+        }
+        compose.onNodeWithTag("shifts-row-${rows.last()}").assertIsDisplayed()
+    }) { ShiftsBody(ScreenshotData.busyWeek) }
+
     // ── The Playbook ─────────────────────────────────────────────────────
 
     /** Simple mode: the plan summary, the Rate heatmap and the top three stores by net. */
@@ -451,7 +489,7 @@ class ScreenshotsTest(private val theme: String) {
             Box(modifier) {
                 AnalyticsContent(
                     uiState = state, onOpenSettings = {}, onStep = {}, onSelectMeasure = {}, onOpenDay = {},
-                    onOpenShift = { _, _ -> }, onOpenNoSession = {}, onRetry = {},
+                    onOpenShift = { _, _ -> }, onOpenShifts = {}, onOpenNoSession = {}, onRetry = {},
                 )
             }
         }
@@ -460,6 +498,39 @@ class ScreenshotsTest(private val theme: String) {
         text(Formats.money(ScreenshotData.day.economics.grossEarnings)).assertExists()
         text(Formats.money(ScreenshotData.day.shifts.first().earned)).assertExists()
     }) { DayContent(ScreenshotData.day, onBack = {}, onOpenSession = {}, onRetry = {}) }
+
+    private fun shifts(path: String) = render(path, assertion = {
+        text(string(R.string.shifts_title)).assertExists()
+        compose.onNodeWithTag("shifts-row-s4").assertIsDisplayed()
+    }) { ShiftsBody(ScreenshotData.shifts()) }
+
+    @Composable
+    private fun ShiftsBody(state: ShiftsUiState) =
+        ShiftsContent(uiState = state, onBack = {}, onOpenSession = { _, _ -> }, onVisibleWeeks = {}, onRetry = {})
+
+    /**
+     * Every text under [tag] is laid out whole: no line is ellipsized, none runs past the text's own width, and the
+     * height fits. Not `hasVisualOverflow`: a cached paragraph can be wider than the measured text, and that slack reads
+     * as a width overflow ("Sun, Oct 25" at 385 px in a 749 px slot did; `CashTipSheetTest` records the same quirk).
+     */
+    private fun assertNoTextOverflow(tag: String) {
+        val texts = hasAnyAncestor(hasTestTag(tag)) and SemanticsMatcher.keyIsDefined(SemanticsActions.GetTextLayoutResult)
+        compose.onAllNodes(texts, useUnmergedTree = true).fetchSemanticsNodes().forEach { node ->
+            val layouts = mutableListOf<TextLayoutResult>()
+            node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
+            layouts.forEach { layout ->
+                val text = layout.layoutInput.text
+                assertFalse("'$text' under $tag overflows its height", layout.didOverflowHeight)
+                for (line in 0 until layout.lineCount) {
+                    assertFalse("'$text' under $tag is ellipsized", layout.isLineEllipsized(line))
+                    assertTrue(
+                        "'$text' under $tag runs past its width",
+                        layout.getLineRight(line) <= layout.size.width + 1f,
+                    )
+                }
+            }
+        }
+    }
 
     private fun playbook(path: String, state: PlaybookUiState, row: String) = render(path, assertion = {
         text(string(R.string.playbook_screen_title)).assertExists()

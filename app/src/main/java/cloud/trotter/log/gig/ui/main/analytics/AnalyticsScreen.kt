@@ -47,13 +47,15 @@ import java.time.LocalDate
  * Recap, the week (#1515): the period bar, the Earned / Est. Profit switch, the week's total and its comparison, the
  * chart by day, two tiles, the shifts to check and the rows. UDF: state in, `stepWeek` / `setMeasure` intents out;
  * fresh through the read-model Flows and a once-a-day date anchor, with no `rememberNow()` tick (a past week's
- * figures are fixed). A day with one shift opens it, a day with more opens the day page.
+ * figures are fixed). A day with one shift opens it, a day with more opens the day page; the Shifts row opens the
+ * Shifts list at the week shown.
  */
 @Composable
 fun AnalyticsScreen(
     onOpenSettings: () -> Unit,
     onOpenSession: (sessionId: String, row: String?) -> Unit,
     onOpenDay: (LocalDate) -> Unit,
+    onOpenShifts: (weekStart: LocalDate) -> Unit,
     viewModel: AnalyticsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -71,6 +73,7 @@ fun AnalyticsScreen(
             }
         },
         onOpenShift = onOpenSession,
+        onOpenShifts = onOpenShifts,
         onOpenNoSession = { showAssignSheet = true },
         onRetry = viewModel::retry,
     )
@@ -99,6 +102,7 @@ internal fun AnalyticsContent(
     onSelectMeasure: (RecapMeasure) -> Unit,
     onOpenDay: (DayTap) -> Unit,
     onOpenShift: (String, String?) -> Unit,
+    onOpenShifts: (weekStart: LocalDate) -> Unit,
     onOpenNoSession: () -> Unit,
     onRetry: () -> Unit,
 ) {
@@ -131,7 +135,7 @@ internal fun AnalyticsContent(
                     RebuildingRecords()
                 }
                 !uiState.anyShift -> Column(Modifier.padding(16.dp)) { RecapNoShiftsYet() }
-                else -> RecapWeekBody(uiState, onStep, onSelectMeasure, onOpenDay, onOpenShift, onOpenNoSession)
+                else -> RecapWeekBody(uiState, onStep, onSelectMeasure, onOpenDay, onOpenShift, onOpenShifts, onOpenNoSession)
             }
         }
     }
@@ -145,6 +149,7 @@ private fun ColumnScope.RecapWeekBody(
     onSelectMeasure: (RecapMeasure) -> Unit,
     onOpenDay: (DayTap) -> Unit,
     onOpenShift: (String, String?) -> Unit,
+    onOpenShifts: (weekStart: LocalDate) -> Unit,
     onOpenNoSession: () -> Unit,
 ) {
     Column(
@@ -167,7 +172,7 @@ private fun ColumnScope.RecapWeekBody(
         }
         // Deliveries with no shift are the one correction Recap still offers: the assign dialog is their only entry.
         NeedsALookCard(reviewItems(uiState.economics, onOpenNoSession).filter { it.action != null })
-        RecapRows(uiState, showShifts = !uiState.weekOff)
+        RecapRows(uiState, onOpenShifts = { uiState.week.startDate?.let(onOpenShifts) }, showShifts = !uiState.weekOff)
     }
 }
 

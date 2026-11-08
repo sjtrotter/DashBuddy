@@ -88,8 +88,10 @@ fail closed (WARN) elsewhere, so a parked tab is one lone root and no editor or 
 a root only pushes; Dashboard is never a saved-state key; never call `clearBackStack(String)` (in 2.9.7 it drops
 Dashboard's empty mapping and a later save then stacks another tab over Home). Recap's Earned / Est. Profit switch lives in its
 `SavedStateHandle`; its week is the persisted `AnalyticsWindowSelection`. The day page (`Screen.Day`,
-`analytics/day/{date}`) and the shift page (`analytics/session/{sessionId}?row={row}`) are argument routes in
-`graphRoutes` only, pushed over Recap, never deep-link targets.
+`analytics/day/{date}`), the Shifts list (`Screen.Shifts`, `analytics/shifts?week={week}`, an optional ISO Monday,
+absent = this week; `MainNavActions.openShifts(weekStart)`, from Recap's Shifts row at Recap's week) and the shift
+page (`analytics/session/{sessionId}?row={row}`) are argument routes in `graphRoutes` only, pushed over Recap, never
+deep-link targets.
 
 ## Module catalogue
 

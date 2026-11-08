@@ -166,12 +166,16 @@ internal fun RecapShiftsToCheck(shifts: List<ShiftToCheck>, onOpenShift: (String
     }
 }
 
-/** Shifts (the week's count) and Spending (expenses plus fuel). Neither opens anything yet. */
+/** Shifts (the week's count; opens the Shifts list at this week) and Spending (expenses plus fuel, opens nothing yet). */
 @Composable
-internal fun RecapRows(state: AnalyticsUiState, showShifts: Boolean = true) {
+internal fun RecapRows(state: AnalyticsUiState, onOpenShifts: () -> Unit, showShifts: Boolean = true) {
     AppCard(Modifier.fillMaxWidth()) {
         if (showShifts) {
-            RecapRow(stringResource(R.string.recap_row_shifts), Formats.commaInt(state.shiftCount))
+            RecapRow(
+                stringResource(R.string.recap_row_shifts),
+                Formats.commaInt(state.shiftCount),
+                Modifier.clickable(onClickLabel = stringResource(R.string.shifts_open), role = Role.Button, onClick = onOpenShifts),
+            )
             HairlineDivider()
         }
         RecapRow(stringResource(R.string.recap_row_spending), Formats.money(state.spending))
@@ -179,8 +183,8 @@ internal fun RecapRows(state: AnalyticsUiState, showShifts: Boolean = true) {
 }
 
 @Composable
-private fun RecapRow(label: String, value: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+private fun RecapRow(label: String, value: String, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().padding(vertical = 12.dp)) {
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, color = AppTheme.colors.text)
         Text(value, style = AppTheme.num.smNum, color = AppTheme.colors.text)
     }

@@ -39,4 +39,9 @@
     <string name="recap_day_online">h en ligne</string>
     <string name="recap_day_miles">mi parcourus</string>
     <string name="recap_day_could_not_load_what">ce jour</string>
+    <string name="shifts_title">Services</string>
+    <string name="shifts_open">Ouvrir tous les services</string>
+    <string name="shifts_week_none">Aucun service</string>
+    <string name="shifts_app_to_now_format">%1$s, %2$s jusqu\'à maintenant</string>
+    <string name="shifts_could_not_load_what">vos services</string>
 </resources>
