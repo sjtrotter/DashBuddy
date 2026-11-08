@@ -63,7 +63,13 @@ PR CI (`pr-check.yml`, job `build-and-test`) is the gate because the laptop cann
   never compared (#1463). The same run renders them after the gate, also when the gate is red as long as the build
   compiled. `tools/ci/screenshots.txt` lists the expected files, and `tools/ci/check_screenshots.py` fails the job
   only on a missing or undecodable one (`screenshots-summary.txt` in the artifact names a crashed render). Locally the
-  PNGs land in `feature/bubble/build/outputs/screenshots` and `app/build/outputs/screenshots`.
+  PNGs land in `feature/bubble/build/outputs/screenshots` and `app/build/outputs/screenshots`. A draft PR's run
+  skips the render (#1547); for a draft's pictures, dispatch the run (`gh workflow run pr-check.yml -f pr=<pr>`),
+  which renders them.
+- CI runs Gradle with `--parallel --max-workers=4 --build-cache` (#1547, CI command lines only; the laptop keeps its own
+  limits). Master pushes and PR runs write the Gradle cache, and a PR reads master's and its own earlier runs'. Test
+  tasks and `:core:database`'s KSP tasks are never cached (undeclared inputs and outputs), so a cache hit can never
+  pass a test or a schema export that did not run.
 
 ## Skip-ci, force-ci and the dispatch escape hatch
 
