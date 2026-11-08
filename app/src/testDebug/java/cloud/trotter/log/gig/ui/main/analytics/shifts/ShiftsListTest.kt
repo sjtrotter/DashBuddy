@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.ui.main.analytics.shifts
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
