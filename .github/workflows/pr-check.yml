@@ -28,6 +28,8 @@ concurrency:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    # #1547 — run 41345313754 hung about 48 minutes on a Compose test; a full run takes 8 to 16.
+    timeout-minutes: 30
     # The workflow_dispatch escape hatch (docs/agents/workflow.md) posts a real `build-and-test`
     # commit status onto the PR head; the default GITHUB_TOKEN cannot (`Resource not accessible by
     # integration`, seen on PR #1075's dispatched run 34070019980), so the job asks for it explicitly.
@@ -42,6 +44,12 @@ jobs:
     if: ${{ !contains(github.event.pull_request.body, '[skip ci]') || contains(github.event.pull_request.body, '[force ci]') }}
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      # #1547 — CI's Gradle flags, on every command line below and never in gradle.properties (the laptop keeps its
+      # own limits). The runner has 4 cores. Test tasks stay uncacheable (root build.gradle.kts), so the cache
+      # serves compile, resource and lint work only.
+      GRADLE_CI_FLAGS: --parallel --max-workers=4 --build-cache
+      # #1547 — a draft PR skips the screenshot render; a ready PR, and a dispatch run, renders it.
+      RENDER_SHOTS: ${{ github.event_name != 'push' && !github.event.pull_request.draft }}
 
     steps:
       - name: Checkout
@@ -67,11 +75,12 @@ jobs:
           distribution: 'temurin'
 
       - name: Set up Gradle
-        # #1450 — writes its cache only from the master push run; PRs and dispatches (which test
-        # unmerged code even when launched from master) restore it read-only.
+        # #1547 — master pushes and PR runs write the cache (it carries the build cache, caches/build-cache-1, in the
+        # Gradle home entry). GitHub scopes a PR's entries to that PR, which still reads master's, so a PR's second
+        # push restores its first push's outputs. A dispatch run (it can test a fork's PR) restores read-only.
         uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.event_name != 'push' || github.ref != 'refs/heads/master' }}
+          cache-read-only: ${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Debug signing key (#1469)
         id: debugkey
@@ -96,7 +105,7 @@ jobs:
         id: compile
         # #1450 — a broken build fails here in minutes instead of after the whole gate.
         shell: bash  # an explicit shell means -eo pipefail, so tee cannot mask the exit status
-        run: ./gradlew --continue compileDebugUnitTestKotlin :domain:compileTestKotlin 2>&1 | tee compile.log
+        run: ./gradlew $GRADLE_CI_FLAGS --continue compileDebugUnitTestKotlin :domain:compileTestKotlin 2>&1 | tee compile.log
 
       - name: Gate (debug APK, unit tests, release lint)
         # One invocation with --continue (#1450): a red module no longer hides the rest.
@@ -111,7 +120,7 @@ jobs:
           DEBUG_KEYSTORE_PATH: ${{ steps.debugkey.outputs.path }}
           DEBUG_KEYSTORE_PASSWORD: ${{ (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && secrets.DEBUG_KEYSTORE_PASSWORD || '' }}
         run: |
-          ./gradlew --continue :app:assembleDebug testDebugUnitTest :domain:test censusContractTest \
+          ./gradlew $GRADLE_CI_FLAGS --continue :app:assembleDebug testDebugUnitTest :domain:test censusContractTest \
             :app:lintVitalRelease 2>&1 | tee gate.log
 
       - name: Schemas committed (Room export drift)
@@ -179,21 +188,22 @@ jobs:
       # #1463 — light and dark pictures of the key screens, recorded only and never compared. They
       # render after the gate's results are uploaded and write their JUnit XML to their own
       # directory (build/test-results/screenshots), so the gate's results are never replaced. They
-      # also render when the gate is red, as long as the build compiled; a master push skips them.
+      # also render when the gate is red, as long as the build compiled; a master push and a draft PR skip them
+      # (RENDER_SHOTS, #1547).
       # --continue keeps the second module rendering when the first fails, and the upload keeps
       # whatever did render. The job turns red only when a render crashes or the checker finds a
       # missing or broken picture.
       - name: Render screenshots
         id: shots
-        if: ${{ !cancelled() && steps.compile.outcome == 'success' && github.event_name != 'push' }}
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' && env.RENDER_SHOTS == 'true' }}
         timeout-minutes: 20
         shell: bash
         run: |
-          ./gradlew --continue :feature:bubble:testDebugUnitTest --tests '*ScreenshotsTest' \
+          ./gradlew $GRADLE_CI_FLAGS --continue :feature:bubble:testDebugUnitTest --tests '*ScreenshotsTest' \
             :app:testDebugUnitTest --tests '*ScreenshotsTest' -PscreenShots=true 2>&1 | tee screenshots.log
 
       - name: Screenshot summary
-        if: ${{ !cancelled() && steps.compile.outcome == 'success' && github.event_name != 'push' }}
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' && env.RENDER_SHOTS == 'true' }}
         continue-on-error: true
         run: python3 tools/ci/junit_summary.py . screenshots.log | tee screenshots-summary.txt >> "$GITHUB_STEP_SUMMARY"
 
@@ -202,7 +212,7 @@ jobs:
         run: python3 tools/ci/check_screenshots.py feature/bubble/build/outputs/screenshots app/build/outputs/screenshots
 
       - name: Upload screenshots
-        if: ${{ !cancelled() && steps.compile.outcome == 'success' && github.event_name != 'push' }}
+        if: ${{ !cancelled() && steps.compile.outcome == 'success' && env.RENDER_SHOTS == 'true' }}
         # Advisory: only a render crash or a checker failure turns the job red.
         continue-on-error: true
         uses: actions/upload-artifact@v4

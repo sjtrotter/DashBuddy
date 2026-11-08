@@ -68,3 +68,10 @@ dependencies {
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
+
+// #1547: Room writes the schema JSONs from KSP into schemas/, which no task declares as an output. A KSP result restored
+// from the build cache would write nothing, and CI's "Schemas committed" step would pass a schema bump whose JSON was
+// never committed. The processor always runs.
+tasks.named { it.startsWith("ksp") }.configureEach {
+    outputs.doNotCacheIf("Room writes the schema JSONs to an undeclared directory") { true }
+}
