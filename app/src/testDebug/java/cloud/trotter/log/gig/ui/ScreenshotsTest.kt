@@ -97,6 +97,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -507,18 +508,26 @@ class ScreenshotsTest(private val theme: String) {
     private fun ShiftsBody(state: ShiftsUiState) =
         ShiftsContent(uiState = state, onBack = {}, onOpenSession = { _, _ -> }, onVisibleWeeks = {}, onRetry = {})
 
-    /** Every text under [tag] is laid out whole: nothing is ellipsized or clipped at its bounds. */
+    /**
+     * Every text under [tag] is laid out whole: no line is ellipsized, none runs past the text's own width, and the
+     * height fits. Not `hasVisualOverflow`: a cached paragraph can be wider than the measured text, and that slack reads
+     * as a width overflow ("Sun, Oct 25" at 385 px in a 749 px slot did; `CashTipSheetTest` records the same quirk).
+     */
     private fun assertNoTextOverflow(tag: String) {
         val texts = hasAnyAncestor(hasTestTag(tag)) and SemanticsMatcher.keyIsDefined(SemanticsActions.GetTextLayoutResult)
         compose.onAllNodes(texts, useUnmergedTree = true).fetchSemanticsNodes().forEach { node ->
             val layouts = mutableListOf<TextLayoutResult>()
             node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
-            layouts.firstOrNull { it.hasVisualOverflow }?.let {
-                throw AssertionError(
-                    "text under $tag overflows: '${it.layoutInput.text}' size=${it.size} " +
-                        "width=${it.didOverflowWidth} height=${it.didOverflowHeight} constraints=${it.layoutInput.constraints} " +
-                        "lines=${it.lineCount} maxLines=${it.layoutInput.maxLines} overflow=${it.layoutInput.overflow}",
-                )
+            layouts.forEach { layout ->
+                val text = layout.layoutInput.text
+                assertFalse("'$text' under $tag overflows its height", layout.didOverflowHeight)
+                for (line in 0 until layout.lineCount) {
+                    assertFalse("'$text' under $tag is ellipsized", layout.isLineEllipsized(line))
+                    assertTrue(
+                        "'$text' under $tag runs past its width",
+                        layout.getLineRight(line) <= layout.size.width + 1f,
+                    )
+                }
             }
         }
     }
