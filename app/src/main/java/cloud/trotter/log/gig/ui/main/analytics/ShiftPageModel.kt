@@ -75,7 +75,7 @@ internal data class RowLanding(val scrollKey: String, val expandRun: String?, va
             for (item in items) {
                 when (item) {
                     is JobCard -> if (item.key == row || (seq != null && seq in item.offerEventSequenceIds) ||
-                        (item.jobId != null && row == jobRowKey(item.jobId))
+                        item.jobId?.let { row == jobRowKey(it) } == true
                     ) {
                         return RowLanding(item.key, null, item.key)
                     }
