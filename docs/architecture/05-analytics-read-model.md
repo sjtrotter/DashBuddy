@@ -566,8 +566,9 @@ orchestrator runs resolve-from-rows in-transaction — the pure `JobAcceptMismat
 closing job's delivered-drop store evidence (`delivery_records.storeName` + `payoutStoreForms`,
 normalized via `StoreKeys`) against each accepted offer's parsed store; EXACTLY one store-unaccounted
 offer while all others are accounted → `UNASSIGNED_INFERRED`; any other shape (same-store tie,
-multiple/zero unaccounted, no evidence) is INCONCLUSIVE → Tier 2 (fail-null beats fail-wrong, #745). **Tier 2 (driver attestation):** a Money-tab callout
-(`orphanOfferGroups`) opens `OrphanOfferAttestDialog`; the driver picks the unassigned offer →
+multiple/zero unaccounted, no evidence) is INCONCLUSIVE → Tier 2 (fail-null beats fail-wrong, #745). **Tier 2 (driver attestation):** originally a Money-tab callout
+opening `OrphanOfferAttestDialog`; since #1517 the shift page's "What happened to this offer?" sheet (see "Shift checks and the
+missed-delivery repair" below). The driver marks the offer unassigned →
 `CorrectionRepository.correctOfferOutcome` appends an `OFFER_OUTCOME_CORRECTION` event →
 `CorrectionFolds.foldOfferOutcomeCorrection` → the orchestrator stamps `UNASSIGNED_ATTESTED` (null ⇒
 undo), rebuild-faithfully. **Read-side exclusion:**
