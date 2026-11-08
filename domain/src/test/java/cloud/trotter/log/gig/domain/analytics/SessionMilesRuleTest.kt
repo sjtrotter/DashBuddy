@@ -33,18 +33,3 @@ class SessionMilesRuleTest {
         }
     }
 }
-
-class TimeEconomicsMilesSplitTest {
-    private fun time(miles: Double, deliveryMiles: Double?) = TimeEconomics.EMPTY.copy(miles = miles, deliveryMiles = deliveryMiles)
-
-    @Test
-    fun `the split is withheld only when delivery miles exceed the shift miles beyond display precision`() {
-        // #1535: a shift corrected to 2.5 miles whose deliveries keep 8.0 of their own.
-        assertTrue(time(2.5, 8.0).deliveryMilesExceedTotal)
-        assertTrue(time(0.0, 0.1).deliveryMilesExceedTotal)
-        assertFalse(time(59.4, 8.0).deliveryMilesExceedTotal)
-        assertFalse(time(8.0, 8.04).deliveryMilesExceedTotal)
-        assertFalse(time(0.0, null).deliveryMilesExceedTotal)
-        assertEquals(0.0, time(2.5, 8.0).unattributedMiles, 0.0)
-    }
-}

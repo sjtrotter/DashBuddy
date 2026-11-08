@@ -2,12 +2,6 @@
     <string name="app_name" translatable="false">gig.log</string>
     <string name="accessibility_service_description">gig.log uses Android\'s Accessibility service to read the screens of the delivery apps you turn on. It reads offers aloud while you drive and records your shifts, deliveries and pay. Screen reading and calculations happen on your phone. With Screen events on, it also sees which other app is open. It drops recognized screens with your banking, payment or ID details, the ID camera and the signature pad without saving anything, and saves customer names and addresses in your history only as codes. If you turn on screenshots, it can save a picture of the whole screen, with everything on it. It taps a delivery app\'s button only when you press Accept or Decline in gig.log, or for an automatic tap you allow. gig.log itself sends nothing it reads off your phone. Spoken offers go to your phone\'s text-to-speech engine, which may use the network. Android backup and exports you make can copy your history.</string>
 
-
-
-
-
-
-
     <!-- #1457 — the permission sheet, six steps in a fixed order: 1 Screen events (its copy is
          :feature:settings event_receipt_*), 2 screen reading (the accessibility disclosure,
          perm_a11y_*), 3 notification access, 4 location, 5 notifications, 6 bubbles. Each card
@@ -61,16 +55,6 @@
 
     <string name="perm_toast_bubbles_hint">Select \"All conversations can bubble\"</string>
     <string name="perm_toast_accessibility_hint">Find gig.log and turn it on.</string>
-
-
-
-
-
-
-
-
-
-
 
     <!-- ========================================================================= -->
     <!-- #57 extraction pass — new entries below follow <screen>_<component>_<property>. -->
@@ -133,8 +117,6 @@
 
     <!-- main/analytics/AnalyticsScreen.kt -->
     <string name="analytics_screen_title">Recap</string>
-    <string name="analytics_screen_content_desc_export_csv">Export data as a spreadsheet</string>
-
 
     <!-- settings/DataExportScreen.kt -->
     <!-- settings/CapabilityConsentScreen.kt (#422/#843) — Google-Play-consistent automation record -->
@@ -144,50 +126,6 @@
     <string name="consent_prompt_body">Each tap stays off until you allow it. Change your choices in Settings > Data &amp; privacy > Automation &amp; consent.</string>
     <string name="consent_prompt_allow">Allow</string>
     <string name="consent_prompt_deny">Don\'t allow</string>
-    <!-- settings/components/FakeOfferCard.kt -->
-    <!-- main/analytics/OffersTab.kt (#975 — was DecisionsTab) -->
-    <string name="offers_tab_offer_funnel_title">Offer outcomes</string>
-    <string name="offers_tab_no_offers_yet">No offers recorded.</string>
-    <string name="offers_tab_offers_count_caption">%1$s %2$s</string>
-    <string name="offers_tab_offer_singular">offer</string>
-    <string name="offers_tab_offer_plural">offers</string>
-    <string name="offers_tab_decline_singular">decline</string>
-    <string name="offers_tab_decline_plural">declines</string>
-    <string name="offers_tab_segment_accepted">Accepted</string>
-    <string name="offers_tab_segment_declined">Declined</string>
-    <string name="offers_tab_segment_timed_out">Timed out</string>
-    <string name="offers_tab_said_no_title">DECLINED · EST. NET</string>
-    <string name="offers_tab_no_declines_yet">No declined offers recorded.</string>
-    <string name="offers_tab_est_net_skipped_format" translatable="false">~%1$s</string>
-    <string name="offers_tab_said_no_population_format">est. net from %1$s of %2$s %3$s</string>
-    <string name="offers_tab_said_no_no_estimates_format">%1$s %2$s, none with an estimate</string>
-    <string name="offers_tab_rates_title">Offer rates</string>
-    <string name="offers_tab_est_per_hour_header" translatable="false">Est. $/hr</string>
-    <string name="offers_tab_frozen_disclosure">Offer figures are estimated at offer time. Counts and results are measured.</string>
-
-    <!-- main/analytics/EstimateVsRealityCard.kt (#975, brief §7.5) -->
-    <string name="offers_tab_est_vs_reality_title">AVG $/HR PER OFFER: ESTIMATE VS ACTUAL</string>
-    <string name="offers_tab_est_vs_reality_bar_est">Est.</string>
-    <string name="offers_tab_est_vs_reality_bar_realized">Actual</string>
-    <string name="offers_tab_est_vs_reality_per_hour_format" translatable="false">%1$s/hr</string>
-    <string name="offers_tab_est_vs_reality_ratio_format">About %1$s of estimate</string>
-    <string name="offers_tab_est_vs_reality_no_ratio">No estimate above $0 to compare</string>
-    <string name="offers_tab_est_vs_reality_population_format">%1$s of %2$s accepted %3$s matched to a delivery</string>
-    <string name="offers_tab_est_vs_reality_thin_format">%1$s %2$s matched, a small sample</string>
-    <string name="offers_tab_est_vs_reality_none">No offers to compare yet</string>
-
-    <!-- main/analytics/OffersListCard.kt (#975, brief §7.4) -->
-    <string name="offers_tab_list_title">Offers</string>
-    <string name="offers_tab_list_empty">No offers matched this filter.</string>
-    <string name="offers_tab_filter_all">All</string>
-    <string name="offers_tab_row_meta_separator" translatable="false">" · "</string>
-    <string name="offers_tab_row_distance_format" translatable="false">%1$s mi</string>
-    <string name="offers_tab_row_est_rate_format">est. %1$s/hr</string>
-    <string name="offers_tab_row_unknown_store">Unknown store</string>
-    <string name="offers_tab_pill_unknown">Unknown</string>
-    <string name="offers_tab_see_all_format">See all %1$s offers</string>
-    <string name="offers_tab_showing_all_format">All %1$s offers</string>
-    <string name="offers_tab_showing_capped_format">Latest %1$s of %2$s offers</string>
 
     <!-- main/ratings/RatingsScreen.kt -->
     <string name="ratings_screen_title">Ratings</string>
@@ -244,57 +182,11 @@
     <string name="settings_home_item_about_subtitle">Version, support and developer</string>
     <string name="settings_home_item_debug_menu_subtitle">Bubble app display and census upload</string>
 
-    <!-- settings/StrategySettingsScreen.kt -->
-    <!-- main/analytics/TimeTab.kt -->
-    <string name="time_tab_time_split_title">TIME SPLIT</string>
-    <string name="time_tab_no_sessions_yet">No shifts recorded.</string>
-    <string name="time_tab_sessions_stat_label">Shifts</string>
-    <string name="time_tab_avg_session_stat_label">Avg shift</string>
-    <string name="time_tab_segment_on_delivery">On delivery</string>
-    <string name="time_tab_segment_unattributed">No delivery</string>
-    <string name="time_tab_deadhead_title">EMPTY MILES</string>
-    <string name="time_tab_no_miles_measured_yet">No miles tracked</string>
-    <string name="time_tab_deadhead_caption">of miles with no delivery</string>
-    <string name="time_tab_delivery_miles_exceed_total">Delivery miles are more than shift miles, so no split is shown</string>
-    <string name="time_tab_segment_deadhead">No delivery</string>
-    <string name="time_tab_on_time_title">ON TIME</string>
-    <string name="time_tab_no_deadline_deliveries_yet">No deliveries with a deadline</string>
-    <string name="time_tab_gauge_on_time_label">on time</string>
-    <string name="time_tab_deadline_caption_format">%1$s of %2$s %3$s with a deadline</string>
     <string name="time_tab_delivery_singular">delivery</string>
     <string name="time_tab_delivery_plural">deliveries</string>
-    <string name="time_tab_margin_early_format">Average %1$s early</string>
-    <string name="time_tab_margin_late_format">Average %1$s late</string>
     <!-- Time tab — #983 (brief §6 + §7.8): the running-hourly-rate pair, the typical online hour,
          and the between-job gap distribution. Every line states its population; a residual is never
          described as pure driving, and a long gap is counted, not judged (§9). -->
-    <string name="time_tab_rate_pair_title">PROFIT/HR</string>
-    <string name="time_tab_rate_whole_shift">Online</string>
-    <string name="time_tab_rate_distinction">Working: delivery time, minus waits between deliveries. Online: all online time.</string>
-    <string name="time_tab_rate_no_gaps_note">No waits between deliveries measured yet, so the working rate may be low.</string>
-    <string name="time_tab_rate_working_unmeasured">No delivery time tracked, so there is no working rate.</string>
-    <string name="time_tab_rate_none">No online time</string>
-    <string name="time_tab_gap_singular">gap</string>
-    <string name="time_tab_gap_plural">gaps</string>
-    <string name="time_tab_typical_hour_title">TYPICAL ONLINE HOUR</string>
-    <string name="time_tab_segment_at_stops">At stops</string>
-    <string name="time_tab_segment_waiting">Waiting</string>
-    <string name="time_tab_segment_driving">Driving &amp; other</string>
-    <string name="time_tab_typical_hour_derivation">At stops: at stores and doors. Waiting: from a drop-off to the next accepted offer. Driving &amp; other: the rest, including before the first offer and after the last drop-off.</string>
-    <string name="time_tab_typical_hour_coverage_format">Timed %1$s of %2$s stops</string>
-    <string name="time_tab_typical_hour_all_timed_format">All %1$s stops timed</string>
-    <string name="time_tab_typical_hour_no_stops_timed">No arrivals recorded, so time at stops counts as Driving &amp; other.</string>
-    <string name="time_tab_typical_hour_no_stops">No stops recorded.</string>
-    <string name="time_tab_typical_hour_leak_format">%2$s waiting, worth about %1$s at your working rate</string>
-    <string name="time_tab_typical_hour_leak_unpriced">No working rate to price the waiting</string>
-    <string name="time_tab_gaps_title">Gaps between deliveries</string>
-    <string name="time_tab_gaps_none">No gaps yet: needs a drop-off, then an accepted offer, in the same shift.</string>
-    <string name="time_tab_gaps_p90_label">9 in 10 under</string>
-    <string name="time_tab_gaps_longest_label">Longest</string>
-    <string name="time_tab_gaps_coverage_format">%1$s %2$s from %3$s deliveries</string>
-    <string name="time_tab_gaps_long_format">%1$s %2$s over 2 hours (a break or slow spell)</string>
-    <string name="time_tab_mileage_tax_title">MILEAGE &amp; TAX</string>
-    <string name="time_tab_mileage_tax_disclosure">The tax deduction is an estimate at the IRS standard mileage rate. Check with a tax professional.</string>
 
     <!-- #315 H5 heatmap + store leaderboard copy. Authored for the Patterns tab; the surfaces
          moved to ui/main/playbook/ in #1024 and kept these ids — the words are unchanged and the
@@ -428,54 +320,17 @@
     <string name="economy_editor_fuel_type_title">Fuel type</string>
     <string name="economy_editor_true_cost_format">Estimated costs %1$s/mi</string>
 
-    <!-- main/analytics/MoneyTab.kt -->
-    <string name="money_tab_earnings_by_day_title">EARNED BY DAY</string>
-    <string name="money_tab_no_earnings_yet">No earnings recorded.</string>
-    <string name="money_tab_earnings_by_day_bar_click_label">Show this day</string>
-    <string name="money_tab_earnings_by_day_detail_format">%1$s · %2$s · %3$s %4$s</string>
-    <string name="money_tab_stat_net_per_hour">Profit/hr online</string>
-    <string name="money_tab_stat_net_per_mile">Profit/mi</string>
-    <string name="money_tab_stat_net_per_drop">Profit/delivery</string>
-
-    <!-- main/analytics/MoneyWentCard.kt (brief §4.1) -->
-    <string name="money_tab_where_went_title">PROFIT VS COSTS</string>
-    <!-- Rendered ONLY when kept money is negative (#1024 review F3) — the hero owns the positive case. -->
-    <string name="money_tab_where_went_kept">Profit %1$s</string>
-    <string name="money_tab_where_went_segment_kept">Profit</string>
-    <string name="money_tab_where_went_segment_gas">Gas</string>
-    <string name="money_tab_where_went_segment_wear">Wear</string>
-    <string name="money_tab_where_went_segment_car">Vehicle costs</string>
-    <string name="money_tab_where_went_no_split">Some deliveries show gas and wear as one combined cost.</string>
     <string name="money_tab_disclosure_expand">Show details</string>
     <string name="money_tab_disclosure_collapse">Hide details</string>
-
-    <!-- main/analytics/PayMixSection.kt (brief §4.2) -->
-    <string name="money_tab_pay_mix_title">EARNED</string>
-    <string name="money_tab_pay_mix_segment_base">Base pay</string>
-    <string name="money_tab_pay_mix_segment_tips">Tips</string>
-    <string name="money_tab_pay_mix_segment_not_itemized">No breakdown</string>
-    <string name="money_tab_pay_mix_segment_not_matched">Not matched</string>
-    <string name="money_tab_pay_mix_tips_with_cash_format">%1$s (including %2$s cash you entered)</string>
-    <string name="money_tab_pay_mix_no_insight">No pay recorded</string>
-    <string name="money_tab_pay_mix_partial_coverage_format">breakdown for %1$s of %2$s deliveries</string>
-    <string name="money_tab_pay_mix_partial_detail">Stacked orders share one receipt that can\'t be split, so their pay has no breakdown.</string>
-    <string name="money_tab_pay_mix_negative_itemization_format">breakdown is %1$s more than the recorded pay</string>
 
     <!-- main/analytics/NeedsALookCard.kt (brief §4.2) -->
     <string name="money_tab_needs_a_look_title_format">NEEDS A LOOK (%1$s)</string>
 
-    <!-- main/analytics/MoneyBreakdownCards.kt -->
-    <string name="money_tab_platform_split_title">BY DELIVERY APP</string>
-    <string name="money_tab_platform_split_kept_format">%1$s profit</string>
     <string name="money_tab_unattributed_callout_format">%1$s reported, no matching delivery</string>
     <string name="money_tab_over_attributed_callout_format">Recorded %1$s more than reported</string>
     <string name="money_tab_no_session_callout_format">%1$s from %2$s %3$s not in a shift</string>
     <string name="money_tab_no_session_callout_click_label">Assign to a shift</string>
     <string name="money_tab_orphan_offers_callout_format">%1$s accepted offers with no delivery</string>
-    <string name="money_tab_recent_sessions_title">LATEST SHIFTS, REPORTED TOTALS</string>
-    <string name="money_tab_no_sessions_recorded_yet">No shifts recorded</string>
-    <!-- Duplicated on purpose as :feature:bubble's hud_hero_cash (#1443); this copy is authoritative. -->
-    <string name="money_tab_cash_marker_format">+%1$s cash</string>
 
     <!-- main/analytics/SessionDetailScreen.kt -->
     <string name="session_detail_title">Shift details</string>
@@ -666,53 +521,9 @@
     <string name="end_shift_cancel">Cancel</string>
     <string name="end_shift_picker_ok">OK</string>
 
-    <!-- ui/main/analytics/AnalyticsUiState.kt -->
-    <string name="analytics_tab_money">Money</string>
-    <string name="analytics_tab_offers">Offers</string>
-    <string name="analytics_tab_time">Time</string>
-
-    <!-- ui/main/analytics/PeriodPager.kt — the #970 period-first pager + range picker -->
-    <string name="analytics_window_today">Today</string>
-    <string name="analytics_window_yesterday">Yesterday</string>
+    <!-- The week's relation word: Recap's period bar and its chart legend. -->
     <string name="analytics_window_this_week">This week</string>
     <string name="analytics_window_last_week">Last week</string>
-    <string name="analytics_window_this_month">This month</string>
-    <string name="analytics_window_last_month">Last month</string>
-    <string name="analytics_window_lifetime">Lifetime</string>
-    <string name="analytics_window_custom">Custom range</string>
-    <string name="analytics_granularity_day">Day</string>
-    <string name="analytics_granularity_week">Week</string>
-    <string name="analytics_granularity_month">Month</string>
-    <string name="analytics_granularity_lifetime">Lifetime</string>
-    <string name="analytics_granularity_custom">Custom…</string>
-    <string name="analytics_window_previous">Previous period</string>
-    <string name="analytics_window_next">Next period</string>
-    <string name="analytics_window_open_picker">Choose a date range</string>
-    <string name="analytics_picker_title">Pick a range</string>
-    <string name="analytics_picker_presets">Quick picks</string>
-    <string name="analytics_picker_show_format">Show %1$s</string>
-    <string name="analytics_picker_pick_start">Tap a day to start the range</string>
-    <string name="analytics_picker_pick_end">Tap another day to end the range</string>
-    <string name="analytics_picker_previous_month">Previous month</string>
-    <string name="analytics_picker_next_month">Next month</string>
-    <string name="analytics_picker_dot_legend">A dot marks a day you earned</string>
-    <!-- CouldNotLoad on the range picker: "Couldn't load the earning dots". -->
-    <string name="analytics_picker_could_not_load_what">the earning dots</string>
-
-    <!-- ui/main/analytics/RecapHero.kt — the #970 recap hero above the tabs -->
-    <string name="analytics_hero_kept_label">Profit</string>
-    <string name="analytics_hero_delta_up_format">Up %1$s from %2$s</string>
-    <string name="analytics_hero_delta_down_format">Down %1$s from %2$s</string>
-    <string name="analytics_hero_delta_flat_format">Same as %1$s</string>
-    <string name="analytics_hero_delta_none">No prior period</string>
-    <string name="analytics_hero_delta_from_nothing_format">Up from nothing in %1$s</string>
-    <string name="analytics_hero_summary_deliveries_format">%1$s %2$s</string>
-    <string name="analytics_hero_summary_online_format">%1$s online</string>
-    <string name="analytics_hero_summary_miles_format">%1$s mi</string>
-    <string name="analytics_hero_summary_previous_format">%1$s prior period</string>
-    <string name="analytics_hero_summary_previous_empty">Nothing recorded in the prior period</string>
-    <string name="analytics_hero_summary_separator"> · </string>
-    <string name="analytics_hero_no_data">Nothing recorded</string>
 
     <!-- ============================================================ -->
     <!-- Weekly Plan (#981, redesign stage 6 — brief §8)              -->
@@ -862,15 +673,8 @@
         <item quantity="one">Learned from %d delivery</item>
         <item quantity="other">Learned from %d deliveries</item>
     </plurals>
-    <!-- #1255: simple analytics and shared detail preference. -->
-    <string name="analytics_tier1_earned">Earned</string>
-    <string name="analytics_tier1_accept_rate">Accept rate</string>
-    <string name="analytics_tier1_net_per_hour_working">Profit/hr working</string>
-    <string name="analytics_tier1_typical_gap">Typical gap</string>
-    <string name="analytics_tier1_at_least_format">at least %1$s</string>
     <string name="patterns_tab_stores_title_by_net">YOUR STORES, BY PROFIT</string>
-    <string name="money_tab_where_went_segment_note_format">%1$s · %2$s/mi</string>
-    <string name="offers_tab_est_vs_reality_mean_note">Table and bar figures are the average $/hr across offers.</string>
+    <!-- #1255: simple analytics and shared detail preference. -->
     <string name="common_more_numbers">More numbers</string>
     <string name="common_fewer_numbers">Fewer numbers</string>
     <string name="common_loading">Loading</string>
@@ -881,9 +685,6 @@
     <!-- What CouldNotLoad names on each screen: "Couldn't load Analytics", "Couldn't load the Playbook". -->
     <string name="analytics_could_not_load_what">Recap</string>
     <string name="playbook_could_not_load_what">Plan</string>
-    <string name="money_tab_pay_mix_estimated_format">%1$s estimated</string>
-    <string name="money_tab_recent_scope_note">Latest shifts: your %1$d newest, whatever period you pick. Amounts are the delivery app\'s totals with your corrections; cash is separate.</string>
-    <string name="time_tab_unattributed_note">No delivery: online time and miles after your last delivery, and shifts with no delivery.</string>
     <!-- Documented duplicate: vehicle_wh_per_mile, vehicle_kwh_per_100_mi and vehicle_electricity_price
          are shared by :app and :feature:setup. The :app copy is AUTHORITATIVE. Keep both byte-identical;
          non-transitive R and the feature-to-app module boundary require local copies.

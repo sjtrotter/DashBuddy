@@ -12,6 +12,7 @@ import cloud.trotter.log.gig.domain.model.event.payload.FuelFillupPayload
 import cloud.trotter.log.gig.domain.model.event.payload.LedgerEntryVoidedPayload
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import cloud.trotter.log.gig.domain.analytics.AnalyticsWindow
 import java.time.LocalDate
 import java.time.ZoneId
 import javax.inject.Inject
@@ -102,6 +103,12 @@ class LedgerRepository @Inject constructor(
 
     fun fuelForSession(sessionId: String): Flow<List<FuelRecord>> =
         ledgerDao.fuelForSession(sessionId).map { rows -> rows.map { it.toDomain() } }
+
+    /** #1515: the window's spending, expenses plus fuel, voids excluded (Recap's Spending row). */
+    fun spending(window: AnalyticsWindow, zone: ZoneId = ZoneId.systemDefault()): Flow<Double> {
+        val bounds = PeriodBounds.of(window, zone)
+        return ledgerDao.spendingBetween(bounds.start, bounds.end)
+    }
 
     /** Unassigned ledger rows beside a dash of this local day, including voids. */
     fun expensesUnassignedOn(date: LocalDate, zone: ZoneId): Flow<List<ExpenseRecord>> {

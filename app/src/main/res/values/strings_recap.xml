@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Recap, the week (#1515), and the day page. -->
+<resources>
+    <!-- A span of dates or days: "Oct 26 to Nov 1", "Mon to Sat". -->
+    <string name="recap_range_format">%1$s to %2$s</string>
+    <!-- The period bar: "This week, Oct 26 to Nov 1". -->
+    <string name="recap_period_format">%1$s, %2$s</string>
+    <string name="recap_week_previous">Previous week</string>
+    <string name="recap_week_next">Next week</string>
+    <string name="recap_measure_earned">Earned</string>
+    <string name="recap_measure_profit">Est. Profit</string>
+    <!-- The comparison under the total: "Mon to Sat $527.40", then "Last week, Mon to Sat $550.00". -->
+    <string name="recap_comparison_this_format">%1$s %2$s</string>
+    <string name="recap_comparison_last_none_format">Last week, %1$s, no shifts</string>
+    <string name="recap_comparison_last_format">Last week, %1$s %2$s</string>
+    <string name="recap_cash_included_format">Cash included %1$s</string>
+    <string name="recap_chart_earned_title">Earned by day</string>
+    <string name="recap_chart_profit_title">Est. Profit by day</string>
+    <string name="recap_legend_in_progress">In progress</string>
+    <string name="recap_day_no_shift">No shift</string>
+    <string name="recap_day_no_pay">No pay found</string>
+    <!-- A day row read aloud: "Wednesday, $40.00, in progress, last week $30.00". -->
+    <string name="recap_day_in_progress">in progress</string>
+    <string name="recap_day_last_week_format">last week %1$s</string>
+    <string name="recap_day_open_shift">Open shift</string>
+    <string name="recap_day_open_day">Open day</string>
+    <string name="recap_tile_profit_per_mile">Est. Profit/mi</string>
+    <!-- "24.2 hr online, 6 shifts". -->
+    <string name="recap_tile_hours_shifts_format">%1$s hr online, %2$s</string>
+    <string name="recap_tile_miles_format">%1$s mi</string>
+    <!-- "Last week $16.90": a tile's comparison, and the week-off line. -->
+    <string name="recap_last_week_format">Last week %1$s</string>
+    <plurals name="recap_shift_count">
+        <item quantity="one">%1$d shift</item>
+        <item quantity="other">%1$d shifts</item>
+    </plurals>
+    <plurals name="recap_checks_title">
+        <item quantity="one">%1$d shift to check</item>
+        <item quantity="other">%1$d shifts to check</item>
+    </plurals>
+    <!-- A shift to check: "Wed Oct 28, DoorDash". -->
+    <string name="recap_check_shift_format">%1$s %2$s, %3$s</string>
+    <string name="recap_row_shifts">Shifts</string>
+    <string name="recap_row_spending">Spending</string>
+    <string name="recap_no_shifts_yet">Go online in your delivery app with gig.log running. Your first shift shows here when it ends.</string>
+    <!-- The week off: "No shifts Oct 19 to 25". -->
+    <string name="recap_week_off_format">No shifts %1$s</string>
+    <string name="recap_day_online">hr online</string>
+    <string name="recap_day_miles">mi driven</string>
+    <string name="recap_day_could_not_load_what">this day</string>
+</resources>

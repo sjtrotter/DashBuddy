@@ -2,6 +2,7 @@ package cloud.trotter.log.gig.ui.main.analytics
 
 import cloud.trotter.log.gig.domain.analytics.OfferOutcome
 import cloud.trotter.log.gig.domain.analytics.PayBasis
+import cloud.trotter.log.gig.domain.analytics.checks.ShiftCheck
 import cloud.trotter.log.gig.domain.analytics.timeline.ShiftTimeline
 import cloud.trotter.log.gig.domain.analytics.timeline.TimelineDelivery
 import cloud.trotter.log.gig.domain.analytics.timeline.TimelineOffer
@@ -32,6 +33,18 @@ class ShiftPageModelTest {
     @Test fun `a job's offer or add-on lands on its card and opens its sheet`() {
         assertEquals(RowLanding("offer:3", null, "offer:3"), RowLanding.of(items, "offer:3"))
         assertEquals(RowLanding("offer:3", null, "offer:3"), RowLanding.of(items, "offer:4"))
+    }
+
+    @Test fun `a job link lands on the job's card whatever the card is keyed by`() {
+        assertEquals(RowLanding("offer:3", null, "offer:3"), RowLanding.of(items, jobRowKey("job-1")))
+        assertNull(RowLanding.of(items, jobRowKey("job-2")))
+    }
+
+    @Test fun `a check link lands on the offer with no delivery first, then the job with more accepts`() {
+        val more = ShiftCheck.MoreAcceptsThanDeliveries("job-1", accepted = 2, delivered = 1)
+        assertEquals(jobRowKey("job-1"), landingRowOf(listOf(more)))
+        assertEquals("offer:7", landingRowOf(listOf(more, ShiftCheck.NoDelivery(7))))
+        assertNull(landingRowOf(emptyList()))
     }
 
     @Test fun `a passed offer opens its run and lands on its row`() {

@@ -28,7 +28,7 @@ import java.time.ZoneId
  *
  * Three properties, each of which the pager and recap hero depend on:
  *  1. **The window path and the enum path agree.** For the same span, `periodEconomics(window)` /
- *     `decisionEconomics` / `timeEconomics` / `dailyEarnings` return exactly what the existing
+ *     `dailyEarnings` return exactly what the existing
  *     `AnalyticsPeriod` overloads return — the enum path is a special case of the window path, and
  *     this is the regression fence around "existing callers see byte-identical results".
  *  2. **Net per day decomposes period net.** Σ `DailyEarnings.net` over a window equals that
@@ -159,14 +159,6 @@ class AnalyticsWindowReadsTest {
             repo.periodEconomics(window, null, zone).first(),
         )
         assertEquals(
-            repo.decisionEconomics(AnalyticsPeriod.THIS_WEEK).first(),
-            repo.decisionEconomics(window, zone).first(),
-        )
-        assertEquals(
-            repo.timeEconomics(AnalyticsPeriod.THIS_WEEK).first(),
-            repo.timeEconomics(window, zone).first(),
-        )
-        assertEquals(
             repo.dailyEarnings(AnalyticsPeriod.THIS_WEEK, zone).first(),
             repo.dailyEarnings(window, zone).first(),
         )
@@ -272,20 +264,6 @@ class AnalyticsWindowReadsTest {
     @Test
     fun `dailyEarnings is empty for the lifetime window`() = runBlocking {
         assertTrue(repo.dailyEarnings(AnalyticsWindows.LIFETIME, zone).first().isEmpty())
-    }
-
-    /** A multi-year custom range is a bounded-ingestion hazard, not a chart — empty axis. */
-    @Test
-    fun `dailyEarnings is empty for an over-long custom window`() = runBlocking {
-        val window = AnalyticsWindows.custom(today().minusYears(3), today())
-        assertTrue(repo.dailyEarnings(window, zone).first().isEmpty())
-    }
-
-    /** …but a year-long range is still inside the cap and yields a full axis. */
-    @Test
-    fun `dailyEarnings still serves a range just inside the cap`() = runBlocking {
-        val window = AnalyticsWindows.custom(today().minusDays(200), today())
-        assertEquals(201, repo.dailyEarnings(window, zone).first().size)
     }
 
     // ── 3. The previous-equivalent window (§7.2) ────────────────────────

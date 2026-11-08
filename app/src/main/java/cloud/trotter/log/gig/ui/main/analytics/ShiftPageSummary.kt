@@ -112,9 +112,8 @@ internal fun MoneyCheckBlock(check: MoneyCheck, appName: String) {
         CheckRow(totalLabel, Formats.money(check.appTotal))
         CheckRow(payLabel, moneyText(check.deliveryPay, check.deliveryPayEstimated))
         check.higher?.let { higher ->
-            val label = if (higher == MoneyCheck.Higher.APP_TOTAL) totalLabel else payLabel
             Text(
-                stringResource(R.string.shift_page_higher_format, label, Formats.money(check.difference)),
+                higherLine(higher, check.difference, appName),
                 modifier = Modifier.padding(top = 8.dp),
                 style = MaterialTheme.typography.bodyMedium,
                 color = c.text,

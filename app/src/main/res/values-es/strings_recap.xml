@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="recap_range_format">%1$s a %2$s</string>
+    <string name="recap_period_format">%1$s, %2$s</string>
+    <string name="recap_week_previous">Semana anterior</string>
+    <string name="recap_week_next">Semana siguiente</string>
+    <string name="recap_measure_earned">Ganado</string>
+    <string name="recap_measure_profit">Ganancia est.</string>
+    <string name="recap_comparison_this_format">%1$s %2$s</string>
+    <string name="recap_comparison_last_none_format">Semana pasada, %1$s, sin turnos</string>
+    <string name="recap_comparison_last_format">Semana pasada, %1$s %2$s</string>
+    <string name="recap_cash_included_format">Efectivo incluido %1$s</string>
+    <string name="recap_chart_earned_title">Ganado por día</string>
+    <string name="recap_chart_profit_title">Ganancia est. por día</string>
+    <string name="recap_legend_in_progress">En curso</string>
+    <string name="recap_day_no_shift">Sin turno</string>
+    <string name="recap_day_no_pay">No se encontró pago</string>
+    <string name="recap_day_in_progress">en curso</string>
+    <string name="recap_day_last_week_format">semana pasada %1$s</string>
+    <string name="recap_day_open_shift">Abrir turno</string>
+    <string name="recap_day_open_day">Abrir día</string>
+    <string name="recap_tile_profit_per_mile">Ganancia est./mi</string>
+    <string name="recap_tile_hours_shifts_format">%1$s h en línea, %2$s</string>
+    <string name="recap_tile_miles_format">%1$s mi</string>
+    <string name="recap_last_week_format">Semana pasada %1$s</string>
+    <plurals name="recap_shift_count">
+        <item quantity="one">%1$d turno</item>
+        <item quantity="other">%1$d turnos</item>
+    </plurals>
+    <plurals name="recap_checks_title">
+        <item quantity="one">%1$d turno para revisar</item>
+        <item quantity="other">%1$d turnos para revisar</item>
+    </plurals>
+    <string name="recap_check_shift_format">%1$s %2$s, %3$s</string>
+    <string name="recap_row_shifts">Turnos</string>
+    <string name="recap_row_spending">Gastos</string>
+    <string name="recap_no_shifts_yet">Conéctate en tu app de reparto con gig.log abierto. Tu primer turno aparece aquí cuando termina.</string>
+    <string name="recap_week_off_format">Sin turnos %1$s</string>
+    <string name="recap_day_online">h en línea</string>
+    <string name="recap_day_miles">mi recorridas</string>
+    <string name="recap_day_could_not_load_what">este día</string>
+</resources>

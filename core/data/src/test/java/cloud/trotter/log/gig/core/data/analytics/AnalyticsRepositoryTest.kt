@@ -172,20 +172,22 @@ class AnalyticsRepositoryTest {
     )
 
     @Test
-    fun `lifetime source composition and pay mix reconcile across platform reads`() = runBlocking {
-        val deliveries = seedMoneySources(dao, base)
+    fun `lifetime source composition reconciles across platform reads`() = runBlocking {
+        seedMoneySources(dao, base)
         val period = AnalyticsPeriod.LIFETIME
         val economics = repo.periodEconomics(period).first()
-        assertMoneySources(economics, repo.payMixParts(period).first(), scale = 3.0, copies = 2)
-        val split = repo.platformEconomics(period).first()
-        assertEquals(2, split.size)
-        for ((platform, e) in split) {
-            val rows = deliveries.filter { it.platform == platform.wire }
-            val scale = if (platform == cloud.trotter.log.gig.domain.state.Platform.DoorDash) 1.0 else 2.0
-            assertMoneySources(e, moneyParts(rows), scale)
-            assertEquals(e, repo.periodEconomics(period, platform).first())
+        assertMoneySources(economics, scale = 3.0, copies = 2)
+        val platforms = listOf(
+            cloud.trotter.log.gig.domain.state.Platform.DoorDash to 1.0,
+            cloud.trotter.log.gig.domain.state.Platform.Uber to 2.0,
+        )
+        var splitGross = 0.0
+        for ((platform, scale) in platforms) {
+            val e = repo.periodEconomics(period, platform).first()
+            assertMoneySources(e, scale)
+            splitGross += e.grossEarnings
         }
-        assertEquals(economics.grossEarnings, split.sumOf { it.economics.grossEarnings }, 0.001)
+        assertEquals(economics.grossEarnings, splitGross, 0.001)
     }
 
     /**
@@ -676,9 +678,7 @@ class AnalyticsRepositoryTest {
         dao.upsertSession(session("S0", base, reportedEarnings = 0.0, durationMillis = hour, startOdo = 0.0, lastOdo = 10.0, deliveries = 1, jobsCompleted = 1, endSource = "early_offline"))
         dao.upsertDelivery(delivery(1, "S0", "J1", "Wendys", pay = 16.70, net = 13.20, completedAt = base + hour))
 
-        val rows = repo.platformEconomics(AnalyticsPeriod.LIFETIME).first()
-        assertEquals(1, rows.size)
-        val eco = rows.single().economics
+        val eco = repo.periodEconomics(AnalyticsPeriod.LIFETIME, cloud.trotter.log.gig.domain.state.Platform.DoorDash).first()
         assertEquals(16.70, eco.grossEarnings, 1e-9)
         assertEquals(0.0, eco.overAttributedPay, 1e-9)
         assertEquals(0.0, eco.unattributedPay, 1e-9)

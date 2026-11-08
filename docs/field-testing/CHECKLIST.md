@@ -80,6 +80,7 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 ### 0/2 or 1/2 younger than 6 weeks — newest first
 
+- [#1515 Recap is the week](checklist/open/1515-recap-week.md)
 - [#1517 an accepted offer with no delivery is checked on its shift page](checklist/open/1517-shift-checks.md)
 - [#1516 a shift's page reads as its timeline](checklist/open/1516-shift-page-timeline.md)
 - [#1535 correct a shift's miles](checklist/open/1535-correct-shift-miles.md)

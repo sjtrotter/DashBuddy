@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.ui.main.navigation
 
 import android.net.Uri
+import java.time.LocalDate
 
 sealed class Screen(val route: String) {
     // Top Level
@@ -9,7 +10,7 @@ sealed class Screen(val route: String) {
 
     // Ratings (epic #320): a row on Home since #1447.
     data object Ratings : Screen("ratings")
-    // Analytics hub (#315 H1) — Money tab v1; Patterns/Decisions/Time tabs stubbed.
+    // Recap (#1515): the week. The route keeps its #315 name.
     data object Analytics : Screen("analytics")
 
     /**
@@ -37,6 +38,15 @@ sealed class Screen(val route: String) {
         const val ARG_ROW = "row"
         fun route(sessionId: String, row: String? = null): String =
             "analytics/session/${Uri.encode(sessionId)}" + (row?.let { "?row=${Uri.encode(it)}" } ?: "")
+    }
+
+    /**
+     * The day page (#1515): a day with two or more shifts, opened from Recap's chart; it sits on Recap's stack. The
+     * argument is the local date in ISO form ("2026-10-28").
+     */
+    data object Day : Screen("analytics/day/{date}") {
+        const val ARG_DATE = "date"
+        fun route(date: LocalDate): String = "analytics/day/$date"
     }
 
     // Settings Hierarchy
@@ -82,10 +92,10 @@ sealed class Screen(val route: String) {
 
         /**
          * Every route the one flat graph registers (#1447 `mainGraph`): the deep-link allowlist plus
-         * the routes no external link may target — the wizard, Ratings and the two argument routes.
+         * the routes no external link may target — the wizard, Ratings and the argument routes.
          */
         val graphRoutes: Set<String> by lazy {
-            allRoutes + setOf(Wizard.route, Ratings.route, SessionDetail.route, VehicleEdit.route)
+            allRoutes + setOf(Wizard.route, Ratings.route, SessionDetail.route, Day.route, VehicleEdit.route)
         }
     }
 }

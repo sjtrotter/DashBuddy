@@ -116,7 +116,7 @@ class DashboardViewModelTest {
 
     /** The persisted analytics selection, round-tripped by the mocked prefs repository. */
     private val selectionFlow = MutableStateFlow<AnalyticsWindowSelection>(
-        AnalyticsWindowSelection.Relative(WindowGranularity.MONTH, -3),
+        AnalyticsWindowSelection(-3),
     )
 
     private fun stubRepositories() {
@@ -300,7 +300,7 @@ class DashboardViewModelTest {
             testScheduler.runCurrent()
 
             assertEquals(
-                AnalyticsWindowSelection.Relative(WindowGranularity.WEEK, 0),
+                AnalyticsWindowSelection.DEFAULT,
                 selectionFlow.value,
             )
         }

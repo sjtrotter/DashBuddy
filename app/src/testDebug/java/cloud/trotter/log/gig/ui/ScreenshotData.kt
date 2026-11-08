@@ -1,33 +1,26 @@
 package cloud.trotter.log.gig.ui
 
+import cloud.trotter.log.gig.domain.analytics.AnalyticsWindow
 import cloud.trotter.log.gig.domain.analytics.AnalyticsWindowSelection
+import cloud.trotter.log.gig.domain.analytics.checks.ShiftCheck
+import cloud.trotter.log.gig.domain.analytics.recap.DayFacts
+import cloud.trotter.log.gig.domain.analytics.recap.DayShift
+import cloud.trotter.log.gig.domain.analytics.recap.RecapComparisons
+import cloud.trotter.log.gig.domain.analytics.recap.RecapDays
+import cloud.trotter.log.gig.domain.analytics.recap.RecapMeasure
 import cloud.trotter.log.gig.domain.analytics.AnalyticsWindows
 import cloud.trotter.log.gig.domain.analytics.DailyEarnings
-import cloud.trotter.log.gig.domain.analytics.DecisionEconomics
 import cloud.trotter.log.gig.domain.analytics.EarningsHeatmap
 import cloud.trotter.log.gig.domain.analytics.EarningsHeatmapCalculator
 import cloud.trotter.log.gig.domain.analytics.EarningsHeatmapCell
-import cloud.trotter.log.gig.domain.analytics.EstimateVsReality
-import cloud.trotter.log.gig.domain.analytics.GapStats
 import cloud.trotter.log.gig.domain.analytics.GradedWindow
 import cloud.trotter.log.gig.domain.analytics.GrossSources
-import cloud.trotter.log.gig.domain.analytics.HourComposition
-import cloud.trotter.log.gig.domain.analytics.NetPerHourPair
-import cloud.trotter.log.gig.domain.analytics.OfferListing
-import cloud.trotter.log.gig.domain.analytics.OfferOutcome
-import cloud.trotter.log.gig.domain.analytics.PayMix
-import cloud.trotter.log.gig.domain.analytics.PayMixParts
 import cloud.trotter.log.gig.domain.analytics.PeriodEconomics
 import cloud.trotter.log.gig.domain.analytics.PeriodTotals
 import cloud.trotter.log.gig.domain.analytics.PlanTarget
-import cloud.trotter.log.gig.domain.analytics.PlatformEconomics
 import cloud.trotter.log.gig.domain.analytics.SavedPlanWindow
 import cloud.trotter.log.gig.domain.analytics.SavedWeeklyPlan
-import cloud.trotter.log.gig.domain.analytics.SessionEvent
-import cloud.trotter.log.gig.domain.analytics.SessionRecord
 import cloud.trotter.log.gig.domain.analytics.StoreReportCard
-import cloud.trotter.log.gig.domain.analytics.TimeEconomics
-import cloud.trotter.log.gig.domain.analytics.WorkGaps
 import cloud.trotter.log.gig.domain.analytics.WeeklyPlanGrade
 import cloud.trotter.log.gig.core.data.vehicle.Garage
 import cloud.trotter.log.gig.domain.evaluation.EvaluationConfig
@@ -37,9 +30,9 @@ import cloud.trotter.log.gig.domain.evaluation.UserEconomy
 import cloud.trotter.log.gig.domain.model.vehicle.GasCar
 import cloud.trotter.log.gig.domain.model.vehicle.Vehicle
 import cloud.trotter.log.gig.domain.state.Platform
-import cloud.trotter.log.gig.ui.main.analytics.AnalyticsTab
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsUiState
-import cloud.trotter.log.gig.ui.main.analytics.OffersFeedState
+import cloud.trotter.log.gig.ui.main.analytics.ShiftToCheck
+import cloud.trotter.log.gig.ui.main.analytics.day.DayUiState
 import cloud.trotter.log.gig.ui.main.dashboard.DashboardUiState
 import cloud.trotter.log.gig.ui.main.playbook.PlaybookUiState
 import cloud.trotter.log.gig.R
@@ -106,12 +99,6 @@ internal object ScreenshotData {
         grossSources = GrossSources(61.25, 1, 0.0, 0, 0.0, 0, 0.0, 0, 0.0, 0, 0, 3.00),
     )
 
-    /** Base pay + platform tips = the recorded $412.50; every delivery itemized. */
-    private val payMixParts = PayMixParts(
-        basePay = 236.00, tips = 176.50, cashTips = 18.00, deliveries = 41, deliveriesWithBreakdown = 41,
-        offerEstimatePay = 0.0, offerEstimateDeliveries = 0, paylessDeliveries = 0,
-    )
-
     /** Monday to Sunday of this week; Thursday on has not happened yet. */
     val weekDailyEarnings: List<DailyEarnings> =
         (listOf(Triple(171.40, 131.20, 16), Triple(194.85, 147.60, 19), Triple(64.25, 49.70, 6)) +
@@ -119,110 +106,6 @@ internal object ScreenshotData {
             .mapIndexed { day, (gross, net, deliveries) ->
                 DailyEarnings(weekStart.plusDays(day.toLong()), gross, net, deliveries)
             }
-
-    /** The week's four shifts, newest first; they sum to [week]. */
-    val recentSessions = listOf(
-        session("s4", "2026-10-28T14:45:00Z", 3.0, 61.25, 38.2, 6, 6, 10, 6, 3, 1, 3.00),
-        session("s3", "2026-10-27T16:00:00Z", 5.5, 112.40, 79.0, 11, 10, 17, 10, 6, 1, 6.00),
-        session("s2", "2026-10-27T09:30:00Z", 4.5, 76.45, 52.2, 8, 8, 12, 8, 3, 1, 0.0),
-        session("s1", "2026-10-26T13:30:00Z", 9.5, 162.40, 99.0, 16, 14, 25, 14, 10, 1, 9.00),
-    )
-
-    private fun session(
-        id: String, start: String, hours: Double, reported: Double, miles: Double, deliveries: Int, jobs: Int,
-        received: Int, accepted: Int, declined: Int, timedOut: Int, cash: Double,
-    ): SessionRecord {
-        val startedAt = at(start)
-        return SessionRecord(
-            sessionId = id, platform = Platform.DoorDash, startedAt = startedAt,
-            endedAt = startedAt + (hours * HOUR).toLong(), reportedEarnings = reported,
-            reportedDurationMillis = null, miles = miles, deliveries = deliveries, jobsCompleted = jobs,
-            offersReceived = received, offersAccepted = accepted, offersDeclined = declined,
-            offersTimeout = timedOut, cashTips = cash,
-        )
-    }
-
-    /**
-     * The shifts' accepts and drop-offs, laid out evenly through each shift: a job every
-     * `length / (jobs + 1)`, its drop-offs part-way through its slot, the first jobs of a shift carrying
-     * the second drop of a stacked order. Every one of the week's 41 drop-offs is here, so the gaps
-     * below are what `WorkGaps` measures over the same completions the Money tab counts.
-     */
-    private class Timeline(val completions: List<SessionEvent>, val accepts: List<SessionEvent>)
-
-    private val timeline: Timeline = run {
-        var sequence = 0L
-        val completions = mutableListOf<SessionEvent>()
-        val accepts = mutableListOf<SessionEvent>()
-        for (shift in recentSessions.sortedBy { it.startedAt }) {
-            val slot = (shift.endedAt!! - shift.startedAt) / (shift.jobsCompleted + 1)
-            val stacked = shift.deliveries - shift.jobsCompleted
-            for (job in 0 until shift.jobsCompleted) {
-                val acceptedAt = shift.startedAt + slot / 2 + job * slot
-                accepts += SessionEvent(shift.sessionId, ++sequence, acceptedAt)
-                val drops = if (job < stacked) listOf(0.55, 0.70) else listOf(0.45 + 0.05 * (job % 4))
-                drops.forEach { completions += SessionEvent(shift.sessionId, ++sequence, acceptedAt + (it * slot).toLong()) }
-            }
-        }
-        Timeline(completions, accepts)
-    }
-
-    /**
-     * Σ per-delivery `realizedMinutes` over the same timeline, by the fold's own rule
-     * (`DeliveryFolds`): each drop-off, in sequence order, gets the time since the shift's completion
-     * high-water mark (the shift's start for its first drop), never negative. These partitions include
-     * the waits between jobs, which `NetPerHourPair.of` then subtracts as the gaps.
-     */
-    private val deliveryMinutes: Double = timeline.completions.groupBy { it.sessionId }.entries.sumOf { (id, drops) ->
-        val startedAt = recentSessions.first { it.sessionId == id }.startedAt
-        var highWater: Long? = null
-        drops.sortedBy { it.sequenceId }.sumOf { drop ->
-            val previousAt = highWater?.let { maxOf(it, startedAt) } ?: startedAt
-            highWater = maxOf(highWater ?: drop.timestamp, drop.timestamp)
-            (drop.timestamp - previousAt).coerceAtLeast(0L) / 60_000.0
-        }
-    }
-
-    val time = TimeEconomics(
-        sessions = 4,
-        onlineMillis = 81_000_000L,
-        deliveryMinutes = deliveryMinutes,
-        miles = 268.4,
-        deliveryMiles = 231.0,
-        deliveriesWithDeadline = 41,
-        onTimeDeliveries = 38,
-        avgDeadlineMarginMillis = 330_000.0,
-        deliveries = 41,
-        dropoffDwellMillis = 41 * 95_000L,
-        dropoffsTimed = 41,
-        pickups = 38,
-        pickupDwellMillis = 38 * 420_000L,
-        pickupsTimed = 38,
-    )
-
-    /** Measured, not stated: one gap per drop-off followed by an accept in its shift (37), plus 4 shift tails. */
-    private val gaps: GapStats = WorkGaps.compute(timeline.completions, timeline.accepts,
-        recentSessions.associate { it.sessionId to it.endedAt!! })
-
-    private val decisions = DecisionEconomics(
-        received = 64, accepted = 38, declined = 22, timedOut = 4, acceptanceRate = 38.0 / 64.0,
-        declinedEstNet = 71.40, declinedWithEstimate = 22, avgScoreAccepted = 68.0, avgScoreDeclined = 41.0,
-        avgEstPerHourAccepted = 19.40, avgEstPerHourDeclined = 11.20,
-    )
-
-    private val estimateVsReality = EstimateVsReality(
-        acceptedOffers = 38, offers = 31, estPerHour = 19.40, realizedPerHour = 17.85, ratio = 17.85 / 19.40,
-    )
-
-    /** The Offers list's first page under All. */
-    val offersFeed = OffersFeedState(
-        offers = listOf(
-            OfferListing(103, Platform.DoorDash, "Sample Pizza", at("2026-10-28T17:20:00Z"), 8.75, 3.9, 21.0, 74.0, OfferOutcome.ACCEPTED),
-            OfferListing(102, Platform.DoorDash, "Sample Grocery", at("2026-10-28T16:55:00Z"), 4.25, 7.8, 8.5, 31.0, OfferOutcome.DECLINED),
-            OfferListing(101, Platform.DoorDash, "Sample Tacos", at("2026-10-28T16:10:00Z"), 11.50, 5.2, 19.0, 70.0, OfferOutcome.ACCEPTED),
-        ),
-        total = 3,
-    )
 
     // ── The lifetime record: heatmap, stores ────────────────────────────
 
@@ -337,29 +220,86 @@ internal object ScreenshotData {
         sessionStartedAt = null,
     )
 
-    fun analytics(tab: AnalyticsTab, showMore: Boolean): AnalyticsUiState {
-        val window = AnalyticsWindowSelection.DEFAULT.resolve(today)
+    // ── Recap (#1515) ───────────────────────────────────────────────────
+
+    private fun shift(id: String, start: String, hours: Double?, earned: Double, profit: Double) = DayShift(
+        sessionId = id, platform = Platform.DoorDash, startedAt = at(start),
+        endedAt = hours?.let { at(start) + (it * HOUR).toLong() }, earned = earned, profit = profit, paySeen = true,
+    )
+
+    /** This week's shifts by day: Monday one, Tuesday two (it opens the day page), today's still running. */
+    private val weekFacts = listOf(
+        DayFacts(weekStart, listOf(shift("s1", "2026-10-26T13:30:00Z", 9.5, 171.40, 131.20))),
+        DayFacts(
+            weekStart.plusDays(1),
+            listOf(shift("s2", "2026-10-27T09:30:00Z", 4.5, 76.45, 57.00), shift("s3", "2026-10-27T16:00:00Z", 5.5, 118.40, 90.60)),
+        ),
+        DayFacts(today, listOf(shift("s4", "2026-10-28T14:45:00Z", null, 64.25, 49.70))),
+    )
+
+    /** Last week: a shift every day but Thursday; Saturday's had no pay found. */
+    private val lastWeekFacts = listOf(88.10, 102.30, 61.75, null, 74.40, -1.0, 143.65).mapIndexedNotNull { day, earned ->
+        val date = weekStart.minusWeeks(1).plusDays(day.toLong())
+        earned?.let {
+            val paid = it >= 0.0
+            DayFacts(date, listOf(shift("l$day", "${date}T15:00:00Z", 5.0, if (paid) it else 0.0, if (paid) it * 0.76 else 0.0)
+                .copy(paySeen = paid)))
+        }
+    }
+
+    /** Recap mid-week: today's shift is running, so the comparison waits; Monday's shift has a check. */
+    fun recap(): AnalyticsUiState = recapOn(AnalyticsWindowSelection.DEFAULT.resolve(today), weekFacts, lastWeekFacts, running = true)
+        .copy(
+            shiftsToCheck = listOf(
+                ShiftToCheck(weekStart, weekFacts.first().shifts.single(), listOf(ShiftCheck.NoDelivery(offerEventSequenceId = 77))),
+            ),
+        )
+
+    /** Last week seen from today: every day has happened, so the comparison covers all seven. */
+    fun recapPastWeek(): AnalyticsUiState =
+        recapOn(AnalyticsWindowSelection(-1).resolve(today), lastWeekFacts, emptyList(), running = false)
+            .copy(economics = previousWeek, lastWeekEconomics = PeriodEconomics.EMPTY)
+
+    /** A week with no shift, two weeks back. */
+    fun recapWeekOff(): AnalyticsUiState =
+        recapOn(AnalyticsWindowSelection(-2).resolve(today), emptyList(), lastWeekFacts, running = false)
+            .copy(economics = PeriodEconomics.EMPTY, lastWeekEconomics = previousWeek, spending = 12.50)
+
+    /** No shift has ever been recorded. */
+    val recapNoShiftsYet = AnalyticsUiState(anyShift = false, today = today, week = AnalyticsWindowSelection.DEFAULT.resolve(today))
+
+    private fun recapOn(week: AnalyticsWindow, facts: List<DayFacts>, lastFacts: List<DayFacts>, running: Boolean): AnalyticsUiState {
+        val start = requireNotNull(week.startDate)
+        val days = RecapDays.of(start, today, facts)
+        val lastWeek = RecapDays.of(start.minusWeeks(1), today, lastFacts)
         return AnalyticsUiState(
-            showMore = showMore,
-            selectedTab = tab,
-            window = window,
+            week = week,
             today = today,
-            canStepBack = AnalyticsWindows.canStepBack(window),
-            canStepForward = AnalyticsWindows.canStepForward(window, today),
-            economics = week,
-            previousEconomics = previousWeek,
-            payMix = PayMix.of(week, payMixParts),
-            platformSplit = listOf(PlatformEconomics(Platform.DoorDash, week)),
-            dailyEarnings = weekDailyEarnings,
-            recentSessions = recentSessions,
-            decisions = decisions,
-            estimateVsReality = estimateVsReality,
-            time = time,
-            gaps = gaps,
-            hourComposition = HourComposition.of(time, gaps),
-            netPerHour = NetPerHourPair.of(week.netProfit, time, gaps),
+            canStepForward = AnalyticsWindows.canStepForward(week, today),
+            shiftRunning = running,
+            economics = ScreenshotData.week,
+            lastWeekEconomics = previousWeek,
+            days = days,
+            lastWeekDays = lastWeek,
+            comparison = RecapComparisons.of(days, lastWeek, RecapMeasure.EARNED, running),
+            spending = 46.30,
         )
     }
+
+    /** Tuesday's day page: two shifts, newest first. */
+    val day = DayUiState(
+        date = weekStart.plusDays(1),
+        economics = PeriodEconomics(
+            totals = PeriodTotals(earnings = 188.85, miles = 131.2, deliveries = 19, jobs = 18, onlineDuration = 36_000_000L),
+            grossEarnings = 194.85,
+            netProfit = 147.60,
+            unattributedPay = 0.0,
+            netPerHour = 147.60 / 10.0,
+            netPerMile = 147.60 / 131.2,
+            cash = 6.00,
+        ),
+        shifts = weekFacts[1].shifts.sortedByDescending { it.startedAt },
+    )
 
     fun playbook(showMore: Boolean) = PlaybookUiState(
         showMore = showMore,
@@ -388,10 +328,4 @@ internal object ScreenshotData {
     private val car = Vehicle("car", "Sample car", 1L, GasCar(year = "2020", make = "Honda", model = "Civic"))
     val garage = Garage(listOf(car), car.id, readable = true)
     val userEconomy = UserEconomy()
-
-    /** The Time tab's typical gap, as its tile reports it. */
-    val typicalGapMillis: Long get() = gaps.medianMillis!!
-
-    /** The Offers tab's accept rate, as the tile reports it. */
-    val acceptanceRate: Double get() = decisions.acceptanceRate!!
 }

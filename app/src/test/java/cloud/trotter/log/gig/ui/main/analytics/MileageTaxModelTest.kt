@@ -17,9 +17,8 @@ import java.util.Locale
  * #689 — the MILEAGE & TAX card's pure copy logic: the year-labelled deduction line, the
  * unknown-year honest-fallback disclaimer (copy owned by `IrsMileage.fallbackNote`), and the
  * spans-years note. Since #970 the note (and the labelled year) derive from the selected
- * **[AnalyticsWindows] window's own endpoints**, so the Jan-straddling Monday week and a driver-drawn
- * custom range are both covered, and a paged-back window is priced at ITS year rather than at the
- * device clock's. Compose-free, per the [MoneyWentModel] / `MoneyWentModelTest` precedent (test the
+ * **[AnalyticsWindows] window's own endpoints**, so the Jan-straddling Monday week is covered, and a
+ * paged-back window is priced at ITS year rather than at the device clock's. Compose-free (test the
  * logic, not the rendering).
  */
 class MileageTaxModelTest {
@@ -127,17 +126,5 @@ class MileageTaxModelTest {
         )
         assertEquals("$70.00 est. IRS 2025 mileage deduction", labels.deductionLine)
         assertNull(labels.spansYearsNote)
-    }
-
-    /** A driver-drawn custom range that crosses New Year gets the same honest note. */
-    @Test fun customRangeStraddlingNewYear_addsSpansYearsNote() {
-        val labels = MileageTaxModel.from(
-            100.0, noonUtc(2026, 7, 15), utc,
-            AnalyticsWindows.custom(LocalDate.of(2025, 12, 20), LocalDate.of(2026, 1, 10)),
-        )
-        assertEquals(
-            "covers more than one tax year; see the export",
-            labels.spansYearsNote,
-        )
     }
 }

@@ -49,4 +49,29 @@ object SessionReportSql {
             "WHEN s.endSource = '${SessionEndSource.SUMMARY_SCREEN}' THEN 'DASH_SUMMARY' " +
             "WHEN $RECORDED_PAY_ABOVE_SQL THEN 'RECORDED_PAY' " +
             "ELSE 'IN_DASH_COUNTER' END"
+
+    /**
+     * One session's Earned (`alias s` over [SESSION_DELIVERY_JOIN_SQL]): its effective total, else its recorded
+     * pay, plus its cash tips. The per-day reads (`AnalyticsDao.sessionGrossRows`, `RecapDao.shiftDayRows`) share it.
+     */
+    const val SESSION_GROSS_SQL =
+        "COALESCE($EFFECTIVE_REPORTED_SQL, d.deliveredPay, 0) + COALESCE(d.cashTip, 0)"
+
+    /**
+     * One session's frozen profit: Σ `netProfit` + Σ cash tips + the remainder its effective total has above its
+     * recorded pay, the three terms `PeriodEconomics.netProfit` folds.
+     */
+    const val SESSION_NET_SQL =
+        "COALESCE(d.net, 0) + COALESCE(d.cashTip, 0) " +
+            "+ CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NOT NULL " +
+            "AND ($EFFECTIVE_REPORTED_SQL) > COALESCE(d.deliveredPay, 0) " +
+            "THEN ($EFFECTIVE_REPORTED_SQL) - COALESCE(d.deliveredPay, 0) ELSE 0 END"
+
+    /**
+     * #1515: 1 when the session's pay was seen at all (an effective total, a delivery with pay, or a cash tip), 0
+     * when not; Recap's "No pay found" against "$0.00".
+     */
+    const val SESSION_PAY_SEEN_SQL =
+        "CASE WHEN ($EFFECTIVE_REPORTED_SQL) IS NOT NULL OR d.deliveredPay IS NOT NULL OR d.cashTip > 0 " +
+            "THEN 1 ELSE 0 END"
 }

@@ -1,16 +1,11 @@
 package cloud.trotter.log.gig.core.data.analytics
 
-import cloud.trotter.log.gig.core.database.analytics.AcceptedOfferRealizedRow
 import cloud.trotter.log.gig.core.database.analytics.DeliveryRecordEntity
-import cloud.trotter.log.gig.core.database.analytics.OfferListRow
 import cloud.trotter.log.gig.core.database.analytics.SessionRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.SessionWithCashRow
 import cloud.trotter.log.gig.core.database.analytics.ShiftPayRow
-import cloud.trotter.log.gig.domain.analytics.AcceptedOfferOutcomeSample
 import cloud.trotter.log.gig.domain.analytics.MilesBasis
 import cloud.trotter.log.gig.domain.analytics.DeliveryRecord
-import cloud.trotter.log.gig.domain.analytics.OfferListing
-import cloud.trotter.log.gig.domain.analytics.OfferOutcome
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
 import cloud.trotter.log.gig.domain.analytics.SessionMilesRule
 import cloud.trotter.log.gig.domain.analytics.SessionReportRule
@@ -84,34 +79,3 @@ internal fun SessionWithCashRow.toDomain(): SessionRecord = session.toDomain(del
 /** Shift row with its recorded pay → domain (#1443/#1459): the recorded pay floors the effective report. */
 internal fun ShiftPayRow.toDomain(): SessionRecord = session.toDomain(recordedPay)
 
-/**
- * Offers-list row → domain (#975 / brief §7.4). Platform is registry-resolved and the stored
- * `AppEventType` name becomes the typed [OfferOutcome] — an outcome this build doesn't recognize maps
- * to `null` (fail-null, rendered as an unknown pill) rather than crashing the list.
- */
-internal fun OfferListRow.toDomain(): OfferListing = OfferListing(
-    eventSequenceId = eventSequenceId,
-    platform = Platform.fromWire(platform) ?: Platform.Unknown,
-    storeName = merchantName,
-    decidedAt = decidedAt,
-    payAmount = payAmount,
-    distanceMiles = distanceMiles,
-    estDollarsPerHour = estDollarsPerHour,
-    score = score,
-    outcome = OfferOutcome.fromEventTypeName(outcome),
-)
-
-/**
- * Estimate-vs-reality join row → domain sample (#975 / brief §7.5). A straight pass-through: every
- * inclusion rule (null estimate, no link, stacked job, unmeasured job) is applied by the pure
- * [cloud.trotter.log.gig.domain.analytics.EstimateVsReality.Companion.of], not here.
- */
-internal fun AcceptedOfferRealizedRow.toSample(): AcceptedOfferOutcomeSample = AcceptedOfferOutcomeSample(
-    offerEventSequenceId = offerEventSequenceId,
-    estPerHour = estPerHour,
-    linkedJobId = linkedJobId,
-    realizedNet = realizedNet,
-    realizedPay = realizedPay,
-    realizedCashTip = realizedCashTip,
-    realizedMinutes = realizedMinutes,
-)

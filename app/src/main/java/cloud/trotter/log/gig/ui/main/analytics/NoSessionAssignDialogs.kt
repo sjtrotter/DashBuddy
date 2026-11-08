@@ -39,7 +39,7 @@ import cloud.trotter.log.gig.domain.format.formatShortDate
  * writes a `DELIVERY_SESSION_ASSIGN` via the ViewModel; Room invalidation shrinks [orphans]
  * reactively (the assigned row leaves the bucket), so the list updates without a manual refresh.
  *
- * Kept OUT of `MoneyTab.kt` (Principle 3 — file-size budget). Pure data in / lambdas out (Principle 1):
+ * Opened from Recap's review row (#1515). Pure data in / lambdas out (Principle 1):
  * [candidateSessionsFor] is a suspend fetch the picker runs in a [produceState]; [onAssign] appends the
  * correction event. No PII surface — store/merchant names are driver-owned; no customer hashes.
  */

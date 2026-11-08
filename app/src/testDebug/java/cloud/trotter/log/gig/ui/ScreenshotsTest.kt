@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -57,7 +58,7 @@ import cloud.trotter.log.gig.feature.settings.eventReceiptDisclosureParts
 import cloud.trotter.log.gig.ui.bubble.BubbleManager
 import cloud.trotter.log.gig.ui.main.MainScaffold
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsContent
-import cloud.trotter.log.gig.ui.main.analytics.AnalyticsTab
+import cloud.trotter.log.gig.ui.main.analytics.day.DayContent
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsUiState
 import cloud.trotter.log.gig.ui.main.dashboard.DashboardBody
 import cloud.trotter.log.gig.ui.main.dashboard.DashboardUiState
@@ -273,39 +274,30 @@ class ScreenshotsTest(private val theme: String) {
     @Test @Config(fontScale = 2f)
     fun homeFont200() = home("home-font-200")
 
-    // ── The Analytics hub ────────────────────────────────────────────────
+    // ── Recap (#1515) ─────────────────────────────────────────────────────
 
-    @Test fun hubMoney() = hub("hub/money", AnalyticsTab.Money, showMore = false,
-        Formats.money(ScreenshotData.week.grossEarnings))
+    /** Mid-week with today's shift running: the comparison waits; Tuesday's two shifts. */
+    @Test fun recapWeek() = recap("recap/week", ScreenshotData.recap(), Formats.money(ScreenshotData.week.grossEarnings))
 
-    /** More numbers: the latest-shifts list shows the week's oldest shift, Monday's, with its reported total. */
-    @Test @Config(qualifiers = FULL)
-    fun hubMoneyFull() = hub("hub/money-full", AnalyticsTab.Money, showMore = true,
-        Formats.money(ScreenshotData.recentSessions.last().reportedEarnings!!))
+    @Test @Config(fontScale = 2f)
+    fun recapWeekFont200() = recap("recap/week-font-200", ScreenshotData.recap(), Formats.money(ScreenshotData.week.grossEarnings))
 
-    @Test fun hubOffers() = hub("hub/offers", AnalyticsTab.Offers, showMore = false,
-        Formats.percent(ScreenshotData.acceptanceRate))
+    /** Last week: every day has happened, so the comparison covers Monday to Sunday. */
+    /** Saturday had a shift with no pay found; a chart row speaks through its description, so that is what is checked. */
+    @Test fun recapPastWeek() = render("recap/past-week", assertion = {
+        text(string(R.string.analytics_screen_title)).assertExists()
+        compose.onAllNodes(hasContentDescription(string(R.string.recap_day_no_pay), substring = true))[0].assertExists()
+    }) { RecapBody(ScreenshotData.recapPastWeek()) }
 
-    @Test @Config(qualifiers = FULL)
-    fun hubOffersFull() = hub("hub/offers-full", AnalyticsTab.Offers, showMore = true, "Sample Pizza")
+    @Test fun recapWeekOff() = recap("recap/week-off", ScreenshotData.recapWeekOff(), string(R.string.recap_row_spending))
 
-    @Test fun hubTime() = hub("hub/time", AnalyticsTab.Time, showMore = false,
-        formatDuration(ScreenshotData.typicalGapMillis))
+    @Test fun recapNoShiftsYet() = recap("recap/no-shifts-yet", ScreenshotData.recapNoShiftsYet, string(R.string.recap_no_shifts_yet))
 
-    /**
-     * More numbers: the net per hour while working, computed by `NetPerHourPair.of` from the fixture's
-     * partitions and gaps. A working hour excludes the waits, so the rate must sit above the whole-shift
-     * rate, and within three times it, or the fixture's time semantics are wrong.
-     */
-    @Test @Config(qualifiers = FULL)
-    fun hubTimeFull() {
-        val pair = ScreenshotData.analytics(AnalyticsTab.Time, showMore = true).netPerHour
-        val working = pair.whileWorking!!
-        val wholeShift = pair.wholeShift!!
-        assertTrue("while working $working/hr against $wholeShift/hr for the whole shift",
-            working > wholeShift && working < 3 * wholeShift)
-        hub("hub/time-full", AnalyticsTab.Time, showMore = true, "${Formats.money(working)}/hr")
-    }
+    /** Tuesday's day page: two shifts, newest first. */
+    @Test fun recapDay() = day("recap/day")
+
+    @Test @Config(fontScale = 2f)
+    fun recapDayFont200() = day("recap/day-font-200")
 
     // ── The Playbook ─────────────────────────────────────────────────────
 
@@ -325,8 +317,8 @@ class ScreenshotsTest(private val theme: String) {
         HomeBody(ScreenshotData.dashboard().copy(isFirstRun = null), hasPermissions = true)
     }
 
-    @Test fun hubLoading() = loading("hub/loading") {
-        HubBody(ScreenshotData.analytics(AnalyticsTab.Money, showMore = false).copy(loaded = false))
+    @Test fun recapLoading() = loading("recap/loading") {
+        RecapBody(ScreenshotData.recap().copy(loaded = false))
     }
 
     @Test fun playbookLoading() = loading("playbook/loading") {
@@ -335,12 +327,12 @@ class ScreenshotsTest(private val theme: String) {
 
     // ── The records states: rebuilding holds every figure back; a failed read offers Retry ──
 
-    @Test fun hubRebuilding() = rebuilding("hub/rebuilding") {
-        HubBody(ScreenshotData.analytics(AnalyticsTab.Money, showMore = false).copy(records = RecordsStatus.REBUILDING))
+    @Test fun recapRebuilding() = rebuilding("recap/rebuilding") {
+        RecapBody(ScreenshotData.recap().copy(records = RecordsStatus.REBUILDING))
     }
 
-    @Test fun hubFailed() = failed("hub/failed", R.string.analytics_could_not_load_what) {
-        HubBody(AnalyticsUiState(failed = true))
+    @Test fun recapFailed() = failed("recap/failed", R.string.analytics_could_not_load_what) {
+        RecapBody(AnalyticsUiState(failed = true))
     }
 
     @Test fun playbookRebuilding() = rebuilding("playbook/rebuilding") {
@@ -447,25 +439,27 @@ class ScreenshotsTest(private val theme: String) {
             }
         }
 
-    private fun hub(path: String, tab: AnalyticsTab, showMore: Boolean, row: String) = render(path, assertion = {
-        text(string(tab.labelRes)).assertExists()
+    private fun recap(path: String, state: AnalyticsUiState, row: String) = render(path, assertion = {
+        text(string(R.string.analytics_screen_title)).assertExists()
         text(row).assertExists()
-    }) { HubBody(ScreenshotData.analytics(tab, showMore)) }
+    }) { RecapBody(state) }
 
-    /** The hub in the app shell's frame. */
+    /** Recap in the app shell's frame. */
     @Composable
-    private fun HubBody(state: AnalyticsUiState) =
+    private fun RecapBody(state: AnalyticsUiState) =
         MainScaffold(selectedTab = TopLevel.ANALYTICS, onSelectTab = {}) { modifier ->
             Box(modifier) {
                 AnalyticsContent(
-                    uiState = state,
-                    offersFeed = { ScreenshotData.offersFeed },
-                    onOpenSettings = {}, onExportCsv = {}, onOpenSession = {}, onStep = {}, onOpenPicker = {},
-                    onSelectGranularity = {}, onSelectTab = {}, onOpenNoSession = {},
-                    onSelectFilter = {}, onShowAllOffers = {}, onToggleShowMore = {}, onRetry = {},
+                    uiState = state, onOpenSettings = {}, onStep = {}, onSelectMeasure = {}, onOpenDay = {},
+                    onOpenShift = { _, _ -> }, onOpenNoSession = {}, onRetry = {},
                 )
             }
         }
+
+    private fun day(path: String) = render(path, assertion = {
+        text(Formats.money(ScreenshotData.day.economics.grossEarnings)).assertExists()
+        text(Formats.money(ScreenshotData.day.shifts.first().earned)).assertExists()
+    }) { DayContent(ScreenshotData.day, onBack = {}, onOpenSession = {}, onRetry = {}) }
 
     private fun playbook(path: String, state: PlaybookUiState, row: String) = render(path, assertion = {
         text(string(R.string.playbook_screen_title)).assertExists()

@@ -10,9 +10,8 @@ import java.time.temporal.TemporalAdjusters
  * stage 1 of #969).
  *
  * This generalizes [AnalyticsPeriod] — which is four fixed *labels* pinned to "the current one" —
- * into a pageable `[start, endExclusive)` range of **local calendar days**, so the hub's `‹ ›` pager
- * can walk backwards ("last week", "the week before that") and the range picker can commit an
- * arbitrary span. [AnalyticsPeriod] stays exactly as it was for the home glance (its four rolling
+ * into a pageable `[start, endExclusive)` range of **local calendar days**, so Recap's `‹ ›` pager
+ * can walk backwards ("last week", "the week before that"). [AnalyticsPeriod] stays exactly as it was for the home glance (its four rolling
  * labels are the right model there) and maps onto this one via [AnalyticsPeriod.toWindow], which is
  * how the two keep ONE definition of the boundary rules (Principle 5).
  *
@@ -59,52 +58,33 @@ data class AnalyticsWindow(
 }
 
 /**
- * The pager's **step size** — what `‹`/`›` move by, and what the chips row offers.
- *
- * [CUSTOM] is a range the driver committed from the picker; it has no natural period, so it steps by
- * its own length. [LIFETIME] does not step at all.
+ * The span a window covers. Recap pages [WEEK]s only; [DAY] is the day page's one-day window and the home glance's
+ * today, [MONTH] the home glance's month (and the Month screen's), [LIFETIME] the home glance's and Plan's all time.
  */
 enum class WindowGranularity {
     DAY,
     WEEK,
     MONTH,
     LIFETIME,
-    CUSTOM,
 }
 
 /**
- * The **persisted** selection behind [AnalyticsWindow] (#970).
- *
- * Deliberately NOT the resolved window: a [Relative] selection stores the granularity plus an integer
- * offset from *the current* window (`0` = this week/today/this month), so reopening the hub tomorrow
- * resolves to the new current window instead of restoring a stale absolute range. Only a driver-picked
- * [Custom] range is absolute — that one IS a specific span and must come back verbatim.
+ * The **persisted** Recap week (#970, week-only since #1515): [weekOffset] weeks from the week containing today (`0` =
+ * this week, `-1` = last week). Relative on purpose, so reopening Recap next week resolves to the new current week
+ * instead of restoring a stale absolute range. A future week is never stored.
  */
-sealed interface AnalyticsWindowSelection {
-
-    /** [offset] `0` = the current window, `-1` = one step back, `+1` would be the future (never stored). */
-    data class Relative(val granularity: WindowGranularity, val offset: Int) : AnalyticsWindowSelection {
-        init {
-            require(granularity != WindowGranularity.CUSTOM) { "CUSTOM is not a relative granularity" }
-        }
+data class AnalyticsWindowSelection(val weekOffset: Int) {
+    init {
+        require(weekOffset <= 0) { "a future week is never selected" }
     }
 
-    /** A driver-committed absolute span, both ends inclusive as the calendar renders them. */
-    data class Custom(val startDate: LocalDate, val endDateInclusive: LocalDate) : AnalyticsWindowSelection {
-        init {
-            require(!endDateInclusive.isBefore(startDate)) { "range must not run backwards" }
-        }
-    }
-
-    /** Resolve to a concrete window against [today] (the device's current local date). */
-    fun resolve(today: LocalDate): AnalyticsWindow = when (this) {
-        is Relative -> AnalyticsWindows.step(AnalyticsWindows.current(granularity, today), offset)
-        is Custom -> AnalyticsWindows.custom(startDate, endDateInclusive)
-    }
+    /** Resolve to the concrete Monday week against [today] (the device's current local date). */
+    fun resolve(today: LocalDate): AnalyticsWindow =
+        AnalyticsWindows.step(AnalyticsWindows.current(WindowGranularity.WEEK, today), weekOffset)
 
     companion object {
-        /** The hub's opening window when nothing is persisted — the current pay week (#315 default). */
-        val DEFAULT: AnalyticsWindowSelection = Relative(WindowGranularity.WEEK, 0)
+        /** Recap's opening week when nothing is persisted: the current pay week. */
+        val DEFAULT: AnalyticsWindowSelection = AnalyticsWindowSelection(0)
     }
 }
 
@@ -125,9 +105,6 @@ object AnalyticsWindows {
     /**
      * The **current** window at [granularity], anchored on [today]: the day containing today, the
      * Monday-week containing today, the calendar month containing today, or all time.
-     *
-     * [WindowGranularity.CUSTOM] has no "current" form (a custom range is always an explicit span) —
-     * it is rejected; the picker calls [custom] instead.
      */
     fun current(granularity: WindowGranularity, today: LocalDate): AnalyticsWindow = when (granularity) {
         WindowGranularity.LIFETIME -> LIFETIME
@@ -140,21 +117,13 @@ object AnalyticsWindows {
             val first = today.withDayOfMonth(1)
             AnalyticsWindow(granularity, first, first.plusMonths(1))
         }
-        WindowGranularity.CUSTOM -> error("CUSTOM has no current window — use custom(start, endInclusive)")
-    }
-
-    /** A driver-committed range, both ends inclusive (the calendar's own vocabulary). */
-    fun custom(startDate: LocalDate, endDateInclusive: LocalDate): AnalyticsWindow {
-        require(!endDateInclusive.isBefore(startDate)) { "range must not run backwards" }
-        return AnalyticsWindow(WindowGranularity.CUSTOM, startDate, endDateInclusive.plusDays(1))
     }
 
     /**
      * Move [window] by [steps] of its own granularity (negative = back, the `‹` arrow).
      *
      * DAY/WEEK/MONTH step by their calendar unit — so a month step is a *calendar* month (Mar 1 back
-     * one is Feb 1–29, not "31 days ago"). CUSTOM steps by its own day length, keeping the span size.
-     * LIFETIME does not move (it is the whole record; there is nothing to step to).
+     * one is Feb 1–29, not "31 days ago"). LIFETIME does not move (it is the whole record; there is nothing to step to).
      */
     fun step(window: AnalyticsWindow, steps: Int): AnalyticsWindow {
         if (steps == 0 || window.isLifetime) return window
@@ -164,11 +133,6 @@ object AnalyticsWindows {
             WindowGranularity.DAY -> current(WindowGranularity.DAY, start.plusDays(n))
             WindowGranularity.WEEK -> current(WindowGranularity.WEEK, start.plusWeeks(n))
             WindowGranularity.MONTH -> current(WindowGranularity.MONTH, start.plusMonths(n))
-            WindowGranularity.CUSTOM -> {
-                val length = window.lengthDays ?: return window
-                val newStart = start.plusDays(length * n)
-                custom(newStart, newStart.plusDays(length - 1))
-            }
             WindowGranularity.LIFETIME -> window
         }
     }
@@ -190,8 +154,7 @@ object AnalyticsWindows {
      * Whether `›` is live. False at (and beyond) the window containing [today] — the brief's
      * "forward disabled at the current window" — and always false for LIFETIME.
      *
-     * The predicate is on the END bound, so it holds for a CUSTOM span too: a range that already
-     * reaches today (or the future) cannot page forward into empty calendar.
+     * The predicate is on the END bound: a window that already reaches today cannot page forward.
      */
     fun canStepForward(window: AnalyticsWindow, today: LocalDate): Boolean {
         val end = window.endDateExclusive ?: return false

@@ -41,6 +41,18 @@ subprojects {
         // #1450: tests read the generated rule assets off disk without declaring them as inputs, so a
         // cached result could pass a rule change its tests never ran against.
         outputs.doNotCacheIf("reads the generated rule assets as an undeclared input") { true }
+        // #1515: on CI, one line per test class as it starts, so a hung test is the class with a START line and no
+        // JUnit XML (the job timeout kills the task before it writes one; run 41345313754 hung ~48 min unnamed).
+        if (System.getenv("CI") == "true") {
+            addTestListener(object : org.gradle.api.tasks.testing.TestListener {
+                override fun beforeSuite(suite: org.gradle.api.tasks.testing.TestDescriptor) {
+                    suite.className?.let { logger.lifecycle("$path START $it") }
+                }
+                override fun afterSuite(suite: org.gradle.api.tasks.testing.TestDescriptor, result: org.gradle.api.tasks.testing.TestResult) = Unit
+                override fun beforeTest(testDescriptor: org.gradle.api.tasks.testing.TestDescriptor) = Unit
+                override fun afterTest(testDescriptor: org.gradle.api.tasks.testing.TestDescriptor, result: org.gradle.api.tasks.testing.TestResult) = Unit
+            })
+        }
         // #1093: print the assertion MESSAGE of a failing test, not just its class + line — the
         // PR CI log was the only test runner available (host memory-starved) and it showed
         // `AssertionError at …Test.kt:282` and nothing else, which is undebuggable at a distance.

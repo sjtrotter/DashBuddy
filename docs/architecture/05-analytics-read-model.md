@@ -180,11 +180,11 @@ all-pay gross = reported-total authoritative + the unattributed review flag; Mon
 via `PeriodBounds`, midnight-reactive) as Room-invalidation Flows to the home glance and the
 Analytics hub (#315). **Arbitrary review windows (#970, redesign epic #969 stage 1).** Every period aggregate has a second
 overload taking an `AnalyticsWindow` (`:domain` — granularity + half-open span of local **dates**:
-`DAY`/`WEEK`/`MONTH`/`LIFETIME`/`CUSTOM`), so the hub's pager/range picker read any span while the
+`DAY`/`WEEK`/`MONTH`/`LIFETIME`; `CUSTOM` and the range picker went with #1515), so the pager reads its span while the
 rolling four-value `AnalyticsPeriod` stays as it was for the home glance. **One rule set, two
 callers:** `PeriodBounds.of(window, zone)` is the primitive; `PeriodBounds.of(period, now, zone)`
 delegates via `AnalyticsPeriod.toWindow(today)`, so the paths can't disagree about where Monday
-starts. Each repository pair (`periodEconomics`/`decisionEconomics`/`timeEconomics`/`dailyEarnings`/
+starts. Each repository pair (`periodEconomics`/`dailyEarnings`/
 `noSessionDeliveries`/`orphanOfferGroups`) shares ONE private `…In(boundsFlow)` core: the enum
 overload feeds it the midnight-re-anchoring `periodBoundariesFlow`, the window overload a fixed
 `flowOf(bounds)` — a paged window must NOT silently become a different span while on screen (the hub
@@ -192,9 +192,9 @@ re-resolves which window is current from `currentLocalDateFlow` one level up). `
 (pure `:domain`) owns the calendar math: Monday weeks, month stepping, the **previous-equivalent
 window** the recap delta compares against (null for Lifetime — the UI states that rather than
 inventing a comparison), and the `canStepForward` fence. The selection persists in **app prefs** as
-`AnalyticsWindowSelection` — `Relative(granularity, offset)` for pageable granularities (so
-reopening next week still means *this* week), `Custom(start, endInclusive)` for a driver-drawn range
-— decoded fail-closed to the current pay week. **Net per day:** `DailyEarnings.net` rides beside
+`AnalyticsWindowSelection(weekOffset)` — Recap's week, relative so reopening next week still means *this* week
+(#1515 dropped the Day / Month / Lifetime / custom selections) — decoded fail-closed to the current pay week (any
+stored granularity but `WEEK` decodes to it). **Net per day:** `DailyEarnings.net` rides beside
 `gross` (`sessionGrossRows`/`noSessionDailyRows`: same frozen columns + cash + the session's
 unattributed remainder), so Σ per-day net equals `PeriodEconomics.netProfit` by construction; EMPTY
 axis for a single-day, unbounded, or over-`MAX_DAY_AXIS` (400-day) window.
@@ -278,6 +278,42 @@ detail have no toggle. Home's week comparison is a neutral prior total (or the d
 message); the hub suppresses up/down/flat percentages while a window reaches today, retaining
 completed-window percentages. Latest dashes remain the newest ten across all periods, with reported
 totals and separately shown cash. All read-model queries, interpretation owners and tickers are unchanged.
+
+**Recap is the week (#1515, PR A).** The hub's Money / Offers / Time sections, its tab switch, the More numbers
+toggle and footer, the granularity chips and the range picker are gone; Recap pages Monday weeks only. Top to
+bottom: the period bar ("‹ This week, Oct 26 to Nov 1 ›", `RecapPeriodBar`), the Earned / Est. Profit switch
+(`RecapMeasure`, in the ViewModel's `SavedStateHandle`), the week's total from `periodEconomics` with the
+comparison under it and "Cash included" (`PeriodEconomics.cash`: Σ cash tips of the shifts' and the no-shift
+deliveries, the `deliveryTotals` `cash` already folded into gross and net, so nothing adds it again), the chart by
+day, two tiles (Est. Profit/hr and /mi against `previous(week)`, the em dash for a missing figure), Shifts to check,
+the no-shift delivery assign row, and the rows Shifts and Spending. **Day marks** are pure `:domain`
+(`analytics.recap.RecapDays`): one rule owns "has this day happened" (`DayTime.of(date, today)`: before today
+HAPPENED, today IN_PROGRESS, after AHEAD), and each day gets one `DayMark`: NO_SHIFT, EARNED_ZERO (pay seen,
+summing to $0), NO_PAY_FOUND (shifts, none with an effective total, a priced delivery or a cash tip), AHEAD, or
+NORMAL; only NORMAL and EARNED_ZERO draw a value, and a no-shift delivery counts as pay for its completion day. The
+input is `RecapRepository.days(window)` over the new `RecapDao.shiftDayRows` (per shift: the same gross and net
+expressions as `sessionGrossRows`, now shared as `SessionReportSql.SESSION_GROSS_SQL` / `SESSION_NET_SQL`, plus
+`SESSION_PAY_SEEN_SQL`) and `noSessionDailyRows`; Home's `dailyEarnings` is unchanged. **The comparison**
+(`RecapComparisons.of`) covers the completed days, the leading HAPPENED run (Monday to yesterday in the current
+week, all seven in a past week, none on its Monday), against the same weekdays of the week before, printed as
+"Mon to Sat $527.40" / "Last week, Mon to Sat $550.00", no percent, and is null while a shift runs. "A shift is
+running" has one owner, `:app` `state.liveSessions(AppState)` / `shiftRunning`, which the bubble's switcher
+reads too. **Shifts to check** fan out `ShiftChecksRepository.checks(sessionIds)` over the week's ended shifts
+(`ShiftChecks.of` stays the only judge); a tap opens the shift page at the first offer with no delivery
+(`row=offer:<seq>`), else at its top. **A day** with one shift opens that shift; two or more open the day page
+(`Screen.Day`, `analytics/day/{date}`, ISO date; `DayViewModel` reads `periodEconomics` over the one-day window and
+`RecapRepository.shifts`); a day with no shift is not clickable. **States:** no shift ever recorded
+(`RecapDao.anyShift`) shows one line; a week with no shift shows "No shifts Oct 19 to 25", last week's total and
+the Spending row; REBUILDING keeps only the period bar. Spending is `LedgerRepository.spending(window)`
+(`LedgerDao.spendingBetween`: expenses plus fuel by `occurredAt`, voids excluded), a separate ledger.
+**Reads retired with the sections:** `decisionEconomics`, `estimateVsReality`, `offers` / `offerCount`,
+`timeEconomics`, `gapStats`, `payMixParts` and the public `platformEconomics` (each with its DAO query and row
+type: `offerOutcomes`, `offerScoreOutcomes`, `acceptedOfferRealizedRows`, `offersBetween`, `offerCount`,
+`deliveryTimeTotals`, `pickupDwellTotals`, `completionEvents`, `acceptEvents`, `sessionEndBounds`,
+`payMixTotals`), and their pure models (`DecisionEconomics`, `EstimateVsReality`, `OfferListing` / `OfferFilter`,
+`TimeEconomics`, `WorkGaps` / `GapStats`, `HourComposition`, `NetPerHourPair`, `PayMix` / `PayMixParts`).
+`periodEconomics(…, platform)` keeps its grouped by-platform fold. The paragraphs below on stages 2, 3 and 7 are
+the history of what those sections were.
 
 **Home = "Today" (#977, stage 4).** A forward-looking glance over the SAME read-model, **zero** new
 queries: **So far today** is the rolling `TODAY` `periodEconomics` (replacing the old four-window
@@ -759,9 +795,10 @@ two operations, SET (finite, 0 to 2 000, `SessionMilesRule.isValidSet`) and REST
   `MileageReconciliation`, and the #1108 allocation budgets, which allocate measured legs and keep the machine span.
   A SET below the shift's Σ `realizedMiles` is accepted with a warning in the dialog; the deliveries keep their
   own miles and net.
-- **Time tab.** When a window's delivery miles exceed its effective shift miles by more than 0.05
-  (`TimeEconomics.deliveryMilesExceedTotal`), the empty-miles card withholds its delivery / no-delivery split and
-  states why in its empty-row place, instead of clamping the remainder to 0.
+- **Time tab (retired by #1515).** When a window's delivery miles exceeded its effective shift miles by more than
+  0.05 (`TimeEconomics.deliveryMilesExceedTotal`), the empty-miles card withheld its delivery / no-delivery split
+  and said why. The card, `TimeEconomics` and its read went with the Time section; Miles and taxes (#1514) owns the
+  split next.
 - **CSV.** `sessions.csv` miles is the effective figure, with a final `miles_source` column (`tracked` or
   `corrected`); the odometer columns stay the machine anchors.
 
@@ -1193,17 +1230,15 @@ throws leaves it set: the supervised retry finds the version already current and
 partial records stay held back until the retry's drain completes. A process death mid-refold loses the flag (it is
 in memory); the next launch reads the partial records as UPDATING until the drain catches up.
 
-The hub and the Playbook carry the status in their UI state (`records`) beside `failed`. While REBUILDING they hold
-back totals, comparisons and correction actions: the hub keeps only its pager, an open correction dialog is hidden,
-and the range picker (opened from the pager) shows no earning dots and no dot legend (`PickerMarks.HELD_BACK`). One
-rule decides both, `AnalyticsUiState.figuresShown()` (loaded, not failed, not REBUILDING), and the hub joins the
-status after its reads' `catch`, so a failed read keeps the real status rather than a default UP_TO_DATE.
+Recap, its day page and the Playbook carry the status in their UI state (`records`) beside `failed`. While
+REBUILDING they hold back totals, comparisons and correction actions: Recap keeps only its period bar and an open
+assign dialog is hidden. One rule decides both, `AnalyticsUiState.figuresShown()` (loaded, not failed, not
+REBUILDING), and Recap joins the status after its reads' `catch`, so a failed read keeps the real status rather than a default UP_TO_DATE.
 UPDATING shows one "Updating records" line under the title bar, but only once the status has stayed UPDATING for
 `RECORDS_UPDATING_LINE_DELAY_MS` (2 s, a `LaunchedEffect` delay on the composition's clock), so an ordinary fold's
 brief lag never shifts the content; the status itself stays immediate. A failed read (a `catch` on the state flow,
 with `CancellationException` rethrown) shows the designsystem `CouldNotLoad` pattern, whose Retry bumps a
-ViewModel-owned attempt counter that re-subscribes every read: the hub state, the Offers feed and the picker's month
-read (`PickerMonthDays.failed`, shown as `CouldNotLoad` in the dot legend's place). Before the first read they show
+ViewModel-owned attempt counter that re-subscribes every read. Before the first read they show
 `AppPlaceholder` blocks shaped like their figures (pulsing on the frame clock, still under reduced motion, read once
 as "Loading"); Home keeps `LoadingBody`.
 

@@ -42,6 +42,7 @@ import cloud.trotter.log.gig.domain.state.OfferIntent
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.focusedPlatform
 import cloud.trotter.log.gig.core.state.StateManagerV2
+import cloud.trotter.log.gig.state.liveSessions as liveSessionsOf
 import cloud.trotter.log.gig.domain.pipeline.Observation
 import cloud.trotter.log.gig.feature.bubble.cards.BubbleCards
 import cloud.trotter.log.gig.feature.bubble.cards.CardStackAssembler
@@ -56,7 +57,6 @@ import cloud.trotter.log.gig.feature.bubble.hud.ShiftTarget
 import cloud.trotter.log.gig.feature.bubble.session.BubbleSessionPresentation
 import cloud.trotter.log.gig.feature.bubble.session.BubbleSessionResolver
 import cloud.trotter.log.gig.feature.bubble.session.CardSource
-import cloud.trotter.log.gig.feature.bubble.session.LiveSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -174,15 +174,7 @@ class BubbleViewModel @Inject constructor(
 
     /** Every platform currently dashing (`PlatformRegion.session != null`), oldest dash first. */
     private val liveSessions = stateManager.state
-        .map { state ->
-            state.regions.platforms
-                .mapNotNull { (platform, region) ->
-                    region.session?.let { LiveSession(platform, it.sessionId, it.startedAt) }
-                }
-                // Deterministic order: the switcher chip row and the merged interleave must not
-                // reshuffle on an unrelated state emission (Map iteration order is not a contract).
-                .sortedWith(compareBy({ it.startedAt }, { it.platform.name }))
-        }
+        .map { liveSessionsOf(it) }
         .distinctUntilChanged()
 
     /**

@@ -3,46 +3,30 @@ package cloud.trotter.log.gig.core.data.analytics
 import cloud.trotter.log.gig.domain.analytics.ExpenseRecord
 import cloud.trotter.log.gig.domain.analytics.FuelRecord
 import cloud.trotter.log.gig.core.database.analytics.AnalyticsDao
-import cloud.trotter.log.gig.core.database.analytics.DeliveryTimeTotalsRow
 import cloud.trotter.log.gig.core.database.analytics.HudShiftDao
 import cloud.trotter.log.gig.core.database.analytics.OfferRecordEntity
-import cloud.trotter.log.gig.core.database.analytics.OutcomeCountRow
-import cloud.trotter.log.gig.core.database.analytics.PickupDwellTotalsRow
-import cloud.trotter.log.gig.core.database.analytics.ScoreOutcomeRow
-import cloud.trotter.log.gig.core.database.analytics.SessionEventRow
-import cloud.trotter.log.gig.core.database.analytics.SessionTotalsRow
 import cloud.trotter.log.gig.core.database.event.AppEventDao
 import cloud.trotter.log.gig.domain.analytics.AnalyticsPeriod
 import cloud.trotter.log.gig.domain.analytics.AnalyticsWindow
 import cloud.trotter.log.gig.domain.analytics.DailyEarnings
-import cloud.trotter.log.gig.domain.analytics.DecisionEconomics
 import cloud.trotter.log.gig.domain.analytics.DeliveryNet
 import cloud.trotter.log.gig.domain.analytics.DeliveryRecord
 import cloud.trotter.log.gig.domain.analytics.EarningsHeatmap
 import cloud.trotter.log.gig.domain.analytics.EarningsHeatmapCalculator
-import cloud.trotter.log.gig.domain.analytics.EstimateVsReality
-import cloud.trotter.log.gig.domain.analytics.GapStats
 import cloud.trotter.log.gig.domain.analytics.GrossSources
 import cloud.trotter.log.gig.domain.analytics.HourOfWeekSampler
 import cloud.trotter.log.gig.domain.analytics.HourOfWeekSamples
-import cloud.trotter.log.gig.domain.analytics.OfferFilter
-import cloud.trotter.log.gig.domain.analytics.OfferListing
-import cloud.trotter.log.gig.domain.analytics.OfferOutcome
 import cloud.trotter.log.gig.domain.analytics.OrphanOfferCandidate
 import cloud.trotter.log.gig.domain.analytics.OrphanOfferGroup
-import cloud.trotter.log.gig.domain.analytics.PayMixParts
 import cloud.trotter.log.gig.domain.analytics.Percentiles
 import cloud.trotter.log.gig.domain.analytics.PeriodEconomics
 import cloud.trotter.log.gig.domain.analytics.PeriodTotals
 import cloud.trotter.log.gig.domain.analytics.PlatformEconomics
 import cloud.trotter.log.gig.domain.analytics.SessionDetail
-import cloud.trotter.log.gig.domain.analytics.SessionEvent
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
 import cloud.trotter.log.gig.domain.analytics.SessionReportRule
 import cloud.trotter.log.gig.domain.analytics.SessionSpan
 import cloud.trotter.log.gig.domain.analytics.StoreReportCard
-import cloud.trotter.log.gig.domain.analytics.TimeEconomics
-import cloud.trotter.log.gig.domain.analytics.WorkGaps
 import cloud.trotter.log.gig.domain.evaluation.NetProfit
 import cloud.trotter.log.gig.domain.model.event.AppEventCodec
 import cloud.trotter.log.gig.domain.model.event.AppEventType
@@ -176,28 +160,6 @@ class AnalyticsRepository @Inject constructor(
             }
         }
 
-    /**
-     * The window's economics **split per platform** (#973 / brief §4.2 — "DoorDash vs Uber Eats rows")
-     * — one entry per platform that has any record in the window, highest gross first.
-     *
-     * Platform-agnostic by construction (Principle 8): the platforms come from the DATA (each grouped
-     * row's `platform` wire, resolved through the [Platform] registry's [Platform.fromWire]), never
-     * from a hardcoded list or a `when` over platform literals — so a third platform's rows appear on
-     * the card the day its ruleset lands, with no edit here. A wire the registry does not know is
-     * dropped rather than guessed at (fail-null beats fail-wrong).
-     *
-     * Reads the four by-platform DAO aggregates ONCE for the whole split, instead of re-querying per
-     * platform, and folds each through the same [assemble] as every other economics read.
-     */
-    fun platformEconomics(
-        window: AnalyticsWindow,
-        zone: ZoneId = ZoneId.systemDefault(),
-    ): Flow<List<PlatformEconomics>> = platformEconomicsIn(flowOf(PeriodBounds.of(window, zone)))
-
-    /** Rolling-period variant of [platformEconomics] (the home-glance enum path). */
-    fun platformEconomics(period: AnalyticsPeriod): Flow<List<PlatformEconomics>> =
-        platformEconomicsIn(periodBoundariesFlow(period))
-
     private fun platformEconomicsIn(bounds: Flow<PeriodBounds.Bounds>): Flow<List<PlatformEconomics>> =
         bounds.flatMapLatest { (start, end) ->
             combine(
@@ -250,40 +212,6 @@ class AnalyticsRepository @Inject constructor(
                         ),
                     )
                 }.sortedByDescending { it.economics.grossEarnings }
-            }
-        }
-
-    /**
-     * The window's **pay-mix parts** (#973 / brief §7.6) — Σ base pay / Σ platform tip / Σ cash tip
-     * plus the itemization-coverage counters, over the same session-anchored delivery population as
-     * [periodEconomics].
-     *
-     * Deliberately returns the PARTS, not a finished mix: gross has one owner ([assemble]), and the
-     * pure `:domain` [cloud.trotter.log.gig.domain.analytics.PayMix.of] composes the two at the read
-     * site as `PayMix.of(economics, parts)`, keeping the exact decomposition in one testable place.
-     */
-    fun payMixParts(
-        window: AnalyticsWindow,
-        zone: ZoneId = ZoneId.systemDefault(),
-    ): Flow<PayMixParts> = payMixPartsIn(flowOf(PeriodBounds.of(window, zone)))
-
-    /** Rolling-period variant of [payMixParts] (the home-glance enum path). */
-    fun payMixParts(period: AnalyticsPeriod): Flow<PayMixParts> =
-        payMixPartsIn(periodBoundariesFlow(period))
-
-    private fun payMixPartsIn(bounds: Flow<PeriodBounds.Bounds>): Flow<PayMixParts> =
-        bounds.flatMapLatest { (start, end) ->
-            analyticsDao.payMixTotals(start, end).map { row ->
-                PayMixParts(
-                    basePay = row.basePay,
-                    tips = row.tips,
-                    cashTips = row.cashTips,
-                    deliveries = row.deliveries,
-                    deliveriesWithBreakdown = row.withBreakdown,
-                    offerEstimatePay = row.offerEstimatePay,
-                    offerEstimateDeliveries = row.offerEstimateDeliveries,
-                    paylessDeliveries = row.paylessDeliveries,
-                )
             }
         }
 
@@ -392,218 +320,6 @@ class AnalyticsRepository @Inject constructor(
                 zone = zoneProvider(),
             )
         }.flowOn(Dispatchers.Default).distinctUntilChanged()
-
-    /**
-     * Offer-decision economics for [period] (#315 H3, Decisions tab): the funnel counts, the frozen
-     * est-net of declines ("value of saying no"), and the per-outcome avg score / est-$/hr. Two
-     * session-anchored DAO aggregates ([AnalyticsDao.offerOutcomes] + [AnalyticsDao.offerScoreOutcomes])
-     * combined and folded into one [DecisionEconomics].
-     *
-     * **Session-anchored (#655):** an offer belongs to the period its *session* started in (same
-     * bucketing owner as every other aggregate — the DAO join), with a null-session fallback on the
-     * offer's own `decidedAt`. Re-emits on new offer records (Room invalidation) and at
-     * midnight/week/month rollover (the boundary flow).
-     *
-     * **Estimates are frozen decision-time snapshots, not realized net** — the numbers say what the
-     * verdict projected at decision time; an economy edit never re-costs them (Principle 5). No new
-     * PII surface: counts + frozen economics only.
-     */
-    fun decisionEconomics(period: AnalyticsPeriod): Flow<DecisionEconomics> =
-        decisionEconomicsIn(periodBoundariesFlow(period))
-
-    /** Arbitrary-window variant of [decisionEconomics] (#970 §7.1) — the pager's offer aggregates. */
-    fun decisionEconomics(
-        window: AnalyticsWindow,
-        zone: ZoneId = ZoneId.systemDefault(),
-    ): Flow<DecisionEconomics> = decisionEconomicsIn(flowOf(PeriodBounds.of(window, zone)))
-
-    private fun decisionEconomicsIn(bounds: Flow<PeriodBounds.Bounds>): Flow<DecisionEconomics> =
-        bounds.flatMapLatest { (start, end) ->
-            combine(
-                analyticsDao.offerOutcomes(start, end),
-                analyticsDao.offerScoreOutcomes(start, end),
-            ) { outcomes, scores -> assembleDecisions(outcomes, scores) }
-        }
-
-    /**
-     * **Estimate vs reality** for [period] (#975 / brief §7.5, the Offers tab): what the evaluator
-     * projected per hour for the offers the driver ACCEPTED, next to what those jobs actually paid
-     * per realized hour, plus the plain ratio between them.
-     *
-     * The DAO read supplies every accepted, non-orphan-resolved offer of the window joined to its
-     * linked job's deliveries; the pure [EstimateVsReality.of] owns the entire population policy —
-     * the #936 null-estimate exclusion, the unlinked/unmeasured exclusions, and the stacked-job rule
-     * (a job claimed by two accepted offers is dropped from BOTH rather than counted twice: fail-null
-     * beats fail-wrong, #745). Its KDoc is the authoritative statement of that population.
-     *
-     * The estimate side is FROZEN decision-time economics and the realized side is the FROZEN
-     * per-delivery net — nothing is recomputed here, and there is no economy dependency (Principle 5).
-     * No new PII surface: rates and counts only.
-     */
-    fun estimateVsReality(period: AnalyticsPeriod): Flow<EstimateVsReality> =
-        estimateVsRealityIn(periodBoundariesFlow(period))
-
-    /** Arbitrary-window variant of [estimateVsReality] (#970 §7.1) — the pager's est-vs-realized read. */
-    fun estimateVsReality(
-        window: AnalyticsWindow,
-        zone: ZoneId = ZoneId.systemDefault(),
-    ): Flow<EstimateVsReality> = estimateVsRealityIn(flowOf(PeriodBounds.of(window, zone)))
-
-    private fun estimateVsRealityIn(bounds: Flow<PeriodBounds.Bounds>): Flow<EstimateVsReality> =
-        bounds.flatMapLatest { (start, end) ->
-            analyticsDao
-                .acceptedOfferRealizedRows(start, end, OfferOutcome.ACCEPTED.eventTypeName)
-                .map { rows -> EstimateVsReality.of(rows.map { it.toSample() }) }
-        }
-
-    /**
-     * One page of the window's offers, newest decision first (#975 / brief §7.4) — the Offers tab's
-     * list. [filter] `ALL` drops the outcome predicate entirely; the other three pin it to that
-     * outcome's stored `AppEventType` name (the [OfferOutcome] mapping is the one owner, Principle 8).
-     *
-     * **Paging is a bounded `LIMIT`/`OFFSET` window, not a Paging3 source.** The hub's list is a
-     * review surface over one selected period — tens to low hundreds of rows — so a growing page size
-     * over one Room-invalidation Flow keeps the whole list reactive (a projector commit re-emits the
-     * visible page) with none of the paging-library machinery. [limit] is CLAMPED to [MAX_OFFER_PAGE]
-     * here rather than trusted from the caller: an unbounded page is a bounded-ingestion hazard the
-     * read side is responsible for, not the UI (Principle 6).
-     *
-     * **Window-only, deliberately.** Every other aggregate here ships an [AnalyticsPeriod] overload
-     * beside its window one because the home glance reads the rolling enum; a per-offer LIST has no
-     * glance consumer and never will (it is a review surface), so a second overload would be dead
-     * code with a `…In(bounds)` core to keep alive. The private core stays, so adding the enum path
-     * later is one delegating line.
-     *
-     * Privacy: `offer_records` carries no customer fields; merchant names are driver-owned display
-     * data (Principle 6).
-     */
-    fun offers(
-        window: AnalyticsWindow,
-        filter: OfferFilter = OfferFilter.ALL,
-        limit: Int = DEFAULT_OFFER_PAGE,
-        offset: Int = 0,
-        zone: ZoneId = ZoneId.systemDefault(),
-    ): Flow<List<OfferListing>> =
-        offersIn(flowOf(PeriodBounds.of(window, zone)), filter, limit, offset)
-
-    private fun offersIn(
-        bounds: Flow<PeriodBounds.Bounds>,
-        filter: OfferFilter,
-        limit: Int,
-        offset: Int,
-    ): Flow<List<OfferListing>> =
-        bounds.flatMapLatest { (start, end) ->
-            analyticsDao
-                .offersBetween(
-                    start = start,
-                    end = end,
-                    outcome = filter.outcome?.eventTypeName,
-                    limit = limit.coerceIn(0, MAX_OFFER_PAGE),
-                    offset = offset.coerceAtLeast(0),
-                )
-                .map { rows -> rows.map { it.toDomain() } }
-        }
-
-    /**
-     * How many offers the window holds under [filter] — the `See all N offers` denominator (#975).
-     * The DAO's `WHERE` is byte-identical to [offers]' minus the paging clause, so the footer count
-     * can never describe a different population than the rows it sits under (Principle 5).
-     */
-    fun offerCount(
-        window: AnalyticsWindow,
-        filter: OfferFilter = OfferFilter.ALL,
-        zone: ZoneId = ZoneId.systemDefault(),
-    ): Flow<Int> = offerCountIn(flowOf(PeriodBounds.of(window, zone)), filter)
-
-    private fun offerCountIn(bounds: Flow<PeriodBounds.Bounds>, filter: OfferFilter): Flow<Int> =
-        bounds.flatMapLatest { (start, end) ->
-            analyticsDao.offerCount(start, end, filter.outcome?.eventTypeName)
-        }
-
-    /**
-     * Time / mileage economics for [period] (#315 H4, Time tab): the online-time split, the deadhead
-     * (unattributed-miles) ratio, the on-time rate + avg deadline margin, and the session odometer
-     * miles behind the mileage-&-tax card. Combines the session totals ([AnalyticsDao.sessionTotals]
-     * — online time, miles, dash count) with the delivery-time aggregate
-     * ([AnalyticsDao.deliveryTimeTotals] — realized minutes/miles, on-time counts) into one
-     * [TimeEconomics].
-     *
-     * **Session-anchored (#655):** both aggregates derive from the sessions that *started* in the
-     * period (the delivery join has the same WHERE shape as [deliveryTotals], with a null-session
-     * `completedAt` fallback), so the split and its remainder are internally consistent by
-     * construction. Re-emits on new records (Room invalidation) and at midnight/week/month rollover
-     * (the boundary flow).
-     *
-     * **All figures are MEASURED, not estimated** — Σ session durations, Σ per-delivery partition
-     * deltas, Σ odometer deltas — with **no economy dependency** (Principle 5: this surface reports
-     * measured time/miles, never a re-costed value). Deadline coverage is explicit: the on-time rate
-     * covers only deliveries that carried a captured deadline. No new PII surface (counts + measured
-     * time/miles only).
-     */
-    fun timeEconomics(period: AnalyticsPeriod): Flow<TimeEconomics> =
-        timeEconomicsIn(periodBoundariesFlow(period))
-
-    /** Arbitrary-window variant of [timeEconomics] (#970 §7.1) — the pager's time/deadhead stats. */
-    fun timeEconomics(
-        window: AnalyticsWindow,
-        zone: ZoneId = ZoneId.systemDefault(),
-    ): Flow<TimeEconomics> = timeEconomicsIn(flowOf(PeriodBounds.of(window, zone)))
-
-    private fun timeEconomicsIn(bounds: Flow<PeriodBounds.Bounds>): Flow<TimeEconomics> =
-        bounds.flatMapLatest { (start, end) ->
-            combine(
-                analyticsDao.sessionTotals(start, end),
-                analyticsDao.deliveryTimeTotals(start, end),
-                analyticsDao.pickupDwellTotals(start, end),
-            ) { s, d, p -> assembleTime(s, d, p) }
-        }
-
-    /**
-     * The window's **between-job gaps** (#983 / brief §7.8) — how long the driver sat between finishing
-     * a drop and taking the next offer. Feeds the Time tab's gap card, the "typical online hour"
-     * waiting segment, and the while-working denominator of the net/hr pair.
-     *
-     * **Read-model, not the event log.** The brief points at `app_events`; the two facts the fold needs
-     * are already projected — `delivery_records.completedAt` and `offer_records.decidedAt` ARE those
-     * payloads' own domain timestamps, and each row's PK IS its source event's `sequenceId`. Paging the
-     * log would re-decode JSON for the same two numbers and re-implement the session-anchored windowing
-     * every other aggregate here shares, so the read model is both cheaper and the SSOT (Principle 5).
-     * The #732 ordering contract is honoured either way: the DAO orders by `sequenceId` and the pure
-     * [WorkGaps] fold measures durations from the domain timestamps.
-     *
-     * The pairing/clamping policy lives entirely in the pure `:domain` [WorkGaps] (never across dashes,
-     * the tail is not a gap, bounded by the dash's own effective end) — this repository only supplies
-     * rows. Off-main ([Dispatchers.Default]) like the heatmap folds, since a Lifetime window's row set
-     * is unbounded by construction; [distinctUntilChanged] suppresses re-emitting identical stats on an
-     * unrelated Room invalidation.
-     *
-     * No economy dependency, no new PII surface: timestamps, ids and counts only.
-     */
-    fun gapStats(
-        window: AnalyticsWindow,
-        zone: ZoneId = ZoneId.systemDefault(),
-    ): Flow<GapStats> = gapStatsIn(flowOf(PeriodBounds.of(window, zone)))
-
-    /** Rolling-period variant of [gapStats] (the enum path, for parity with every other aggregate). */
-    fun gapStats(period: AnalyticsPeriod): Flow<GapStats> = gapStatsIn(periodBoundariesFlow(period))
-
-    private fun gapStatsIn(bounds: Flow<PeriodBounds.Bounds>): Flow<GapStats> =
-        bounds.flatMapLatest { (start, end) ->
-            combine(
-                analyticsDao.completionEvents(start, end),
-                analyticsDao.acceptEvents(start, end, OfferOutcome.ACCEPTED.eventTypeName),
-                analyticsDao.sessionEndBounds(start, end),
-            ) { completions, accepts, ends ->
-                WorkGaps.compute(
-                    completions = completions.map { it.toDomain() },
-                    accepts = accepts.map { it.toDomain() },
-                    sessionEndMillis = ends.associate { it.sessionId to it.endMillis },
-                )
-            }
-        }.flowOn(Dispatchers.Default).distinctUntilChanged()
-
-    private fun SessionEventRow.toDomain() =
-        SessionEvent(sessionId = sessionId, sequenceId = sequenceId, timestamp = timestamp)
 
     /**
      * Per-day earnings for [period] (#315 H6, Money-tab chart) — a **complete day axis**: one
@@ -969,84 +685,11 @@ class AnalyticsRepository @Inject constructor(
             noSessionPay = noSessionPay,
             noSessionDeliveries = noSessionDeliveries,
             grossSources = grossSources,
+            cash = cash,
         )
     }
 
-    /**
-     * Fold the two per-outcome DAO row sets into [DecisionEconomics]. Outcomes are matched by
-     * [AppEventType] name (the SSOT the projector writes — no magic-string literals): a missing
-     * outcome group means zero of that outcome (never present when its count is zero). The
-     * acceptance rate stays `null` until at least one offer closed; the average score / est-$/hr
-     * pass the DAO's null-safe `AVG` through verbatim (no fabricated zero).
-     */
-    private fun assembleDecisions(
-        outcomes: List<OutcomeCountRow>,
-        scores: List<ScoreOutcomeRow>,
-    ): DecisionEconomics {
-        fun outcome(type: AppEventType) = outcomes.find { it.outcome == type.name }
-        fun scoreOf(type: AppEventType) = scores.find { it.outcome == type.name }
-
-        val accepted = outcome(AppEventType.OFFER_ACCEPTED)?.count ?: 0
-        val declined = outcome(AppEventType.OFFER_DECLINED)?.count ?: 0
-        val timedOut = outcome(AppEventType.OFFER_TIMEOUT)?.count ?: 0
-        val received = accepted + declined + timedOut
-
-        val acceptedScores = scoreOf(AppEventType.OFFER_ACCEPTED)
-        val declinedScores = scoreOf(AppEventType.OFFER_DECLINED)
-
-        return DecisionEconomics(
-            received = received,
-            accepted = accepted,
-            declined = declined,
-            timedOut = timedOut,
-            acceptanceRate = if (received > 0) accepted.toDouble() / received else null,
-            declinedEstNet = outcome(AppEventType.OFFER_DECLINED)?.estNetSum ?: 0.0,
-            // #975: how many of those declines were priced at all. `SUM(estNetPay)` already skips a
-            // #936 no-verdict offer, so the figure above is honest but silently partial — this is what
-            // lets the surface say "across N of M declines with estimates" rather than imply full
-            // coverage (§9).
-            declinedWithEstimate = outcome(AppEventType.OFFER_DECLINED)?.withEstimate ?: 0,
-            avgScoreAccepted = acceptedScores?.avgScore,
-            avgScoreDeclined = declinedScores?.avgScore,
-            avgEstPerHourAccepted = acceptedScores?.avgEstPerHour,
-            avgEstPerHourDeclined = declinedScores?.avgEstPerHour,
-        )
-    }
-
-    /**
-     * Fold the session + delivery-time DAO rows into [TimeEconomics] (#315 H4). A straight pass-through
-     * of measured aggregates — nullable delivery SUMs stay nullable (no fabricated zero), and every
-     * derived split ([TimeEconomics.unattributedMillis]/[TimeEconomics.unattributedMiles] etc.) is the
-     * DTO's own coerce-≥0 helper, so this repository stores no second copy of that math (Principle 5).
-     */
-    private fun assembleTime(
-        session: SessionTotalsRow,
-        delivery: DeliveryTimeTotalsRow,
-        pickup: PickupDwellTotalsRow,
-    ): TimeEconomics = TimeEconomics(
-        sessions = session.sessions,
-        onlineMillis = session.onlineMillis,
-        deliveryMinutes = delivery.deliveryMinutes,
-        miles = session.miles,
-        deliveryMiles = delivery.deliveryMiles,
-        deliveriesWithDeadline = delivery.withDeadline,
-        onTimeDeliveries = delivery.onTime,
-        avgDeadlineMarginMillis = delivery.avgDeadlineMarginMillis,
-        deliveries = delivery.deliveries,
-        dropoffDwellMillis = delivery.dropoffDwellMillis,
-        dropoffsTimed = delivery.dropoffsTimed,
-        pickups = pickup.pickups,
-        pickupDwellMillis = pickup.dwellMillis,
-        pickupsTimed = pickup.timed,
-    )
-
-    /**
-     * Public only for the two Offers-tab paging constants below (#975) — the hub's list needs the
-     * same page size and the same ceiling the read enforces, and a second copy in the UI is exactly
-     * the kind of hand-maintained duplicate Principle 5 exists to prevent. Everything else here stays
-     * `private`.
-     */
-    companion object {
+    private companion object {
         /** ±window around an orphan's `completedAt` for the #660 piece-2 categorize picker (48 h). */
         private const val CANDIDATE_WINDOW_MILLIS = 48L * 60L * 60L * 1_000L
 
@@ -1056,16 +699,5 @@ class AnalyticsRepository @Inject constructor(
          * variant returns an empty axis and the UI hides the card instead.
          */
         private const val MAX_DAY_AXIS = 400L
-
-        /** Rows the Offers-tab list shows before the driver asks for more (#975 / brief §7.4). */
-        const val DEFAULT_OFFER_PAGE = 10
-
-        /**
-         * Hard ceiling on one offers page (#975). The `See all N offers` footer expands the page in
-         * place, so this is what keeps "N" from becoming an unbounded read on a Lifetime window — a
-         * bounded-ingestion guard owned by the read side, not by the UI (Principle 6). Beyond it the
-         * list shows the most recent [MAX_OFFER_PAGE] and says so.
-         */
-        const val MAX_OFFER_PAGE = 250
     }
 }

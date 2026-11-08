@@ -1,4 +1,4 @@
-status: review
+status: superseded?
 issues: #1024, #1026
 
 - **🆕 NEW — #1024 part 2 (PR #1026) — Money tab: one number, one place.** Open Analytics on a
@@ -13,3 +13,4 @@ issues: #1024, #1026
   - Confirmed: 0/2
   desk: needs field: count the Money cards and labels on a dashed week, including the two-platform view.
   Triage source: first-line blame 2026-08-12 (`69e72d33b`, original README L786).
+  - 2026-11-08 proposal (#1515 PR A): the screen this item exercises (the hub's Money, Offers or Time section, or its More toggle) was removed when Recap became the week; proposed superseded, pending the dev.

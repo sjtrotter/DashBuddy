@@ -6,10 +6,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import cloud.trotter.log.gig.R
 import cloud.trotter.log.gig.core.designsystem.component.AppCard
 import cloud.trotter.log.gig.core.designsystem.theme.AppTheme
+import cloud.trotter.log.gig.domain.analytics.checks.MoneyCheck
 import cloud.trotter.log.gig.domain.analytics.checks.ShiftCheck
+import cloud.trotter.log.gig.domain.format.Formats
 
 /**
  * The shift's checks under the money check, one line each: "1 accepted offer has no delivery recorded" for the
@@ -37,3 +40,27 @@ internal fun shiftCheckLines(checks: List<ShiftCheck>): List<String> = buildList
 
 /** True when [checks] has a line for [ShiftChecksBlock]. */
 internal fun hasCheckLines(checks: List<ShiftCheck>): Boolean = checks.any { it !is ShiftCheck.MoneyDiffers }
+
+/** "DoorDash total $23.50 higher" or "Delivery pay $23.50 higher": the money check's one line. */
+@Composable
+internal fun higherLine(higher: MoneyCheck.Higher, amount: Double, appName: String): String {
+    val label = when (higher) {
+        MoneyCheck.Higher.APP_TOTAL -> stringResource(R.string.shift_page_app_total_format, appName)
+        MoneyCheck.Higher.DELIVERY_PAY -> stringResource(R.string.shift_page_delivery_pay)
+    }
+    return stringResource(R.string.shift_page_higher_format, label, Formats.money(amount))
+}
+
+/** Every line for [checks]: the money line first, then [shiftCheckLines]. Recap's Shifts to check. */
+@Composable
+internal fun allCheckLines(checks: List<ShiftCheck>, appName: String): List<String> =
+    checks.filterIsInstance<ShiftCheck.MoneyDiffers>().map { higherLine(it.higher, it.amount, appName) } +
+        shiftCheckLines(checks)
+
+/**
+ * Where a link to a shift with [checks] lands: the first offer with no delivery, else the first job with more accepts
+ * than deliveries, else the page's top (null), where the money check shows.
+ */
+internal fun landingRowOf(checks: List<ShiftCheck>): String? =
+    checks.firstNotNullOfOrNull { (it as? ShiftCheck.NoDelivery)?.let { check -> offerRowKey(check.offerEventSequenceId) } }
+        ?: checks.firstNotNullOfOrNull { (it as? ShiftCheck.MoreAcceptsThanDeliveries)?.let { check -> jobRowKey(check.jobId) } }

@@ -6,7 +6,7 @@ import cloud.trotter.log.gig.domain.analytics.StoreReportCard
 
 /**
  * Pure, Compose-free logic for the #979 store leaderboard + heatmap Rate/Hours toggle (redesign stage
- * 5/7, brief §6). Compose-free on purpose (the `WindowLabel`/`MoneyWentModel` precedent) — the
+ * 5/7, brief §6). Compose-free on purpose (the `WindowLabel` precedent) — the
  * interesting part is sort/threshold reasoning, and it should be provable without rendering.
  *
  * **Placement (#1024 review F7):** it lived in `ui/main/analytics/` for the Patterns tab, which #1024

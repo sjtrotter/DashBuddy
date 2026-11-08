@@ -187,7 +187,7 @@ class DashboardViewModel @Inject constructor(
      * the caller navigates, by writing the hub's own persisted selection (the DataStore is that
      * selection's single owner, #970 — Home does not get a private copy or a nav argument).
      *
-     * A [AnalyticsWindowSelection.Relative] week at offset 0, not an absolute range: "the week Home
+     * [AnalyticsWindowSelection.DEFAULT], this week at offset 0, not an absolute range: "the week Home
      * was showing" must still mean *this* week if the driver comes back tomorrow.
      *
      * Suspends so the caller can order the write before the navigation and the hub opens already on
@@ -197,7 +197,7 @@ class DashboardViewModel @Inject constructor(
     suspend fun selectWeekRecapWindow() {
         try {
             appPreferencesRepository.setAnalyticsWindow(
-                AnalyticsWindowSelection.Relative(WindowGranularity.WEEK, 0),
+                AnalyticsWindowSelection.DEFAULT,
             )
         } catch (e: CancellationException) {
             throw e // cooperative cancellation — never swallow it

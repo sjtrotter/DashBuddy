@@ -73,8 +73,8 @@ plus the stateless `PlatformSwitcherRow`); no Hilt/`:core:data`/`:core:state`, w
 `BubbleViewModel` (`displayedShift`, `dailyGoal`, `todayEarned`) stay in `:app`, which consumes the moved renderers
 as a legal `:app → :feature` dependency).
 
-The analytics hub (`ui/main/analytics/*`) is a separate
-sibling surface, left for a future extraction.
+Recap (`ui/main/analytics/*`: the week in `AnalyticsScreen` with its sections under `recap/`, the day page under
+`day/`, the shift page) is a separate sibling surface, left for a future extraction.
 
 **Navigation (#1447):** a Material 3 bottom bar with three icon-only tabs, Home,
 Recap and Plan (`TopLevel`, enum names `ANALYTICS` and `PLAYBOOK`; each name is the icon's content description and
@@ -86,8 +86,10 @@ reduced motion, #1524).
 Tab switches, parking (`popBackStack(root, inclusive, saveState)`) and fresh clears start only at a tab root and
 fail closed (WARN) elsewhere, so a parked tab is one lone root and no editor or draft is ever popped; a deep link off
 a root only pushes; Dashboard is never a saved-state key; never call `clearBackStack(String)` (in 2.9.7 it drops
-Dashboard's empty mapping and a later save then stacks another tab over Home). The hub's tab, Offers filter and page
-size live in its `SavedStateHandle`.
+Dashboard's empty mapping and a later save then stacks another tab over Home). Recap's Earned / Est. Profit switch lives in its
+`SavedStateHandle`; its week is the persisted `AnalyticsWindowSelection`. The day page (`Screen.Day`,
+`analytics/day/{date}`) and the shift page (`analytics/session/{sessionId}?row={row}`) are argument routes in
+`graphRoutes` only, pushed over Recap, never deep-link targets.
 
 ## Module catalogue
 
@@ -166,7 +168,8 @@ test host activity is a debug dependency), provide a clock they control, set `ma
 the clock and call `mainClock.advanceTimeBy(2_000)`: one tick of 1,000 ms rounds to whole frames and can miss the
 recomposition (see the `ComposeSmokeTest`s in `:feature:bubble` and `:app`). Motion runs on the Compose frame clock
 (`mainClock.advanceTimeBy`), wall time on `LocalNowProvider`, and a one-time effect persists its mark at start, never
-at its end.
+at its end. `performScrollTo` animates, so on the frozen frame clock it never returns: switch `autoAdvance` on for the
+scroll only (`RecapDayTapTest.row`), or keep the node in view (#1515's first run hung until the job timeout).
 
 `rememberNow()` is a `produceState` loop over `LocalNowProvider.current` that re-reads the clock every `tickMs`
 (default 1,000 ms); `val now by rememberNow()` and derive from it.

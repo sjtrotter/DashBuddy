@@ -1,4 +1,4 @@
-status: active
+status: superseded?
 issues: #315
 
 - **🆕 NEW — Analytics Money tab: earnings-by-day chart + header CSV export icon (#315 H6).**
@@ -16,3 +16,4 @@ issues: #315
   icon doesn't open the CSV export screen. (PR #315-H6.)
   - Confirmed: 1/2 — 2026-07-05: header icon used for the CSV export (opens the same Data & Privacy screen); Week chart viewed.
   Triage source: first-line blame 2026-07-05 (`2c32e53ce`, original README L1948). Recorded first confirmation: 2026-07-05 (existing evidence only).
+  - 2026-11-08 proposal (#1515 PR A): the screen this item exercises (the hub's Money, Offers or Time section, or its More toggle) was removed when Recap became the week; proposed superseded, pending the dev.

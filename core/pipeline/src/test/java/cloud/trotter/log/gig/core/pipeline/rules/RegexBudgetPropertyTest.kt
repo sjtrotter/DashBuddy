@@ -38,8 +38,10 @@ class RegexBudgetPropertyTest {
         /**
          * Wall-clock ceiling for a single match. Linear beats exponential by many orders of
          * magnitude on these inputs, so this is a cushion for a cold JIT on shared CI, not a fit.
+         * 50 ms flaked at 72 ms once CI ran four test JVMs on four cores (#1547's `--parallel`); a
+         * backtracking engine on the 4 001-char pumping input takes seconds or never returns.
          */
-        const val BUDGET_MS = 50L
+        const val BUDGET_MS = 500L
     }
 
     private val catalog = listOf("(a|aa)+$", "(a?)*b", "(.*a){20}", "(a+)+$", "(\\d+\\s*)+")
