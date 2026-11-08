@@ -11,6 +11,7 @@
     <string name="recap_measure_profit">Est. Profit</string>
     <!-- The comparison under the total: "Mon to Sat $527.40", then "Last week, Mon to Sat $550.00". -->
     <string name="recap_comparison_this_format">%1$s %2$s</string>
+    <string name="recap_comparison_last_none_format">Last week, %1$s, no shifts</string>
     <string name="recap_comparison_last_format">Last week, %1$s %2$s</string>
     <string name="recap_cash_included_format">Cash included %1$s</string>
     <string name="recap_chart_earned_title">Earned by day</string>

@@ -10,7 +10,8 @@ data class RecapComparison(
     val firstDay: DayOfWeek,
     val lastDay: DayOfWeek,
     val thisWeek: Double,
-    val lastWeek: Double,
+    /** Null when the week before had no shift on those days: "no shifts" in words, never $0.00. */
+    val lastWeek: Double?,
 )
 
 /** The pure owner of Recap's comparison rule. */
@@ -30,11 +31,12 @@ object RecapComparisons {
         if (shiftRunning) return null
         val completed = week.takeWhile { it.time == DayTime.HAPPENED }
         if (completed.isEmpty() || lastWeek.size < completed.size) return null
+        val lastSpan = lastWeek.take(completed.size)
         return RecapComparison(
             firstDay = completed.first().date.dayOfWeek,
             lastDay = completed.last().date.dayOfWeek,
             thisWeek = completed.sumOf { it.value(measure) ?: 0.0 },
-            lastWeek = lastWeek.take(completed.size).sumOf { it.value(measure) ?: 0.0 },
+            lastWeek = if (lastSpan.all { it.mark == DayMark.NO_SHIFT }) null else lastSpan.sumOf { it.value(measure) ?: 0.0 },
         )
     }
 }

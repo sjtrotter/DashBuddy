@@ -59,7 +59,8 @@ private fun ComparisonLines(comparison: RecapComparison) {
         color = AppTheme.colors.text,
     )
     Text(
-        stringResource(R.string.recap_comparison_last_format, span, Formats.money(comparison.lastWeek)),
+        comparison.lastWeek?.let { stringResource(R.string.recap_comparison_last_format, span, Formats.money(it)) }
+            ?: stringResource(R.string.recap_comparison_last_none_format, span),
         style = MaterialTheme.typography.bodyMedium,
         color = AppTheme.colors.text2,
     )

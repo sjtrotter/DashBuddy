@@ -7,6 +7,7 @@
     <string name="recap_measure_earned">Gagné</string>
     <string name="recap_measure_profit">Bénéfice est.</string>
     <string name="recap_comparison_this_format">%1$s %2$s</string>
+    <string name="recap_comparison_last_none_format">Semaine dernière, %1$s, aucun service</string>
     <string name="recap_comparison_last_format">Semaine dernière, %1$s %2$s</string>
     <string name="recap_cash_included_format">Espèces incluses %1$s</string>
     <string name="recap_chart_earned_title">Gagné par jour</string>

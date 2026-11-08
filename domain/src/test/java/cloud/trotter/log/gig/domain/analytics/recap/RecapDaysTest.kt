@@ -117,7 +117,7 @@ class RecapDaysTest {
         assertEquals(DayOfWeek.MONDAY, comparison.firstDay)
         assertEquals(DayOfWeek.SUNDAY, comparison.lastDay)
         assertEquals(70.0, comparison.thisWeek, 1e-9)
-        assertEquals(0.0, comparison.lastWeek, 1e-9)
+        assertNull("a week before with no shift is no shifts, not \$0.00", comparison.lastWeek)
     }
 
     @Test fun `the comparison waits while a shift runs`() {

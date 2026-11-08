@@ -7,6 +7,7 @@
     <string name="recap_measure_earned">Ganado</string>
     <string name="recap_measure_profit">Ganancia est.</string>
     <string name="recap_comparison_this_format">%1$s %2$s</string>
+    <string name="recap_comparison_last_none_format">Semana pasada, %1$s, sin turnos</string>
     <string name="recap_comparison_last_format">Semana pasada, %1$s %2$s</string>
     <string name="recap_cash_included_format">Efectivo incluido %1$s</string>
     <string name="recap_chart_earned_title">Ganado por día</string>

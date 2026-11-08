@@ -175,7 +175,7 @@ class AnalyticsViewModelTest {
         runWithViewModel { viewModel ->
             val comparison = requireNotNull(viewModel.uiState.value.comparison)
             assertEquals(140.0, comparison.thisWeek, 1e-9)
-            assertEquals(70.0, comparison.lastWeek, 1e-9)
+            assertEquals(70.0, requireNotNull(comparison.lastWeek), 1e-9)
             viewModel.setMeasure(RecapMeasure.PROFIT)
             testScheduler.runCurrent()
             assertEquals(84.0, viewModel.uiState.value.comparison!!.thisWeek, 1e-9)
