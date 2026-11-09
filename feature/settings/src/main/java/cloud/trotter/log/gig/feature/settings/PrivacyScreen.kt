@@ -95,6 +95,7 @@ internal val PRIVACY_SECTIONS: List<Pair<Int, Int>> = listOf(
     R.string.privacy_customers_title to R.string.privacy_customers_body,
     R.string.privacy_saves_title to R.string.privacy_saves_body,
     R.string.privacy_leaves_title to R.string.privacy_leaves_body,
+    R.string.privacy_storage_title to R.string.privacy_storage_body,
     R.string.privacy_screenshots_title to R.string.privacy_screenshots_body,
     R.string.privacy_backup_title to R.string.privacy_backup_body,
     R.string.privacy_retention_title to R.string.privacy_retention_body,

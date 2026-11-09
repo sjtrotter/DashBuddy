@@ -31,18 +31,41 @@ def fail(message: str) -> None:
     sys.exit(1)
 
 
+ESCAPES = {"n": "\n", "'": "'", '"': '"', "@": "@", "?": "?", "\\": "\\"}
+FORMAT_TOKEN = re.compile(r"%(\d+\$)?[-#+ 0,(]*\d*(\.\d+)?[a-zA-Z]")
+
+
 def android_text(raw: str) -> str:
-    """An Android string resource's text as the app shows it (the XML parser has already decoded entities)."""
-    text = raw.strip()
-    if len(text) >= 2 and text[0] == text[-1] == '"':
-        text = text[1:-1]
-    text = re.sub(r"\\n", "\n", text)
-    return re.sub(r"\\(['\"@?\\])", r"\1", text)
+    """An Android string resource's text as the app shows it (the XML parser has already decoded entities).
+
+    Android collapses whitespace runs outside double quotes, drops unescaped double quotes and decodes backslash
+    escapes. Only the escapes in [ESCAPES] are supported; any other fails the build rather than render differently.
+    """
+    raw = raw.strip()
+    out, quoted, i = [], False, 0
+    while i < len(raw):
+        char = raw[i]
+        if char == "\\":
+            if i + 1 >= len(raw) or raw[i + 1] not in ESCAPES:
+                fail(f"unsupported escape in: {raw.strip()[:60]}")
+            out.append(ESCAPES[raw[i + 1]])
+            i += 2
+            continue
+        if char == '"':
+            quoted = not quoted
+        elif char.isspace() and not quoted:
+            if not out or out[-1] != " ":
+                out.append(" ")
+        else:
+            out.append(char)
+        i += 1
+    return "".join(out)
 
 
 def read_strings(path: Path) -> list[tuple[str, str]]:
+    """Every string resource's name and raw text; [android_text] decodes only the ones the site uses."""
     root = ET.parse(path).getroot()
-    return [(el.get("name"), android_text("".join(el.itertext()))) for el in root.iter("string")]
+    return [(el.get("name"), "".join(el.itertext())) for el in root.iter("string")]
 
 
 def privacy_sections(strings: list[tuple[str, str]]) -> list[tuple[str, str]]:
@@ -55,7 +78,7 @@ def privacy_sections(strings: list[tuple[str, str]]) -> list[tuple[str, str]]:
         body = title[: -len("_title")] + "_body"
         if body not in by_name:
             fail(f"{title} has no {body}")
-        sections.append((by_name[title], by_name[body]))
+        sections.append((no_format(android_text(by_name[title])), android_text(by_name[body])))
     return sections
 
 
@@ -74,9 +97,14 @@ def effective_date(root: Path, rev: int) -> str:
     return match.group(1)
 
 
-def paragraphs(text: str) -> str:
-    if re.search(r"%(\d+\$)?[sd]", text):
+def no_format(text: str) -> str:
+    if FORMAT_TOKEN.search(text):
         fail(f"a privacy string takes a format argument, which the web page cannot fill: {text[:60]}")
+    return text
+
+
+def paragraphs(text: str) -> str:
+    no_format(text)
     return "\n".join(f"<p>{html.escape(p)}</p>" for p in text.split("\n") if p.strip())
 
 
@@ -92,6 +120,8 @@ def fill(template: str, values: dict[str, str]) -> str:
         return values[key]
 
     filled = re.sub(r"\{\{([a-z_]+)\}\}", sub, template)
+    if "{{" in filled or "}}" in filled:
+        fail("template has a marker the generator does not understand")
     unused = set(values) - set(re.findall(r"\{\{([a-z_]+)\}\}", template))
     if unused:
         fail(f"template does not use {sorted(unused)}")
@@ -109,8 +139,8 @@ def main() -> None:
             fail(f"missing string {name}")
 
     sections = "\n".join(section(t, paragraphs(b)) for t, b in privacy_sections(strings))
-    test_build_title = html.escape(by_name[TEST_BUILD_TITLE])
-    test_build_body = "\n".join(paragraphs(by_name[n]) for n in TEST_BUILD_LINES)
+    test_build_title = html.escape(no_format(android_text(by_name[TEST_BUILD_TITLE])))
+    test_build_body = "\n".join(paragraphs(android_text(by_name[n])) for n in TEST_BUILD_LINES)
 
     rev = revision(root)
     site = root / SITE
