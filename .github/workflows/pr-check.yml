@@ -226,6 +226,11 @@ jobs:
             gate.log
           retention-days: 7
 
+      - name: Play listing checker tests
+        # #1416 — stdlib only, a second or two; every run, drafts included.
+        if: ${{ !cancelled() && env.RUN_GATE == 'true' }}
+        run: python3 -m unittest tools/play/test_play_listing.py
+
       # #1463 — light and dark pictures of the key screens, recorded only and never compared. They
       # render after the gate's results are uploaded and write their JUnit XML to their own
       # directory (build/test-results/screenshots), so the gate's results are never replaced. They

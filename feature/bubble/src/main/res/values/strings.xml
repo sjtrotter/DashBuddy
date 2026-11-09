@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+    <!-- #1416: the caption above the bubble in the Play listing's pictures (PlayListingScreenshotsTest); the
+         listing is English only. -->
+    <string name="play_shot_bubble_caption" translatable="false">The gig.log bubble, sample data</string>
+
     <!-- bubble/ChatViews.kt -->
 
     <!-- bubble/hud/HudHead.kt -->

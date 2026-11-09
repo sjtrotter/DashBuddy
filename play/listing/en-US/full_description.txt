@@ -1,0 +1,38 @@
+gig.log is for delivery drivers. It reads the delivery app on your phone while you work and turns what it shows into numbers about your own work: what an offer pays per mile and per hour, an estimate of what is left after vehicle costs, and where your time and miles went.
+
+OFFERS
+When an offer appears, gig.log shows its pay, miles and minutes, an estimated profit after vehicle costs, and pay per mile and per hour. It can read the offer aloud. You set your own limits (minimum profit, maximum miles, maximum items) and gig.log names any limit an offer crosses. When an offer shows no distance, gig.log says so and does not estimate a profit.
+
+ACCEPT AND DECLINE
+The offer notification and the bubble's offer card have Accept and Decline buttons. When you press one, gig.log finds the same button in the DoorDash app, checks it, and taps it. gig.log never accepts or declines an offer on its own.
+
+THE BUBBLE
+A bubble over the delivery app shows your shift: earnings so far, your daily goal, miles, time online and the current pickup or drop-off. From the bubble you can log a cash tip, an expense, a fill-up or an odometer reading.
+
+SHIFTS AND MILES
+gig.log notices when a shift starts, pauses and ends. It records miles with GPS only while a shift is running. You can end a shift by hand and correct its miles.
+
+VEHICLES AND COSTS
+Keep a list of vehicles, from a gas car to a bicycle. Each type starts with its own cost estimates, which you can change.
+
+HISTORY
+The app has three tabs. Home shows today and this week so far. Recap goes back through past weeks, shift by shift and delivery by delivery. Plan shows when and where you earn most, and builds a weekly plan from your best hours.
+
+EXPORT
+Save your deliveries, shifts, expenses, fill-ups and an estimated IRS mileage deduction as spreadsheet files, to a folder you choose. The files include store names and leave out customer names and addresses.
+
+PRIVACY
+- gig.log has no account, no ads and no analytics. Every calculation runs on your phone.
+- gig.log drops the banking, DasherDirect and payment screens it recognizes, without saving them. It recognizes known layouts on English screens, so it can miss one; the privacy policy says what it can miss.
+- Customer names and addresses are saved in your history as a code, not the text itself.
+- Data leaves your phone only for features you turn on: the daily gas-price lookup (Android's address lookup gets a location rounded to about 11 km, and the U.S. Energy Information Administration gets your region) and the vehicle lookup in setup. Spoken offers go to your phone's text-to-speech engine, which may use the network. Android backup and your own exports can also copy your history.
+- Screenshots of offers, receipts and shift summaries are off by default. A screenshot is the whole display, so it can show customer details and other apps, and it is saved to your gallery, which may sync it.
+- The privacy policy lists everything the app reads, keeps and sends: https://gig.log.trotter.cloud/privacy/
+
+ACCESSIBILITY SERVICE
+gig.log uses Android's accessibility service to read the text, numbers and buttons on the delivery app's screen. That is how it sees an offer or a delivery. It reads only the DoorDash and Uber Driver apps. It taps a button in those apps only when you press Accept or Decline in gig.log, or after you allow a specific automatic tap in Settings. You can turn the service off in Android's accessibility settings.
+
+SUPPORTED APPS
+DoorDash (the Dasher app) is supported for offers, pickups, drop-offs, shifts and receipts. Uber Driver support is partial: on Android 14 and later this version of gig.log cannot read Uber's offer pop-up, and its Accept and Decline buttons do not work in Uber. It reads Uber's other screens, such as trips and shift summaries. The delivery app must be in English.
+
+gig.log is early software from one developer. gig.log is not affiliated with, endorsed by or sponsored by DoorDash or Uber.

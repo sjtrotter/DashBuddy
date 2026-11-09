@@ -27,7 +27,7 @@ data class ConsentReceipt(
  * to master). [URL] is PRIVACY.md on master.
  */
 object PrivacyDisclosure {
-    const val REVISION: Int = 17
+    const val REVISION: Int = 18
 
     /** PRIVACY.md at a git ref (a commit sha or `master`). */
     fun urlAt(ref: String): String = "https://github.com/sjtrotter/gig.log/blob/$ref/PRIVACY.md"

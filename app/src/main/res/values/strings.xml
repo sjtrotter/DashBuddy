@@ -1,5 +1,9 @@
 <resources>
     <string name="app_name" translatable="false">gig.log</string>
+    <!-- #1416: the Play listing's feature graphic (PlayListingScreenshotsTest); the listing is English only. -->
+    <string name="play_feature_graphic_tagline" translatable="false">Offer pay, miles and profit for delivery drivers</string>
+    <!-- #1416: the feature graphic's wordmark. Not app_name, which a debug build overrides; no build overrides this. -->
+    <string name="play_wordmark" translatable="false">gig.log</string>
     <!-- #170: the Play build's service description. Android reads it from the service config XML, so it cannot be
          formatted: it is the one static copy that names the apps gig.log reads. AccessibilityDescriptionGuardTest
          checks every build's copy names exactly the bound platforms (Platform.boundPlatforms) and carries the Screen
@@ -44,7 +48,7 @@
 
     <string name="perm_title_location">Location</string>
     <string name="perm_pitch_location">Counts your miles during a shift.</string>
-    <string name="perm_body_location">gig.log counts miles with GPS only while a shift is on. Choose Precise; approximate location counts no miles. Gas-price lookups use your last location each time they run (daily when automatic, in setup for each fuel type while automatic updates are on, and when you refresh it or choose Use auto price in the bubble), even off shift, and Android\'s address lookup may send it to its provider to find your region.</string>
+    <string name="perm_body_location">gig.log counts miles with GPS only while a shift is on. Choose Precise; approximate location counts no miles. Gas-price lookups use your last location each time they run (daily when automatic, in setup for each fuel type while automatic updates are on, and when you refresh it or choose Use auto price in the bubble), even off shift, and Android\'s address lookup may send it, rounded to about 11 km, to its provider to find your region.</string>
     <string name="perm_without_location">gig.log can\'t track your driven miles.</string>
     <string name="perm_action_location">Allow location</string>
 
