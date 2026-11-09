@@ -183,7 +183,8 @@ user: restoring history and vehicle/economy settings on a new phone is expected.
 store (`datastore/rule_capability_grants.preferences_pb`) and the Screen-events consent/receipt store
 (`datastore/consent_event_receipt.preferences_pb`) are excluded, so a new device re-asks consent. Debug logs
 (`app.log`, `shareable.log`, `shareable.log.1`, and rotations under `logs/`), captures, census files, census
-credentials and the developer-settings store (census upload/share toggles + the server policy cache) are also excluded from both backup and transfer (`app/src/main/res/xml/backup_rules.xml`,
+credentials, the developer-settings store (census upload/share toggles + the server policy cache) and the recognition
+notice store (`datastore/recognition_notices.preferences_pb`, #1560) are also excluded from both backup and transfer (`app/src/main/res/xml/backup_rules.xml`,
 `data_extraction_rules.xml`; #1236, dev ruling 2026-10-07).
 
 ## 7. Where your data lives, and how long
@@ -260,6 +261,10 @@ identity export. Vehicle/default resets preserve these learned preferences.
   `EventReceiptConsentDataSource` keeps the decision and receipt only in `consent_event_receipt`. It best-effort deletes the old
   Screen-events keys from `app_prefs` without copying them: restored app preferences must never restore consent.
   An empty dedicated store re-asks once after this upgrade as well as on a new phone.
+- `recognition_notices` (a DataStore file, #1560) holds, per delivery app, the time gig.log last showed a "screens
+  not read" notice, so it shows at most one a day. No screen text, no customer or store data. It stays on the phone
+  and is excluded from backup and device transfer. Which screens broke is kept in memory only and is gone after a
+  restart.
 - Your daily profit goal, in dollars, if you set one. Stays on the device.
 - One mark of the day you first met that goal and the goal amount it was met at (`goal_met_mark` in `app_state`, e.g.
   `2026-10-18|7900`), so the HUD's goal animation plays once per day and goal. Stays on the device, backed up with the
@@ -297,6 +302,9 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r14 (2026-11-09)** — §7: a `recognition_notices` file on the device holds when gig.log last showed each
+  delivery app's "screens not read" notice; §6: it is excluded from backup and device transfer (#1560). Which
+  screens broke is kept in memory only. The in-app privacy page does not list every exclusion and is unchanged.
 - **r13 (2026-11-06)** — §7: shift miles you correct are stored on the device beside the tracked figure, and
   the CSV export marks which one each shift uses (#1535). The in-app privacy page lists them with what you enter.
 - **r12 (2026-10-31)** — §5: Accept and Decline are not asked for until gig.log can tap them by itself;

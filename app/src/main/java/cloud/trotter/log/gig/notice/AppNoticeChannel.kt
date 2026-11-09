@@ -58,6 +58,9 @@ object AppNoticeChannel {
      *
      * @param requestCode distinguishes this notice's [PendingIntent] from its siblings' —
      *   conventionally the issue number that introduced it.
+     * @param tag posts under `(tag, notificationId)` so one id can carry one notice per key (#1560:
+     *   the recognition notice, one per platform wire). Null posts with the id alone, as every other
+     *   notice does.
      */
     fun postNotice(
         context: Context,
@@ -66,6 +69,7 @@ object AppNoticeChannel {
         requestCode: Int,
         title: String,
         text: String,
+        tag: String? = null,
     ) {
         ensure(context, notificationManager)
 
@@ -87,7 +91,19 @@ object AppNoticeChannel {
             .setAutoCancel(true)
             .build()
 
-        notificationManager.notify(notificationId, notification)
+        if (tag == null) {
+            notificationManager.notify(notificationId, notification)
+        } else {
+            notificationManager.notify(tag, notificationId, notification)
+        }
+    }
+
+    /**
+     * Withdraw a notice posted with [tag] (#1560). Not wrapped, for the same reason as [postNotice]:
+     * the notifier owns its fail-open policy.
+     */
+    fun cancelNotice(notificationManager: NotificationManager, tag: String, notificationId: Int) {
+        notificationManager.cancel(tag, notificationId)
     }
 
     /**
@@ -100,7 +116,10 @@ object AppNoticeChannel {
         /** #938 — the once-per-install non-English locale notice. */
         const val LOCALE_BOUNDARY = 102
 
-        /** #937 — recognition has stopped understanding a platform's screens. */
+        /**
+         * #937 / #1560 — recognition has stopped understanding or reading a platform's screens. One id,
+         * one notice per platform: each posts tagged by its platform wire.
+         */
         const val RECOGNITION_HEALTH = 103
 
         // 104 is the weekly-plan recap (`WeeklyPlanChannel.NOTIFICATION_ID`) — a different

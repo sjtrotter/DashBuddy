@@ -1,9 +1,13 @@
 package cloud.trotter.log.gig.replay
 
 import cloud.trotter.log.gig.core.database.analytics.AnalyticsProjectionStateEntity
+import cloud.trotter.log.gig.core.pipeline.ParseRotTracker
+import cloud.trotter.log.gig.core.pipeline.RotEdge
 import cloud.trotter.log.gig.core.state.AppEffect
 import cloud.trotter.log.gig.domain.action.ActionTrigger
 import cloud.trotter.log.gig.domain.action.RuleAction
+import cloud.trotter.log.gig.domain.pipeline.Observation
+import cloud.trotter.log.gig.domain.pipeline.UNKNOWN_TARGET
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.TaskPhase
 import cloud.trotter.log.gig.test.util.DoorDashFullDashJourney
@@ -70,6 +74,18 @@ class DoorDashFullDashE2ETest {
             // ── Recognition: every journey input reached the state machine ───────────────────────
             val gated = replay.inputs.filterNot { it.forwarded }
             assertTrue("every composed frame is recognized and forwarded: $gated\n$trace", gated.isEmpty())
+
+            // ── #1560: a time-ordered real dash opens no parse-rot incident ──────────────────────
+            // The inputs are pre-FrameGate; the tracker's one-occurrence-per-visit rule makes repeats harmless.
+            val rot = ParseRotTracker()
+            val screens = replay.inputs.mapNotNull { input ->
+                (input.observation as? Observation.Screen)?.let { input.atMs to it }
+            }
+            val rotEdges = screens.flatMap { (atMs, obs) ->
+                rot.record(Platform.DoorDash.wire, atMs, obs.ruleId.takeUnless { obs.target == UNKNOWN_TARGET }, obs.parseShortfalls)
+            } + rot.sweep(Platform.DoorDash.wire, (screens.maxOfOrNull { it.first } ?: 0L) + 60_000L)
+            val rotTripped = rotEdges.filterIsInstance<RotEdge.Tripped>().map { it.cause.ruleId }
+            assertTrue("a real dash tripped parse rot (name the rules, do not tune constants): $rotTripped", rotTripped.isEmpty())
 
             // ── Durable: the read model ─────────────────────────────────────────────────────────
             val deliveries = replay.await { replay.db.analyticsDao().deliveriesBetween(0, Long.MAX_VALUE) }

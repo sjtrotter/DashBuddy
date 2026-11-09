@@ -76,4 +76,10 @@ object DataStoreModule {
     @RuleCapabilityPreferences
     fun provideRuleCapabilityDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
         PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("rule_capability_grants") }
+
+    @Provides
+    @Singleton
+    @RecognitionNoticePreferences
+    fun provideRecognitionNoticeDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
+        PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("recognition_notices") }
 }

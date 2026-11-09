@@ -52,6 +52,16 @@ data class ParseShortfall(
      * may be mandatory). Sorted, by name (ours).
      */
     val refusedBindings: List<String> = emptyList(),
+    /** #1560: the matched branch's shape (`CompiledBranch.shape`); null when it declares none. */
+    val shape: String? = null,
+    /**
+     * #1560: true when the branch's own `Skip` validator discarded it after the shortfall was measured.
+     *
+     * A frame whose winning rule parsed healthy can still carry a parse-trigger shortfall from a
+     * skipped branch of the same rule; only the winning branch's own shortfall says the winner
+     * rotted. The parse-rot tracker reads this to tell the two apart.
+     */
+    val branchSkipped: Boolean = false,
 ) {
     /** Either PARSE trigger fired (the #1036 pair) — the census/WARN keyed by rule id. */
     val hasParseTrigger: Boolean get() = allNullFieldCount > 0 || nullRequiredFields.isNotEmpty()

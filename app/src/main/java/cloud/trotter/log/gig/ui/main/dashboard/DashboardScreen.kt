@@ -60,8 +60,9 @@ import cloud.trotter.log.gig.feature.dashboard.R as DashboardR
 /**
  * Home — **"Today"** since #977, decluttered to **four blocks** by #1024 section D.
  *
- * Top to bottom: the "Home" title bar with the Settings gear (#1447) · header (date · live clock ·
- * status pill) · **Today** (kept, the four supporting figures, a hairline, then today's plan strip) ·
+ * Top to bottom: the "Home" title bar with the Settings gear (#1447) · a recognition card per open
+ * incident, at the top, in every state but loading (#1560) · header (date · live clock · status pill) ·
+ * **Today** (kept, the four supporting figures, a hairline, then today's plan strip) ·
  * **This week** (net + delta + sparkline + `Recap →`, the weekly-plan pointer, the review items —
  * three hairline rows of one card) · the Ratings row · the shared **"How these numbers work"**
  * footer, the screen's single disclosure affordance (#1024 rule 2). Analytics and Playbook are the
@@ -230,6 +231,13 @@ internal fun DashboardBody(
                 .padding(16.dp)
                 .fillMaxSize()
         ) {
+            // #1560: one card per open recognition incident, before the `when` so it shows in every
+            // non-loading state — the permission gate included (a denied notification permission opens
+            // the gate, and the card is then the only place the dasher hears about the incident).
+            uiState.recognitionIncidents.forEach { incident ->
+                RecognitionIncidentCard(incident)
+                Spacer(modifier = Modifier.height(12.dp))
+            }
             when {
                 // CASE 1: Permissions Missing (The Gate). #1457: the button forgets every
                 // deferral and reopens the sheet at its first pending step (the disclosure card,

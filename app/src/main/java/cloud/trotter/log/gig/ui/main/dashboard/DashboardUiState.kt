@@ -7,6 +7,7 @@ import cloud.trotter.log.gig.domain.analytics.EarningsHeatmap
 import cloud.trotter.log.gig.domain.analytics.OrphanOfferGroup
 import cloud.trotter.log.gig.domain.analytics.PeriodEconomics
 import cloud.trotter.log.gig.domain.analytics.SavedWeeklyPlan
+import cloud.trotter.log.gig.domain.pipeline.RecognitionIncident
 import java.time.LocalDate
 
 /**
@@ -95,4 +96,10 @@ data class DashboardUiState(
     val sessionStartedAt: Long? = null,
     /** #1533: every live shift the dasher can end by hand, on any platform, in any mode. Empty hides the button. */
     val endShiftCandidates: List<EndShiftCandidate> = emptyList(),
+    /**
+     * #1560: the open recognition incidents from their one owner, one per platform at most. Each carries its
+     * `openedAt` anchor and the card derives the elapsed line from the ticker (Reactive UI rule 2). Shown
+     * whether or not the notice was seen or allowed. Empty hides the card.
+     */
+    val recognitionIncidents: List<RecognitionIncident> = emptyList(),
 )

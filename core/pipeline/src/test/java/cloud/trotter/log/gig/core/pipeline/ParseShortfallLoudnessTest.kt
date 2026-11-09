@@ -10,6 +10,7 @@ import cloud.trotter.log.gig.domain.capture.ReplayMetadataProvider
 import cloud.trotter.log.gig.domain.model.accessibility.UiNode
 import cloud.trotter.log.gig.domain.model.notification.RawNotificationData
 import cloud.trotter.log.gig.domain.pipeline.ParseShortfall
+import cloud.trotter.log.gig.domain.pipeline.UNKNOWN_TARGET
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import org.junit.Assert.assertEquals
@@ -326,6 +327,52 @@ class ParseShortfallLoudnessTest {
             obs.ruleId,
         )
         assertEquals(listOf("doordash.screen.summary_skipped"), obs.parseShortfalls.map { it.ruleId })
+    }
+
+    // ── #1560: the shortfall carries its shape and whether its branch was skipped ──
+
+    /** An offer rule whose id-anchored pay resolves nothing on the summary tree. */
+    private fun offerRule(withSkipValidator: Boolean): String {
+        val validate = if (withSkipValidator) {
+            """, "validate": [ { "assert": "fieldNotNull", "field": "payAmount", "onFail": "skip" } ]"""
+        } else {
+            ""
+        }
+        return """{
+            "id": "doordash.screen.offer_rotted",
+            "priority": 19,
+            "require": { "allTextContains": "Dash summary" },
+            "parse": {
+                "as": "offer",
+                "fields": {
+                    "payAmount": { "find": { "hasIdExact": "offer_pay" }, "read": "text" },
+                    "distance": { "find": { "hasTextStartsWith": "Total" }, "read": "text" },
+                    "deliveryTimeText": { "find": { "hasTextStartsWith": "Total" }, "read": "text" }
+                }
+            }$validate
+        }"""
+    }
+
+    @Test
+    fun `a skipped offer branch reports its shape and that it was skipped, and the frame is UNKNOWN`() {
+        val obs = classifier(screens = screenRuleset(offerRule(withSkipValidator = true))).classify(screenEvent())
+
+        val s = obs.parseShortfalls.single()
+        assertEquals("doordash.screen.offer_rotted", s.ruleId)
+        assertEquals("offer", s.shape)
+        assertTrue(s.branchSkipped)
+        assertEquals(listOf("payAmount"), s.nullRequiredFields)
+        assertEquals(UNKNOWN_TARGET, obs.target)
+    }
+
+    @Test
+    fun `the same offer branch without the validator claims the frame and is not skipped`() {
+        val obs = classifier(screens = screenRuleset(offerRule(withSkipValidator = false))).classify(screenEvent())
+
+        val s = obs.parseShortfalls.single()
+        assertEquals("offer", s.shape)
+        assertFalse(s.branchSkipped)
+        assertEquals("doordash.screen.offer_rotted", obs.ruleId)
     }
 
     // ── The second parse-bearing path ───────────────────────────────────

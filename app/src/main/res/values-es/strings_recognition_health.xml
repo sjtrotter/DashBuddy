@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="recognition_platform_fallback">la app de reparto</string>
+    <string name="recognition_rot_line_format">%2$s de %1$s: %3$s sin leer</string>
+    <string name="recognition_unknown_line_format">Pantallas de %1$s no reconocidas</string>
+    <string name="recognition_incident_title_format">Algunas pantallas de %1$s sin leer</string>
+    <string name="recognition_fields_pair_format">%1$s y %2$s</string>
+    <string name="recognition_still_other">Puede que otras pantallas se sigan registrando.</string>
+    <string name="recognition_shape_offer">Ofertas</string>
+    <string name="recognition_shape_post_task">Recibos de entrega</string>
+    <string name="recognition_shape_session_ended">Resúmenes de turno</string>
+    <string name="recognition_shape_other">Pantallas</string>
+    <string name="recognition_field_pay_amount">pago</string>
+    <string name="recognition_field_distance">distancia</string>
+    <string name="recognition_field_total_pay">pago</string>
+    <string name="recognition_field_total_earnings">total</string>
+    <string name="recognition_field_other">algunos datos</string>
+    <string name="recognition_home_since_format">Desde hace %1$s</string>
+</resources>

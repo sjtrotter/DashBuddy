@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="recognition_platform_fallback">l\'app de livraison</string>
+    <string name="recognition_rot_line_format">%2$s de %1$s, lecture impossible : %3$s</string>
+    <string name="recognition_unknown_line_format">Écrans de %1$s non reconnus</string>
+    <string name="recognition_incident_title_format">Certains écrans de %1$s non lus</string>
+    <string name="recognition_fields_pair_format">%1$s et %2$s</string>
+    <string name="recognition_still_other">D\'autres écrans peuvent encore être enregistrés.</string>
+    <string name="recognition_shape_offer">Offres</string>
+    <string name="recognition_shape_post_task">Reçus de livraison</string>
+    <string name="recognition_shape_session_ended">Résumés de service</string>
+    <string name="recognition_shape_other">Écrans</string>
+    <string name="recognition_field_pay_amount">paiement</string>
+    <string name="recognition_field_distance">distance</string>
+    <string name="recognition_field_total_pay">paiement</string>
+    <string name="recognition_field_total_earnings">total</string>
+    <string name="recognition_field_other">certaines valeurs</string>
+    <string name="recognition_home_since_format">Depuis %1$s</string>
+</resources>

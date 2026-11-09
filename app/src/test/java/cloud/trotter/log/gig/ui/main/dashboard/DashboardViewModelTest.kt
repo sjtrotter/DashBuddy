@@ -24,6 +24,8 @@ import cloud.trotter.log.gig.domain.analytics.WeeklyPlanSchedule
 import cloud.trotter.log.gig.domain.analytics.PeriodTotals
 import cloud.trotter.log.gig.domain.analytics.WindowGranularity
 import cloud.trotter.log.gig.domain.pipeline.Observation
+import cloud.trotter.log.gig.domain.pipeline.RecognitionIncident
+import cloud.trotter.log.gig.domain.pipeline.RecognitionIncidents
 import cloud.trotter.log.gig.domain.state.AppState
 import cloud.trotter.log.gig.domain.state.DestructiveKind
 import cloud.trotter.log.gig.domain.state.PendingDestructive
@@ -40,6 +42,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -96,6 +99,12 @@ class DashboardViewModelTest {
     private val bubbleManager: BubbleManager = mock()
     private val weeklyPlanRepository: WeeklyPlanRepository = mock()
     private val clock: Clock = Clock.fixed(Instant.ofEpochMilli(9_000_000L), ZoneOffset.UTC)
+
+    /** #1560: the incident owner's open incidents, driven by the test. */
+    private val openIncidents = MutableStateFlow<List<RecognitionIncident>>(emptyList())
+    private val recognitionIncidents = object : RecognitionIncidents {
+        override val open: StateFlow<List<RecognitionIncident>> = openIncidents
+    }
 
     /** #1533: each shift's last recorded activity in the read model; unlisted shifts have none. */
     private val lastActivity = mutableMapOf<String, Long>()
@@ -184,6 +193,7 @@ class DashboardViewModelTest {
         bubbleManager = bubbleManager,
         weeklyPlanRepository = weeklyPlanRepository,
         clock = clock,
+        recognitionIncidents = recognitionIncidents,
     )
 
     /**
@@ -403,6 +413,25 @@ class DashboardViewModelTest {
             assertEquals("s1", cmd.sessionId)
             assertEquals(1_200_000L, cmd.endAt)
             assertEquals(9_000_000L, cmd.timestamp)
+        }
+    }
+
+    @Test
+    fun `open recognition incidents reach the state and leave it when they close`() = runTest {
+        whenever(stateManager.state).thenReturn(MutableStateFlow(onlineState()))
+        whenever(appStateRepository.isFirstRun).thenReturn(flowOf(false))
+        val incident = RecognitionIncident(platformWire = Platform.DoorDash.wire, openedAt = 1_000L, screensUnrecognized = true)
+
+        runWithViewModel { viewModel ->
+            assertTrue(viewModel.uiState.value.recognitionIncidents.isEmpty())
+
+            openIncidents.value = listOf(incident)
+            testScheduler.runCurrent()
+            assertEquals(listOf(incident), viewModel.uiState.value.recognitionIncidents)
+
+            openIncidents.value = emptyList()
+            testScheduler.runCurrent()
+            assertTrue(viewModel.uiState.value.recognitionIncidents.isEmpty())
         }
     }
 

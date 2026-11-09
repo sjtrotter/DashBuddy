@@ -11,6 +11,8 @@
     <!-- #1236: re-consent on a new device; the database and app/economy preferences follow the user. -->
     <exclude domain="file" path="datastore/rule_capability_grants.preferences_pb" />
     <exclude domain="file" path="datastore/consent_event_receipt.preferences_pb" />
+    <!-- #1560: this phone's recognition notice timing, never restored onto another phone. -->
+    <exclude domain="file" path="datastore/recognition_notices.preferences_pb" />
     <!-- #1214/#1236: debug logs, including the internal-storage fallback, are device-local. -->
     <exclude domain="external" path="app.log" />
     <exclude domain="external" path="shareable.log" />

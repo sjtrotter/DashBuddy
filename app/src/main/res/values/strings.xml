@@ -462,11 +462,6 @@
     <string name="locale_notice_title">gig.log reads English screens only</string>
     <string name="locale_notice_text">Your phone isn\'t in English. gig.log reads delivery apps only in English, so it may miss most offers and deliveries, and its privacy filters may miss customer details. Switching your phone to English fixes both, though no filter catches everything.</string>
 
-    <!-- #937 recognition-health alarm (App notices channel) -->
-    <string name="recognition_health_notice_title">gig.log can\'t read %1$s right now</string>
-    <string name="recognition_health_notice_text">gig.log didn\'t recognize %2$d%% of recent screens from %1$s. That app probably changed. Offers, pickups and deliveries may go untracked until gig.log updates.</string>
-    <string name="recognition_health_notice_platform_fallback">this delivery app</string>
-
     <!-- #991 speech-engine liveness notice (App notices channel). Device-independent copy: no
          offer, store or customer value ever reaches it.
          The remedy is deliberately FORCE-STOP, not "reopen": the speech handler is a

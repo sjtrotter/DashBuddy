@@ -40,8 +40,9 @@ abstract class AppBindingsModule {
     abstract fun bindLocaleBoundaryReporter(impl: LocaleBoundaryNotifier): LocaleBoundaryReporter
 
     /**
-     * #937: the same inversion for the recognition-health alarm — `:core:pipeline` measures the
-     * UNKNOWN rate and decides, `:app` owns the notification it can't reach.
+     * #937 / #1560: the same inversion for the recognition incident — the incident owner
+     * (`RecognitionHealthMonitor`, `:core:pipeline`) measures the UNKNOWN rate and parse rot and
+     * decides, `:app` owns the notification it can't reach.
      */
     @Binds
     abstract fun bindRecognitionHealthReporter(

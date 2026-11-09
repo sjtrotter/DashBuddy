@@ -43,3 +43,8 @@ annotation class WeeklyPlanPreferences
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class VehiclePreferences
+
+/** #1560 — when each delivery app's recognition notice last posted; device-local, excluded from backup and transfer. */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class RecognitionNoticePreferences

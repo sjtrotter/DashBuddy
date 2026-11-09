@@ -20,6 +20,7 @@ import cloud.trotter.log.gig.domain.analytics.WeeklyPlanSchedule
 import cloud.trotter.log.gig.domain.analytics.PeriodEconomics
 import cloud.trotter.log.gig.domain.analytics.WindowGranularity
 import cloud.trotter.log.gig.domain.pipeline.Observation
+import cloud.trotter.log.gig.domain.pipeline.RecognitionIncidents
 import cloud.trotter.log.gig.domain.state.AppState
 import cloud.trotter.log.gig.domain.state.Flow
 import cloud.trotter.log.gig.domain.state.Mode
@@ -52,7 +53,8 @@ import javax.inject.Inject
  *  - [AppStateRepository.isFirstRun] — the setup gate,
  *  - [AnalyticsRepository] — the rolling `TODAY` economics ("So far today"), the **lifetime**
  *    hour×day heatmap (the plan strip's only source), and the current pay week's economics /
- *    previous week / per-day net / orphan-offer groups (the week block + the review row).
+ *    previous week / per-day net / orphan-offer groups (the week block + the review row),
+ *  - [RecognitionIncidents] — the open recognition incidents (#1560), one card each.
  *
  * **All of it is existing read-model surface** — stage 4 adds no query. The heatmap is the Patterns
  * tab's read; the week trio is the #970 arbitrary-window read the analytics pager already uses.
@@ -76,6 +78,7 @@ class DashboardViewModel @Inject constructor(
     private val bubbleManager: BubbleManager,
     private val weeklyPlanRepository: WeeklyPlanRepository,
     private val clock: Clock,
+    recognitionIncidents: RecognitionIncidents,
 ) : ViewModel() {
 
     /** The device's local date, re-emitting at midnight — the anchor the week + weekday resolve against. */
@@ -151,8 +154,12 @@ class DashboardViewModel @Inject constructor(
         )
     }
 
-    val uiState: StateFlow<DashboardUiState> = combine(homeState, endShiftCandidates) { home, candidates ->
-        home.copy(endShiftCandidates = candidates)
+    val uiState: StateFlow<DashboardUiState> = combine(
+        homeState,
+        endShiftCandidates,
+        recognitionIncidents.open,
+    ) { home, candidates, incidents ->
+        home.copy(endShiftCandidates = candidates, recognitionIncidents = incidents)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardUiState())
 
     /**

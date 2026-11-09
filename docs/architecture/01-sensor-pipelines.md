@@ -996,12 +996,13 @@ thousand) trips when the window is FULL and ≥`UNKNOWN_RATIO_THRESHOLD`=0.80 of
 UNKNOWN. Field-derived: a healthy dash measured near 16 % UNKNOWN on that same stream, so the
 threshold sits 5× clear of the noise while a real anchor break drives the ratio toward 1.0.
 `RecognitionHealthMonitor` owns the edges — package→platform via the registry (an `Unknown` package
-is ignored; no platform literal anywhere), one WARN + one `RecognitionHealthReporter` call per
-platform per **process** (per-*dash* would need `:core:state`, which depends on `:core:pipeline` and
-not the reverse; recovery deliberately does not re-arm). The `:domain` reporter contract is #938's
-inversion reused: the `:app` `RecognitionHealthNotifier` posts on the shared `app_notice_channel`,
-whose id + copy live in one owner (`AppNoticeChannel`, ids 102 locale / 103 recognition / 105 TTS
-health — 104 is the separate `weekly_plan_channel`; `AppNoticeChannel.postNotice` owns the
+is ignored; no platform literal anywhere), one WARN per platform per **process** (per-*dash* would
+need `:core:state`, which depends on `:core:pipeline` and not the reverse), and the UNKNOWN cause joins
+that platform's recognition incident (#1560, below), staying until the process restarts. The `:domain`
+reporter contract is #938's inversion reused: the `:app` `RecognitionHealthNotifier` posts on the
+shared `app_notice_channel`, whose id + copy live in one owner (`AppNoticeChannel`, ids 102 locale /
+103 recognition, posted once per platform and tagged by its wire / 105 TTS health — 104 is the
+separate `weekly_plan_channel`; `AppNoticeChannel.postNotice` owns the
 ensure+PendingIntent+Builder posting shape all three notifiers call).
 
 **#1036 adds the alarm's other half: matched-but-parsed-nothing.** #937 measures rules that stopped
@@ -1025,8 +1026,8 @@ both pipelines count them **post-admission**, beside the #937 sample, so debounc
 disabled platforms never enter the census. `PipelineStats.onParseShortfall(shortfall)` owns both
 grains: a per-rule count rendered as `parseShortfall{<ruleId>=n,…}` on the periodic summary (loudest
 8, `+k more`, rule ids and counts only, P7) and one WARN per rule per process under the
-`ParseHealth` tag. Keyed by rule id ONLY (P8), and inert. Deliberately **no** dasher-visible notice:
-escalation is a later decision. A rule whose one evidence field is legitimately optional trips
+`ParseHealth` tag. Keyed by rule id ONLY (P8), and inert. The dasher-visible notice is #1560's, which
+reads the same shortfalls (next paragraph). A rule whose one evidence field is legitimately optional trips
 benignly (`dash_along_the_way`, `idle_map`, `set_dash_end_time` in the committed corpus; in the field
 (09-06/09-07 pulls, DoorDash 8.95.6) also `waiting_for_offer` — its `earnings_pill` is a CAROUSEL that
 alternates the dash total with a `Weekly goal` render, on which `sessionPay` is correctly null — and
@@ -1082,6 +1083,59 @@ pins that the id-less arm never steals an id-bearing target, mirrors the walk's 
 replays the shifted-ref sequence). Re-anchoring changed the bind's content-pinned capability key (#422), so
 consent is re-asked; the same corpus shows the real
 finds (`delivery_summary_expanded`/`_collapsed`, `waiting_for_offer`, `timeline`).
+
+**#1560: one recognition incident per platform.** A platform update can break recognition two ways —
+its screens stop matching (#937's UNKNOWN rate) or its rules keep matching and read nothing (#1036's
+shortfalls) — and the dasher gets one notice for both. `RecognitionHealthMonitor` is the one incident
+owner per platform; the decisions are pure: `RecognitionHealth` (unchanged), `ParseRotTracker` and
+`RecognitionIncidentBook`. *Causes.* (a) The UNKNOWN cause joins the incident on `RecognitionHealth`'s
+once-per-process trip and leaves only with the process; it does not recover by rate because of a
+**known limit**: `UnknownSuppressor` (`FrameGate.kt:104,134`) admits at most 200 distinct UNKNOWN
+frames per burst and re-arms only after a 30-minute gap, so past the cap no UNKNOWN frame reaches the
+monitor and a rate could not tell recovery from a live break. (b) Parse rot counts **shape-required
+field** rot only (`REQUIRED_FIELDS_BY_SHAPE`: offer, post_task, session_ended); total rot of shapes
+with no required fields waits for #1049 (benign nulls such as the `waiting_for_offer` carousel). Rot is
+counted in **occurrences, one per visit**: a rotted offer that falls to UNKNOWN is admitted once per
+countdown tick, because UNKNOWN frames dedup by content hash, so frames would over-count one card. An
+occurrence of rule R starts on a rot frame whose platform's previous admitted frame ("distinct" =
+post-`FrameGate` admissions, the frames the #937 sample uses) carried no rot of R, and only when R's
+previous occurrence started ≥ 3 000 ms earlier, so flicking back and forth on one card counts once. It
+confirms when no healthy parse of R arrives within the 3 000 ms **pre-render window**; a healthy R
+inside the window discards it as a pre-render frame. `ParseRotTracker` owns that definition. R trips
+after **5** confirmed occurrences with no healthy parse of R between, and **3** healthy parses of R
+clear it. Confirmation needs a later admitted frame of the platform (a dasher parked on the fifth visit
+trips on the next frame). *Skipped branches count:* DoorDash offer branches carry `fieldNotNull … skip`
+(`offer.json5:352,712,717,1048,1053,1058`), so offer rot leaves the frame UNKNOWN and the skipped
+branch's shortfall is the only trace; `Ruleset.matchFirst` now reports each shortfall after the
+validators with its `shape` and `branchSkipped`, and a frame whose winner parsed healthy is healthy for
+that rule even when a skipped branch of the same rule left a shortfall. A **second known limit** follows
+from the same cap: only offer branches carry the skip, so offer rot is the one rot that rides UNKNOWN
+frames, and once a burst has spent the cap, rotted offers do not reach the tracker until the 30-minute
+gap — it fails quiet, never false, and receipt and summary rot (recognized frames) are unaffected. The
+**sibling-rule limit**: a run resets only on the same rule id, so a screen pair split across two rules
+(`delivery_summary_collapsed` / `_expanded`) resets neither from the other — right for a real break, a
+false trip if one of the pair legitimately shows no pay (`ParseRotCorpusQuietTest`, the
+`DoorDashFullDashE2ETest` replay and the field checklist are the check). *The incident.* One per
+platform, the union of its open causes; it opens on the first cause and closes when the last clears.
+Within one frame the trip edges apply before the clear edges, then closure is decided, so a frame that
+trips one rule and clears another keeps the incident. A ruleset reload never clears an incident (only
+healthy parses do). *The notice.* Posted once per incident, at most once per 24 h per platform, on id
+103 tagged by the platform wire, and cancelled when the incident closes; it is not updated when causes
+join. Incidents live in memory; the one persisted value is the last notice time per wire (DataStore
+file `recognition_notices`, excluded from backup and device transfer), loaded once at startup (10 s
+bound; notices wait for the load), written before each post (2 s bound; on failure or timeout the
+notice posts anyway), and fail-open on load, save and timeouts. After the load, a notice left in the
+shade for a platform with no open incident is cancelled. The startup closes are enqueued under the
+monitor's lock before notices are enabled, and every later post or close is enqueued under the lock
+that decided it, to one ordered consumer on the IO dispatcher — the sensing call never writes to disk
+and never calls the reporter. Screens only, as #937. *The copy.* `RecognitionNoticeCopy` (`:app`) owns
+it, from label maps keyed by shape and shape field (never by platform or rule id), one cause line per
+cause, one closing line for every cause ("Other screens may still record."), and no percentage (the
+percentage stays in the #937 WARN). Home shows one card per open incident (`RecognitionIncidentCard`,
+"For 2h 5m" at minute grain from `openedAt`) in every non-loading state, the permission gate included,
+so a muted or denied notice still reaches the dasher. `RecognitionHealthNotifier` is the #640 seam: the
+"Check for new rules" actions go there. Log lines (tag `RecognitionHealth`, PII-free): WARN on a rot
+trip, INFO on a clear, a notice and a close, one WARN per process for a failed load or save.
 
 ## Carried from the CLAUDE.md summary (trim v4)
 
