@@ -47,15 +47,23 @@ import java.io.IOException
 @OptIn(ExperimentalCoroutinesApi::class)
 class RecognitionHealthMonitorTest {
 
-    /** Every reporter call, in order: `notice:<wire>` / `closed:<wire>`. */
-    private class Recorder(val calls: MutableList<String> = mutableListOf()) : RecognitionHealthReporter {
+    /**
+     * Every reporter call that changes the shade, in order: `notice:<wire>` / `closed:<wire>`. Like the real notification
+     * shade, withdrawing a notice that is not there is a no-op and is not recorded; [shade] starts with the notices a
+     * previous process left behind.
+     */
+    private class Recorder(
+        val calls: MutableList<String> = mutableListOf(),
+        private val shade: MutableSet<String> = mutableSetOf(),
+    ) : RecognitionHealthReporter {
         val notices = mutableListOf<RecognitionIncident>()
         override fun onIncidentNotice(incident: RecognitionIncident) {
             calls += "notice:${incident.platformWire}"
             notices += incident
+            shade += incident.platformWire
         }
         override fun onIncidentClosed(platformWire: String) {
-            calls += "closed:$platformWire"
+            if (shade.remove(platformWire)) calls += "closed:$platformWire"
         }
     }
 
@@ -323,7 +331,7 @@ class RecognitionHealthMonitorTest {
     @Test
     fun `a restart posts no second notice within a day and withdraws the stale one`() = runTest {
         val t0 = 10 * day
-        val reporter = Recorder()
+        val reporter = Recorder(shade = mutableSetOf(dd))
         val store = Store(persisted = mapOf(dd to t0))
         val monitor = monitor(reporter, store = store)
         runCurrent()
@@ -340,6 +348,17 @@ class RecognitionHealthMonitorTest {
         runCurrent()
         assertEquals(listOf("closed:doordash", "notice:doordash"), reporter.calls)
         assertEquals(mapOf(dd to t0 + day + 1_000), store.saves.last())
+    }
+
+    // 2b (Sol r1 S1): a notice that posted after a failed save left no trace in the store.
+    @Test
+    fun `a restart withdraws a leftover notice the store never recorded`() = runTest {
+        val reporter = Recorder(shade = mutableSetOf(dd))
+        val monitor = monitor(reporter, store = Store())
+        runCurrent()
+
+        assertEquals(listOf("closed:doordash"), reporter.calls)
+        assertTrue(monitor.open.value.isEmpty())
     }
 
     // 3
@@ -520,7 +539,7 @@ class RecognitionHealthMonitorTest {
     @Test
     fun `an incident open before the load keeps its notice and gets no close`() = runTest {
         val t0 = 10 * day
-        val reporter = Recorder()
+        val reporter = Recorder(shade = mutableSetOf(dd))
         val gate = CompletableDeferred<Unit>()
         val monitor = monitor(
             reporter,
@@ -532,7 +551,7 @@ class RecognitionHealthMonitorTest {
         gate.complete(Unit)
         runCurrent()
         monitor.separator(t0 + 1_000)
-        advanceUntilIdle()
+        runCurrent()
 
         assertEquals(listOf("notice:doordash"), reporter.calls)
     }
@@ -541,7 +560,7 @@ class RecognitionHealthMonitorTest {
     @Test
     fun `an incident open right after the load posts after the stale close`() = runTest {
         val t0 = 10 * day
-        val reporter = Recorder()
+        val reporter = Recorder(shade = mutableSetOf(dd))
         val gate = CompletableDeferred<Unit>()
         val monitor = monitor(
             reporter,
@@ -552,7 +571,7 @@ class RecognitionHealthMonitorTest {
         gate.complete(Unit)
         runCurrent()
         monitor.tripOffer(t0)
-        advanceUntilIdle()
+        runCurrent()
 
         assertEquals(listOf("closed:doordash", "notice:doordash"), reporter.calls)
     }

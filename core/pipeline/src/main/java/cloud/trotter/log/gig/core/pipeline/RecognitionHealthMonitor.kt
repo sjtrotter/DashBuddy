@@ -114,8 +114,11 @@ class RecognitionHealthMonitor @Inject constructor(
 
             synchronized(lock) {
                 book.seedLastNoticeAt(persisted)
-                // A notice the previous process left in the shade, for a platform with no open incident.
-                for (wire in persisted.keys) {
+                // A notice the previous process left in the shade, for a platform with no open incident. Every
+                // registered platform, not only the persisted ones: a notice that posted after a failed save left no
+                // trace in the store. Cancelling a notice that is not there is a no-op.
+                val wires = Platform.entries.filter { it != Platform.Unknown }.map { it.wire } + persisted.keys
+                for (wire in wires.toSet()) {
                     if (!book.hasIncident(wire)) actions.trySend(Action.Close(wire))
                 }
                 loaded = true
