@@ -68,7 +68,12 @@ The debug key reads `giglog.debugKeystore.path` and `giglog.debugKeystore.passwo
 2. **Create the app** `cloud.trotter.log.gig`. The Play API cannot create apps.
 3. **First bundle by hand.** Push a tag with `PLAY_PUBLISH` unset (§6): the run builds the AAB and keeps it as
    the `play-bundle` workflow artifact for 7 days. Upload it in the Console to the internal testing track and
-   accept **Play App Signing** when asked. From then on the pipeline uploads.
+   accept **Play App Signing** when asked. Play treats the app as a draft until that first release is published,
+   and a draft app's API accepts only draft releases, so keep `PLAY_PUBLISH` off until the release is out of
+   draft. Publishing it needs the App content forms done, including the accessibility declaration's video
+   (`play/accessibility-declaration.md`); record that video from the run's AAB, built into an APK with `bundletool`
+   and installed over USB, because the Play Store cannot serve the app before the release is published. From then
+   on the pipeline uploads.
 4. **Internal testing track.** Add the testers (the developer at minimum); testers opt in through the link the
    Console shows.
 5. **Store listing.** The files live in `play/listing/` and #1416 fills them; the "Play store listing" workflow
@@ -107,8 +112,11 @@ To check the condition before the first release, run play-listing.yml in `inspec
 nothing in the Play Console. The signed feeds (#1559) use a separate pool and never this one.
 
 In Play Console → Users and permissions, invite the service account's email and grant, for this app only:
-**View app information**, **Release apps to testing tracks** and **Manage store presence**. Never Admin, never
-production releases: promotion to production stays a hand step in the Console.
+**View app information**, **Release apps to testing tracks** and **Manage store presence**. With only those three,
+the listing upload's final commit was refused (403) while the app was a draft. It went through once the account had
+every permission for this app and, at account level, **View app information and download bulk reports**; which of
+the two was needed is not yet known. Never account-level Admin. Promotion to production stays a hand step in the
+Console.
 
 ## 5. Secrets and variables
 
