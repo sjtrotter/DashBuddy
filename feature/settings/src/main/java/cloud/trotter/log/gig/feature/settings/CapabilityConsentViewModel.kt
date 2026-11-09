@@ -40,7 +40,7 @@ import javax.inject.Inject
 class CapabilityConsentViewModel @Inject constructor(
     private val grants: RuleCapabilityGrants,
     private val eventReceipt: EventReceiptPreferences,
-    @WideEventReceiptOffered private val eventReceiptOffered: Boolean,
+    @param:WideEventReceiptOffered private val eventReceiptOffered: Boolean,
 ) : ViewModel() {
 
     val uiState: StateFlow<ConsentUiState> =
