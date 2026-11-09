@@ -453,18 +453,24 @@ frames the pipeline ever sees*:
   store holds, offered ⇒ the stored value. The listener and the permission flow read through it; Settings hides the
   section on `offered` directly. The stored decision is never rewritten. Debug-only behaviour (event types, the
   self-disable, the census) stays keyed on `BuildConfig.DEBUG`, never on `offered`.
-  **Bound platforms (#170, #1413):** the watched registry is the platforms gig.log ships rules for, one registry
-  flag, `Platform.bound` (true for DoorDash and Uber). `Platform.watchedPackages` derives from `Platform.boundPlatforms`,
-  so the listener's filtered footprint, both service configs' `android:packageNames` and the manifest's `<queries>`
-  name the same two packages; `PlatformPreferencesRepository` intersects the enabled preference with the bound set
-  (a saved Instacart or Walmart Spark wire is ignored, so no gate, filter or pipeline admits that package), and the
-  platform settings list shows bound platforms only. Unbound registry entries stay (other code keys on them). The
-  guard is `AccessibilityPackageParityTest`: the platforms with a generated rules asset (`<wire>.json` under
-  `TestRulesetFactory.rulesDir`) == `Platform.boundPlatforms`, and `Platform.watchedPackages` == each config's
-  `packageNames` == `<queries>`. Adding a platform means its ruleset plus `bound = true`; the test fails on either
-  alone. The screen reading card names the bound platforms from the registry; the service description cannot be
-  formatted, so it carries the names as static text, pinned per build by `AccessibilityDescriptionGuardTest` (which
-  also pins that only a build offering Screen events says so). **Content reads stay on enabled windows (#1413
+  **Bound and readable platforms (#170, #1413):** `Platform.bound` says the platform ships a ruleset (DoorDash,
+  Uber). Which platforms a build READS is `Platform.readable(includeUnbound)`, keyed by the build table's
+  `readsUnboundPlatforms` (`BuildConfig.READS_UNBOUND_PLATFORMS`, injected as `@ReadsUnboundPlatforms`): false in the
+  Play and sideload builds (the bound two), true in debug only (every registry platform with a package, so a tester
+  driving Instacart Shopper or Walmart Spark feeds their UNKNOWN screens to the census). The listener's filtered
+  footprint (`Platform.readablePackages`), `PlatformPreferencesRepository` (the enabled preference is intersected
+  with the readable set, so a saved unbound wire is ignored outside debug; installed-app detection too) and the
+  platform settings list all derive from that one function; unbound registry entries stay (other code keys on them).
+  Config wiring: main's XML (Play) and the `accessibilityTool` overlay (sideload) list the bound two; debug carries
+  its own `src/debug/res/xml` copy listing all four and does NOT get the overlay dir, because that dir joins the
+  debug source set at the same priority and two copies there would collide; `src/debug/AndroidManifest.xml` adds the
+  two extra `<queries>`. Guards: `AccessibilityPackageParityTest` (per build: merged config `packageNames` == merged
+  `<queries>` == `readablePackages(row)`; the platforms with a generated rules asset == `Platform.boundPlatforms`)
+  and `AccessibilityToolFlagGuardTest` (one config per build, the table's flag, debug differs from the overlay only
+  in `packageNames`). Adding a platform means its ruleset plus `bound = true`; the test fails on either alone. The
+  screen reading card names the readable platforms from the registry; the service description cannot be formatted,
+  so it carries the names as static text, pinned per build by `AccessibilityDescriptionGuardTest` (which also pins
+  that only a build offering Screen events says so). **Content reads stay on enabled windows (#1413
   step 3):** `FrontWindowWalk` / `FrameWindowResolver` read a non-enabled window's root for its package name only;
   `mapNative` / `mapWindow` (the only content reads) run on enabled-package roots alone, emitted frame or not, pinned
   by `FrameWindowsPledgePropertyTest` (every map call, not just the emitted one) and `PreMapPackageSkipTest`.

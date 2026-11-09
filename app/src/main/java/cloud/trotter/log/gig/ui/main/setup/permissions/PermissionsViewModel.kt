@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import cloud.trotter.log.gig.BuildConfig
 import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
 import cloud.trotter.log.gig.domain.di.PrivacyNoticeUrl
+import cloud.trotter.log.gig.domain.di.ReadsUnboundPlatforms
 import cloud.trotter.log.gig.domain.di.WideEventReceiptOffered
 import cloud.trotter.log.gig.domain.settings.EventReceiptConsent
 import cloud.trotter.log.gig.domain.settings.EventReceiptPreferences
@@ -58,6 +59,7 @@ class PermissionsViewModel internal constructor(
     private val screenEventsOffered: Boolean = true,
     accessibilityTool: Boolean = true,
     privacyUrl: String = PrivacyDisclosure.URL,
+    readsUnboundPlatforms: Boolean = false,
 ) : ViewModel() {
 
     @Inject
@@ -67,14 +69,15 @@ class PermissionsViewModel internal constructor(
         deferrals: PermissionDeferrals,
         @WideEventReceiptOffered screenEventsOffered: Boolean,
         @PrivacyNoticeUrl privacyUrl: String,
+        @ReadsUnboundPlatforms readsUnboundPlatforms: Boolean,
     ) : this(
         { OsPermissionPoll.of(context) }, eventReceipt, BuildConfig.DEBUG, deferrals, screenEventsOffered,
-        BuildConfig.ACCESSIBILITY_TOOL, privacyUrl,
+        BuildConfig.ACCESSIBILITY_TOOL, privacyUrl, readsUnboundPlatforms,
     )
 
     /** #170 — the screen reading card's facts for this build. */
     val accessibilityDisclosure: AccessibilityDisclosureFacts =
-        AccessibilityDisclosureFacts.of(accessibilityTool, screenEventsOffered, privacyUrl)
+        AccessibilityDisclosureFacts.of(accessibilityTool, screenEventsOffered, privacyUrl, readsUnboundPlatforms)
 
     private val osPoll = MutableStateFlow(pollOs())
 

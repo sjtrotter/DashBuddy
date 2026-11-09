@@ -1,7 +1,8 @@
 <!-- #1414: the Play build's copy. Play allows isAccessibilityTool="true" only for disability tools, so this
-     says false. The debug and sideload builds use app/src/accessibilityTool/res/xml/accessibility_service_config.xml,
-     identical except for that flag (wired by the build table in app/build.gradle.kts). Keep the two files in step;
-     AccessibilityToolFlagGuardTest fails when they differ in anything but the flag. -->
+     says false. The sideload build uses app/src/accessibilityTool/res/xml/accessibility_service_config.xml,
+     identical except for that flag (wired by the build table in app/build.gradle.kts); the debug build uses
+     app/src/debug/res/xml/accessibility_service_config.xml, which also lists the platforms with no ruleset (#170).
+     Keep the files in step; AccessibilityToolFlagGuardTest fails when they differ in anything else. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:isAccessibilityTool="false"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewClicked|typeWindowsChanged"

@@ -41,13 +41,19 @@ upload on enrols the install there automatically. Nothing reaches a server befor
   its disclosure card says so. The sideload build exists for drivers who want Uber offers read. Accept and Decline
   happen when the dasher presses them in gig.log. Automated actions need separate per-action grants; auto-accept is
   not built.
-- `android:packageNames` — the service is bound to the delivery apps gig.log has rules for: `com.doordash.driverapp`
-  (DoorDash) and `com.ubercab.driver` (Uber Driver). Nothing from any other app reaches the pipeline. (One opt-in
-  exception, §2.2.) The manifest's `<queries>` names the same two packages. Instacart Shopper and Walmart Spark stay
-  in the platform registry (`Platform`) with no rules: they are not bound, cannot be enabled in Settings, and a saved
-  preference from an older install that enables them is ignored (`Platform.bound`, `PlatformPreferencesRepository`).
-  `AccessibilityPackageParityTest` pins the rules assets, the registry, both service configs and `<queries>` to one
-  set.
+- `android:packageNames` — in the Play and sideload builds the service is bound to the delivery apps gig.log has
+  rules for: `com.doordash.driverapp` (DoorDash) and `com.ubercab.driver` (Uber Driver). Nothing from any other app
+  reaches the pipeline. (One opt-in exception, §2.2.) The manifest's `<queries>` names the same two packages.
+  Instacart Shopper and Walmart Spark stay in the platform registry (`Platform`) with no rules: in those builds they
+  are not bound, cannot be enabled in Settings, and a saved preference from an older install that enables them is
+  ignored (`Platform.readable`, `PlatformPreferencesRepository`). **The debug (tester) build also reads Instacart
+  Shopper (`com.instacart.shopper`) and Walmart Spark (`com.walmart.spark`)** when the tester turns them on in
+  Settings, so a tester who drives them feeds their screens to the census (build table `readsUnboundPlatforms`, its
+  own `src/debug` service config and `<queries>`). They have no rules, so every screen of theirs is UNKNOWN and is
+  handled like any UNKNOWN screen in that build: the sensitive-marker backstop first, then a capture envelope kept on
+  the device (§3, §7) and, only with the census switches on, the census outline or capture text (§6).
+  `AccessibilityPackageParityTest` pins, per build, the service config and `<queries>` to the registry's readable
+  set, and the bound set to the rules assets.
 - `android:accessibilityEventTypes` — four event types in the Play and sideload builds: window state changed, window content
   changed, view clicked, windows changed. No text-changed, focus or selection events. A **debug** build subscribes to
   every event type for rule development (`AccessibilityListener`, `BuildConfig.DEBUG`).
@@ -341,7 +347,8 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
   Instacart Shopper and Walmart Spark are no longer bound or enableable, and a saved preference for them is ignored
   (#170, #1413). The disclosure card names the apps, links this file as of the build's commit and, in the Play build,
   says it can't read Uber Driver's offer pop-up; the Screen events sentence shows only in builds that offer Screen
-  events; the card and every service description say screenshots go to the gallery, where gallery sync or sharing can
+  events; the debug (tester) build also reads Instacart Shopper and Walmart Spark, which have no rules, so their
+  screens are UNKNOWN and handled as in §3, §6 and §7, and its card and description name all four apps; the card and every service description say screenshots go to the gallery, where gallery sync or sharing can
   copy them. §8: a receipt is kept only while its decision is stored, and the bug-report export now ends with the
   consent receipts, scrubbed like the log. §7: the one-tap wipe is tracked in #1579. The in-app privacy page's "What
   gig.log reads" shows the Screen events line only where Screen events are offered, and "Your choices" says the

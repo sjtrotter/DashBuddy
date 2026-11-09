@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import cloud.trotter.log.gig.core.pipeline.BuildConfig
+import cloud.trotter.log.gig.domain.di.ReadsUnboundPlatforms
 import cloud.trotter.log.gig.domain.di.WideEventReceiptOffered
 import cloud.trotter.log.gig.domain.pipeline.LocaleBoundaryReporter
 import cloud.trotter.log.gig.domain.settings.EventReceiptConsent
@@ -62,6 +63,16 @@ class AccessibilityListener : AccessibilityService() {
     @Inject
     @field:WideEventReceiptOffered
     var wideEventReceiptOffered: Boolean = false
+
+    /**
+     * #170 — whether this build also reads the registry platforms that ship no ruleset (the debug build only).
+     * Selects the filtered footprint, `Platform.readablePackages`. Starts false, the bound set, until Hilt injects
+     * it in `onCreate`.
+     */
+    @JvmField
+    @Inject
+    @field:ReadsUnboundPlatforms
+    var readsUnboundPlatforms: Boolean = false
 
     /** QQ3 — `disableSelf()` is called at most once per service instance. */
     private var disabledSelf = false
@@ -144,7 +155,7 @@ class AccessibilityListener : AccessibilityService() {
                 return false
             }
             val packageNames = try {
-                ServiceInfoPolicy.packageNamesFor(consent, Platform.watchedPackages)
+                ServiceInfoPolicy.packageNamesFor(consent, Platform.readablePackages(readsUnboundPlatforms))
             } catch (e: IllegalArgumentException) {
                 // LL9: refuse to apply — the manifest's package list stays in force (fail-closed).
                 Timber.tag("Pipeline").e(e, "Event receipt: refused to apply an empty package list")

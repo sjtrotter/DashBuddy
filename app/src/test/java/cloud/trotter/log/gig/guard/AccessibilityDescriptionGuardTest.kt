@@ -15,9 +15,10 @@ import javax.xml.parsers.DocumentBuilderFactory
  * #170 — the accessibility service description Android shows beside the switch, as each build merges it: the
  * build type's source set (`src/<build>/res/values`) over main's. Main's copy is the Play build's.
  *
- * - Every build's copy names exactly the bound platforms (`Platform.boundPlatforms`), joined the way the
- *   disclosure card joins them: the description is referenced from the service config XML and cannot be
- *   formatted, so it is the one static copy of the names, and this test is what keeps it derived.
+ * - Every build's copy names exactly the platforms that build reads (`Platform.readable` with the row's
+ *   `readsUnboundPlatforms`: the bound two, all four in debug), joined the way the disclosure card joins them: the
+ *   description is referenced from the service config XML and cannot be formatted, so it is the one static copy
+ *   of the names, and this test is what keeps it derived.
  * - It carries the Screen events sentence iff the build table says the build offers Screen events.
  * - The sideload copy is main's word for word plus that sentence; the debug copy is main's up to its sharing
  *   sentences (the test build's own additions follow, pinned by `DebugDisclosureOverrideTest`).
@@ -52,17 +53,14 @@ class AccessibilityDescriptionGuardTest {
     }
 
     @Test
-    fun `every build's description names exactly the bound platforms`() {
-        val names = joinAppNames(
-            Platform.boundPlatforms.map { it.displayName },
-            main.getValue("perm_a11y_names_pair"),
-            Locale.ROOT,
-        )
-        val others = Platform.entries.filter { it !in Platform.boundPlatforms && it.packageName != null }
-        for (build in builds.keys) {
+    fun `every build's description names exactly the platforms it reads`() {
+        for ((build, row) in builds) {
+            val readable = Platform.readable(row.readsUnboundPlatforms)
+            val names = joinAppNames(readable.map { it.displayName }, main.getValue("perm_a11y_names_pair"), Locale.ROOT)
             val text = effective(build)
             assertTrue("$build names $names", "read the screens of $names, when you turn them on in gig.log." in text)
-            others.forEach { assertFalse("$build must not name ${it.displayName}", it.displayName in text) }
+            Platform.entries.filter { it !in readable && it.packageName != null }
+                .forEach { assertFalse("$build must not name ${it.displayName}", it.displayName in text) }
         }
     }
 
@@ -82,10 +80,11 @@ class AccessibilityDescriptionGuardTest {
         val play = effective("release")
         assertEquals("the Play build uses main's copy", main.getValue(KEY), play)
         assertEquals("sideload is main's plus the Screen events sentence", play, effective("sideload").without(SCREEN_EVENTS))
-        val debug = effective("debug").without(SCREEN_EVENTS)
+        // Debug also names the platforms with no ruleset; past the names it is main's up to the sharing sentences.
+        val debug = effective("debug").without(SCREEN_EVENTS).substringAfter(", when you turn them on in gig.log.")
         assertTrue(
             "debug is main's up to the sharing sentences",
-            debug.startsWith(play.substringBefore(" gig.log itself sends nothing")),
+            debug.startsWith(play.substringAfter(", when you turn them on in gig.log.").substringBefore(" gig.log itself sends nothing")),
         )
     }
 

@@ -3,6 +3,7 @@ package cloud.trotter.log.gig.core.data.settings
 import android.content.Context
 import android.content.pm.PackageManager
 import cloud.trotter.log.gig.domain.di.ApplicationScope
+import cloud.trotter.log.gig.domain.di.ReadsUnboundPlatforms
 import cloud.trotter.log.gig.core.datastore.settings.PlatformPreferencesDataSource
 import cloud.trotter.log.gig.domain.settings.GraceConfig
 import cloud.trotter.log.gig.domain.settings.PlatformPreferences
@@ -22,6 +23,8 @@ class PlatformPreferencesRepository @Inject constructor(
     private val dataSource: PlatformPreferencesDataSource,
     @param:ApplicationContext private val context: Context,
     @ApplicationScope scope: CoroutineScope,
+    /** #170 — this build also reads the platforms with no ruleset (debug only); see [Platform.readable]. */
+    @param:ReadsUnboundPlatforms private val readsUnboundPlatforms: Boolean,
 ) : PlatformPreferences {
     private val packageManager: PackageManager = context.packageManager
 
@@ -31,14 +34,14 @@ class PlatformPreferencesRepository @Inject constructor(
      * filters, pipelines, UI — reads one always-current value instead of
      * holding a private cache. Defaults to installed apps if nothing saved.
      *
-     * Only [Platform.bound] platforms can be enabled (#170): a saved wire for a platform gig.log has no
-     * ruleset for (an older install's Instacart or Walmart Spark) is ignored, so no listener, filter or
-     * pipeline reads that app.
+     * Only the platforms this build reads ([Platform.readable]) can be enabled (#170): outside the debug build, a
+     * saved wire for a platform gig.log has no ruleset for (an older install's Instacart or Walmart Spark) is
+     * ignored, so no listener, filter or pipeline reads that app.
      */
     override val enabledPlatforms: StateFlow<Set<Platform>> = dataSource.enabledPlatforms
         .map { saved ->
             if (saved != null) {
-                readablePlatforms(saved)
+                readablePlatforms(saved, readsUnboundPlatforms)
             } else {
                 detectInstalledPlatforms()
             }
@@ -69,9 +72,9 @@ class PlatformPreferencesRepository @Inject constructor(
     override val graceConfig: StateFlow<Map<Platform, GraceConfig>> =
         MutableStateFlow(emptyMap())
 
-    /** Check which bound platforms are installed on device. */
+    /** Check which platforms this build reads are installed on device. */
     fun detectInstalledPlatforms(): Set<Platform> =
-        Platform.boundPlatforms
+        Platform.readable(readsUnboundPlatforms)
             .filter { platform ->
                 try {
                     packageManager.getPackageInfo(platform.packageName!!, 0)
@@ -91,8 +94,10 @@ class PlatformPreferencesRepository @Inject constructor(
     }
 
     internal companion object {
-        /** The bound platforms that [saved] wire names enable; every other wire is ignored (#170). */
-        fun readablePlatforms(saved: Set<String>): Set<Platform> =
-            saved.mapNotNull { Platform.fromWire(it) }.filter { it.bound }.toSet()
+        /** The readable platforms that [saved] wire names enable; every other wire is ignored (#170). */
+        fun readablePlatforms(saved: Set<String>, includeUnbound: Boolean): Set<Platform> {
+            val readable = Platform.readable(includeUnbound)
+            return saved.mapNotNull { Platform.fromWire(it) }.filter { it in readable }.toSet()
+        }
     }
 }

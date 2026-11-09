@@ -1,4 +1,4 @@
-<!-- #1414: the debug and sideload builds' copy. It declares isAccessibilityTool="true" because Android 14+
+<!-- #1414: the sideload build's copy (the debug build has its own in src/debug, #170). It declares isAccessibilityTool="true" because Android 14+
      delivers events an app marks accessibility-data-sensitive (Uber's offer pop-up) only to a service that
      declares it. The Play build uses app/src/main/res/xml/accessibility_service_config.xml, identical except
      that it says false. Keep the two files in step; AccessibilityToolFlagGuardTest fails when they differ in

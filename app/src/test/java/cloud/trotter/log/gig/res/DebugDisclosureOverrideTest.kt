@@ -66,12 +66,18 @@ class DebugDisclosureOverrideTest {
             assertFalse("$key (debug) is about screens; notifications belong to their own card", "notification" in debug.lowercase())
         }
         // #170: the debug build offers Screen events and main (the Play build) does not, so the debug copy adds
-        // that one sentence; AccessibilityDescriptionGuardTest pins it per build.
+        // that one sentence, and it names the platforms with no ruleset too; AccessibilityDescriptionGuardTest pins
+        // both per build. Past the names, it is the main text with its sharing sentences replaced.
+        val afterNames = ", when you turn them on in gig.log."
         assertTrue(
             "the debug service description is the main text, plus the Screen events sentence, with its sharing sentences replaced",
             appDebug.getValue("accessibility_service_description")
                 .replace(" With Screen events on, it also sees which other app is open.", "")
-                .startsWith(appMain.getValue("accessibility_service_description").substringBefore(" gig.log itself sends nothing")),
+                .substringAfter(afterNames)
+                .startsWith(
+                    appMain.getValue("accessibility_service_description").substringAfter(afterNames)
+                        .substringBefore(" gig.log itself sends nothing"),
+                ),
         )
     }
 

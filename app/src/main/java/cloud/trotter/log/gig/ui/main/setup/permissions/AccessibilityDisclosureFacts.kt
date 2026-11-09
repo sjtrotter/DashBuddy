@@ -6,7 +6,8 @@ import java.util.Locale
 /**
  * #170 — what the screen reading card states that varies by build or by registry, so the card itself stays
  * stateless copy:
- * - [appNames]: the apps gig.log reads, the bound registry's display names ([Platform.boundPlatforms]);
+ * - [appNames]: the apps this build reads, the display names of [Platform.readable] (the bound platforms, plus the
+ *   unbound ones in the debug build);
  * - [unreadOfferPopUpApps]: the apps whose offer pop-up this build can't read. Android 14+ shows an offer pop-up
  *   marked accessibility-data-sensitive only to a service that declares itself an accessibility tool, so a build
  *   that does not (the Play build) can't read the pop-up of a platform whose offer arrives that way
@@ -21,16 +22,24 @@ data class AccessibilityDisclosureFacts(
     val privacyUrl: String,
 ) {
     companion object {
-        fun of(accessibilityTool: Boolean, screenEventsOffered: Boolean, privacyUrl: String) = AccessibilityDisclosureFacts(
-            appNames = Platform.boundPlatforms.map { it.displayName },
-            unreadOfferPopUpApps = if (accessibilityTool) {
-                emptyList()
-            } else {
-                Platform.boundPlatforms.filter { it.offerOverlay }.map { it.displayName }
-            },
-            screenEventsOffered = screenEventsOffered,
-            privacyUrl = privacyUrl,
-        )
+        fun of(
+            accessibilityTool: Boolean,
+            screenEventsOffered: Boolean,
+            privacyUrl: String,
+            readsUnboundPlatforms: Boolean,
+        ): AccessibilityDisclosureFacts {
+            val readable = Platform.readable(readsUnboundPlatforms)
+            return AccessibilityDisclosureFacts(
+                appNames = readable.map { it.displayName },
+                unreadOfferPopUpApps = if (accessibilityTool) {
+                    emptyList()
+                } else {
+                    readable.filter { it.offerOverlay }.map { it.displayName }
+                },
+                screenEventsOffered = screenEventsOffered,
+                privacyUrl = privacyUrl,
+            )
+        }
     }
 }
 

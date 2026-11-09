@@ -12,41 +12,54 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 /**
  * #1151 review LL11 — the filtered footprint the listener applies on UNDECIDED / DECLINED
- * (`Platform.watchedPackages`, via `ServiceInfoPolicy`) REPLACES the manifest's
+ * (`Platform.readablePackages`, via `ServiceInfoPolicy`) REPLACES the service config's
  * `android:packageNames`. Pin the two as equal so "cold-start default == filtered footprint" stays
  * true when a platform is added to one and not the other.
  *
- * #170 — the apps gig.log reads are the ones it ships rules for. One set, four places: the generated rules assets
- * (one `<wire>.json` per platform), the registry's bound platforms (`Platform.watchedPackages`), both copies of the
- * service config's `android:packageNames`, and the manifest's `<queries>`. Adding or removing a ruleset without the
- * registry and the config fails here.
+ * #170 — per build, one set in three places: `Platform.readablePackages(row.readsUnboundPlatforms)`, the
+ * `packageNames` of the service config that build merges, and its merged `<queries>` (main's plus the build type's
+ * manifest). Release and sideload read the bound platforms; debug reads every registry platform with a package.
+ * The bound platforms are exactly the platforms with a generated rules asset, so adding or removing a ruleset
+ * without the registry and the configs fails here.
  */
 class AccessibilityPackageParityTest {
 
     private val root = RepoRoot.locate()
+    private val builds = BuildTable.rows(root)
 
     @Test
-    fun `both service configs' packageNames equal the watched-package registry`() {
-        for (path in CONFIGS) {
-            val xml = File(root, path)
-            assertTrue("missing ${xml.path}", xml.isFile)
-            val raw = parse(xml).getAttributeNS(ANDROID_NS, "packageNames")
+    fun `the build table holds the three builds and only debug reads the unbound platforms`() {
+        assertEquals(setOf("debug", "release", "sideload"), builds.keys)
+        assertEquals(setOf("debug"), builds.filterValues { it.readsUnboundPlatforms }.keys)
+    }
+
+    @Test
+    fun `each build's service config packageNames equals its readable registry`() {
+        for ((build, row) in builds) {
+            val path = BuildTable.serviceConfigPath(root, build, row)
+            val raw = parse(File(root, path)).getAttributeNS(ANDROID_NS, "packageNames")
             assertTrue("$path: android:packageNames must be declared (an absent list means every package)", raw.isNotBlank())
             val declared = raw.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
-            assertEquals(path, Platform.watchedPackages, declared)
+            assertEquals("$build ($path)", Platform.readablePackages(row.readsUnboundPlatforms), declared)
         }
     }
 
     @Test
-    fun `the manifest's queries equal the watched-package registry`() {
-        val manifest = parse(File(root, "app/src/main/AndroidManifest.xml"))
-        val queries = manifest.getElementsByTagName("queries")
-        assertEquals("one <queries> block", 1, queries.length)
-        val packages = (queries.item(0) as Element).getElementsByTagName("package")
-        val declared = (0 until packages.length)
-            .map { (packages.item(it) as Element).getAttributeNS(ANDROID_NS, "name") }
-            .toSet()
-        assertEquals(Platform.watchedPackages, declared)
+    fun `each build's merged queries equal its readable registry`() {
+        val main = queries("app/src/main/AndroidManifest.xml")
+        for ((build, row) in builds) {
+            val merged = main + queries("app/src/$build/AndroidManifest.xml")
+            assertEquals(build, Platform.readablePackages(row.readsUnboundPlatforms), merged)
+        }
+    }
+
+    @Test
+    fun `release and sideload read the bound platforms, debug every platform with a package`() {
+        assertEquals(Platform.watchedPackages, Platform.readablePackages(includeUnbound = false))
+        assertEquals(
+            Platform.entries.mapNotNull { it.packageName }.toSet(),
+            Platform.readablePackages(includeUnbound = true),
+        )
     }
 
     @Test
@@ -62,6 +75,17 @@ class AccessibilityPackageParityTest {
         assertEquals(withRules.mapNotNull { it.packageName }.toSet(), Platform.watchedPackages)
     }
 
+    /** The `<queries>` packages of a manifest; none when the file or the block is absent. */
+    private fun queries(path: String): Set<String> {
+        val file = File(root, path)
+        if (!file.isFile) return emptySet()
+        val blocks = parse(file).getElementsByTagName("queries")
+        return (0 until blocks.length).flatMap { b ->
+            val packages = (blocks.item(b) as Element).getElementsByTagName("package")
+            (0 until packages.length).map { (packages.item(it) as Element).getAttributeNS(ANDROID_NS, "name") }
+        }.toSet()
+    }
+
     private fun parse(file: File): Element {
         val factory = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
         return factory.newDocumentBuilder().parse(file).documentElement
@@ -69,9 +93,5 @@ class AccessibilityPackageParityTest {
 
     private companion object {
         const val ANDROID_NS = "http://schemas.android.com/apk/res/android"
-        val CONFIGS = listOf(
-            "app/src/main/res/xml/accessibility_service_config.xml",
-            "app/src/accessibilityTool/res/xml/accessibility_service_config.xml",
-        )
     }
 }

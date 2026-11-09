@@ -5,6 +5,7 @@ import cloud.trotter.log.gig.domain.di.DefaultDispatcher
 import cloud.trotter.log.gig.domain.di.IoDispatcher
 import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
 import cloud.trotter.log.gig.domain.di.PrivacyNoticeUrl
+import cloud.trotter.log.gig.domain.di.ReadsUnboundPlatforms
 import cloud.trotter.log.gig.domain.di.WideEventReceiptOffered
 import dagger.Module
 import dagger.Provides
@@ -79,6 +80,15 @@ object DispatchersModule {
      * clean commit (`BuildConfig.PRIVACY_REF`). The permission card, Automation & consent and the privacy page
      * all open this.
      */
+    /**
+     * #170 — whether this build also reads the registry platforms that ship no ruleset (true in debug only, so a
+     * tester's unrecognized screens from those apps reach the census), from the build table. The listener's
+     * subscription, the enabled-platform preference, the platform list and the screen reading card all take it.
+     */
+    @Provides
+    @ReadsUnboundPlatforms
+    fun provideReadsUnboundPlatforms(): Boolean = BuildConfig.READS_UNBOUND_PLATFORMS
+
     @Provides
     @PrivacyNoticeUrl
     fun providePrivacyNoticeUrl(): String = PrivacyDisclosure.urlAt(BuildConfig.PRIVACY_REF)
