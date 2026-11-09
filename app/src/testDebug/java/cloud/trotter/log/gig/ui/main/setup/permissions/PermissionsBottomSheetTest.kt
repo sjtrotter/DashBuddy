@@ -40,7 +40,7 @@ class PermissionsBottomSheetTest {
     private fun show(): PermissionsViewModel {
         val vm = PermissionsViewModel({ os }, AllowedPrefs(), isDebugBuild = false, PermissionDeferrals())
         compose.setContent {
-            GigLogTheme { PermissionsBottomSheet(onClosed = { closed++ }, viewModel = vm) }
+            GigLogTheme { PermissionsBottomSheet(onClosed = { closed++ }, onOpenPrivacy = {}, viewModel = vm) }
         }
         compose.waitForIdle()
         return vm

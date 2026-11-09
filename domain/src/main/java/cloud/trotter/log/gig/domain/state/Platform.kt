@@ -19,6 +19,15 @@ import java.util.Locale
  * sensor layer then admits that platform's large system-layer windows as snapshot candidates (by
  * size + package). Adding an overlay platform is flipping this one flag (principle 8).
  *
+ * [bound] (#170) declares that gig.log ships a ruleset for the platform. Which apps a build reads is
+ * [readable]: the bound platforms, or, in the one build that reads the unbound ones too (the debug build, so a
+ * tester's unrecognized screens from those apps reach the census; the build table's `readsUnboundPlatforms`),
+ * every platform with a package. The service subscription, the enabled-platform preference, the platform settings
+ * list and the permission card's app names all derive from [readable]. In every other build a platform with no
+ * ruleset stays a registry entry (other code keys on it) but is never read, whatever a saved preference says.
+ * `AccessibilityPackageParityTest` pins, per build, the readable set to the service config's `packageNames` and the
+ * manifest's `<queries>`, and the bound set to the generated rules assets.
+ *
  * [wire] values are assumed **non-empty and dot-free** — they are used as the
  * platform namespace prefix of rule ids (`<wire>.<section>.<name>`), so a wire
  * containing a `.` or an empty wire would break prefix-based resolution
@@ -31,9 +40,10 @@ enum class Platform(
     val shortName: String,
     val appName: String,
     val offerOverlay: Boolean = false,
+    val bound: Boolean = false,
 ) {
-    DoorDash("doordash", "com.doordash.driverapp", "DoorDash", "DD", "DoorDash"),
-    Uber("uber", "com.ubercab.driver", "Uber Driver", "Uber", "Uber", offerOverlay = true),
+    DoorDash("doordash", "com.doordash.driverapp", "DoorDash", "DD", "DoorDash", bound = true),
+    Uber("uber", "com.ubercab.driver", "Uber Driver", "Uber", "Uber", offerOverlay = true, bound = true),
     Instacart("instacart", "com.instacart.shopper", "Instacart Shopper", "IC", "Instacart"),
     WalmartSpark("walmart_spark", "com.walmart.spark", "Walmart Spark", "Spark", "Walmart Spark"),
     Unknown("_unknown", null, "Unknown", "", "Unknown"),
@@ -82,9 +92,23 @@ enum class Platform(
         fun fromPackage(packageName: String?): Platform =
             byPackage[packageName] ?: Unknown
 
-        /** All known package names for OS-level event subscription. */
-        val watchedPackages: Set<String> =
-            entries.mapNotNull { it.packageName }.toSet()
+        /**
+         * THE answer to "which platforms does this build read" (#170), in registry order; each has a package. The
+         * bound platforms ([bound]: they ship a ruleset), or every platform with a package when [includeUnbound]
+         * (the build table's `readsUnboundPlatforms`, injected as `@ReadsUnboundPlatforms`).
+         */
+        fun readable(includeUnbound: Boolean): List<Platform> =
+            entries.filter { it.packageName != null && (includeUnbound || it.bound) }
+
+        /** The package names of [readable]: the OS-level event subscription. */
+        fun readablePackages(includeUnbound: Boolean): Set<String> =
+            readable(includeUnbound).mapNotNull { it.packageName }.toSet()
+
+        /** The platforms that ship a ruleset: [readable] without the unbound ones. */
+        val boundPlatforms: List<Platform> = readable(includeUnbound = false)
+
+        /** The bound platforms' package names: the subscription of every build that reads only those. */
+        val watchedPackages: Set<String> = readablePackages(includeUnbound = false)
 
         /**
          * Packages of the platforms whose offers arrive as a system-layer overlay ([offerOverlay],

@@ -37,12 +37,23 @@ upload on enrols the install there automatically. Nothing reaches a server befor
   allows `true` only for apps built for people with disabilities, so the Play build does not declare it. The flag
   changes how Android classifies and warns about the service and which events it is eligible to receive: since
   Android 14 the system delivers events an app marks accessibility-data-sensitive only to services declaring `true`.
-  Uber's offer pop-up is such a surface, so the Play build cannot read it; the sideload build exists for drivers who
-  want Uber offers read. Accept and Decline happen when the dasher presses them in gig.log. Automated actions need
-  separate per-action grants; auto-accept is not built.
-- `android:packageNames` — the service is bound to the delivery apps only: `com.doordash.driverapp`,
-  `com.ubercab.driver`, `com.instacart.shopper`, `com.walmart.spark`. Nothing from any other app reaches the
-  pipeline. (One opt-in exception, §2.2.)
+  Uber's offer pop-up is such a surface, so the Play build cannot read it; it reads Uber Driver's other screens, and
+  its disclosure card says so. The sideload build exists for drivers who want Uber offers read. Accept and Decline
+  happen when the dasher presses them in gig.log. Automated actions need separate per-action grants; auto-accept is
+  not built.
+- `android:packageNames` — in the Play and sideload builds the service is bound to the delivery apps gig.log has
+  rules for: `com.doordash.driverapp` (DoorDash) and `com.ubercab.driver` (Uber Driver). Nothing from any other app
+  reaches the pipeline. (One opt-in exception, §2.2.) The manifest's `<queries>` names the same two packages.
+  Instacart Shopper and Walmart Spark stay in the platform registry (`Platform`) with no rules: in those builds they
+  are not bound, cannot be enabled in Settings, and a saved preference from an older install that enables them is
+  ignored (`Platform.readable`, `PlatformPreferencesRepository`). **The debug (tester) build also reads Instacart
+  Shopper (`com.instacart.shopper`) and Walmart Spark (`com.walmart.spark`)** when the tester turns them on in
+  Settings, so a tester who drives them feeds their screens to the census (build table `readsUnboundPlatforms`, its
+  own `src/debug` service config and `<queries>`). They have no rules, so every screen of theirs is UNKNOWN and is
+  handled like any UNKNOWN screen in that build: the sensitive-marker backstop first, then a capture envelope kept on
+  the device (§3, §7) and, only with the census switches on, the census outline or capture text (§6).
+  `AccessibilityPackageParityTest` pins, per build, the service config and `<queries>` to the registry's readable
+  set, and the bound set to the rules assets.
 - `android:accessibilityEventTypes` — four event types in the Play and sideload builds: window state changed, window content
   changed, view clicked, windows changed. No text-changed, focus or selection events. A **debug** build subscribes to
   every event type for rule development (`AccessibilityListener`, `BuildConfig.DEBUG`).
@@ -51,6 +62,17 @@ upload on enrols the install there automatically. Nothing reaches a server befor
   bounds) of those apps' windows. `flagRetrieveInteractiveWindows` plus `getWindows()` is what lets it see a
   platform's offer **overlay** (Uber draws offers in a system overlay window).
 - `android:canTakeScreenshot="true"` — used only for the evidence screenshots in §4, which are OFF by default.
+
+**The disclosure.** Before sending the dasher to Android's accessibility settings, the setup sheet shows the screen
+reading card (`AccessibilityDisclosureCard`). It names the apps the service reads, from the registry; says what it
+reads, what it drops and what it saves as codes; says that screenshots are whole-screen pictures saved to the
+phone's gallery, where gallery sync or sharing can copy them off the phone; says where screen reading and
+calculations happen and what can copy data off the phone; says when it taps a button; and links gig.log's own
+Privacy page (§8). In the Play build it also says that this version can't read Uber Driver's offer pop-up
+and that it reads Uber Driver's other screens. Only a build that offers Screen events (§2.2) carries the Screen events
+sentence, on the card and in the service description Android shows in its settings; each build has one copy of that
+description (main for Play, `src/sideload` and `src/debug`), and `AccessibilityDescriptionGuardTest` pins the names
+and the sentence per build. Allow opens Android's settings; Don't allow leaves the service off and records nothing.
 
 What the tree is used for: recognition against a published, rule-based ruleset (`matchers/rules/`, Apache-2.0)
 that turns a screen into a named state (an offer, a pickup, a drop-off, a dash summary). Recognition, evaluation
@@ -82,7 +104,7 @@ A separate `NotificationListenerService` reads the delivery apps' notifications 
 pause notices, earnings notices) and recognizes them against the same ruleset (`core/pipeline/.../notification`).
 A notification from a package that is not an enabled platform is dropped before anything is read
 (`NotificationListener.onNotificationPosted` checks the enabled-package set; `NotificationFilter.isRelevant` gates
-what is forwarded).
+what is forwarded). Only the platforms the service is bound to (§2.1) can be enabled.
 
 ### 2.4 Location
 
@@ -168,7 +190,7 @@ There is no account, no analytics SDK, no advertising identifier. Gas-price refr
 | Text-to-speech (`TtsEffectHandler`) | used for spoken offers | your phone's text-to-speech engine | the offer sentence; the engine may use the network under its own terms |
 | UNKNOWN screen/notification census (debug build only, the developer's and testers' build, §2.1; `censusUploadEnabled`) | off | gig.log's census server, built into the debug build (§2.1); turning the switch on enrols the install | a **skeleton** of an admitted UNKNOWN screen or platform notification: screen view classes/ids, or a grammar-bounded notification channel id and five filtered slots; text slots carry coarse kinds or hashes under a k-anonymity gate, never source text — see `docs/adr/ADR-0011-unknown-census-privacy-model.md` — plus daily recognition-health counts per platform and app version, sent with this install's ID. Every other build (Play, sideload) binds a no-op sink (`NoOpCensusSink`) and cannot upload at all. |
 | Share UNKNOWN captures (debug build only, §2.1; `censusShareCaptures`, trusted installs) | off | the same census server, only while its operator has marked this install trusted | the **text** of UNKNOWN screens (`CensusUploadWorker.uploadEnvelopes`). An UNKNOWN screen gets no rule redaction — only the marker and address-block backstops (§3) — so a capture can still contain customer details, and the operator can read them. The switch says exactly this (`developer_settings_census_share_captures_explainer`). |
-| Bug-report export | manual | a folder/provider the user chooses (`DataExportViewModel.exportLog`) | INFO+ milestones checked against known sensitive markers before writing; matches are replaced, but unknown sensitive details can escape filtering. A cloud provider may upload the file. gig.log does not deliver it to the developer. |
+| Bug-report export | manual | a folder/provider the user chooses (`DataExportViewModel.exportLog`) | INFO+ milestones checked against known sensitive markers before writing; matches are replaced, but unknown sensitive details can escape filtering. Then the consent receipts (§8). A cloud provider may upload the file. gig.log does not deliver it to the developer. |
 | CSV export | manual | a folder/provider the user chooses (`DataExportViewModel` → `CsvExporter`) | all recorded sessions and deliveries, including merchant names and which saved vehicle drove each dash (its id and label — the dasher's own text), plus deductible miles per vehicle per tax year and logged expenses and fill-ups (amounts, categories, the dasher’s own labels, gallons and the app's tracked miles at the fill-up, plus the saved vehicle id and label for car-care and gas receipts), including voided entries. No customer data or customer/address hashes. A cloud provider may upload the files. |
 
 Exports replace existing files with the same names in the chosen folder. Exported files survive uninstall and remain until deleted through that provider. “No direct gig.log upload” does not mean that a selected cloud folder keeps the files on the phone.
@@ -289,7 +311,7 @@ identity export. Vehicle/default resets preserve these learned preferences.
 - Retention of app-private data is "until you delete it": uninstalling removes the database, the DataStore files,
   the logs and any captures. Android may restore the backed-up database and app/economy preferences on reinstall
   or a new phone; the excluded consent stores and debug logs do not restore. Gallery screenshots (§4) and files
-  you exported (§6) live outside the app and stay until you delete them. A one-tap in-app wipe does not exist yet — tracked in #1237.
+  you exported (§6) live outside the app and stay until you delete them. A one-tap in-app wipe does not exist yet — tracked in #1579.
 
 ## 8. Consent records
 
@@ -297,11 +319,27 @@ Each capability decision and the Screen-events decision are stored on the device
 the same DataStore write, with the time it was made, the app version, and the revision of this document that the
 in-app disclosure referred to when it was recorded (`PrivacyDisclosure.REVISION`; `RuleCapabilityDataSource`,
 `EventReceiptConsentDataSource`). The app does not verify that you opened this document — the revision records
-which text the disclosure pointed at. They are readable under Automation & Consent. No export carries them today
-(the bug-report export carries the decision log lines, not the receipts). Both decisions and their receipts are
-in dedicated stores excluded from Android backup and device transfer (§6), so a new device re-asks consent while
-the database and general app/economy preferences restore. The in-app link opens the current revision of this file;
-the revision history below says what changed since the revision on a receipt.
+which text the disclosure pointed at. They are readable under Automation & Consent. A store edit keeps a receipt
+only while its capability is in the stored granted or denied set, so no receipt outlives its decision; a decision
+for a capability the current rules no longer enable keeps its receipt (`RuleCapabilityDataSource.update`).
+
+The bug-report export (§6) ends with a "Consent receipts" section: the Screen-events receipt and each capability
+receipt, with its status, date, app version and privacy notice revision, by capability key (a sha256 hash), plus the
+action and rule id where the loaded rules still enable it. These lines are added after the shareable log, so they
+pass the same marker scrubber explicitly (`LogRepository.scrubForExport`); if the scrubber is missing or fails, the
+section is left out and the file says so (`DataExportViewModel`). The receipts are read from their stores at export
+time (`ConsentReceiptReader`), not from the in-memory copies the screens use; if a store cannot be read, the section
+says the records are unavailable.
+
+Both decisions and their receipts are in dedicated stores excluded from Android backup and device transfer (§6), so
+a new device re-asks consent while the database and general app/economy preferences restore.
+
+The privacy links on the screen reading card and on Automation & Consent open gig.log's own Privacy page (Settings →
+Data & Privacy → Privacy, `PrivacyScreen`), a plain-language summary of this file. Its foot links the privacy policy
+(`PrivacyDisclosure.POLICY_URL`, https://gig.log.trotter.cloud/privacy/) and "Technical details": this file as of the
+commit the build was made from (`BuildConfig.PRIVACY_REF`, `PrivacyDisclosure.urlAt`); a build from an uncommitted
+tree or without git opens the current revision. The revision history below says what changed since the revision on a
+receipt.
 
 ## 9. Verify it
 
@@ -311,6 +349,18 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r16 (2026-11-09)** — §2.1: the service is bound to DoorDash and Uber Driver only, the apps gig.log has rules for;
+  Instacart Shopper and Walmart Spark are no longer bound or enableable, and a saved preference for them is ignored
+  (#170, #1413). The disclosure card names the apps, links gig.log's own Privacy page and, in the Play build,
+  says it can't read Uber Driver's offer pop-up; the Screen events sentence shows only in builds that offer Screen
+  events; the debug (tester) build also reads Instacart Shopper and Walmart Spark, which have no rules, so their
+  screens are UNKNOWN and handled as in §3, §6 and §7, and its card and description name all four apps; the card and every service description say screenshots go to the gallery, where gallery sync or sharing can
+  copy them. §8: a receipt is kept only while its decision is stored, and the bug-report export now ends with the
+  consent receipts, read from their stores at export time and scrubbed like the log; Automation & Consent's privacy
+  link also opens the in-app Privacy page, whose foot links the privacy policy and this file as of the build's
+  commit ("Technical details"). §7: the one-tap wipe is tracked in #1579. The in-app privacy page's "What
+  gig.log reads" shows the Screen events line only where Screen events are offered, and "Your choices" says the
+  records leave the phone only in a bug report you export. Receipts created under r15 retain that revision.
 - **r15 (2026-11-09)** — §2.1: the debug build is published on every GitHub Release as the tester build;
   it keeps UNKNOWN capture envelopes and a verbose log on the device, and its census switches (off by default) send
   to gig.log's census server, whose address is built in, enrolling the install when census upload is turned on

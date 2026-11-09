@@ -142,7 +142,11 @@
     <string name="consent_receipt_format">%1$s, %2$s, app %3$s, privacy notice %4$d</string>
     <string name="consent_receipt_allowed">Allowed</string>
     <string name="consent_receipt_denied">Not allowed</string>
+    <!-- #170: on the screen reading card and Automation & consent; opens the in-app Privacy page. -->
     <string name="consent_privacy_link">Full privacy notice</string>
+    <!-- #170: the Privacy page's foot. The policy is the plain-language web page; technical details is PRIVACY.md. -->
+    <string name="privacy_policy_link">Privacy policy</string>
+    <string name="privacy_technical_link">Technical details</string>
     <string name="settings_odometer_prompts">Odometer reminder</string>
     <string name="settings_odometer_prompts_description">Highlights the bubble\'s Odometer button early in a shift, and after one until you log a reading</string>
     <string name="developer_settings_add_on_title">Add-on figures</string>
@@ -152,7 +156,9 @@
          truth: a change to a claim there updates the matching privacy_* string in the same PR. -->
     <string name="privacy_title">Privacy</string>
     <string name="privacy_reads_title">What gig.log reads</string>
-    <string name="privacy_reads_body">Screens of the delivery apps you turn on, through Android Accessibility, and with Screen events on, the name of the app in front. Those apps\' notifications; other apps\' are skipped unread. GPS during a shift. Gas-price lookups use your last location each time they run (daily when automatic, in setup for each fuel type while automatic updates are on, and when you refresh it or choose Use auto price in the bubble), even off shift. Screen reading and calculations happen on your phone. Recognized banking, payment and ID screens, the ID camera and the signature pad are dropped unsaved. The filters work in English and can miss a screen.</string>
+    <string name="privacy_reads_body">Screens of the delivery apps you turn on, through Android Accessibility. Those apps\' notifications; other apps\' are skipped unread. GPS during a shift. Gas-price lookups use your last location each time they run (daily when automatic, in setup for each fuel type while automatic updates are on, and when you refresh it or choose Use auto price in the bubble), even off shift. Screen reading and calculations happen on your phone. Recognized banking, payment and ID screens, the ID camera and the signature pad are dropped unsaved. The filters work in English and can miss a screen.</string>
+    <!-- #170: shown under privacy_reads_body only in a build that offers Screen events. -->
+    <string name="privacy_reads_screen_events">With Screen events on, also the name of the app in front.</string>
     <string name="privacy_customers_title">Customers</string>
     <string name="privacy_customers_body">Customer names and addresses in your history are saved as codes, so gig.log can tell customers apart without knowing who they are. Store names and addresses are saved as text. Screenshots are pictures and keep everything on screen.</string>
     <string name="privacy_saves_title">What gig.log saves</string>
@@ -166,7 +172,7 @@
     <string name="privacy_retention_title">How long it stays</string>
     <string name="privacy_retention_body">Until you clear app data or uninstall, though a backup can bring it back on a reinstall or a new phone. Logs keep only recent entries. Screenshots and exports stay until you delete them. There is no one-tap delete yet.</string>
     <string name="privacy_choices_title">Your choices</string>
-    <string name="privacy_choices_body">Each choice on Automation &amp; consent is saved on this phone with its date, app version and privacy notice version. The app log notes each automatic-tap choice and leaves the phone only in a bug report you export; the saved records are not exported.</string>
+    <string name="privacy_choices_body">Each choice on Automation &amp; consent is saved on this phone with its date, app version and privacy notice version. The app log notes each automatic-tap choice. Both leave the phone only in a bug report you export.</string>
     <string name="privacy_test_builds_title">Test builds</string>
     <string name="privacy_test_builds_body">This test build saves the text of the delivery apps\' screens and notifications on the phone. On screens it recognizes, its rules replace the customer details they know about; elsewhere the filters can miss them. Its log also keeps screen text. That text stays until removed or uninstalled, and backup and transfer leave it out. Census upload, off unless turned on in developer options, sends outlines of unrecognized screens and notifications, plus counts showing which screens gig.log recognizes and the app version, with this install\'s ID, to gig.log\'s census server (census.dashbuddy.trotter.cloud), which enrolls the install when census upload is turned on. Capture sharing, also off unless turned on, needs census upload and the server\'s trust; it sends the text of unrecognized screens, never notifications, and the server\'s operator can read it. Screen events are required: without them, screen reading turns itself off and the app can\'t be used.</string>
 </resources>

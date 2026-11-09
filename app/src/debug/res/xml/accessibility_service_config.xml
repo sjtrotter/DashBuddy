@@ -1,0 +1,15 @@
+<!-- #170: the debug (tester) build's copy. Identical to app/src/accessibilityTool/res/xml/accessibility_service_config.xml
+     (it declares isAccessibilityTool="true") except packageNames: the debug build also reads the registry platforms
+     with no ruleset (Instacart Shopper, Walmart Spark), so a tester's unrecognized screens from them reach the census.
+     The debug build does not get the accessibilityTool overlay dir (app/build.gradle.kts sourceSets), so this is its
+     one copy. AccessibilityToolFlagGuardTest and AccessibilityPackageParityTest pin it. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:isAccessibilityTool="true"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewClicked|typeWindowsChanged"
+    android:packageNames="com.doordash.driverapp,com.ubercab.driver,com.instacart.shopper,com.walmart.spark"
+    android:accessibilityFeedbackType="feedbackSpoken"
+    android:notificationTimeout="100"
+    android:canTakeScreenshot="true"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/accessibility_service_description"
+    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews" />

@@ -64,7 +64,7 @@ class EventReceiptConsentDialogTest {
 
     private fun show(prefs: FakeEventReceipt) {
         val vm = CapabilityConsentViewModel(NoCapabilities(), prefs, eventReceiptOffered = true)
-        compose.setContent { GigLogTheme { CapabilityConsentScreen(onBack = {}, viewModel = vm) } }
+        compose.setContent { GigLogTheme { CapabilityConsentScreen(onBack = {}, onOpenPrivacy = {}, viewModel = vm) } }
     }
 
     private fun screenEventsSwitch() = compose.onNode(isToggleable())

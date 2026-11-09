@@ -5,8 +5,6 @@
     <queries>
         <package android:name="com.doordash.driverapp" />
         <package android:name="com.ubercab.driver" />
-        <package android:name="com.instacart.shopper" />
-        <package android:name="com.walmart.spark" />
     </queries>
 
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />

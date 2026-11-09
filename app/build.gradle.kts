@@ -79,18 +79,23 @@ fun versionNameFor(base: String): String = "$base+$gitSha" + if (gitDirty) ".dir
 // - `sideload` is the build from outside Play: a release build (no debug extras: the library modules serve it
 //   their `release` variant, so captures and census bind their no-op sinks) whose only differences from Play
 //   are the two below. Android 14+ shows Uber's offer pop-up only to a service that declares the flag true.
-// - `debug` is the developer's test build; it keeps its application ID, signing key and versionCode.
+// - `debug` is the developer's test build; it keeps its application ID, signing key and versionCode. It is the one
+//   build that also reads the registry platforms with no ruleset (Instacart Shopper, Walmart Spark), so a tester who
+//   drives them feeds their unrecognized screens to the census (#170, dev 2026-11-09).
 //
 // Every per-build fact below derives from this table. `AccessibilityToolFlagGuardTest` pins its rows.
 // ---------------------------------------------------------------------------
 
-/** What one build declares: the accessibility-tool flag, and whether it offers Screen events. */
-data class Distribution(val accessibilityTool: Boolean, val wideEventReceipt: Boolean)
+/**
+ * What one build declares: the accessibility-tool flag, whether it offers Screen events, and whether it reads the
+ * registry platforms that ship no ruleset (`Platform.readable`).
+ */
+data class Distribution(val accessibilityTool: Boolean, val wideEventReceipt: Boolean, val readsUnboundPlatforms: Boolean)
 
 val distribution = mapOf(
-    "debug" to Distribution(accessibilityTool = true, wideEventReceipt = true),
-    "release" to Distribution(accessibilityTool = false, wideEventReceipt = false),
-    "sideload" to Distribution(accessibilityTool = true, wideEventReceipt = true),
+    "debug" to Distribution(accessibilityTool = true, wideEventReceipt = true, readsUnboundPlatforms = true),
+    "release" to Distribution(accessibilityTool = false, wideEventReceipt = false, readsUnboundPlatforms = false),
+    "sideload" to Distribution(accessibilityTool = true, wideEventReceipt = true, readsUnboundPlatforms = false),
 )
 
 /**
@@ -145,6 +150,11 @@ android {
 
         buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
         buildConfigField("long", "BUILD_TIME_MS", "${buildTimeMs}L")
+
+        // #170: the in-app privacy link opens PRIVACY.md as of the commit this build was made from
+        // (`PrivacyDisclosure.urlAt`). A `.dirty` or no-git build has no such commit, so it opens master.
+        val privacyRef = if (gitDirty || gitSha == "nogit") "master" else gitSha
+        buildConfigField("String", "PRIVACY_REF", "\"$privacyRef\"")
     }
 
     signingConfigs {
@@ -222,14 +232,18 @@ android {
         configureEach {
             val facts = distribution.getValue(name)
             buildConfigField("boolean", "WIDE_EVENT_RECEIPT_OFFERED", facts.wideEventReceipt.toString())
+            buildConfigField("boolean", "ACCESSIBILITY_TOOL", facts.accessibilityTool.toString())
+            buildConfigField("boolean", "READS_UNBOUND_PLATFORMS", facts.readsUnboundPlatforms.toString())
         }
     }
 
     // #1414: main's accessibility_service_config.xml declares isAccessibilityTool="false" (the Play posture, so
     // a build left out of this wiring fails toward what Play accepts). A build whose row says true gets the
-    // overlay copy that declares true.
+    // overlay copy that declares true. #170: a build that reads the unbound platforms needs a wider packageNames,
+    // so it carries its own copy in its build-type source set (src/debug/res/xml) and does NOT get the overlay:
+    // the overlay dir joins that same source set at the same priority, and two copies there would collide.
     sourceSets {
-        distribution.filterValues { it.accessibilityTool }.keys.forEach { buildType ->
+        distribution.filterValues { it.accessibilityTool && !it.readsUnboundPlatforms }.keys.forEach { buildType ->
             maybeCreate(buildType).res.directories.add("$projectDir/src/accessibilityTool/res")
         }
     }

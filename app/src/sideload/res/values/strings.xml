@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #170: the sideload build's accessibility service description, a FULL replacement for main's (the Play build's).
+     The sideload build offers Screen events, so its copy says so; otherwise it is main's text word for word.
+     AccessibilityDescriptionGuardTest pins this. -->
+<resources>
+    <string name="accessibility_service_description">gig.log uses Android\'s Accessibility service to read the screens of DoorDash and Uber Driver, when you turn them on in gig.log. It reads offers aloud while you drive and records your shifts, deliveries and pay. Screen reading and calculations happen on your phone. With Screen events on, it also sees which other app is open. It drops recognized screens with your banking, payment or ID details, the ID camera and the signature pad without saving anything, and saves customer names and addresses in your history only as codes. If you turn on screenshots, it can save a picture of the whole screen, with everything on it, to your phone\'s gallery, where gallery sync or sharing can copy it off your phone. It taps a delivery app\'s button only when you press Accept or Decline in gig.log, or for an automatic tap you allow. gig.log itself sends nothing it reads off your phone. Spoken offers go to your phone\'s text-to-speech engine, which may use the network. Android backup and exports you make can copy your history.</string>
+</resources>

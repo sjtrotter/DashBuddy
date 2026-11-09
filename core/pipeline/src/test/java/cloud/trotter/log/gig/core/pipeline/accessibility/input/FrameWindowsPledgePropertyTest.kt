@@ -15,6 +15,12 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
 
+/**
+ * #1422 — the frame resolver's pledge, over random window topologies: a resolved frame is the freshly checked root
+ * of an enabled window and never our own bubble. #1413 step 3: every mapping (`mapNative` / `mapWindow`, the only
+ * content reads) is of an enabled package's root, whether or not it becomes a frame; other windows are read for
+ * their package name only.
+ */
 class FrameWindowsPledgePropertyTest {
     @Test fun `resolved frames always carry the exact freshly checked enabled root and never our bubble`() = runTest {
         // #1422 review S3: the property must not pass vacuously — both paths must resolve real frames, cold and warm.
@@ -66,6 +72,12 @@ class FrameWindowsPledgePropertyTest {
                         assertNotEquals(OWN, mapped.packageName)
                         frame.windowContext?.let { assertEquals(mapped.windowId, it.windowId) }
                     }
+                }
+                // #1413 step 3 (#170): EVERY content read is of an enabled window, including a mapping that
+                // emits no frame. A non-enabled window is identified by its package only, never mapped.
+                h.access.mappedRoots.forEach { mapped ->
+                    assertTrue("mapped a non-enabled root ${mapped.packageName}", mapped.packageName in enabled)
+                    assertNotEquals(OWN, mapped.packageName)
                 }
             }
         }

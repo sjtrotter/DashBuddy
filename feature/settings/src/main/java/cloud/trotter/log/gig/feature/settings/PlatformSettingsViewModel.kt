@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.log.gig.core.data.settings.PlatformPreferencesRepository
+import cloud.trotter.log.gig.domain.di.ReadsUnboundPlatforms
 import cloud.trotter.log.gig.domain.state.Platform
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -27,11 +28,13 @@ data class PlatformUiState(
 class PlatformSettingsViewModel @Inject constructor(
     private val repository: PlatformPreferencesRepository,
     @ApplicationContext context: Context,
+    @ReadsUnboundPlatforms readsUnboundPlatforms: Boolean,
 ) : ViewModel() {
 
     private val packageManager: PackageManager = context.packageManager
 
-    private val monitorablePlatforms = Platform.entries.filter { it.packageName != null }
+    /** The apps this build can read (#170): the bound registry, plus the unbound platforms in the debug build. */
+    private val monitorablePlatforms = Platform.readable(readsUnboundPlatforms)
 
     val platforms: StateFlow<List<PlatformUiState>> = repository.enabledPlatforms
         .map { enabled ->

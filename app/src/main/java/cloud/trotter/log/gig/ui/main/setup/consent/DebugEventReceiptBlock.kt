@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import cloud.trotter.log.gig.R
 import kotlinx.coroutines.delay
 import cloud.trotter.log.gig.feature.settings.CapabilityConsentScreen
+import cloud.trotter.log.gig.feature.settings.PrivacyScreen
 import cloud.trotter.log.gig.feature.settings.eventReceiptDisclosureParts
 import cloud.trotter.log.gig.feature.settings.eventReceiptSettingsPath
 
@@ -45,9 +46,14 @@ import cloud.trotter.log.gig.feature.settings.eventReceiptSettingsPath
 @Composable
 fun DebugEventReceiptShell(onExit: () -> Unit) {
     var showConsentSettings by rememberSaveable { mutableStateOf(false) }
-    if (showConsentSettings) {
+    // #170: the consent screen's privacy link opens the Privacy page here too; there is no NavHost in this shell.
+    var showPrivacy by rememberSaveable { mutableStateOf(false) }
+    if (showPrivacy) {
+        BackHandler { showPrivacy = false }
+        PrivacyScreen(onBack = { showPrivacy = false })
+    } else if (showConsentSettings) {
         BackHandler { showConsentSettings = false }
-        CapabilityConsentScreen(onBack = { showConsentSettings = false })
+        CapabilityConsentScreen(onBack = { showConsentSettings = false }, onOpenPrivacy = { showPrivacy = true })
     } else {
         DebugEventReceiptBlock(
             onOpenSettings = { showConsentSettings = true },

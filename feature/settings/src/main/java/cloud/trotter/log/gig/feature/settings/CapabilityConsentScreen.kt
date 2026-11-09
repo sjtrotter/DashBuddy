@@ -17,7 +17,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,7 +25,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.booleanResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -35,7 +33,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.log.gig.core.designsystem.component.AppAccordion
 import cloud.trotter.log.gig.domain.capability.ConsentReceipt
-import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
 import cloud.trotter.log.gig.domain.format.formatShortDate
 import cloud.trotter.log.gig.domain.state.Platform
 import java.time.ZoneId
@@ -55,10 +52,10 @@ import java.util.Locale
 @Composable
 fun CapabilityConsentScreen(
     onBack: () -> Unit,
+    onOpenPrivacy: () -> Unit,
     viewModel: CapabilityConsentViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val uriHandler = LocalUriHandler.current
 
     Scaffold(
         topBar = {
@@ -111,13 +108,10 @@ fun CapabilityConsentScreen(
                 }
             }
 
-            TextButton(
-                // No browser (restricted/work profile) throws from openUri — a privacy link must never crash the record screen.
-                onClick = { runCatching { uriHandler.openUri(PrivacyDisclosure.URL) } },
+            PrivacyNoticeLink(
+                onClick = onOpenPrivacy,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            ) {
-                Text(stringResource(R.string.consent_privacy_link))
-            }
+            )
             Spacer(Modifier.height(32.dp))
         }
     }

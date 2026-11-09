@@ -87,6 +87,7 @@ fun DashboardScreen(
     onOpenRatings: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenWizard: () -> Unit,
+    onOpenPrivacy: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -128,6 +129,7 @@ fun DashboardScreen(
     if (showPermissionSheet) {
         PermissionsBottomSheet(
             onClosed = { showPermissionSheet = false },
+            onOpenPrivacy = onOpenPrivacy,
             viewModel = permissionsViewModel,
         )
     }

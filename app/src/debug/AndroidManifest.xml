@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+    <!-- #170: the debug build also reads the registry platforms with no ruleset; main's <queries> names the bound
+         two, and the merger adds these. AccessibilityPackageParityTest pins the union per build. -->
+    <queries>
+        <package android:name="com.instacart.shopper" />
+        <package android:name="com.walmart.spark" />
+    </queries>
     <!-- #1333: ui-test-manifest's host activity for Compose tests; tests run under Robolectric and need no export. -->
     <application>
         <activity

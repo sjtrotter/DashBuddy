@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -179,6 +180,7 @@ class RuleCapabilityDataSourceTest {
         )
         val source = RuleCapabilityDataSource(ds)
         ds.edit {
+            it[stringSetPreferencesKey("granted_capability_keys")] = setOf("old")
             it[stringPreferencesKey("consent_receipts_json")] =
                 """{"old":{"decidedAt":1,"appVersion":"0.240.0","disclosureRevision":2,"granted":true,"promptSurface":"sheet"}}"""
         }
@@ -203,5 +205,49 @@ class RuleCapabilityDataSourceTest {
         val source = RuleCapabilityDataSource(reopened)
         assertEquals(mapOf("k" to record), source.receipts.first())
         assertEquals(setOf("k"), source.granted.first())
+    }
+
+    /** #170 — a receipt whose key is in neither set is dropped in the same edit; every decided key keeps its own. */
+    @Test
+    fun `an edit drops receipts for keys that are neither granted nor denied`() = runTest {
+        val ds = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { File(tmp.root, "prune.preferences_pb") },
+        )
+        val source = RuleCapabilityDataSource(ds)
+        val denial = record.copy(granted = false)
+        source.update { _, _, _ ->
+            GrantSnapshot(setOf("granted"), setOf("denied"), mapOf("granted" to record, "denied" to denial, "orphan" to record))
+        }
+        assertEquals(mapOf("granted" to record, "denied" to denial), source.receipts.first())
+
+        // A stored orphan (written before pruning existed) goes with the next edit, whatever that edit touches.
+        ds.edit {
+            it[stringPreferencesKey("consent_receipts_json")] =
+                Json.encodeToString(mapOf("granted" to record, "denied" to denial, "stale" to record))
+        }
+        source.update { granted, denied, receipts -> GrantSnapshot(granted + "new", denied, receipts + ("new" to record)) }
+        assertEquals(setOf("granted", "denied", "new"), source.receipts.first().keys)
+    }
+
+    /**
+     * #170 — pruning keys on the persisted sets, never on what the loaded rules enumerate: a decision for a
+     * capability no rule enables any more keeps its receipt for as long as the decision is stored.
+     */
+    @Test
+    fun `a persisted decision keeps its receipt when no rule enumerates it`() = runTest {
+        val ds = PreferenceDataStoreFactory.create(
+            scope = backgroundScope,
+            produceFile = { File(tmp.root, "retired.preferences_pb") },
+        )
+        val source = RuleCapabilityDataSource(ds)
+        source.update { _, _, _ -> GrantSnapshot(setOf("retired-grant"), setOf("retired-denial"), mapOf(
+            "retired-grant" to record, "retired-denial" to record.copy(granted = false),
+        )) }
+        source.update { granted, denied, receipts -> GrantSnapshot(granted + "k", denied, receipts + ("k" to record)) }
+        assertEquals(setOf("retired-grant", "retired-denial", "k"), source.receipts.first().keys)
+
+        source.update { granted, denied, receipts -> GrantSnapshot(granted - "retired-grant", denied, receipts) }
+        assertEquals("a decision removed from both sets loses its receipt", setOf("retired-denial", "k"), source.receipts.first().keys)
     }
 }

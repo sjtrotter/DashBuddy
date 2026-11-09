@@ -248,4 +248,19 @@ class LogRepositoryTest {
         assertEquals("", repo.shareableLogContents())
         assertFalse(shareable().exists())
     }
+
+    /** #170 — text appended to the bug report after the sink passes the same scrubber, or is dropped. */
+    @Test
+    fun `export lines pass the sink's scrubber, and a missing or failing scrubber returns nothing`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val app = RuntimeEnvironment.getApplication()
+        val lines = listOf("Screen events: Allowed, 10/6/26, app 0.230.1, privacy notice 16", "LEAKSTORE Bank Account")
+
+        val scrubbed = LogRepository(app, dispatcher, realScrubber).scrubForExport(lines)
+        assertEquals(listOf(lines[0], "[scrubbed:Bank Account]"), scrubbed)
+
+        assertEquals(null, LogRepository(app, dispatcher, LogScrubber { error("boom") }).scrubForExport(lines))
+        assertEquals(null, LogRepository(app, dispatcher).scrubForExport(lines))
+    }
 }
+

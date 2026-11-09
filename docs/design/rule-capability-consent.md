@@ -194,12 +194,18 @@ Each capability decision and the separate Screen-events decision carries its lat
 `decidedAt` (epoch milliseconds), `appVersion`, `disclosureRevision` (`PrivacyDisclosure.REVISION` of
 `PRIVACY.md`), and `granted`. The decision and receipt are written in **one DataStore edit** in the
 same store, so a record cannot commit separately from enforcement; a later decision replaces it.
-The consent-schema migration clears capability receipts together with the decisions. Missing or
+Every edit also drops a receipt whose key is in neither the new granted nor the new denied set, so no
+record outlives its decision; a decision for a capability the loaded rules no longer enumerate keeps its
+receipt. The consent-schema migration clears capability receipts together with the decisions. Missing or
 undecodable receipt JSON means no record, without changing grants or the Screen-events decision.
 
 Automation & Consent shows the receipt under each capability and the Screen-events switch, with
-status, local date, app version and disclosure revision, plus a link to the root `PRIVACY.md`.
-Receipts stay on the device and are not exported; a bug-report export carries the automatic-tap decision log lines, not the receipts.
+status, local date, app version and disclosure revision, plus a link to gig.log's own Privacy page, whose
+foot links the privacy policy and `PRIVACY.md` as of the build's commit (`@PrivacyNoticeUrl`). The
+bug-report export ends with a "Consent receipts" section in the same shape, read from the stores at export
+time (`ConsentReceiptReader`; an unreadable store says "unavailable", never "no choices") and passed through
+the shareable log's scrubber (`LogRepository.scrubForExport`); a failed scrubber leaves the section out and
+says so.
 
 ### Source policy (superseded by #843 — no auto-grant)
 

@@ -81,6 +81,10 @@ class RuleCapabilityDataSource @Inject constructor(
      * read-modify-write must happen inside the edit so concurrent updates
      * can't interleave). [transform] receives the currently-saved sets and
      * returns the new (granted, denied, receipts) snapshot.
+     *
+     * #170: a receipt is kept only while its key is in the new granted or denied set, so the store holds no
+     * record of a decision it no longer has. Every persisted decision keeps its receipt, including one for a
+     * capability the current rules no longer enumerate.
      */
     suspend fun update(
         transform: (granted: Set<String>, denied: Set<String>, receipts: Map<String, ConsentReceipt>) -> GrantSnapshot,
@@ -93,7 +97,8 @@ class RuleCapabilityDataSource @Inject constructor(
             )
             prefs[Keys.GRANTED] = newGranted
             prefs[Keys.DENIED] = newDenied
-            prefs[Keys.RECEIPTS] = ConsentReceiptJson.encodeToString(newReceipts)
+            val decided = newGranted + newDenied
+            prefs[Keys.RECEIPTS] = ConsentReceiptJson.encodeToString(newReceipts.filterKeys { it in decided })
         }
     }
 

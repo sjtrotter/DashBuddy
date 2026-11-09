@@ -8,7 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.w3c.dom.Element
 
-/** Checks English XML resource copy in the main and debug source sets; does not cover Kotlin literals. */
+/** Checks English XML resource copy in the main, debug and sideload source sets; does not cover Kotlin literals. */
 class BannedCopyGuardTest {
     private val banned = Regex(
         """\b(delve|leverage|robust|streamline|harness|seamless|effortless|unlock|supercharge|quietly|deeply|fundamentally|remarkably|utilize)\b""",
@@ -25,7 +25,7 @@ class BannedCopyGuardTest {
                     val folder = file.parentFile?.name.orEmpty()
                     file.isFile &&
                         file.extension == "xml" &&
-                        ("/src/main/res/" in file.invariantSeparatorsPath || "/src/debug/res/" in file.invariantSeparatorsPath) &&
+                        listOf("/src/main/res/", "/src/debug/res/", "/src/sideload/res/").any { it in file.invariantSeparatorsPath } &&
                         (
                             folder == "values" ||
                             folder == "values-en" ||

@@ -9,8 +9,8 @@ import cloud.trotter.log.gig.domain.settings.EventReceiptConsent
  * - [EventReceiptConsent.ALLOWED] ⇒ `null` (every package). This is the ONLY way topology events
  *   (`TYPE_WINDOWS_CHANGED`, which arrive with a null package) reach [ListenerGate]: the framework
  *   filters by package BEFORE `onAccessibilityEvent`.
- * - anything else ⇒ exactly the [watched] registry (`Platform.watchedPackages`, the list the
- *   manifest XML carries as the cold-start default). Fail-closed: UNDECIDED behaves as DECLINED.
+ * - anything else ⇒ exactly the [watched] registry (`Platform.readablePackages` for this build, the list the
+ *   service config XML carries as the cold-start default). Fail-closed: UNDECIDED behaves as DECLINED.
  *
  * Build type plays no part: since #1151 no build widens `packageNames` unconditionally.
  *

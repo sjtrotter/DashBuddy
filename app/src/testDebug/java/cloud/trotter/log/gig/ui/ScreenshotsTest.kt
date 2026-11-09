@@ -30,6 +30,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import cloud.trotter.log.gig.BuildConfig
 import cloud.trotter.log.gig.R
 import cloud.trotter.log.gig.core.designsystem.R as DesignR
 import cloud.trotter.log.gig.domain.analytics.RecordsStatus
@@ -60,6 +61,7 @@ import cloud.trotter.log.gig.feature.settings.CapabilityConsentViewModel
 import cloud.trotter.log.gig.feature.settings.EventReceiptConsentDialog
 import cloud.trotter.log.gig.feature.settings.EventReceiptOffConfirmDialog
 import cloud.trotter.log.gig.feature.settings.PrivacyScreen
+import cloud.trotter.log.gig.feature.settings.PrivacyViewModel
 import cloud.trotter.log.gig.feature.settings.StrategySettingsContent
 import cloud.trotter.log.gig.feature.settings.eventReceiptDisclosureParts
 import cloud.trotter.log.gig.ui.bubble.BubbleManager
@@ -427,7 +429,7 @@ class ScreenshotsTest(private val theme: String) {
             val grants = Grants(caps, setOf("dd-expand"), mapOf("dd-expand" to receipt(true), "dd-confirm" to receipt(false)))
             CapabilityConsentViewModel(grants, Prefs(consent, if (consent == EventReceiptConsent.UNDECIDED) null else receipt(true)), eventReceiptOffered = true)
         }
-        CapabilityConsentScreen(onBack = {}, viewModel = viewModel)
+        CapabilityConsentScreen(onBack = {}, onOpenPrivacy = {}, viewModel = viewModel)
     }
 
     /** The title, plus the declined capability's decision line with its receipt (decision, date, app version). */
@@ -442,20 +444,27 @@ class ScreenshotsTest(private val theme: String) {
     private fun privacy(path: String) = render(path, assertion = {
         text(string(SettingsR.string.privacy_title)).assertExists()
         text(string(SettingsR.string.privacy_test_builds_title)).assertExists()
-    }) { PrivacyScreen {} }
+    }) { PrivacyScreen(onBack = {}, viewModel = PrivacyViewModel(PrivacyDisclosure.URL, screenEventsOffered = true)) }
 
     /**
      * One step of the permission gate over Home in its gate state, through the real sheet and its real
-     * ViewModel (the `PermissionsBottomSheetTest` shape): [poll] is what Android reports as granted.
+     * ViewModel (the `PermissionsBottomSheetTest` shape): [poll] is what Android reports as granted. These shots
+     * render the debug build's resources, so they take the debug build's own facts (#170); the per-build card
+     * text is pinned by `AccessibilityDisclosureCompositionTest`, not here.
      */
     private fun permissionStep(name: String, step: Int, consent: EventReceiptConsent, poll: OsPermissionPoll) {
-        val vm = PermissionsViewModel({ poll }, Prefs(consent), isDebugBuild = false, PermissionDeferrals())
+        val vm = PermissionsViewModel(
+            { poll }, Prefs(consent), isDebugBuild = false, PermissionDeferrals(),
+            screenEventsOffered = BuildConfig.WIDE_EVENT_RECEIPT_OFFERED,
+            accessibilityTool = BuildConfig.ACCESSIBILITY_TOOL,
+            readsUnboundPlatforms = BuildConfig.READS_UNBOUND_PLATFORMS,
+        )
         val gate = vm.uiState.value
         render("setup/$name", window = true,
             assertion = { text(string(R.string.perm_step_format, step, 6)).assertIsDisplayed() }) {
             HomeBody(ScreenshotData.dashboard(), hasPermissions = if (gate.consentRead) gate.allGranted else null,
                 screenReadingOff = PermissionType.Accessibility in gate.missing)
-            PermissionsBottomSheet(onClosed = {}, viewModel = vm)
+            PermissionsBottomSheet(onClosed = {}, onOpenPrivacy = {}, viewModel = vm)
         }
     }
 

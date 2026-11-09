@@ -49,11 +49,14 @@ import cloud.trotter.log.gig.R
  * Close rule (#1457): the sheet hides only once the consent is read and no step is pending, and
  * after the hide it calls [onClosed] only if that still holds; a queue that refilled meanwhile
  * slides the sheet back up instead.
+ *
+ * #170: [onOpenPrivacy] opens gig.log's Privacy page, from the screen reading card's link; the host navigates.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PermissionsBottomSheet(
     onClosed: () -> Unit,
+    onOpenPrivacy: () -> Unit,
     viewModel: PermissionsViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -145,6 +148,8 @@ fun PermissionsBottomSheet(
                         AccessibilityDisclosureCard(
                             stepNumber = stepNumber,
                             stepCount = stepCount,
+                            facts = viewModel.accessibilityDisclosure,
+                            onOpenPrivacy = onOpenPrivacy,
                             onAllow = {
                                 launchGrantFlow(
                                     context = context,
