@@ -85,8 +85,12 @@ fun PrivacyScreen(onBack: () -> Unit, viewModel: PrivacyViewModel = hiltViewMode
     }
 }
 
-/** The page's sections in order (heading, body); the Test builds section is added after them when shown. */
-private val PRIVACY_SECTIONS: List<Pair<Int, Int>> = listOf(
+/**
+ * The page's sections in order (heading, body); the Test builds section is added after them when shown. The web
+ * privacy policy (tools/site/build_site.py, #1582) takes the same sections in strings.xml file order, so this list
+ * follows that order; PrivacySectionOrderTest pins it.
+ */
+internal val PRIVACY_SECTIONS: List<Pair<Int, Int>> = listOf(
     R.string.privacy_reads_title to R.string.privacy_reads_body,
     R.string.privacy_customers_title to R.string.privacy_customers_body,
     R.string.privacy_saves_title to R.string.privacy_saves_body,

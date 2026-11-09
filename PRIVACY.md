@@ -5,6 +5,9 @@ file that does it named for each claim, so it can be checked against the source 
 It is not yet a legal privacy policy; wording for the Play listing and the in-app disclosure is reviewed
 separately (#246). Where a claim and the code ever disagree, the code is the fact and this file is the bug.
 A change to a claim here updates the in-app privacy page (`privacy_*`) and every disclosure string that states it, in the same PR.
+The public privacy policy, https://gig.log.trotter.cloud/privacy/, is built from those same `privacy_*` strings and
+this file's current revision (`tools/site/build_site.py`, deployed by `.github/workflows/pages.yml`), so it changes
+with them.
 
 gig.log is **source-available**: the app is licensed under PolyForm Shield (`LICENSE`) and the recognition
 ruleset under `matchers/` is Apache-2.0 (`matchers/LICENSE`). Every statement below can be verified against the
