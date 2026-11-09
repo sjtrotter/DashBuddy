@@ -94,7 +94,7 @@ gcloud services enable iamcredentials.googleapis.com sts.googleapis.com androidp
 gcloud iam workload-identity-pools create github --location=global --display-name=GitHub
 gcloud iam workload-identity-pools providers create-oidc giglog --location=global --workload-identity-pool=github \
   --issuer-uri=https://token.actions.githubusercontent.com \
-  --attribute-mapping=google.subject=assertion.sub,attribute.repository_id=assertion.repository_id,attribute.environment=assertion.environment,attribute.ref=assertion.ref \
+  --attribute-mapping=google.subject=assertion.sub,attribute.repository_id=assertion.repository_id,attribute.repository_owner_id=assertion.repository_owner_id,attribute.environment=assertion.environment,attribute.ref=assertion.ref \
   --attribute-condition="assertion.repository_id=='911857133' && assertion.repository_owner_id=='33046718' && ((assertion.environment=='release' && assertion.ref.startsWith('refs/tags/v')) || (assertion.environment=='play-listing' && assertion.ref=='refs/heads/master'))"
 gcloud iam service-accounts add-iam-policy-binding "$SA" --role=roles/iam.workloadIdentityUser \
   --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github/attribute.repository_id/911857133"
