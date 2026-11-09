@@ -141,7 +141,7 @@ jobs:
           java-version: 21
 
       # Read-only: a release builds every task itself and writes nothing back for PR runs to restore.
-      - uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
+      - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
         with:
           cache-read-only: true
 
@@ -242,7 +242,7 @@ jobs:
 
       - name: Upload the Play build to the internal track
         if: vars.PLAY_PUBLISH == 'true'
-        uses: r0adkll/upload-google-play@eb49699984a39f23558439581660aa6f088acfd6 # v1
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1
         with:
           serviceAccountJson: ${{ steps.auth.outputs.credentials_file_path }}
           packageName: cloud.trotter.log.gig
