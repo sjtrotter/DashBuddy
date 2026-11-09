@@ -60,26 +60,29 @@ internal object ShiftPageFixtures {
             offersTimeout = 1,
         )
 
-    /** A stack (Five Guys and Chipotle, two drops, cash on the second), an add-on job, and runs of passed offers. */
-    fun stackAndAddOn(running: Boolean = false): SessionDetailUiState {
+    /**
+     * A stack (Five Guys and Chipotle, two drops, cash on the second), an add-on job, and runs of passed offers.
+     * [store] renames every merchant ([sampleStackAndAddOn]).
+     */
+    fun stackAndAddOn(running: Boolean = false, store: (String) -> String = { it }): SessionDetailUiState {
         val offers = listOf(
-            offer(10, 7, OfferOutcome.DECLINED, "Chick-fil-A", 6.50, 4.1),
-            offer(11, 14, OfferOutcome.DECLINED, "Panda Express", 4.00, 6.0),
-            offer(12, 22, OfferOutcome.TIMED_OUT, "Wingstop", 3.50, 5.2),
-            offer(13, 32, OfferOutcome.ACCEPTED, "Five Guys & Chipotle", 9.75, 3.1),
-            offer(14, 97, OfferOutcome.ACCEPTED, "Sample Burgers", 6.25, 2.4),
-            offer(20, 104, OfferOutcome.ACCEPTED, "Sample Tacos", 4.00, 1.8, OfferScope.ADD_ON, OfferQuoteBasis.INCREMENTAL),
-            offer(30, 150, OfferOutcome.DECLINED, "Sample Pizza", 5.00, 7.3),
+            offer(10, 7, OfferOutcome.DECLINED, store("Chick-fil-A"), 6.50, 4.1),
+            offer(11, 14, OfferOutcome.DECLINED, store("Panda Express"), 4.00, 6.0),
+            offer(12, 22, OfferOutcome.TIMED_OUT, store("Wingstop"), 3.50, 5.2),
+            offer(13, 32, OfferOutcome.ACCEPTED, store("Five Guys & Chipotle"), 9.75, 3.1),
+            offer(14, 97, OfferOutcome.ACCEPTED, store("Sample Burgers"), 6.25, 2.4),
+            offer(20, 104, OfferOutcome.ACCEPTED, store("Sample Tacos"), 4.00, 1.8, OfferScope.ADD_ON, OfferQuoteBasis.INCREMENTAL),
+            offer(30, 150, OfferOutcome.DECLINED, store("Sample Pizza"), 5.00, 7.3),
         )
         val records = listOf(
-            record(STACK_FIRST_DROP, "job-1", "Five Guys", 72, 6.25, PayBasis.DROP_SHARE, 3.10),
-            record(STACK_SECOND_DROP, "job-1", "Chipotle", 84, 5.50, PayBasis.DROP_SHARE, 2.40, cash = 5.0),
-            record(103, "job-2", "Sample Burgers", 128, 7.00, PayBasis.DROP_SHARE, 3.80),
-            record(104, "job-2", "Sample Tacos", 136, 4.00, PayBasis.OFFER_PAY, 1.90),
+            record(STACK_FIRST_DROP, "job-1", store("Five Guys"), 72, 6.25, PayBasis.DROP_SHARE, 3.10),
+            record(STACK_SECOND_DROP, "job-1", store("Chipotle"), 84, 5.50, PayBasis.DROP_SHARE, 2.40, cash = 5.0),
+            record(103, "job-2", store("Sample Burgers"), 128, 7.00, PayBasis.DROP_SHARE, 3.80),
+            record(104, "job-2", store("Sample Tacos"), 136, 4.00, PayBasis.OFFER_PAY, 1.90),
         )
         val pickups = listOf(
-            TimelinePickup(201, "job-1", "Five Guys", at(42), at(48), listOf("h13")),
-            TimelinePickup(202, "job-1", "Chipotle", at(52), at(57), listOf("h13")),
+            TimelinePickup(201, "job-1", store("Five Guys"), at(42), at(48), listOf("h13")),
+            TimelinePickup(202, "job-1", store("Chipotle"), at(52), at(57), listOf("h13")),
         )
         val deliveries = records.map { r ->
             TimelineDelivery(
@@ -93,6 +96,19 @@ internal object ShiftPageFixtures {
         )
         return state(detail, ShiftTimeline.fold(offers, pickups, deliveries, running))
     }
+
+    /** The stack's merchants under made-up names: the Play listing's shift page shows no real store. */
+    val SAMPLE_STORES = mapOf(
+        "Chick-fil-A" to "Sample Grocery",
+        "Panda Express" to "Noodle House",
+        "Wingstop" to "Sample Pharmacy",
+        "Five Guys & Chipotle" to "Burger Stand & Corner Cafe",
+        "Five Guys" to "Burger Stand",
+        "Chipotle" to "Corner Cafe",
+    )
+
+    /** [stackAndAddOn] with [SAMPLE_STORES]; every other merchant in it is already a "Sample …" one. */
+    fun sampleStackAndAddOn(): SessionDetailUiState = stackAndAddOn { SAMPLE_STORES[it] ?: it }
 
     /**
      * The heaviest field shape: 47 offers and no deliveries. Two accepted offers that never delivered split the

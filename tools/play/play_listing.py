@@ -1,4 +1,4 @@
-"""Push the store listing under play/listing/<locale>/ to Play, or print what Play has.
+"""Check the store listing under play/listing/<locale>/, push it to Play, or print what Play has.
 
 Runs in the "Play store listing" workflow (.github/workflows/play-listing.yml) with the same service account
 the release pipeline uses. Credentials come from Application Default Credentials (in CI, the file the auth
@@ -9,20 +9,21 @@ step writes). The layout follows fastlane's supply convention (play/listing/READ
     play/listing/en-US/full_description.txt
     play/listing/en-US/images/icon.png
     play/listing/en-US/images/featureGraphic.png
-    play/listing/en-US/images/phoneScreenshots/*.png   (optional)
+    play/listing/en-US/images/phoneScreenshots/*.png
 
-upload refuses before it opens an edit when a required file is missing, empty or over Play's length limit,
-so an empty or half-filled tree never publishes.
+check reads the files against Play's limits (text lengths, image sizes and PNG formats) and needs no
+credentials and no Google libraries. upload runs the same check and refuses before it opens an edit on any
+problem, so an empty, half-filled or malformed tree never publishes.
 
-Usage: play_listing.py inspect|upload
+Usage: play_listing.py inspect|upload|check [listing root, default play/listing]
 """
 import argparse
 import json
+import sys
 from pathlib import Path
 
-import google.auth
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "ci"))
+import png_structure  # noqa: E402
 
 PACKAGE = "cloud.trotter.log.gig"
 LISTING_DIR = Path("play/listing")
@@ -33,23 +34,63 @@ TEXT_FILES = {
     "short_description.txt": ("shortDescription", 80),
     "full_description.txt": ("fullDescription", 4000),
 }
-REQUIRED_IMAGES = {"icon.png": "icon", "featureGraphic.png": "featureGraphic"}
-OPTIONAL_IMAGE_DIRS = {"phoneScreenshots": "phoneScreenshots"}
+ICON = "icon.png"
+FEATURE_GRAPHIC = "featureGraphic.png"
+PHONE_SCREENSHOTS = "phoneScreenshots"
+ICON_SIZE = (512, 512)
+ICON_MAX_BYTES = 1024 * 1024
+FEATURE_GRAPHIC_SIZE = (1024, 500)
+SCREENSHOT_COUNT = (2, 8)
+SCREENSHOT_SIDE = (320, 3840)
+# PNG colour types: 2 is RGB (24-bit at depth 8), 6 is RGB with alpha (32-bit at depth 8).
+RGB, RGBA = 2, 6
 
 
 def service():
+    import google.auth
+    from googleapiclient.discovery import build
+
     creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/androidpublisher"])
     # Live discovery: the client's bundled document lags the API and lacks
     # commit's changesInReviewBehavior, which the upload relies on.
     return build("androidpublisher", "v3", credentials=creds, cache_discovery=False, static_discovery=False)
 
 
-def read_listing():
-    """Reads and checks every locale's files; exits with every problem before any API call."""
+def image_problems(path, colour, size=None, max_bytes=None):
+    """Problems with one PNG: its structure, bit depth 8 and [colour] (RGB with no tRNS), then [size], else
+    Play's screenshot side and ratio limits, then [max_bytes]."""
+    try:
+        png = png_structure.read(path)
+    except png_structure.ERRORS as error:
+        return [f"{path}: not a well-formed PNG ({error})"]
+    problems = []
+    if png.depth != 8 or png.colour != colour:
+        want = "24-bit RGB with no alpha" if colour == RGB else "32-bit RGBA"
+        problems.append(f"{path}: colour type {png.colour} at bit depth {png.depth}, Play wants {want} "
+                        f"(colour type {colour}, bit depth 8)")
+    if colour == RGB and b"tRNS" in png.kinds:
+        problems.append(f"{path}: has a tRNS (transparency) chunk, Play wants no alpha")
+    if size is not None:
+        if (png.width, png.height) != size:
+            problems.append(f"{path}: {png.width} x {png.height} px, Play wants {size[0]} x {size[1]}")
+    else:
+        low, high = SCREENSHOT_SIDE
+        short, long = sorted((png.width, png.height))
+        if short < low or long > high:
+            problems.append(f"{path}: {png.width} x {png.height} px, each side must be {low} to {high}")
+        if long > 2 * short:
+            problems.append(f"{path}: {png.width} x {png.height} px, the long side may be at most twice the short")
+    if max_bytes is not None and path.stat().st_size > max_bytes:
+        problems.append(f"{path}: {path.stat().st_size} bytes, Play allows {max_bytes}")
+    return problems
+
+
+def collect(root=LISTING_DIR):
+    """Every locale's (body, images), and every problem found against Play's limits."""
     problems = []
     listings = {}
     for locale in LOCALES:
-        locale_dir = LISTING_DIR / locale
+        locale_dir = root / locale
         body = {"language": locale}
         for name, (field, limit) in TEXT_FILES.items():
             path = locale_dir / name
@@ -62,29 +103,52 @@ def read_listing():
             elif len(text) > limit:
                 problems.append(f"{path}: {len(text)} characters, Play allows {limit}")
             body[field] = text
+        images_dir = locale_dir / "images"
         images = {}
-        for name, image_type in REQUIRED_IMAGES.items():
-            path = locale_dir / "images" / name
-            if not path.is_file():
+        for name, image_type, rules in (
+            (ICON, "icon", {"colour": RGBA, "size": ICON_SIZE, "max_bytes": ICON_MAX_BYTES}),
+            (FEATURE_GRAPHIC, "featureGraphic", {"colour": RGB, "size": FEATURE_GRAPHIC_SIZE}),
+        ):
+            path = images_dir / name
+            if path.is_file():
+                problems += image_problems(path, **rules)
+            else:
                 problems.append(f"{path}: missing")
             images[image_type] = [path]
-        for name, image_type in OPTIONAL_IMAGE_DIRS.items():
-            files = sorted((locale_dir / "images" / name).glob("*.png"))
-            if files:
-                images[image_type] = files
+        shots_dir = images_dir / PHONE_SCREENSHOTS
+        shots = sorted(shots_dir.glob("*.png"))
+        low, high = SCREENSHOT_COUNT
+        if not low <= len(shots) <= high:
+            problems.append(f"{shots_dir}: {len(shots)} PNG screenshots, Play wants {low} to {high}")
+        for shot in shots:
+            problems += image_problems(shot, RGB)
+        images[PHONE_SCREENSHOTS] = shots
         listings[locale] = (body, images)
+    return listings, problems
+
+
+def read_listing(root=LISTING_DIR):
+    """Reads and checks every locale's files; exits with every problem before any API call."""
+    listings, problems = collect(root)
     if problems:
         raise SystemExit("listing not uploaded:\n  " + "\n  ".join(problems))
     return listings
+
+
+def check(root=LISTING_DIR):
+    _, problems = collect(root)
+    for line in problems:
+        print(f"problem: {line}")
+    print(f"{root}: {len(problems)} problems" if problems else f"{root}: ready to upload")
+    return 1 if problems else 0
 
 
 def inspect(api, edit_id):
     edits = api.edits()
     print("details:", json.dumps(edits.details().get(packageName=PACKAGE, editId=edit_id).execute(), indent=2))
     print("listings:", json.dumps(edits.listings().list(packageName=PACKAGE, editId=edit_id).execute(), indent=2))
-    image_types = sorted(set(REQUIRED_IMAGES.values()) | set(OPTIONAL_IMAGE_DIRS.values()))
     for locale in LOCALES:
-        for image_type in image_types:
+        for image_type in ("featureGraphic", "icon", PHONE_SCREENSHOTS):
             images = edits.images().list(
                 packageName=PACKAGE, editId=edit_id, language=locale, imageType=image_type,
             ).execute()
@@ -105,6 +169,8 @@ def upload(api, edit_id, listings):
 
 
 def upload_images(edits, edit_id, locale, image_type, files):
+    from googleapiclient.http import MediaFileUpload
+
     edits.images().deleteall(
         packageName=PACKAGE, editId=edit_id, language=locale, imageType=image_type,
     ).execute()
@@ -116,11 +182,15 @@ def upload_images(edits, edit_id, locale, image_type, files):
         print(f"{locale}: {image_type} <- {file.name}")
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", nargs="?", default="inspect", choices=("inspect", "upload"))
-    args = parser.parse_args()
-    listings = read_listing() if args.mode == "upload" else None
+    parser.add_argument("mode", nargs="?", default="inspect", choices=("inspect", "upload", "check"))
+    parser.add_argument("root", nargs="?", default=str(LISTING_DIR), help="listing root (default play/listing)")
+    args = parser.parse_args(argv)
+    root = Path(args.root)
+    if args.mode == "check":
+        return check(root)
+    listings = read_listing(root) if args.mode == "upload" else None
     api = service()
     edit_id = api.edits().insert(packageName=PACKAGE, body={}).execute()["id"]
     if args.mode == "upload":
@@ -130,7 +200,8 @@ def main():
             inspect(api, edit_id)
         finally:
             api.edits().delete(packageName=PACKAGE, editId=edit_id).execute()
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

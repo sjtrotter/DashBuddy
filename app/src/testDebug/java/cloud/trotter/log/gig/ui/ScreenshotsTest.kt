@@ -65,20 +65,14 @@ import cloud.trotter.log.gig.feature.settings.PrivacyViewModel
 import cloud.trotter.log.gig.feature.settings.StrategySettingsContent
 import cloud.trotter.log.gig.feature.settings.eventReceiptDisclosureParts
 import cloud.trotter.log.gig.ui.bubble.BubbleManager
-import cloud.trotter.log.gig.ui.main.MainScaffold
-import cloud.trotter.log.gig.ui.main.analytics.AnalyticsContent
 import cloud.trotter.log.gig.ui.main.analytics.day.DayContent
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsUiState
 import cloud.trotter.log.gig.ui.main.analytics.shifts.SHIFTS_LIST_TAG
 import cloud.trotter.log.gig.ui.main.analytics.shifts.ShiftsContent
 import cloud.trotter.log.gig.ui.main.analytics.shifts.ShiftsUiState
-import cloud.trotter.log.gig.ui.main.dashboard.DashboardBody
-import cloud.trotter.log.gig.ui.main.dashboard.DashboardUiState
 import cloud.trotter.log.gig.ui.main.dashboard.EndShiftCandidate
 import cloud.trotter.log.gig.ui.main.dashboard.EndShiftForm
 import cloud.trotter.log.gig.ui.main.dashboard.EndShiftSheet
-import cloud.trotter.log.gig.ui.main.navigation.TopLevel
-import cloud.trotter.log.gig.ui.main.playbook.PlaybookContent
 import cloud.trotter.log.gig.ui.main.playbook.PlaybookUiState
 import cloud.trotter.log.gig.ui.main.settings.SettingsHomeContent
 import cloud.trotter.log.gig.ui.main.setup.consent.ConsentPromptPage
@@ -473,35 +467,10 @@ class ScreenshotsTest(private val theme: String) {
         text(string(DashboardR.string.dashboard_weekly_plan_pointer_action)).assertExists()
     }) { HomeBody(ScreenshotData.dashboard(), hasPermissions = true) }
 
-    /** Home in the app shell's frame, so the bottom bar shows under it (#1447). */
-    @Composable
-    private fun HomeBody(state: DashboardUiState, hasPermissions: Boolean?, screenReadingOff: Boolean = false) =
-        MainScaffold(selectedTab = TopLevel.HOME, onSelectTab = {}) { modifier ->
-            Box(modifier) {
-                DashboardBody(
-                    uiState = state, hasPermissions = hasPermissions, screenReadingOff = screenReadingOff,
-                    onContinueGate = {}, onOpenWizard = {}, onCompleteSetup = {}, onShowBubble = {},
-                    onOpenRecap = {}, onOpenPlan = {}, onOpenRatings = {}, onOpenSettings = {},
-                )
-            }
-        }
-
     private fun recap(path: String, state: AnalyticsUiState, row: String) = render(path, assertion = {
         text(string(R.string.analytics_screen_title)).assertExists()
         text(row).assertExists()
     }) { RecapBody(state) }
-
-    /** Recap in the app shell's frame. */
-    @Composable
-    private fun RecapBody(state: AnalyticsUiState) =
-        MainScaffold(selectedTab = TopLevel.ANALYTICS, onSelectTab = {}) { modifier ->
-            Box(modifier) {
-                AnalyticsContent(
-                    uiState = state, onOpenSettings = {}, onStep = {}, onSelectMeasure = {}, onOpenDay = {},
-                    onOpenShift = { _, _ -> }, onOpenShifts = {}, onOpenNoSession = {}, onRetry = {},
-                )
-            }
-        }
 
     private fun day(path: String) = render(path, assertion = {
         text(Formats.money(ScreenshotData.day.economics.grossEarnings)).assertExists()
@@ -545,15 +514,6 @@ class ScreenshotsTest(private val theme: String) {
         text(string(R.string.playbook_screen_title)).assertExists()
         text(row).assertExists()
     }) { PlaybookBody(state) }
-
-    /** The Playbook in the app shell's frame. */
-    @Composable
-    private fun PlaybookBody(state: PlaybookUiState) =
-        MainScaffold(selectedTab = TopLevel.PLAYBOOK, onSelectTab = {}) { modifier ->
-            Box(modifier) {
-                PlaybookContent(uiState = state, onOpenSettings = {}, onOpenPlan = {}, onToggleShowMore = {}, onRetry = {})
-            }
-        }
 
     /** A tab's loading body: the spinner shows, since [render] runs two seconds of frames first. */
     private fun loading(path: String, content: @Composable () -> Unit) = render(path, assertion = {

@@ -1,10 +1,10 @@
 name: Play store listing
 
 # Manually triggered. "inspect" prints what the Play Console holds (listing text, image ids, tracks) and changes
-# nothing; "upload" replaces the en-US listing text and images with what is under play/listing/ and commits the
-# edit. tools/play/play_listing.py does the work; play/listing/README.md is the layout. docs/RELEASE.md, Play
-# Console setup, covers the service account. Keyless auth accepts this job only through the `play-listing`
-# environment on master (docs/RELEASE.md §4).
+# nothing; "upload" checks play/listing/ against Play's limits (play_listing.py check), then replaces the en-US
+# listing text and images with it and commits the edit. tools/play/play_listing.py does the work;
+# play/listing/README.md is the layout. docs/RELEASE.md, Play Console setup, covers the service account. Keyless
+# auth accepts this job only through the `play-listing` environment on master (docs/RELEASE.md §4).
 # Needs "View app information" for inspect and "Manage store presence" for upload.
 on:
   workflow_dispatch:
@@ -36,6 +36,11 @@ jobs:
           [ "$ok" = 1 ] || exit 1
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # Stdlib only, before any credential: a tree Play would reject never reaches the auth step.
+      - name: Check the listing files
+        if: ${{ inputs.mode == 'upload' }}
+        run: python3 tools/play/play_listing.py check
 
       - id: auth
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3

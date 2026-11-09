@@ -1,5 +1,7 @@
 <resources>
     <string name="app_name" translatable="false">gig.log</string>
+    <!-- #1416: the Play listing's feature graphic (PlayListingScreenshotsTest); the listing is English only. -->
+    <string name="play_feature_graphic_tagline" translatable="false">Offer pay, miles and profit for delivery drivers</string>
     <!-- #170: the Play build's service description. Android reads it from the service config XML, so it cannot be
          formatted: it is the one static copy that names the apps gig.log reads. AccessibilityDescriptionGuardTest
          checks every build's copy names exactly the bound platforms (Platform.boundPlatforms) and carries the Screen
