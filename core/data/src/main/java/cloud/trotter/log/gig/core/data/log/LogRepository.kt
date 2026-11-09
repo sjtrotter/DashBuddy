@@ -110,6 +110,24 @@ class LogRepository @Inject constructor(
     }
 
     /**
+     * #170 — passes text the bug report adds after the sink (the consent receipts) through the same fail-closed
+     * [scrubber]: the appended text never reached [writeShareable], so it is scrubbed here, explicitly. A line
+     * with a marker is replaced whole by `[scrubbed:<marker>]` (no prefix is kept: these lines carry no timestamp).
+     * Returns null when the scrubber is unbound or throws; the caller then leaves the text out, never writes it raw.
+     */
+    fun scrubForExport(lines: List<String>): List<String>? {
+        val scrub = scrubber ?: return null
+        return try {
+            lines.map { line ->
+                val marker = scrub.findMarker(line)
+                if (marker == null) line else "[scrubbed:$marker]"
+            }
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    /**
      * Build the redacted stand-in for a scrubbed line. Keeps the leading timestamp (cheaply
      * available: everything before the ` [state]` bracket the [StateAwareTree] format inserts) so
      * ordering context survives, and appends only the safe [marker] constant. FAIL-SAFE: if the line
