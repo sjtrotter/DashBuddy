@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.replay
 
+import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
@@ -275,7 +276,7 @@ class ConsentToActuationE2ETest {
 
     /** The real Settings consent VM; its event-receipt half is irrelevant here (a fixed ALLOWED value). */
     private fun settingsScreen(replay: E2ESessionReplay): CapabilityConsentViewModel =
-        viewModel { CapabilityConsentViewModel(replay.grants, AllowedEventReceipt, eventReceiptOffered = true) }
+        viewModel { CapabilityConsentViewModel(replay.grants, AllowedEventReceipt, eventReceiptOffered = true, privacyUrl = PrivacyDisclosure.URL) }
 
     private inline fun <reified VM : ViewModel> viewModel(crossinline create: () -> VM): VM {
         val store = ViewModelStore()

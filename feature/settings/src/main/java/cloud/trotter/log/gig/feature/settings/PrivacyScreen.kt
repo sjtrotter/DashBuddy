@@ -17,17 +17,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.booleanResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 
 /**
  * #1457 — the in-app privacy page (Settings > Data & privacy > Privacy): what gig.log reads, saves
@@ -35,12 +33,12 @@ import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
  * each card says only what its own permission does. Static copy, no state; `PRIVACY.md` is the
  * engineering ground truth, and a change to a claim there updates the matching `privacy_*` string in
  * the same PR. The Test builds section shows only where `privacy_show_test_builds` is true (the debug
- * source set).
+ * source set). #170: the Screen events line shows only in a build that offers Screen events, and the link
+ * opens PRIVACY.md as of this build's commit ([PrivacyViewModel]).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PrivacyScreen(onBack: () -> Unit) {
-    val uriHandler = LocalUriHandler.current
+fun PrivacyScreen(onBack: () -> Unit, viewModel: PrivacyViewModel = hiltViewModel()) {
     val showTestBuilds = booleanResource(R.bool.privacy_show_test_builds)
 
     Scaffold(
@@ -65,17 +63,19 @@ fun PrivacyScreen(onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp),
         ) {
-            PRIVACY_SECTIONS.forEach { (title, body) -> PrivacySection(title, body) }
+            PRIVACY_SECTIONS.forEach { (title, body) ->
+                val extra = R.string.privacy_reads_screen_events.takeIf {
+                    title == R.string.privacy_reads_title && viewModel.screenEventsOffered
+                }
+                PrivacySection(title, body, extra)
+            }
             if (showTestBuilds) {
                 PrivacySection(R.string.privacy_test_builds_title, R.string.privacy_test_builds_body)
             }
-            TextButton(
-                // No browser (restricted/work profile) throws from openUri; the link must never crash the page.
-                onClick = { runCatching { uriHandler.openUri(PrivacyDisclosure.URL) } },
+            PrivacyNoticeLink(
+                url = viewModel.privacyUrl,
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            ) {
-                Text(stringResource(R.string.consent_privacy_link))
-            }
+            )
             Spacer(Modifier.height(32.dp))
         }
     }
@@ -93,8 +93,9 @@ private val PRIVACY_SECTIONS: List<Pair<Int, Int>> = listOf(
     R.string.privacy_choices_title to R.string.privacy_choices_body,
 )
 
+/** One section: its heading, its body and, when given, a second paragraph ([extra]). */
 @Composable
-private fun PrivacySection(@StringRes title: Int, @StringRes body: Int) {
+private fun PrivacySection(@StringRes title: Int, @StringRes body: Int, @StringRes extra: Int? = null) {
     Spacer(Modifier.height(16.dp))
     Text(
         text = stringResource(title),
@@ -107,4 +108,12 @@ private fun PrivacySection(@StringRes title: Int, @StringRes body: Int) {
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    if (extra != null) {
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = stringResource(extra),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }

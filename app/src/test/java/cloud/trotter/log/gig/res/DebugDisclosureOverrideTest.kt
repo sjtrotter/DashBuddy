@@ -65,11 +65,13 @@ class DebugDisclosureOverrideTest {
             )
             assertFalse("$key (debug) is about screens; notifications belong to their own card", "notification" in debug.lowercase())
         }
+        // #170: the debug build offers Screen events and main (the Play build) does not, so the debug copy adds
+        // that one sentence; AccessibilityDescriptionGuardTest pins it per build.
         assertTrue(
-            "the debug service description is the main text with its sharing sentences replaced",
-            appDebug.getValue("accessibility_service_description").startsWith(
-                appMain.getValue("accessibility_service_description").substringBefore(" gig.log itself sends nothing"),
-            ),
+            "the debug service description is the main text, plus the Screen events sentence, with its sharing sentences replaced",
+            appDebug.getValue("accessibility_service_description")
+                .replace(" With Screen events on, it also sees which other app is open.", "")
+                .startsWith(appMain.getValue("accessibility_service_description").substringBefore(" gig.log itself sends nothing")),
         )
     }
 

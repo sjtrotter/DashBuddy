@@ -3,6 +3,8 @@ package cloud.trotter.log.gig.di
 import cloud.trotter.log.gig.domain.di.ApplicationScope
 import cloud.trotter.log.gig.domain.di.DefaultDispatcher
 import cloud.trotter.log.gig.domain.di.IoDispatcher
+import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
+import cloud.trotter.log.gig.domain.di.PrivacyNoticeUrl
 import cloud.trotter.log.gig.domain.di.WideEventReceiptOffered
 import dagger.Module
 import dagger.Provides
@@ -71,4 +73,13 @@ object DispatchersModule {
     @Provides
     @WideEventReceiptOffered
     fun provideWideEventReceiptOffered(): Boolean = BuildConfig.WIDE_EVENT_RECEIPT_OFFERED
+
+    /**
+     * #170 — the one in-app privacy link: PRIVACY.md as of this build's commit, or master for a build with no
+     * clean commit (`BuildConfig.PRIVACY_REF`). The permission card, Automation & consent and the privacy page
+     * all open this.
+     */
+    @Provides
+    @PrivacyNoticeUrl
+    fun providePrivacyNoticeUrl(): String = PrivacyDisclosure.urlAt(BuildConfig.PRIVACY_REF)
 }

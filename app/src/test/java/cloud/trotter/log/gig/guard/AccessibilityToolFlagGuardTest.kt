@@ -37,16 +37,24 @@ class AccessibilityToolFlagGuardTest {
 
     @Test
     fun `the build table holds the three builds with their flags`() {
-        val script = buildScript()
         val expected = mapOf(
-            "debug" to (true to true),
-            "release" to (false to false),
-            "sideload" to (true to true),
+            "debug" to BuildTable.Row(accessibilityTool = true, wideEventReceipt = true),
+            "release" to BuildTable.Row(accessibilityTool = false, wideEventReceipt = false),
+            "sideload" to BuildTable.Row(accessibilityTool = true, wideEventReceipt = true),
         )
-        val rows = ROW.findAll(script).associate { m ->
-            m.groupValues[1] to (m.groupValues[2].toBoolean() to m.groupValues[3].toBoolean())
+        assertEquals("(accessibilityTool, wideEventReceipt) per build type", expected, BuildTable.rows(root))
+    }
+
+    /** #170 — the screen reading card reads both build facts from BuildConfig, derived from the table row. */
+    @Test
+    fun `every build type's BuildConfig carries both table facts`() {
+        val configure = block(buildScript().substringAfter("buildTypes {"), Regex("""configureEach\s*\{"""))
+        for ((field, fact) in listOf("WIDE_EVENT_RECEIPT_OFFERED" to "wideEventReceipt", "ACCESSIBILITY_TOOL" to "accessibilityTool")) {
+            assertTrue(
+                "$field from facts.$fact",
+                Regex("""buildConfigField\(\s*"boolean"\s*,\s*"$field"\s*,\s*facts\.$fact\.toString\(\)\s*\)""").containsMatchIn(configure),
+            )
         }
-        assertEquals("(accessibilityTool, wideEventReceipt) per build type", expected, rows)
     }
 
     @Test
@@ -98,8 +106,5 @@ class AccessibilityToolFlagGuardTest {
     private companion object {
         const val ANDROID_NS = "http://schemas.android.com/apk/res/android"
         const val FLAG = "isAccessibilityTool"
-        val ROW = Regex(
-            """"(\w+)"\s+to\s+Distribution\(\s*accessibilityTool\s*=\s*(true|false)\s*,\s*wideEventReceipt\s*=\s*(true|false)\s*,?\s*\)""",
-        )
     }
 }

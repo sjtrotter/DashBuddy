@@ -60,6 +60,7 @@ import cloud.trotter.log.gig.feature.settings.CapabilityConsentViewModel
 import cloud.trotter.log.gig.feature.settings.EventReceiptConsentDialog
 import cloud.trotter.log.gig.feature.settings.EventReceiptOffConfirmDialog
 import cloud.trotter.log.gig.feature.settings.PrivacyScreen
+import cloud.trotter.log.gig.feature.settings.PrivacyViewModel
 import cloud.trotter.log.gig.feature.settings.StrategySettingsContent
 import cloud.trotter.log.gig.feature.settings.eventReceiptDisclosureParts
 import cloud.trotter.log.gig.ui.bubble.BubbleManager
@@ -159,6 +160,10 @@ class ScreenshotsTest(private val theme: String) {
     @Test fun setupStep1() = permissionStep("step-1-screen-events", 1, EventReceiptConsent.UNDECIDED, OsPermissionPoll())
 
     @Test fun setupStep2() = permissionStep("step-2-screen-reading", 2, EventReceiptConsent.ALLOWED, OsPermissionPoll())
+
+    /** #170 — the Play build's screen reading card: no Screen events step or sentence, and the Uber pop-up line. */
+    @Test fun setupStep1Play() = permissionStep("step-1-screen-reading-play", 1, EventReceiptConsent.UNDECIDED, OsPermissionPoll(),
+        playBuild = true)
 
     @Test fun setupStep3() = permissionStep("step-3-notification-access", 3, EventReceiptConsent.ALLOWED,
         OsPermissionPoll(accessibility = true))
@@ -425,7 +430,7 @@ class ScreenshotsTest(private val theme: String) {
         )
         val viewModel = remember(consent) {
             val grants = Grants(caps, setOf("dd-expand"), mapOf("dd-expand" to receipt(true), "dd-confirm" to receipt(false)))
-            CapabilityConsentViewModel(grants, Prefs(consent, if (consent == EventReceiptConsent.UNDECIDED) null else receipt(true)), eventReceiptOffered = true)
+            CapabilityConsentViewModel(grants, Prefs(consent, if (consent == EventReceiptConsent.UNDECIDED) null else receipt(true)), eventReceiptOffered = true, privacyUrl = PrivacyDisclosure.URL)
         }
         CapabilityConsentScreen(onBack = {}, viewModel = viewModel)
     }
@@ -442,17 +447,22 @@ class ScreenshotsTest(private val theme: String) {
     private fun privacy(path: String) = render(path, assertion = {
         text(string(SettingsR.string.privacy_title)).assertExists()
         text(string(SettingsR.string.privacy_test_builds_title)).assertExists()
-    }) { PrivacyScreen {} }
+    }) { PrivacyScreen(onBack = {}, viewModel = PrivacyViewModel(PrivacyDisclosure.URL, screenEventsOffered = true)) }
 
     /**
      * One step of the permission gate over Home in its gate state, through the real sheet and its real
      * ViewModel (the `PermissionsBottomSheetTest` shape): [poll] is what Android reports as granted.
      */
-    private fun permissionStep(name: String, step: Int, consent: EventReceiptConsent, poll: OsPermissionPoll) {
-        val vm = PermissionsViewModel({ poll }, Prefs(consent), isDebugBuild = false, PermissionDeferrals())
+    private fun permissionStep(
+        name: String, step: Int, consent: EventReceiptConsent, poll: OsPermissionPoll, playBuild: Boolean = false,
+    ) {
+        val vm = PermissionsViewModel(
+            { poll }, Prefs(consent), isDebugBuild = false, PermissionDeferrals(),
+            screenEventsOffered = !playBuild, accessibilityTool = !playBuild,
+        )
         val gate = vm.uiState.value
         render("setup/$name", window = true,
-            assertion = { text(string(R.string.perm_step_format, step, 6)).assertIsDisplayed() }) {
+            assertion = { text(string(R.string.perm_step_format, step, if (playBuild) 5 else 6)).assertIsDisplayed() }) {
             HomeBody(ScreenshotData.dashboard(), hasPermissions = if (gate.consentRead) gate.allGranted else null,
                 screenReadingOff = PermissionType.Accessibility in gate.missing)
             PermissionsBottomSheet(onClosed = {}, viewModel = vm)

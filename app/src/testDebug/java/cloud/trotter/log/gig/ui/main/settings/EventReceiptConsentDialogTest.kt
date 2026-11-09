@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.ui.main.settings
 
+import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
 import androidx.activity.ComponentDialog
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOff
@@ -63,7 +64,7 @@ class EventReceiptConsentDialogTest {
     }
 
     private fun show(prefs: FakeEventReceipt) {
-        val vm = CapabilityConsentViewModel(NoCapabilities(), prefs, eventReceiptOffered = true)
+        val vm = CapabilityConsentViewModel(NoCapabilities(), prefs, eventReceiptOffered = true, privacyUrl = PrivacyDisclosure.URL)
         compose.setContent { GigLogTheme { CapabilityConsentScreen(onBack = {}, viewModel = vm) } }
     }
 

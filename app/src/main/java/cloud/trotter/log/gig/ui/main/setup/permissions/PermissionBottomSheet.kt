@@ -145,6 +145,7 @@ fun PermissionsBottomSheet(
                         AccessibilityDisclosureCard(
                             stepNumber = stepNumber,
                             stepCount = stepCount,
+                            facts = viewModel.accessibilityDisclosure,
                             onAllow = {
                                 launchGrantFlow(
                                     context = context,

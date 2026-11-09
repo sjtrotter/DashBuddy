@@ -18,11 +18,18 @@ data class ConsentReceipt(
 )
 
 /**
- * The revision of PRIVACY.md the in-app disclosure refers to (bump when the document's claims change). [URL] opens
- * the CURRENT revision (a moving head); PRIVACY.md's revision history is how a reader maps a receipt's revision to
- * the text it referred to — pinning the link per revision is #1237.
+ * The revision of PRIVACY.md the in-app disclosure refers to (bump when the document's claims change). PRIVACY.md's
+ * revision history is how a reader maps a receipt's revision to the text it referred to.
+ *
+ * [URL] is the master copy: the stable link the Play Console policy entry uses. The in-app link (#170) opens the
+ * copy as of the build's own commit, [urlAt] with `BuildConfig.PRIVACY_REF`, provided to every screen as the
+ * `@PrivacyNoticeUrl` string; a build with no clean commit falls back to master.
  */
 object PrivacyDisclosure {
-    const val REVISION: Int = 15
-    const val URL: String = "https://github.com/sjtrotter/gig.log/blob/master/PRIVACY.md"
+    const val REVISION: Int = 16
+
+    /** PRIVACY.md at a git ref (a commit sha or `master`). */
+    fun urlAt(ref: String): String = "https://github.com/sjtrotter/gig.log/blob/$ref/PRIVACY.md"
+
+    val URL: String = urlAt("master")
 }

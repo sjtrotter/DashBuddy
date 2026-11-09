@@ -145,6 +145,11 @@ android {
 
         buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
         buildConfigField("long", "BUILD_TIME_MS", "${buildTimeMs}L")
+
+        // #170: the in-app privacy link opens PRIVACY.md as of the commit this build was made from
+        // (`PrivacyDisclosure.urlAt`). A `.dirty` or no-git build has no such commit, so it opens master.
+        val privacyRef = if (gitDirty || gitSha == "nogit") "master" else gitSha
+        buildConfigField("String", "PRIVACY_REF", "\"$privacyRef\"")
     }
 
     signingConfigs {
@@ -222,6 +227,7 @@ android {
         configureEach {
             val facts = distribution.getValue(name)
             buildConfigField("boolean", "WIDE_EVENT_RECEIPT_OFFERED", facts.wideEventReceipt.toString())
+            buildConfigField("boolean", "ACCESSIBILITY_TOOL", facts.accessibilityTool.toString())
         }
     }
 

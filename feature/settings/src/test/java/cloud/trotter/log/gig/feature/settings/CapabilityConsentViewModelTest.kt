@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.feature.settings
 
+import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
 import cloud.trotter.log.gig.domain.action.RuleAction
 import cloud.trotter.log.gig.domain.capability.ConsentReceipt
 import cloud.trotter.log.gig.domain.capability.RuleCapability
@@ -180,7 +181,7 @@ class CapabilityConsentViewModelTest {
             )
             val allow = consent == EventReceiptConsent.ALLOWED
             if (allow) grants.setGrantedKeys(setOf("k1")) else grants.setDeniedKeys(setOf("k1"))
-            val vm = CapabilityConsentViewModel(grants, FakeEventReceipt(consent), eventReceiptOffered = true)
+            val vm = CapabilityConsentViewModel(grants, FakeEventReceipt(consent), eventReceiptOffered = true, privacyUrl = PrivacyDisclosure.URL)
 
             val state = vm.uiState.first { it.sources.isNotEmpty() }
             val expected = if (allow) ConsentStatus.ALLOWED else ConsentStatus.NOT_ALLOWED
@@ -219,7 +220,7 @@ class CapabilityConsentViewModelTest {
             listOf(cap("k1", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS, "asset:rules/doordash.json")),
         )
         grants.setGrantedKeys(setOf("k1"))
-        val vm = CapabilityConsentViewModel(grants, FakeEventReceipt(), eventReceiptOffered = true)
+        val vm = CapabilityConsentViewModel(grants, FakeEventReceipt(), eventReceiptOffered = true, privacyUrl = PrivacyDisclosure.URL)
 
         // WhileSubscribed: collecting is what starts the upstream combine.
         val state = vm.uiState.first { it.sources.isNotEmpty() }
@@ -230,7 +231,7 @@ class CapabilityConsentViewModelTest {
     @Test
     fun `setGranted grant routes through the grant store`() = runTest {
         val grants = FakeGrants()
-        val vm = CapabilityConsentViewModel(grants, FakeEventReceipt(), eventReceiptOffered = true)
+        val vm = CapabilityConsentViewModel(grants, FakeEventReceipt(), eventReceiptOffered = true, privacyUrl = PrivacyDisclosure.URL)
 
         vm.setGranted("k1", true)
 
@@ -241,7 +242,7 @@ class CapabilityConsentViewModelTest {
     fun `setGranted revoke routes through the grant store as false and drops the key`() = runTest {
         val grants = FakeGrants()
         grants.setGrantedKeys(setOf("k1"))
-        val vm = CapabilityConsentViewModel(grants, FakeEventReceipt(), eventReceiptOffered = true)
+        val vm = CapabilityConsentViewModel(grants, FakeEventReceipt(), eventReceiptOffered = true, privacyUrl = PrivacyDisclosure.URL)
 
         vm.setGranted("k1", false)
 
@@ -266,7 +267,7 @@ class CapabilityConsentViewModelTest {
             grants.setEnumeration(
                 listOf(cap("k1", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS, "asset:rules/doordash.json")),
             )
-            val vm = CapabilityConsentViewModel(grants, FakeEventReceipt(consent), eventReceiptOffered = true)
+            val vm = CapabilityConsentViewModel(grants, FakeEventReceipt(consent), eventReceiptOffered = true, privacyUrl = PrivacyDisclosure.URL)
             val state = vm.uiState.first { it.sources.isNotEmpty() }
             assertEquals("$consent", expected, state.eventReceiptAllowed)
         }
@@ -279,17 +280,17 @@ class CapabilityConsentViewModelTest {
             grants.setEnumeration(
                 listOf(cap("k1", "doordash.screen.delivery_summary_collapsed", RuleAction.EXPAND_EARNINGS, "asset:rules/doordash.json")),
             )
-            val vm = CapabilityConsentViewModel(grants, FakeEventReceipt(consent), eventReceiptOffered = false)
+            val vm = CapabilityConsentViewModel(grants, FakeEventReceipt(consent), eventReceiptOffered = false, privacyUrl = PrivacyDisclosure.URL)
             assertFalse("$consent seeded", vm.uiState.value.eventReceiptOffered)
             assertFalse("$consent combined", vm.uiState.first { it.sources.isNotEmpty() }.eventReceiptOffered)
         }
-        val offered = CapabilityConsentViewModel(FakeGrants(), FakeEventReceipt(), eventReceiptOffered = true)
+        val offered = CapabilityConsentViewModel(FakeGrants(), FakeEventReceipt(), eventReceiptOffered = true, privacyUrl = PrivacyDisclosure.URL)
         assertTrue("a build that offers it shows the section", offered.uiState.value.eventReceiptOffered)
     }
 
     @Test
     fun `the switch initial state is seeded from the current value`() {
-        val vm = CapabilityConsentViewModel(FakeGrants(), FakeEventReceipt(EventReceiptConsent.ALLOWED), eventReceiptOffered = true)
+        val vm = CapabilityConsentViewModel(FakeGrants(), FakeEventReceipt(EventReceiptConsent.ALLOWED), eventReceiptOffered = true, privacyUrl = PrivacyDisclosure.URL)
         assertTrue("no subscriber yet — the stateIn initial value", vm.uiState.value.eventReceiptAllowed)
     }
 
@@ -297,7 +298,7 @@ class CapabilityConsentViewModelTest {
     fun `event receipt switch writes through the preference, never the grant store`() = runTest {
         val grants = FakeGrants()
         val receipt = FakeEventReceipt()
-        val vm = CapabilityConsentViewModel(grants, receipt, eventReceiptOffered = true)
+        val vm = CapabilityConsentViewModel(grants, receipt, eventReceiptOffered = true, privacyUrl = PrivacyDisclosure.URL)
 
         vm.setEventReceiptAllowed(true)
         vm.setEventReceiptAllowed(false)
@@ -313,7 +314,7 @@ class CapabilityConsentViewModelTest {
         val record = ConsentReceipt(123L, "test", 1, true)
         grants.receipts.value = mapOf("k" to record)
         events.receipt.value = record
-        val vm = CapabilityConsentViewModel(grants, events, eventReceiptOffered = true)
+        val vm = CapabilityConsentViewModel(grants, events, eventReceiptOffered = true, privacyUrl = PrivacyDisclosure.URL)
         assertEquals(mapOf("k" to record), vm.uiState.value.receipts)
         assertEquals(record, vm.uiState.value.eventReceipt)
         val collector = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
