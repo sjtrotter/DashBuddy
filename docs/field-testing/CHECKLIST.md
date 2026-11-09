@@ -66,6 +66,8 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 ## §2 Active
 
+- [The Play build's screen reading card (#170, #1413)](checklist/open/170-play-build-screen-reading-card.md)
+- [The Play build does not read an Uber offer pop-up (#1413)](checklist/open/1413-play-build-uber-offer-not-read.md)
 - [A recognition incident posts one notice and shows on Home (#1560)](checklist/open/1560-recognition-incident-notice.md)
 - [The bottom bar's three tabs and where each link lands (#1447)](checklist/open/1447-bottom-bar-routes.md)
 - [Permission and consent screens say only what each one does (#1457)](checklist/open/1457-permission-and-consent-screens.md)

@@ -453,6 +453,21 @@ frames the pipeline ever sees*:
   store holds, offered ⇒ the stored value. The listener and the permission flow read through it; Settings hides the
   section on `offered` directly. The stored decision is never rewritten. Debug-only behaviour (event types, the
   self-disable, the census) stays keyed on `BuildConfig.DEBUG`, never on `offered`.
+  **Bound platforms (#170, #1413):** the watched registry is the platforms gig.log ships rules for, one registry
+  flag, `Platform.bound` (true for DoorDash and Uber). `Platform.watchedPackages` derives from `Platform.boundPlatforms`,
+  so the listener's filtered footprint, both service configs' `android:packageNames` and the manifest's `<queries>`
+  name the same two packages; `PlatformPreferencesRepository` intersects the enabled preference with the bound set
+  (a saved Instacart or Walmart Spark wire is ignored, so no gate, filter or pipeline admits that package), and the
+  platform settings list shows bound platforms only. Unbound registry entries stay (other code keys on them). The
+  guard is `AccessibilityPackageParityTest`: the platforms with a generated rules asset (`<wire>.json` under
+  `TestRulesetFactory.rulesDir`) == `Platform.boundPlatforms`, and `Platform.watchedPackages` == each config's
+  `packageNames` == `<queries>`. Adding a platform means its ruleset plus `bound = true`; the test fails on either
+  alone. The screen reading card names the bound platforms from the registry; the service description cannot be
+  formatted, so it carries the names as static text, pinned per build by `AccessibilityDescriptionGuardTest` (which
+  also pins that only a build offering Screen events says so). **Content reads stay on enabled windows (#1413
+  step 3):** `FrontWindowWalk` / `FrameWindowResolver` read a non-enabled window's root for its package name only;
+  `mapNative` / `mapWindow` (the only content reads) run on enabled-package roots alone, emitted frame or not, pinned
+  by `FrameWindowsPledgePropertyTest` (every map call, not just the emitted one) and `PreMapPackageSkipTest`.
 - **D3 — per-key coalescer.** `coalesceByKey(quietMs, maxWaitMs, keyOf, merge, maxKeys,
   leadingEdge)` (`event/coalesce/CoalesceByKey.kt`) replaced `debounceWithTimeout`. Per key, a
   burst opens on the first event, folds every event into an accumulator, and emits when EITHER the
