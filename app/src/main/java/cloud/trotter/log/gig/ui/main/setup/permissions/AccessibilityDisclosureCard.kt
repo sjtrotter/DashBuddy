@@ -21,8 +21,8 @@ import cloud.trotter.log.gig.feature.settings.R as SettingsR
  * #1457 — the accessibility step (step 2, or 1 in a build with no Screen-events step), the service's own
  * disclosure screen (Play's prominent disclosure for an app that is not an accessibility tool, #170 /
  * #1413): which apps the service reads and why, what is dropped and what is saved as codes, screenshots and
- * where they go, where it all happens and what can leave the phone, when it taps, and a link to the full
- * privacy notice. #170: the apps are named from the registry; a build that offers Screen events adds that
+ * where they go, where it all happens and what can leave the phone, when it taps, and a link to gig.log's
+ * Privacy page ([onOpenPrivacy]). #170: the apps are named from the registry; a build that offers Screen events adds that
  * sentence, and a build that does not declare itself an accessibility tool (the Play build) says which offer
  * pop-up it can't read ([facts]). Nothing here grants anything: Allow ([onAllow]) only opens Android's
  * Accessibility settings, and Don't allow ([onDontAllow]) puts this step off and records nothing.
@@ -33,24 +33,19 @@ fun AccessibilityDisclosureCard(
     stepNumber: Int,
     stepCount: Int,
     facts: AccessibilityDisclosureFacts,
+    onOpenPrivacy: () -> Unit,
     onAllow: () -> Unit,
     onDontAllow: () -> Unit,
 ) {
     val locale = LocalConfiguration.current.locales[0]
     val pair = stringResource(R.string.perm_a11y_names_pair)
-    val paragraphs = listOfNotNull(
-        stringResource(R.string.perm_a11y_use, joinAppNames(facts.appNames, pair, locale)),
-        if (facts.unreadOfferPopUpApps.isEmpty()) {
-            null
+    val paragraphs = facts.paragraphs().map { paragraph ->
+        if (paragraph.names == null) {
+            stringResource(paragraph.res)
         } else {
-            stringResource(R.string.perm_a11y_overlay_limit, joinAppNames(facts.unreadOfferPopUpApps, pair, locale))
-        },
-        stringResource(R.string.perm_a11y_data),
-        if (facts.screenEventsOffered) stringResource(R.string.perm_a11y_screen_events) else null,
-        stringResource(R.string.perm_a11y_screenshots),
-        stringResource(R.string.perm_a11y_where),
-        stringResource(R.string.perm_a11y_taps),
-    )
+            stringResource(paragraph.res, joinAppNames(paragraph.names, pair, locale))
+        }
+    }
     PermissionStepColumn {
         PermissionStepHeader(
             stepNumber = stepNumber,
@@ -63,7 +58,7 @@ fun AccessibilityDisclosureCard(
             if (index > 0) Spacer(Modifier.height(8.dp))
             PermissionBodyText(paragraph)
         }
-        PrivacyNoticeLink(url = facts.privacyUrl)
+        PrivacyNoticeLink(onClick = onOpenPrivacy)
         PermissionWithoutIt(stringResource(PermissionType.Accessibility.withoutRes))
         Spacer(Modifier.height(24.dp))
         Row(

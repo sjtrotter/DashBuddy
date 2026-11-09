@@ -23,6 +23,9 @@ class MainNavActions(private val nav: NavController) {
     fun openRatings() = nav.push(Screen.Ratings.route)
     fun openSettings() = nav.push(Screen.SettingsHome.route)
     fun openWizard() = nav.push(Screen.Wizard.route)
+
+    /** #170: the privacy links on the screen reading card and Automation & consent: gig.log's Privacy page. */
+    fun openPrivacy() = nav.push(Screen.PrivacySettings.route)
     /** A shift's page; [row] lands it on a timeline item (Recap's Shifts to check). */
     fun openSession(sessionId: String, row: String? = null) = nav.navigate(Screen.SessionDetail.route(sessionId, row))
 

@@ -7,8 +7,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 
 /**
- * #170 — the two build facts the privacy page shows: its link (PRIVACY.md as of this build's commit) and whether
- * this build offers Screen events (false in the Play build, whose page then leaves the Screen events line out).
+ * #170 — the two build facts the privacy page shows: its technical-details link (PRIVACY.md as of this build's
+ * commit) and whether this build offers Screen events (false in the Play build, whose page then leaves the Screen
+ * events line out).
  * Both are fixed for the process; there is no state.
  */
 @HiltViewModel

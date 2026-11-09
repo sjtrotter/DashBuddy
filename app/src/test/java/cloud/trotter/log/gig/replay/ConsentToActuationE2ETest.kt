@@ -11,7 +11,6 @@ import cloud.trotter.log.gig.core.state.AppEffect
 import cloud.trotter.log.gig.domain.action.ActionTrigger
 import cloud.trotter.log.gig.domain.action.RuleAction
 import cloud.trotter.log.gig.domain.capability.ConsentReceipt
-import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
 import cloud.trotter.log.gig.domain.pipeline.TimeoutType
 import cloud.trotter.log.gig.domain.settings.EventReceiptConsent
 import cloud.trotter.log.gig.domain.settings.EventReceiptPreferences
@@ -276,7 +275,7 @@ class ConsentToActuationE2ETest {
 
     /** The real Settings consent VM; its event-receipt half is irrelevant here (a fixed ALLOWED value). */
     private fun settingsScreen(replay: E2ESessionReplay): CapabilityConsentViewModel =
-        viewModel { CapabilityConsentViewModel(replay.grants, AllowedEventReceipt, eventReceiptOffered = true, privacyUrl = PrivacyDisclosure.URL) }
+        viewModel { CapabilityConsentViewModel(replay.grants, AllowedEventReceipt, eventReceiptOffered = true) }
 
     private inline fun <reified VM : ViewModel> viewModel(crossinline create: () -> VM): VM {
         val store = ViewModelStore()

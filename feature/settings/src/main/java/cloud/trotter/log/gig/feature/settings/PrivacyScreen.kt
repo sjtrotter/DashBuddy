@@ -17,15 +17,18 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.booleanResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
 
 /**
  * #1457 — the in-app privacy page (Settings > Data & privacy > Privacy): what gig.log reads, saves
@@ -33,8 +36,9 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
  * each card says only what its own permission does. Static copy, no state; `PRIVACY.md` is the
  * engineering ground truth, and a change to a claim there updates the matching `privacy_*` string in
  * the same PR. The Test builds section shows only where `privacy_show_test_builds` is true (the debug
- * source set). #170: the Screen events line shows only in a build that offers Screen events, and the link
- * opens PRIVACY.md as of this build's commit ([PrivacyViewModel]).
+ * source set). #170: the Screen events line shows only in a build that offers Screen events. The foot links the
+ * privacy policy ([PrivacyDisclosure.POLICY_URL]) and the technical details, PRIVACY.md as of this build's commit
+ * ([PrivacyViewModel]). The screen reading card and Automation & consent link here.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,10 +76,10 @@ fun PrivacyScreen(onBack: () -> Unit, viewModel: PrivacyViewModel = hiltViewMode
             if (showTestBuilds) {
                 PrivacySection(R.string.privacy_test_builds_title, R.string.privacy_test_builds_body)
             }
-            PrivacyNoticeLink(
-                url = viewModel.privacyUrl,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            )
+            // #170: the page's foot links the plain-language policy and the engineering document, PRIVACY.md as of this
+            // build's commit. The card's and Automation & consent's privacy links open this page.
+            WebLink(R.string.privacy_policy_link, PrivacyDisclosure.POLICY_URL, Modifier.fillMaxWidth().padding(top = 8.dp))
+            WebLink(R.string.privacy_technical_link, viewModel.privacyUrl, Modifier.fillMaxWidth())
             Spacer(Modifier.height(32.dp))
         }
     }
@@ -92,6 +96,15 @@ private val PRIVACY_SECTIONS: List<Pair<Int, Int>> = listOf(
     R.string.privacy_retention_title to R.string.privacy_retention_body,
     R.string.privacy_choices_title to R.string.privacy_choices_body,
 )
+
+/** A link that opens [url] in the browser. No browser (restricted or work profile) throws; it must never crash the page. */
+@Composable
+private fun WebLink(@StringRes label: Int, url: String, modifier: Modifier) {
+    val uriHandler = LocalUriHandler.current
+    TextButton(onClick = { runCatching { uriHandler.openUri(url) } }, modifier = modifier) {
+        Text(stringResource(label))
+    }
+}
 
 /** One section: its heading, its body and, when given, a second paragraph ([extra]). */
 @Composable

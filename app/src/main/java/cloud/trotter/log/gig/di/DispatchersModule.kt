@@ -76,9 +76,8 @@ object DispatchersModule {
     fun provideWideEventReceiptOffered(): Boolean = BuildConfig.WIDE_EVENT_RECEIPT_OFFERED
 
     /**
-     * #170 — the one in-app privacy link: PRIVACY.md as of this build's commit, or master for a build with no
-     * clean commit (`BuildConfig.PRIVACY_REF`). The permission card, Automation & consent and the privacy page
-     * all open this.
+     * #170 — the privacy page's "Technical details" link: PRIVACY.md as of this build's commit, or master for a
+     * build with no clean commit (`BuildConfig.PRIVACY_REF`).
      */
     /**
      * #170 — whether this build also reads the registry platforms that ship no ruleset (true in debug only, so a

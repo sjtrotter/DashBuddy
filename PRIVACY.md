@@ -67,8 +67,8 @@ upload on enrols the install there automatically. Nothing reaches a server befor
 reading card (`AccessibilityDisclosureCard`). It names the apps the service reads, from the registry; says what it
 reads, what it drops and what it saves as codes; says that screenshots are whole-screen pictures saved to the
 phone's gallery, where gallery sync or sharing can copy them off the phone; says where screen reading and
-calculations happen and what can copy data off the phone; says when it taps a button; and links this document as of
-the build's own commit (§8). In the Play build it also says that this version can't read Uber Driver's offer pop-up
+calculations happen and what can copy data off the phone; says when it taps a button; and links gig.log's own
+Privacy page (§8). In the Play build it also says that this version can't read Uber Driver's offer pop-up
 and that it reads Uber Driver's other screens. Only a build that offers Screen events (§2.2) carries the Screen events
 sentence, on the card and in the service description Android shows in its settings; each build has one copy of that
 description (main for Play, `src/sideload` and `src/debug`), and `AccessibilityDescriptionGuardTest` pins the names
@@ -327,13 +327,19 @@ The bug-report export (§6) ends with a "Consent receipts" section: the Screen-e
 receipt, with its status, date, app version and privacy notice revision, by capability key (a sha256 hash), plus the
 action and rule id where the loaded rules still enable it. These lines are added after the shareable log, so they
 pass the same marker scrubber explicitly (`LogRepository.scrubForExport`); if the scrubber is missing or fails, the
-section is left out and the file says so (`DataExportViewModel`).
+section is left out and the file says so (`DataExportViewModel`). The receipts are read from their stores at export
+time (`ConsentReceiptReader`), not from the in-memory copies the screens use; if a store cannot be read, the section
+says the records are unavailable.
 
 Both decisions and their receipts are in dedicated stores excluded from Android backup and device transfer (§6), so
-a new device re-asks consent while the database and general app/economy preferences restore. The in-app link opens
-this file as of the commit the build was made from (`BuildConfig.PRIVACY_REF`, `PrivacyDisclosure.urlAt`); a build
-from an uncommitted tree or without git opens the current revision. The revision history below says what changed
-since the revision on a receipt. The Play Console policy link is the current revision (`PrivacyDisclosure.URL`).
+a new device re-asks consent while the database and general app/economy preferences restore.
+
+The privacy links on the screen reading card and on Automation & Consent open gig.log's own Privacy page (Settings →
+Data & Privacy → Privacy, `PrivacyScreen`), a plain-language summary of this file. Its foot links the privacy policy
+(`PrivacyDisclosure.POLICY_URL`, https://gig.log.trotter.cloud/privacy/) and "Technical details": this file as of the
+commit the build was made from (`BuildConfig.PRIVACY_REF`, `PrivacyDisclosure.urlAt`); a build from an uncommitted
+tree or without git opens the current revision. The revision history below says what changed since the revision on a
+receipt.
 
 ## 9. Verify it
 
@@ -345,12 +351,14 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 - **r16 (2026-11-09)** — §2.1: the service is bound to DoorDash and Uber Driver only, the apps gig.log has rules for;
   Instacart Shopper and Walmart Spark are no longer bound or enableable, and a saved preference for them is ignored
-  (#170, #1413). The disclosure card names the apps, links this file as of the build's commit and, in the Play build,
+  (#170, #1413). The disclosure card names the apps, links gig.log's own Privacy page and, in the Play build,
   says it can't read Uber Driver's offer pop-up; the Screen events sentence shows only in builds that offer Screen
   events; the debug (tester) build also reads Instacart Shopper and Walmart Spark, which have no rules, so their
   screens are UNKNOWN and handled as in §3, §6 and §7, and its card and description name all four apps; the card and every service description say screenshots go to the gallery, where gallery sync or sharing can
   copy them. §8: a receipt is kept only while its decision is stored, and the bug-report export now ends with the
-  consent receipts, scrubbed like the log. §7: the one-tap wipe is tracked in #1579. The in-app privacy page's "What
+  consent receipts, read from their stores at export time and scrubbed like the log; Automation & Consent's privacy
+  link also opens the in-app Privacy page, whose foot links the privacy policy and this file as of the build's
+  commit ("Technical details"). §7: the one-tap wipe is tracked in #1579. The in-app privacy page's "What
   gig.log reads" shows the Screen events line only where Screen events are offered, and "Your choices" says the
   records leave the phone only in a bug report you export. Receipts created under r15 retain that revision.
 - **r15 (2026-11-09)** — §2.1: the debug build is published on every GitHub Release as the tester build;

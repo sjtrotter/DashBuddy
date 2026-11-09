@@ -14,21 +14,18 @@ import java.util.Locale
  */
 class AccessibilityDisclosureFactsTest {
 
-    private val url = "https://example.invalid/PRIVACY.md"
-
     @Test
     fun `the card names the bound platforms`() {
-        val facts = AccessibilityDisclosureFacts.of(accessibilityTool = false, screenEventsOffered = false, privacyUrl = url, readsUnboundPlatforms = false)
+        val facts = AccessibilityDisclosureFacts.of(accessibilityTool = false, screenEventsOffered = false, readsUnboundPlatforms = false)
         assertEquals(Platform.boundPlatforms.map { it.displayName }, facts.appNames)
         assertEquals(listOf("DoorDash", "Uber Driver"), facts.appNames)
-        assertEquals(url, facts.privacyUrl)
     }
 
     /** #170 — the debug build reads every registry platform with a package, so its card names all of them. */
     @Test
     fun `the debug build's card names every platform it reads`() {
         val debug = AccessibilityDisclosureFacts.of(
-            accessibilityTool = true, screenEventsOffered = true, privacyUrl = url, readsUnboundPlatforms = true,
+            accessibilityTool = true, screenEventsOffered = true, readsUnboundPlatforms = true,
         )
         assertEquals(Platform.readable(includeUnbound = true).map { it.displayName }, debug.appNames)
         assertEquals(listOf("DoorDash", "Uber Driver", "Instacart Shopper", "Walmart Spark"), debug.appNames)
@@ -37,12 +34,12 @@ class AccessibilityDisclosureFactsTest {
 
     @Test
     fun `only the Play build lists the offer pop-ups it can't read`() {
-        val play = AccessibilityDisclosureFacts.of(accessibilityTool = false, screenEventsOffered = false, privacyUrl = url, readsUnboundPlatforms = false)
+        val play = AccessibilityDisclosureFacts.of(accessibilityTool = false, screenEventsOffered = false, readsUnboundPlatforms = false)
         assertEquals(Platform.boundPlatforms.filter { it.offerOverlay }.map { it.displayName }, play.unreadOfferPopUpApps)
         assertTrue(play.unreadOfferPopUpApps.isNotEmpty())
         assertFalse(play.screenEventsOffered)
 
-        val sideload = AccessibilityDisclosureFacts.of(accessibilityTool = true, screenEventsOffered = true, privacyUrl = url, readsUnboundPlatforms = false)
+        val sideload = AccessibilityDisclosureFacts.of(accessibilityTool = true, screenEventsOffered = true, readsUnboundPlatforms = false)
         assertEquals(emptyList<String>(), sideload.unreadOfferPopUpApps)
         assertTrue(sideload.screenEventsOffered)
     }

@@ -71,6 +71,7 @@ private fun MainScreen(route: String, actions: MainNavActions) {
             onOpenRatings = actions::openRatings,
             onOpenSettings = actions::openSettings,
             onOpenWizard = actions::openWizard,
+            onOpenPrivacy = actions::openPrivacy,
         )
         Screen.Analytics.route -> AnalyticsScreen(
             onOpenSettings = actions::openSettings,
@@ -98,7 +99,10 @@ private fun MainScreen(route: String, actions: MainNavActions) {
         Screen.EvidenceSettings.route -> EvidenceSettingsScreen(onBack = actions::back)
         Screen.DataExport.route -> DataExportScreen(onBack = actions::back)
         Screen.PrivacySettings.route -> PrivacyScreen(onBack = actions::back)
-        Screen.ConsentSettings.route -> CapabilityConsentScreen(onBack = actions::back)
+        Screen.ConsentSettings.route -> CapabilityConsentScreen(
+            onBack = actions::back,
+            onOpenPrivacy = actions::openPrivacy,
+        )
         Screen.EconomySettings.route -> EconomySettingsScreen(
             onBack = actions::back,
             onOpenGarage = { actions.open(Screen.Garage.route) },

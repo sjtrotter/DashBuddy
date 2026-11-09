@@ -7,8 +7,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.log.gig.BuildConfig
-import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
-import cloud.trotter.log.gig.domain.di.PrivacyNoticeUrl
 import cloud.trotter.log.gig.domain.di.ReadsUnboundPlatforms
 import cloud.trotter.log.gig.domain.di.WideEventReceiptOffered
 import cloud.trotter.log.gig.domain.settings.EventReceiptConsent
@@ -48,7 +46,7 @@ import javax.inject.Inject
  * step, belong to the sheet (see [PermissionsBottomSheet]).
  *
  * #170: [accessibilityDisclosure] is the screen reading card's build and registry facts (the apps it names, the
- * offer pop-up the Play build can't read, Screen events, the privacy link). Fixed for the process.
+ * offer pop-up the Play build can't read, Screen events). Fixed for the process.
  */
 @HiltViewModel
 class PermissionsViewModel internal constructor(
@@ -58,7 +56,6 @@ class PermissionsViewModel internal constructor(
     private val deferrals: PermissionDeferrals,
     private val screenEventsOffered: Boolean = true,
     accessibilityTool: Boolean = true,
-    privacyUrl: String = PrivacyDisclosure.URL,
     readsUnboundPlatforms: Boolean = false,
 ) : ViewModel() {
 
@@ -68,16 +65,15 @@ class PermissionsViewModel internal constructor(
         eventReceipt: EventReceiptPreferences,
         deferrals: PermissionDeferrals,
         @WideEventReceiptOffered screenEventsOffered: Boolean,
-        @PrivacyNoticeUrl privacyUrl: String,
         @ReadsUnboundPlatforms readsUnboundPlatforms: Boolean,
     ) : this(
         { OsPermissionPoll.of(context) }, eventReceipt, BuildConfig.DEBUG, deferrals, screenEventsOffered,
-        BuildConfig.ACCESSIBILITY_TOOL, privacyUrl, readsUnboundPlatforms,
+        BuildConfig.ACCESSIBILITY_TOOL, readsUnboundPlatforms,
     )
 
     /** #170 — the screen reading card's facts for this build. */
     val accessibilityDisclosure: AccessibilityDisclosureFacts =
-        AccessibilityDisclosureFacts.of(accessibilityTool, screenEventsOffered, privacyUrl, readsUnboundPlatforms)
+        AccessibilityDisclosureFacts.of(accessibilityTool, screenEventsOffered, readsUnboundPlatforms)
 
     private val osPoll = MutableStateFlow(pollOs())
 

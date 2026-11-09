@@ -6,7 +6,6 @@ import cloud.trotter.log.gig.domain.action.RuleAction
 import cloud.trotter.log.gig.domain.capability.ConsentReceipt
 import cloud.trotter.log.gig.domain.capability.RuleCapability
 import cloud.trotter.log.gig.domain.capability.RuleCapabilityGrants
-import cloud.trotter.log.gig.domain.di.PrivacyNoticeUrl
 import cloud.trotter.log.gig.domain.di.WideEventReceiptOffered
 import cloud.trotter.log.gig.domain.settings.EventReceiptConsent
 import cloud.trotter.log.gig.domain.settings.EventReceiptPreferences
@@ -42,8 +41,6 @@ class CapabilityConsentViewModel @Inject constructor(
     private val grants: RuleCapabilityGrants,
     private val eventReceipt: EventReceiptPreferences,
     @param:WideEventReceiptOffered private val eventReceiptOffered: Boolean,
-    /** #170 — the privacy link the screen opens (PRIVACY.md as of this build's commit). */
-    @param:PrivacyNoticeUrl val privacyUrl: String,
 ) : ViewModel() {
 
     val uiState: StateFlow<ConsentUiState> =

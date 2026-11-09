@@ -76,24 +76,29 @@ Before sending the driver to Android's accessibility settings, gig.log shows a d
 the Play build, `AccessibilityDisclosureCard`). It names the apps the service reads, says what it reads and what it
 drops or saves as codes, says that this version can't read Uber Driver's offer pop-up, says what screenshots contain
 and that they go to the gallery, says that screen reading and calculations stay on the phone and what can copy data
-off it, says when the app taps a button, and links the full privacy notice. Allow opens Android's accessibility
+off it, says when the app taps a button, and links gig.log's own Privacy page, which in turn links the privacy
+policy and the technical details. Allow opens Android's accessibility
 settings; Don't allow leaves the service off. The service description in Android's settings repeats the disclosure.
 
 ## Demo video script
 
-Record on a phone with the Play build installed from internal testing, the service off and no earlier deferral
-(force-stop gig.log first, so the process is new). Scroll slowly enough that every line of the card can be read.
+Before recording: install the Play build from internal testing. In Android settings, grant gig.log every other
+setup permission, so the screen reading card is the only step left: notification access, location (precise),
+notifications and bubbles. Leave gig.log's accessibility service off. Force-stop gig.log, so the process is new and
+no earlier "Don't allow" is remembered. Scroll slowly enough that every line of the card can be read.
 
 1. Open gig.log. Home opens and the setup sheet shows "Step 1 of 5", Screen reading (Accessibility).
 2. Scroll through the whole card slowly: the paragraphs, the "Full privacy notice" link and "Without it". Tap the
-   link to show it opens the privacy notice, then return to gig.log.
+   link: gig.log's Privacy page opens. Scroll it, tap "Privacy policy" at its foot to show the policy page, then
+   go back to gig.log and back again to Home. The setup sheet shows the card again.
 3. Tap Allow. Android's accessibility settings open. Find gig.log, open it, show the service description, turn the
-   service on and accept Android's dialog. Return to gig.log.
-4. Open Android's accessibility settings again and turn the service off. Return to gig.log.
-5. Home shows "Screen reading is off". Tap "Turn on screen reading": the card shows again. Tap Don't allow: the
-   sheet moves on and the service stays off. Home shows "Screen reading is off" again.
-6. Tap "Turn on screen reading" once more to show the card comes back (a cold start of the app shows it too), then
-   Allow and turn the service on, as in step 3.
+   service on and accept Android's dialog. Return to gig.log: the setup sheet closes. If gig.log then asks about
+   automatic taps, tap "Not now".
+4. Open Android's accessibility settings again and turn gig.log's service off. Return to gig.log.
+5. The setup sheet opens again by itself with the card ("Step 1 of 5"). Tap Don't allow: the sheet closes and the
+   service stays off. Home shows "Screen reading is off".
+6. Tap "Turn on screen reading" on Home: the card shows again. (A cold start of the app shows it too.) Tap Allow and
+   turn the service on, as in step 3.
 7. Go online in DoorDash. When an offer arrives, gig.log reads it aloud. Press Accept on gig.log's offer card:
    DoorDash accepts the offer.
 

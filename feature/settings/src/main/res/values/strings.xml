@@ -142,7 +142,11 @@
     <string name="consent_receipt_format">%1$s, %2$s, app %3$s, privacy notice %4$d</string>
     <string name="consent_receipt_allowed">Allowed</string>
     <string name="consent_receipt_denied">Not allowed</string>
+    <!-- #170: on the screen reading card and Automation & consent; opens the in-app Privacy page. -->
     <string name="consent_privacy_link">Full privacy notice</string>
+    <!-- #170: the Privacy page's foot. The policy is the plain-language web page; technical details is PRIVACY.md. -->
+    <string name="privacy_policy_link">Privacy policy</string>
+    <string name="privacy_technical_link">Technical details</string>
     <string name="settings_odometer_prompts">Odometer reminder</string>
     <string name="settings_odometer_prompts_description">Highlights the bubble\'s Odometer button early in a shift, and after one until you log a reading</string>
     <string name="developer_settings_add_on_title">Add-on figures</string>

@@ -52,6 +52,7 @@ import java.util.Locale
 @Composable
 fun CapabilityConsentScreen(
     onBack: () -> Unit,
+    onOpenPrivacy: () -> Unit,
     viewModel: CapabilityConsentViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -108,7 +109,7 @@ fun CapabilityConsentScreen(
             }
 
             PrivacyNoticeLink(
-                url = viewModel.privacyUrl,
+                onClick = onOpenPrivacy,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             )
             Spacer(Modifier.height(32.dp))

@@ -200,10 +200,12 @@ receipt. The consent-schema migration clears capability receipts together with t
 undecodable receipt JSON means no record, without changing grants or the Screen-events decision.
 
 Automation & Consent shows the receipt under each capability and the Screen-events switch, with
-status, local date, app version and disclosure revision, plus a link to `PRIVACY.md` as of the build's
-commit (`@PrivacyNoticeUrl`). The bug-report export ends with a "Consent receipts" section in the same
-shape, passed through the shareable log's scrubber (`LogRepository.scrubForExport`); a failed scrubber
-leaves the section out and says so.
+status, local date, app version and disclosure revision, plus a link to gig.log's own Privacy page, whose
+foot links the privacy policy and `PRIVACY.md` as of the build's commit (`@PrivacyNoticeUrl`). The
+bug-report export ends with a "Consent receipts" section in the same shape, read from the stores at export
+time (`ConsentReceiptReader`; an unreadable store says "unavailable", never "no choices") and passed through
+the shareable log's scrubber (`LogRepository.scrubForExport`); a failed scrubber leaves the section out and
+says so.
 
 ### Source policy (superseded by #843 — no auto-grant)
 
