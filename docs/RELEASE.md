@@ -78,10 +78,14 @@ The debug key reads `giglog.debugKeystore.path` and `giglog.debugKeystore.passwo
 ## 4. Google Cloud: keyless access for the workflows
 
 Create a service account for this app with no project-level roles and no key. Both workflows authenticate with
-Workload Identity Federation, and only from `master` or a `v*` tag of `sjtrotter/DashBuddy`.
+Workload Identity Federation, and only from two places: the `release` environment on a `v*` tag (release.yml) and
+the `play-listing` environment on `master` (play-listing.yml). Any other job, including one on `master` that can
+request an identity token, such as a Pages deploy, gets no credential. The provider admits this repository by its
+numeric repository id and owner id, not by name, so renaming the repository never breaks the login.
 
 In Cloud Shell, select the project that owns the service account, then set `PROJECT_NUMBER` and `SA`. Skip the
-pool command if a `github` pool already exists in that project.
+pool command if a `github` pool already exists in that project. `911857133` is this repository's id and `33046718`
+its owner's (`gh api repos/sjtrotter/gig.log --jq '.id, .owner.id'`); a fork uses its own.
 
 ```sh
 PROJECT_NUMBER='<GCP_PROJECT_NUMBER>'
@@ -90,11 +94,14 @@ gcloud services enable iamcredentials.googleapis.com sts.googleapis.com androidp
 gcloud iam workload-identity-pools create github --location=global --display-name=GitHub
 gcloud iam workload-identity-pools providers create-oidc giglog --location=global --workload-identity-pool=github \
   --issuer-uri=https://token.actions.githubusercontent.com \
-  --attribute-mapping=google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.ref=assertion.ref \
-  --attribute-condition="assertion.repository=='sjtrotter/DashBuddy' && (assertion.ref=='refs/heads/master' || assertion.ref.startsWith('refs/tags/v'))"
+  --attribute-mapping=google.subject=assertion.sub,attribute.repository_id=assertion.repository_id,attribute.repository_owner_id=assertion.repository_owner_id,attribute.environment=assertion.environment,attribute.ref=assertion.ref \
+  --attribute-condition="assertion.repository_id=='911857133' && assertion.repository_owner_id=='33046718' && ((assertion.environment=='release' && assertion.ref.startsWith('refs/tags/v')) || (assertion.environment=='play-listing' && assertion.ref=='refs/heads/master'))"
 gcloud iam service-accounts add-iam-policy-binding "$SA" --role=roles/iam.workloadIdentityUser \
-  --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github/attribute.repository/sjtrotter/DashBuddy"
+  --member="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github/attribute.repository_id/911857133"
 ```
+
+To check the condition before the first release, run play-listing.yml in `inspect` mode from `master`; it changes
+nothing in the Play Console. The signed feeds (#1559) use a separate pool and never this one.
 
 In Play Console → Users and permissions, invite the service account's email and grant, for this app only:
 **View app information**, **Release apps to testing tracks** and **Manage store presence**. Never Admin, never
@@ -114,6 +121,9 @@ Settings → Environments → `release` (only version tags can deploy to it):
 | `SIDELOAD_STORE_PASSWORD` | the sideload keystore's password |
 | `SIDELOAD_KEY_ALIAS` | `giglog-sideload` |
 | `SIDELOAD_KEY_PASSWORD` | the sideload key's password |
+
+Settings → Environments → `play-listing`: no secrets; Deployment branches and tags: `master` only. The Play
+login admits play-listing.yml only through this environment (§4).
 
 Settings → Secrets and variables → Actions (repository):
 

@@ -72,29 +72,29 @@ The full architecture is in [CLAUDE.md](CLAUDE.md) and, in more detail, in [`doc
 gig.log is alpha. One developer builds it and tests it on one phone while delivering. Expect screens it does not recognize and changes between builds.
 
 - DoorDash is the platform gig.log is built and field-tested against. Its rules cover offers, pickups, drop-offs, shift start and end, receipts and notifications.
-- Uber has a smaller rule set: the offer card, online and offline screens, trip screens, shift summaries and trip notifications. It has had much less field testing. gig.log infers an accepted Uber offer when Uber's trip screen follows the offer, but this detection is incomplete ([#826](https://github.com/sjtrotter/DashBuddy/issues/826)). The Uber rules do not point gig.log at Uber's Accept and Decline buttons, so pressing Accept or Decline in gig.log does not tap them in Uber.
+- Uber has a smaller rule set: the offer card, online and offline screens, trip screens, shift summaries and trip notifications. It has had much less field testing. gig.log infers an accepted Uber offer when Uber's trip screen follows the offer, but this detection is incomplete ([#826](https://github.com/sjtrotter/gig.log/issues/826)). The Uber rules do not point gig.log at Uber's Accept and Decline buttons, so pressing Accept or Decline in gig.log does not tap them in Uber.
 - Instacart Shopper and Walmart Spark are listed in the code but have no rules, so they are not supported.
 - Recognition expects the delivery app to be in English. In another language, screens go unrecognized. If the phone itself is set to a language other than English, gig.log shows a notice once.
 
 ### Supported apps
 
-A table of what gig.log does with each delivery app, and in which build, is being decided in [#1417](https://github.com/sjtrotter/DashBuddy/issues/1417). It will go here once it is settled.
+A table of what gig.log does with each delivery app, and in which build, is being decided in [#1417](https://github.com/sjtrotter/gig.log/issues/1417). It will go here once it is settled.
 
 ## Planned
 
 None of these are built yet.
 
-- A Google Play release, closed testing first ([#1412](https://github.com/sjtrotter/DashBuddy/issues/1412)), with APKs on the GitHub Releases page ([#1415](https://github.com/sjtrotter/DashBuddy/issues/1415)).
-- A redesign of the history tabs as Home, Recap and Plan ([#1510](https://github.com/sjtrotter/DashBuddy/issues/1510), [#1511](https://github.com/sjtrotter/DashBuddy/issues/1511)).
-- Uber: completing accepted-offer detection ([#826](https://github.com/sjtrotter/DashBuddy/issues/826)) and handling several offers shown at once ([#251](https://github.com/sjtrotter/DashBuddy/issues/251)).
-- Accept and decline by voice ([#579](https://github.com/sjtrotter/DashBuddy/issues/579)).
-- The rules in their own repository, sent to the app as signed updates, so drivers can choose where their rules come from ([#192](https://github.com/sjtrotter/DashBuddy/issues/192)).
-- Opt-in, anonymized market figures built from many drivers' data ([#193](https://github.com/sjtrotter/DashBuddy/issues/193), [#1137](https://github.com/sjtrotter/DashBuddy/issues/1137)).
-- Opt-in research with universities: empirical measurement of the visible offer surface, returning only anonymized aggregate results ([#194](https://github.com/sjtrotter/DashBuddy/issues/194)).
+- A Google Play release, closed testing first ([#1412](https://github.com/sjtrotter/gig.log/issues/1412)), with APKs on the GitHub Releases page ([#1415](https://github.com/sjtrotter/gig.log/issues/1415)).
+- A redesign of the history tabs as Home, Recap and Plan ([#1510](https://github.com/sjtrotter/gig.log/issues/1510), [#1511](https://github.com/sjtrotter/gig.log/issues/1511)).
+- Uber: completing accepted-offer detection ([#826](https://github.com/sjtrotter/gig.log/issues/826)) and handling several offers shown at once ([#251](https://github.com/sjtrotter/gig.log/issues/251)).
+- Accept and decline by voice ([#579](https://github.com/sjtrotter/gig.log/issues/579)).
+- The rules in their own repository, sent to the app as signed updates, so drivers can choose where their rules come from ([#192](https://github.com/sjtrotter/gig.log/issues/192)).
+- Opt-in, anonymized market figures built from many drivers' data ([#193](https://github.com/sjtrotter/gig.log/issues/193), [#1137](https://github.com/sjtrotter/gig.log/issues/1137)).
+- Opt-in research with universities: empirical measurement of the visible offer surface, returning only anonymized aggregate results ([#194](https://github.com/sjtrotter/gig.log/issues/194)).
 
 ## Getting a build
 
-No release has been published yet. A pull request's CI run (the PR Check workflow on the [Actions tab](https://github.com/sjtrotter/DashBuddy/actions)) uploads a debug APK as the artifact `debug-apk-<PR number>` once the build and tests pass. A run skipped with the skip-ci token, or one that fails before that step, uploads none. Downloading it needs a GitHub login, and GitHub keeps it for 7 days.
+No release has been published yet. A pull request's CI run (the PR Check workflow on the [Actions tab](https://github.com/sjtrotter/gig.log/actions)) uploads a debug APK as the artifact `debug-apk-<PR number>` once the build and tests pass. A run skipped with the skip-ci token, or one that fails before that step, uploads none. Downloading it needs a GitHub login, and GitHub keeps it for 7 days.
 
 A debug build is a developer build. It differs from a release build in three ways:
 
@@ -144,7 +144,7 @@ The rules are tested against captured screens in `app/src/test/resources/snapsho
 
 ## Reporting a problem
 
-Open an [issue](https://github.com/sjtrotter/DashBuddy/issues/new). Say which delivery app, which screen and what went wrong. Leave out customer names, addresses and your own account details. The app's About screen lists a support address, support@trotter.cloud.
+Open an [issue](https://github.com/sjtrotter/gig.log/issues/new). Say which delivery app, which screen and what went wrong. Leave out customer names, addresses and your own account details. The app's About screen lists a support address, support@trotter.cloud.
 
 Changes that need checking on a real shift go on the [field-testing checklist](docs/field-testing/CHECKLIST.md), which says what to watch for and how to tell if it works.
 

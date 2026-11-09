@@ -24,5 +24,5 @@ data class ConsentReceipt(
  */
 object PrivacyDisclosure {
     const val REVISION: Int = 13
-    const val URL: String = "https://github.com/sjtrotter/DashBuddy/blob/master/PRIVACY.md"
+    const val URL: String = "https://github.com/sjtrotter/gig.log/blob/master/PRIVACY.md"
 }

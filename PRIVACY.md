@@ -291,7 +291,7 @@ the revision history below says what changed since the revision on a receipt.
 
 ## 9. Verify it
 
-Repository: https://github.com/sjtrotter/DashBuddy — rulesets under `matchers/rules/`, the recognition pipeline
+Repository: https://github.com/sjtrotter/gig.log — rulesets under `matchers/rules/`, the recognition pipeline
 under `core/pipeline/`, the consent model under `docs/design/rule-capability-consent.md`, the census model under
 `docs/adr/ADR-0011-unknown-census-privacy-model.md`, the DoorDash ICA posture under `LEGAL.md`.
 

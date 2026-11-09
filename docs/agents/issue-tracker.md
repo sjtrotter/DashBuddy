@@ -1,6 +1,6 @@
 # Issue tracker: GitHub
 
-Issues and specs for this repo live as GitHub issues in `sjtrotter/DashBuddy`. Use the `gh` CLI for all
+Issues and specs for this repo live as GitHub issues in `sjtrotter/gig.log`. Use the `gh` CLI for all
 operations. Workstation ids (project number, field and option ids) are in `CLAUDE.local.md`.
 
 ## Conventions
@@ -22,8 +22,8 @@ operations. Workstation ids (project number, field and option ids) are in `CLAUD
 - **Blocking**: when one issue is pre-work for or directly blocks another, always set the blocking relationship so the
   dependency shows in the GitHub UI: if you write "pre-work for #X" or "blocked by #Y" in an issue, make it real. Use
   native issue dependencies. Use the `addBlockedBy` GraphQL mutation in `CLAUDE.local.md` (node ids),
-  or REST: `gh api --method POST repos/sjtrotter/DashBuddy/issues/<child>/dependencies/blocked_by -F issue_id=<blocker database id>`
-  (`gh api repos/sjtrotter/DashBuddy/issues/<n> --jq .id`). Saying "blocked by #X" in prose without the edge is not enough.
+  or REST: `gh api --method POST repos/sjtrotter/gig.log/issues/<child>/dependencies/blocked_by -F issue_id=<blocker database id>`
+  (`gh api repos/sjtrotter/gig.log/issues/<n> --jq .id`). Saying "blocked by #X" in prose without the edge is not enough.
   Reverse with `removeBlockedBy`. Use `addSubIssue` / `removeSubIssue` instead when one issue is literally a sub-task,
   not just a dependency.
 - **Starting work**: add the `in-progress` label and set the board Status to In Progress before branching
