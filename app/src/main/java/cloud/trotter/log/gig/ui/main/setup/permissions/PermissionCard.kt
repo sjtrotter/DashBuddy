@@ -42,13 +42,15 @@ import cloud.trotter.log.gig.feature.settings.R as SettingsR
 @Composable
 fun PermissionCard(
     type: PermissionType,
+    stepNumber: Int,
+    stepCount: Int,
     card: PermissionType.CardCopy,
     settingsRoute: SettingsRoute?,
     onGrantClicked: () -> Unit,
     onNotNow: () -> Unit,
 ) {
     PermissionStepColumn {
-        PermissionStepHeader(stepNumber = type.stepNumber, iconRes = card.iconRes, titleRes = type.titleRes)
+        PermissionStepHeader(stepNumber, stepCount, iconRes = card.iconRes, titleRes = type.titleRes)
         Text(
             text = stringResource(card.pitchRes),
             style = MaterialTheme.typography.bodyLarge,
@@ -116,11 +118,15 @@ internal fun PermissionStepColumn(content: @Composable ColumnScope.() -> Unit) {
     )
 }
 
-/** "Step N of 6", the hero icon (when the step has one) and the title. */
+/**
+ * "Step N of M", the hero icon (when the step has one) and the title. N and M come from
+ * [PermissionsUiState.stepNumberOf] and [PermissionsUiState.stepCount]: six steps, or five in a build
+ * with no Screen-events step (#1414).
+ */
 @Composable
-internal fun PermissionStepHeader(stepNumber: Int, @DrawableRes iconRes: Int?, @StringRes titleRes: Int) {
+internal fun PermissionStepHeader(stepNumber: Int, stepCount: Int, @DrawableRes iconRes: Int?, @StringRes titleRes: Int) {
     Text(
-        text = stringResource(R.string.perm_step_format, stepNumber, PermissionType.STEP_COUNT),
+        text = stringResource(R.string.perm_step_format, stepNumber, stepCount),
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )

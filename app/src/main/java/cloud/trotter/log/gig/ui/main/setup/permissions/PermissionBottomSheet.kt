@@ -34,7 +34,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.log.gig.R
 
 /**
- * The permission gate: one step at a time, "Step N of 6" (#1457), until no step is pending.
+ * The permission gate: one step at a time, "Step N of 6" (#1457; "of 5" in a build with no Screen-events step,
+ * #1414), until no step is pending.
  *
  * The OS state lives in [PermissionsViewModel] (#944) — this composable only observes
  * [PermissionsUiState] and dispatches events up: [PermissionsViewModel.refresh] on the edges that
@@ -129,15 +130,21 @@ fun PermissionsBottomSheet(
             dragHandle = null,
             modifier = Modifier.padding(bottom = bottomPadding)
         ) {
+            val stepNumber = uiState.stepNumberOf(step)
+            val stepCount = uiState.stepCount
             when (step) {
                 // #1151 (dev re-sequencing): the consent step comes BEFORE the accessibility grant.
                 PermissionStep.ScreenEvents -> ScreenEventsCard(
+                    stepNumber = stepNumber,
+                    stepCount = stepCount,
                     onDecision = viewModel::onScreenEventsDecision,
                 )
                 is PermissionStep.Os -> {
                     val card = step.type.card
                     if (card == null) {
                         AccessibilityDisclosureCard(
+                            stepNumber = stepNumber,
+                            stepCount = stepCount,
                             onAllow = {
                                 launchGrantFlow(
                                     context = context,
@@ -155,6 +162,8 @@ fun PermissionsBottomSheet(
                         val routed = step.type in uiState.settingsRouted
                         PermissionCard(
                             type = step.type,
+                            stepNumber = stepNumber,
+                            stepCount = stepCount,
                             card = card,
                             settingsRoute = if (routed) SettingsRoute.of(step.type) else null,
                             onGrantClicked = {

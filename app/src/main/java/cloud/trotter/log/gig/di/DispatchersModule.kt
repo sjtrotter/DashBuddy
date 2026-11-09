@@ -3,6 +3,7 @@ package cloud.trotter.log.gig.di
 import cloud.trotter.log.gig.domain.di.ApplicationScope
 import cloud.trotter.log.gig.domain.di.DefaultDispatcher
 import cloud.trotter.log.gig.domain.di.IoDispatcher
+import cloud.trotter.log.gig.domain.di.WideEventReceiptOffered
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -61,4 +62,13 @@ object DispatchersModule {
     @Provides
     @Named("isDebug")
     fun provideIsDebug(): Boolean = BuildConfig.DEBUG
+
+    /**
+     * #1414 — whether this build offers Screen events (false in the Play build), from the build table in
+     * `app/build.gradle.kts`. Provided here because a layer or feature module must not read `:app`'s
+     * BuildConfig: the listener, the permission flow and Settings all take this one value.
+     */
+    @Provides
+    @WideEventReceiptOffered
+    fun provideWideEventReceiptOffered(): Boolean = BuildConfig.WIDE_EVENT_RECEIPT_OFFERED
 }

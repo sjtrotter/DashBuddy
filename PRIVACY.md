@@ -18,17 +18,23 @@ gig.log assists delivery drivers by reading enabled delivery apps and speaking o
 
 ### 2.1 The accessibility service (the screen reader)
 
-Declared in `app/src/main/res/xml/accessibility_service_config.xml`:
+Declared in `app/src/main/res/xml/accessibility_service_config.xml` (the Play build) and its copy
+`app/src/accessibilityTool/res/xml/accessibility_service_config.xml` (the sideload and debug builds); the two
+differ only in the first flag below (`AccessibilityToolFlagGuardTest`). There are three builds (`app/build.gradle.kts`):
+the **Play** build (`cloud.trotter.log.gig`), the **sideload** build from outside Play (`cloud.trotter.log.gig.sideload`,
+a release build with none of the debug extras) and the developer's **debug** build (`cloud.trotter.log.gig.debug`).
 
-- `android:isAccessibilityTool="true"` — gig.log declares itself an accessibility tool because that is what it
-  is: it reads offers aloud. Accept and Decline happen when the dasher presses them in gig.log.
-  Automated actions need separate per-action grants; auto-accept is not built. The flag changes how Android classifies
-  and warns about the service and which events it is eligible to receive (since Android 14 the system delivers
-  events an app marks accessibility-data-sensitive only to services carrying it).
+- `android:isAccessibilityTool` — `false` in the Play build, `true` in the sideload and debug builds. Google Play
+  allows `true` only for apps built for people with disabilities, so the Play build does not declare it. The flag
+  changes how Android classifies and warns about the service and which events it is eligible to receive: since
+  Android 14 the system delivers events an app marks accessibility-data-sensitive only to services declaring `true`.
+  Uber's offer pop-up is such a surface, so the Play build cannot read it; the sideload build exists for drivers who
+  want Uber offers read. Accept and Decline happen when the dasher presses them in gig.log. Automated actions need
+  separate per-action grants; auto-accept is not built.
 - `android:packageNames` — the service is bound to the delivery apps only: `com.doordash.driverapp`,
   `com.ubercab.driver`, `com.instacart.shopper`, `com.walmart.spark`. Nothing from any other app reaches the
   pipeline. (One opt-in exception, §2.2.)
-- `android:accessibilityEventTypes` — four event types in a release build: window state changed, window content
+- `android:accessibilityEventTypes` — four event types in the Play and sideload builds: window state changed, window content
   changed, view clicked, windows changed. No text-changed, focus or selection events. A **debug** build subscribes to
   every event type for rule development (`AccessibilityListener`, `BuildConfig.DEBUG`).
 - `android:canRetrieveWindowContent="true"` with `flagReportViewIds`, `flagRetrieveInteractiveWindows`,
@@ -43,6 +49,11 @@ and every economic computation run **on the device** (`core/pipeline`, `core/sta
 
 ### 2.2 The one wide-receipt opt-in ("Screen events")
 
+**Not in the Play build.** Play allows the wide receipt only for an app that declares itself an accessibility tool,
+so the Play build does not offer Screen events: it has no Screen events step or Settings switch, and its package
+filter is always on, whatever an earlier install stored (`EventReceiptConsent.enforced`, fed by
+`BuildConfig.WIDE_EVENT_RECEIPT_OFFERED`). The rest of this section describes the sideload and debug builds.
+
 By default the service receives events only from the apps above. A separately asked, affirmative consent
 ("Screen events", the first step of the permission flow, `EventReceiptPreferences` in `domain`, enforced by
 `AccessibilityListener` through `ServiceInfoPolicy`) lets the service receive the system's window-change events
@@ -52,7 +63,7 @@ delivery apps' windows are inspected: another app's window is identified by pack
 stores nothing of its content. The one surface that can still capture another app's content is a whole-display
 evidence screenshot (§4), which is off by default and says so where it is turned on (`event_receipt_body`).
 
-In release builds, declining Screen events retains the supported-package subscription and leaves gig.log usable. In debug builds, declining disables the accessibility service until Screen events is allowed again (`ServiceInfoPolicy.shouldDisableSelf`). The debug permission note states this requirement.
+In the sideload build, declining Screen events retains the supported-package subscription and leaves gig.log usable. In debug builds, declining disables the accessibility service until Screen events is allowed again (`ServiceInfoPolicy.shouldDisableSelf`). The debug permission note states this requirement.
 
 ### 2.3 Notifications
 
@@ -146,7 +157,7 @@ There is no account, no analytics SDK, no advertising identifier. Gas-price refr
 | Vehicle list in the setup wizard (`EpaVehicleDataSource`) | asks first (#1258): off until "Look up my vehicle" is tapped; choice is saved | the U.S. EPA public vehicle API (`fueleconomy.gov`) | vehicle-list request after opt-in, including on later setup visits; selected year, make, model and vehicle ID as the user chooses, to retrieve MPG; no account or install ID |
 | Google MPG search | manual button press | Google in the user's browser (`VehicleCard`) | entered vehicle year, make and model plus `mpg`; browser cookies/account settings apply |
 | Text-to-speech (`TtsEffectHandler`) | used for spoken offers | your phone's text-to-speech engine | the offer sentence; the engine may use the network under its own terms |
-| UNKNOWN screen/notification census (developer builds only, `censusUploadEnabled`) | off | a census server you configure | a **skeleton** of an admitted UNKNOWN screen or platform notification: screen view classes/ids, or a grammar-bounded notification channel id and five filtered slots; text slots carry coarse kinds or hashes under a k-anonymity gate, never source text — see `docs/adr/ADR-0011-unknown-census-privacy-model.md` — plus daily recognition-health counts per platform and app version, sent with this install's ID. Release builds bind a no-op sink (`NoOpCensusSink`) and cannot upload at all. |
+| UNKNOWN screen/notification census (developer builds only, `censusUploadEnabled`) | off | a census server you configure | a **skeleton** of an admitted UNKNOWN screen or platform notification: screen view classes/ids, or a grammar-bounded notification channel id and five filtered slots; text slots carry coarse kinds or hashes under a k-anonymity gate, never source text — see `docs/adr/ADR-0011-unknown-census-privacy-model.md` — plus daily recognition-health counts per platform and app version, sent with this install's ID. Every other build (Play, sideload) binds a no-op sink (`NoOpCensusSink`) and cannot upload at all. |
 | Share UNKNOWN captures (developer builds only, `censusShareCaptures`, trusted installs) | off | the same census server, only while its operator has marked this install trusted | the **text** of UNKNOWN screens (`CensusUploadWorker.uploadEnvelopes`). An UNKNOWN screen gets no rule redaction — only the marker and address-block backstops (§3) — so a capture can still contain customer details, and the operator can read them. The switch says exactly this (`developer_settings_census_share_captures_explainer`). |
 | Bug-report export | manual | a folder/provider the user chooses (`DataExportViewModel.exportLog`) | INFO+ milestones checked against known sensitive markers before writing; matches are replaced, but unknown sensitive details can escape filtering. A cloud provider may upload the file. gig.log does not deliver it to the developer. |
 | CSV export | manual | a folder/provider the user chooses (`DataExportViewModel` → `CsvExporter`) | all recorded sessions and deliveries, including merchant names and which saved vehicle drove each dash (its id and label — the dasher's own text), plus deductible miles per vehicle per tax year and logged expenses and fill-ups (amounts, categories, the dasher’s own labels, gallons and the app's tracked miles at the fill-up, plus the saved vehicle id and label for car-care and gas receipts), including voided entries. No customer data or customer/address hashes. A cloud provider may upload the files. |
@@ -159,7 +170,7 @@ independently of capture enablement. It scans the original five fields and all a
 shared 40-character/value filters. Any sensitive marker refuses the entire item; action labels are never
 uploaded. Channel ids must match `[A-Za-z0-9_.-]{1,64}` without repair. The debug screen and notification
 paths share one sink, spool, worker and server-authoritative 300/day budget, with common 429 deferral;
-there is no separate client daily allowance. Release still binds `NoOpCensusSink` and builds nothing.
+there is no separate client daily allowance. Every non-debug build (Play, sideload) still binds `NoOpCensusSink` and builds nothing.
 Census failures leave recognition unaffected; INFO counters contain counts and reason/kind names,
 never notification text or channel ids. Trusted capture sharing remains screen-only. CLICK skeletons
 stay OUT until a reliable screen fingerprint can accompany clicks (ADR-0011 §10).
@@ -253,8 +264,8 @@ identity export. Vehicle/default resets preserve these learned preferences.
 - One mark of the day you first met that goal and the goal amount it was met at (`goal_met_mark` in `app_state`, e.g.
   `2026-10-18|7900`), so the HUD's goal animation plays once per day and goal. Stays on the device, backed up with the
   app's preferences; it holds no money figure beyond the goal you set yourself.
-- Debug builds may keep capture envelopes for rule development under the app's files; release builds bind a no-op
-  capture bus (`NoOpCaptureBus`) and keep none. Captures and census files are excluded from Android backup and
+- Debug builds may keep capture envelopes for rule development under the app's files; every other build (Play,
+  sideload) binds a no-op capture bus (`NoOpCaptureBus`) and keeps none. Captures and census files are excluded from Android backup and
   device transfer (`app/src/main/res/xml/backup_rules.xml`).
 - Logs rotate automatically: `app.log` stays in the app's files root, firehose rotations live under `logs/`, and
   the shareable log keeps one `shareable.log.1` backup (`LogRepository`). All these log paths are excluded from

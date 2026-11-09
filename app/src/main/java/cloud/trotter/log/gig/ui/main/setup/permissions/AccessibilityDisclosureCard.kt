@@ -16,8 +16,9 @@ import cloud.trotter.log.gig.R
 import cloud.trotter.log.gig.feature.settings.R as SettingsR
 
 /**
- * #1457 — step 2, the accessibility service's own disclosure screen (Play's prominent disclosure for
- * an app that is not an accessibility tool, #170 / #1413): what the service reads and why, what is
+ * #1457 — the accessibility step (step 2, or 1 in a build with no Screen-events step), the service's own
+ * disclosure screen (Play's prominent disclosure for an app that is not an accessibility tool, #170 /
+ * #1413): what the service reads and why, what is
  * dropped and what is saved as codes, screenshots, where it all happens and what can leave the phone,
  * and when it taps. Nothing here grants anything: Allow ([onAllow]) only opens Android's
  * Accessibility settings, and Don't allow ([onDontAllow]) puts this step off and records nothing.
@@ -25,12 +26,15 @@ import cloud.trotter.log.gig.feature.settings.R as SettingsR
  */
 @Composable
 fun AccessibilityDisclosureCard(
+    stepNumber: Int,
+    stepCount: Int,
     onAllow: () -> Unit,
     onDontAllow: () -> Unit,
 ) {
     PermissionStepColumn {
         PermissionStepHeader(
-            stepNumber = PermissionType.Accessibility.stepNumber,
+            stepNumber = stepNumber,
+            stepCount = stepCount,
             iconRes = R.drawable.ic_accessibility,
             titleRes = PermissionType.Accessibility.titleRes,
         )
