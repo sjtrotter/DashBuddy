@@ -13,8 +13,8 @@ name: Release
 #   KEYSTORE_BASE64, STORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD      the Play upload key (required when PLAY_PUBLISH)
 #   SIDELOAD_KEYSTORE_BASE64, SIDELOAD_STORE_PASSWORD, SIDELOAD_KEY_ALIAS, SIDELOAD_KEY_PASSWORD   always required
 # Secrets (repository, shared with pr-check.yml): DEBUG_KEYSTORE_BASE64, DEBUG_KEYSTORE_PASSWORD, always required.
-# Variables (repository): PLAY_PUBLISH, PLAY_WIF_PROVIDER, PLAY_SERVICE_ACCOUNT. Keyless auth accepts only master
-# and v* tags of this repo.
+# Variables (repository): PLAY_PUBLISH, PLAY_WIF_PROVIDER, PLAY_SERVICE_ACCOUNT. Keyless auth accepts this repo (by
+# id) only from the `release` environment on a v* tag, or the `play-listing` environment on master (docs/RELEASE.md §4).
 on:
   push:
     tags: ['v*']

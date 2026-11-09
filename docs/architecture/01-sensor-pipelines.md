@@ -703,8 +703,8 @@ then fired, and were answered with the window beneath). The shipped rules:
   on top (an Uber card over a DoorDash dash), R0 follows the overlay's platform — the covered dash's
   transitions are unobserved for the card's lifetime and its settle park (§3) is dropped when R0
   leaves its surface. Two platforms visible at once is the multiplatform problem tracked in
-  [#251](https://github.com/sjtrotter/DashBuddy/issues/251) /
-  [#826](https://github.com/sjtrotter/DashBuddy/issues/826), deliberately not solved here.
+  [#251](https://github.com/sjtrotter/gig.log/issues/251) /
+  [#826](https://github.com/sjtrotter/gig.log/issues/826), deliberately not solved here.
 - **D6 — topology emits at most ONE window, by the event path's rules** (review CC2/CC3/DD3). With the
   active window ENABLED, the event path owns it and never reads a non-active application window above
   it, so `WindowsChangedPipeline` emits ONLY an overlay winner — via `AccessibilitySource.overlayFront`,

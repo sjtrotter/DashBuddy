@@ -404,7 +404,7 @@ Before adding snapshot fixtures, changing a rule's parse output, or writing a re
 
 ### Issue tracker
 
-GitHub issues in `sjtrotter/DashBuddy`; every issue is labelled and added to the Roadmap project. Before filing or
+GitHub issues in `sjtrotter/gig.log`; every issue is labelled and added to the Roadmap project. Before filing or
 editing an issue, read `docs/agents/issue-tracker.md` (labels, board, blocking).
 
 ### Domain docs

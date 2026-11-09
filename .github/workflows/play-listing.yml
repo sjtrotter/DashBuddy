@@ -3,7 +3,8 @@ name: Play store listing
 # Manually triggered. "inspect" prints what the Play Console holds (listing text, image ids, tracks) and changes
 # nothing; "upload" replaces the en-US listing text and images with what is under play/listing/ and commits the
 # edit. tools/play/play_listing.py does the work; play/listing/README.md is the layout. docs/RELEASE.md, Play
-# Console setup, covers the service account. Keyless auth accepts only master and v* tags of this repo.
+# Console setup, covers the service account. Keyless auth accepts this job only through the `play-listing`
+# environment on master (docs/RELEASE.md §4).
 # Needs "View app information" for inspect and "Manage store presence" for upload.
 on:
   workflow_dispatch:
@@ -18,6 +19,7 @@ on:
 jobs:
   listing:
     runs-on: ubuntu-latest
+    environment: play-listing
     permissions: { contents: read, id-token: write }
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
