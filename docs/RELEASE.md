@@ -74,6 +74,9 @@ The debug key reads `giglog.debugKeystore.path` and `giglog.debugKeystore.passwo
 5. **Store listing.** The files live in `play/listing/` and #1416 fills them; the "Play store listing" workflow
    pushes them.
 6. **Service account for the pipeline**, with no key: §4.
+7. **Privacy policy.** App content → Privacy policy: `https://gig.log.trotter.cloud/privacy/`. The Pages workflow
+   (`pages.yml`) builds that page from the in-app Privacy page's `privacy_*` strings and PRIVACY.md's current revision,
+   and deploys it from `master`.
 
 ## 4. Google Cloud: keyless access for the workflows
 

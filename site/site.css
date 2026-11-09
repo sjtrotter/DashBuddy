@@ -1,0 +1,21 @@
+/* gig.log's brand colours (core/designsystem AppColors), dark by default as the app is. */
+:root {
+  --bg: #0C1014; --surface: #141A21; --text: #EEF3F7; --text2: #AAB6C2; --line: rgba(255, 255, 255, 0.08);
+  --accent: #46E0C8;
+  color-scheme: dark light;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #F6F8FA; --surface: #FFFFFF; --text: #0C1014; --text2: #3B4652; --line: rgba(0, 0, 0, 0.1); --accent: #0B7A6B; }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+main { max-width: 42rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 0.5rem; }
+h2 { font-size: 1.15rem; margin: 2rem 0 0.5rem; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+p { margin: 0 0 0.9rem; }
+.meta, footer { color: var(--text2); font-size: 0.95rem; }
+a { color: var(--accent); }
+footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--line); }

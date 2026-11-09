@@ -5,6 +5,9 @@ file that does it named for each claim, so it can be checked against the source 
 It is not yet a legal privacy policy; wording for the Play listing and the in-app disclosure is reviewed
 separately (#246). Where a claim and the code ever disagree, the code is the fact and this file is the bug.
 A change to a claim here updates the in-app privacy page (`privacy_*`) and every disclosure string that states it, in the same PR.
+The public privacy policy, https://gig.log.trotter.cloud/privacy/, is built from those same `privacy_*` strings and
+this file's current revision (`tools/site/build_site.py`, deployed by `.github/workflows/pages.yml`), so it changes
+with them.
 
 gig.log is **source-available**: the app is licensed under PolyForm Shield (`LICENSE`) and the recognition
 ruleset under `matchers/` is Apache-2.0 (`matchers/LICENSE`). Every statement below can be verified against the
@@ -230,6 +233,11 @@ and this change adds no network transmission, precise-location collection, or me
 identity export. Vehicle/default resets preserve these learned preferences.
 
 
+- Storage and transport: the Room database and the DataStore files live in the app's private storage, which other
+  apps cannot read and which Android's device encryption covers; gig.log adds no encryption of its own. The gas-price
+  (`https://api.eia.gov/`, `GasPriceApiModule`) and vehicle (`https://www.fueleconomy.gov/`, `VehicleNetworkModule`)
+  lookups use HTTPS, and the app targets an SDK at which Android refuses plain HTTP by default. Screenshots (§4) and
+  exports (§6) are ordinary files outside that storage, readable by any app the user lets see photos or files.
 - The event log and the analytics tables are a Room database on the device (`core/database`); the read-model
   tables are a rebuildable projection of your own event log. The database is backed up and transferred so your
   history can be restored on a new phone (§6).
@@ -349,6 +357,10 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r17 (2026-11-09)** — §7: how the data is stored (app-private storage under Android's encryption, no app-level
+  encryption, HTTPS for the two lookups, screenshots and exports outside it), shown in the app as "How it is stored"
+  (`privacy_storage_*`) and on the public policy page; the public policy at https://gig.log.trotter.cloud/privacy/ is
+  built from the in-app Privacy page's strings.
 - **r16 (2026-11-09)** — §2.1: the service is bound to DoorDash and Uber Driver only, the apps gig.log has rules for;
   Instacart Shopper and Walmart Spark are no longer bound or enableable, and a saved preference for them is ignored
   (#170, #1413). The disclosure card names the apps, links gig.log's own Privacy page and, in the Play build,

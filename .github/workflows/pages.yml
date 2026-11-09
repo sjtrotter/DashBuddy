@@ -1,0 +1,57 @@
+# #1582: builds gig.log's GitHub Pages site (https://gig.log.trotter.cloud) and, on master, deploys it.
+# A Pages deploy publishes the whole site, so this is the site's only deploy: the feeds (#1564) add their output to
+# the directory tools/site/build_site.py writes, in this workflow, and never deploy a site of their own.
+name: Pages
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - site/**
+      - tools/site/**
+      - feature/settings/src/main/res/values/strings.xml
+      - PRIVACY.md
+      - domain/src/main/java/cloud/trotter/log/gig/domain/capability/ConsentReceipt.kt
+      - .github/workflows/pages.yml
+  pull_request:
+    paths:
+      - site/**
+      - tools/site/**
+      - feature/settings/src/main/res/values/strings.xml
+      - PRIVACY.md
+      - domain/src/main/java/cloud/trotter/log/gig/domain/capability/ConsentReceipt.kt
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Build the site
+        run: python3 -I tools/site/build_site.py . _site
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        if: github.event_name != 'pull_request'
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}privacy/
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
