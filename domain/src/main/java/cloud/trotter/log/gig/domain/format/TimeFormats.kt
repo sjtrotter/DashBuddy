@@ -40,6 +40,15 @@ fun formatDuration(millis: Long): String {
     }
 }
 
+/** "2h 5m" / "5m" / "0m" — minute grain, floored; negatives read "0m". Digits pinned to Locale.ROOT. */
+fun formatDurationMinutes(millis: Long): String {
+    val safe = millis.coerceAtLeast(0)
+    val hours = TimeUnit.MILLISECONDS.toHours(safe)
+    val minutes = TimeUnit.MILLISECONDS.toMinutes(safe) % 60
+    return if (hours > 0) String.format(Locale.ROOT, "%dh %dm", hours, minutes)
+    else String.format(Locale.ROOT, "%dm", minutes)
+}
+
 /** Elapsed clock duration: m:ss below an hour, h:mm:ss from an hour. Negatives floor to zero. */
 fun formatClockDuration(ms: Long): String {
     val seconds = ms.coerceAtLeast(0) / 1_000

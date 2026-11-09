@@ -36,6 +36,16 @@ class TimeFormatsTest {
     }
 
     @Test
+    fun `formatDurationMinutes is minute grain and floors`() {
+        assertEquals("0m", formatDurationMinutes(0))
+        assertEquals("0m", formatDurationMinutes(59_999))
+        assertEquals("1m", formatDurationMinutes(60_000))
+        assertEquals("2h 5m", formatDurationMinutes(2 * 3_600_000L + 5 * 60_000L))
+        assertEquals("3h 0m", formatDurationMinutes(3 * 3_600_000L))
+        assertEquals("0m", formatDurationMinutes(-5_000))
+    }
+
+    @Test
     fun `formatCountdown is m colon ss with absolute magnitude for negatives`() {
         assertEquals("1:05", formatCountdown(65_000))
         assertEquals("0:00", formatCountdown(0))

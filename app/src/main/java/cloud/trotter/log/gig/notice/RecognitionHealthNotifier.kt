@@ -2,34 +2,40 @@ package cloud.trotter.log.gig.notice
 
 import android.app.NotificationManager
 import android.content.Context
-import cloud.trotter.log.gig.R
 import cloud.trotter.log.gig.domain.pipeline.RecognitionHealthReporter
-import cloud.trotter.log.gig.domain.state.Platform
+import cloud.trotter.log.gig.domain.pipeline.RecognitionIncident
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * The dasher-visible half of the #937 recognition-health alarm: when a platform's screens stop
- * being recognized, say so out loud instead of quietly narrating nothing.
+ * The dasher-visible half of the recognition incident (#937, one incident per platform since #1560):
+ * when a platform's screens stop being recognized, or its rules stop reading them, say so out loud
+ * instead of quietly narrating nothing.
  *
  * This is the recognition entry in the #909 silent-death family. The effect engine (#914), the
  * bubble (#916) and the odometer (#917) each got a liveness signal; recognition had none, so a
  * platform app update that broke every anchor mid-dash was detectable only at the next desk
  * pull — and once rules ship OTA (#640) to users who never do a desk pull, never at all.
  *
- * **Stateless by design.** The once-per-platform-per-process edge gate lives in
- * `RecognitionHealthMonitor` (`:core:pipeline`), which owns the window that decides; duplicating
- * a gate here would be a second source of truth for "have we already said this".
+ * **One notice per platform.** Every notice posts on [AppNoticeChannel.Ids.RECOGNITION_HEALTH] tagged
+ * by the platform wire, so two platforms' notices coexist and a close withdraws only its own. The notice
+ * is posted once per incident and not updated when causes join; Home's card shows every cause.
  *
- * **Fail-open.** Every path is wrapped: this is called from the sensing hot path, and a
- * notification the OS refuses (POST_NOTIFICATIONS not granted) must degrade to the monitor's
- * WARN alone, never to a thrown frame.
+ * **The #640 seam.** This is the one place the notice is built. The "Check for new rules" / "Keep rules
+ * up to date" actions #640 adds go here, beside the copy, so the `:domain` contract stays data only.
  *
- * **PII posture:** the only values that reach the notification are a platform's own display
- * name (resolved from its wire through the `Platform` registry) and a percentage. No screen
- * text, no customer data, no store names — principle 7's INFO+ contract holds trivially.
+ * **Stateless by design.** The incident, its one-notice gate and the once-a-day limit live in
+ * `RecognitionHealthMonitor` (`:core:pipeline`); duplicating a gate here would be a second source of
+ * truth for "have we already said this".
+ *
+ * **Fail-open.** Every path is wrapped: a notification the OS refuses (POST_NOTIFICATIONS not granted)
+ * must degrade to the monitor's log lines alone, never to a crashed reporter coroutine.
+ *
+ * **PII posture:** the copy comes from [RecognitionNoticeCopy]: a platform's own display name
+ * (resolved from its wire through the `Platform` registry) and our own shape and field labels. No
+ * screen text, no customer data, no store names, no percentage.
  */
 @Singleton
 class RecognitionHealthNotifier @Inject constructor(
@@ -37,34 +43,29 @@ class RecognitionHealthNotifier @Inject constructor(
     private val notificationManager: NotificationManager,
 ) : RecognitionHealthReporter {
 
-    override fun onRecognitionDegraded(platformWire: String, unknownPercent: Int) {
+    override fun onIncidentNotice(incident: RecognitionIncident) {
         try {
-            postNotice(platformWire, unknownPercent)
+            AppNoticeChannel.postNotice(
+                context = context,
+                notificationManager = notificationManager,
+                notificationId = AppNoticeChannel.Ids.RECOGNITION_HEALTH,
+                requestCode = REQUEST_CODE,
+                title = RecognitionNoticeCopy.title(context.resources, incident),
+                text = RecognitionNoticeCopy.text(context.resources, incident),
+                tag = incident.platformWire,
+            )
         } catch (t: Throwable) {
-            // Deliberately broad and NOT rethrown (#909): the caller is a sensing frame.
-            Timber.tag(TAG).e(t, "Recognition health notice could not be posted (#937)")
+            // Deliberately broad and NOT rethrown (#909): a refused notice costs a log line.
+            Timber.tag(TAG).e(t, "Recognition notice could not be posted (#1560)")
         }
     }
 
-    private fun postNotice(platformWire: String, unknownPercent: Int) {
-        // The registry is the only path from a wire to display copy (principle 8). An unknown
-        // wire — a ruleset naming a platform this build doesn't carry — still gets a notice,
-        // with the generic wording rather than a fabricated brand name.
-        val platformName = Platform.fromWire(platformWire)
-            ?.takeIf { it != Platform.Unknown }
-            ?.displayName
-            ?: context.getString(R.string.recognition_health_notice_platform_fallback)
-
-        AppNoticeChannel.postNotice(
-            context = context,
-            notificationManager = notificationManager,
-            notificationId = AppNoticeChannel.Ids.RECOGNITION_HEALTH,
-            requestCode = REQUEST_CODE,
-            title = context.getString(R.string.recognition_health_notice_title, platformName),
-            text = context.getString(
-                R.string.recognition_health_notice_text, platformName, unknownPercent,
-            ),
-        )
+    override fun onIncidentClosed(platformWire: String) {
+        try {
+            AppNoticeChannel.cancelNotice(notificationManager, platformWire, AppNoticeChannel.Ids.RECOGNITION_HEALTH)
+        } catch (t: Throwable) {
+            Timber.tag(TAG).e(t, "Recognition notice could not be withdrawn (#1560)")
+        }
     }
 
     private companion object {

@@ -45,6 +45,7 @@ import cloud.trotter.log.gig.domain.census.CensusUploadStats
 import cloud.trotter.log.gig.domain.model.accessibility.UiNode
 import cloud.trotter.log.gig.domain.pipeline.Observation
 import cloud.trotter.log.gig.domain.pipeline.RecognitionHealthReporter
+import cloud.trotter.log.gig.domain.pipeline.RecognitionNoticeStore
 import cloud.trotter.log.gig.domain.settings.GraceConfig
 import cloud.trotter.log.gig.domain.settings.PlatformPreferences
 import cloud.trotter.log.gig.domain.state.Platform
@@ -138,7 +139,8 @@ class PrivacyExportReplay(
     private val publisher = SkeletonPublisher(sink, stats, envelopeSink)
     private val accessibility = AccessibilityPipeline(ContentChangedPipeline(source, platforms, stats),
         StateChangedPipeline(source, platforms, stats), WindowsChangedPipeline(source, platforms, stats),
-        source, classifier, writer, platforms, stats, RecognitionHealthMonitor(RecognitionHealthReporter { _, _ -> }, health), publisher)
+        source, classifier, writer, platforms, stats, RecognitionHealthMonitor(RecognitionHealthReporter.NoOp, health,
+            RecognitionNoticeStore.NoOp, backgroundScope, io), publisher)
     private val notificationPipeline = NotificationPipeline(notifications, NotificationFilter(platforms), classifier, writer, platforms, stats, publisher)
     val forwarded = mutableListOf<Observation>()
     val requests = CopyOnWriteArrayList<RequestBytes>()

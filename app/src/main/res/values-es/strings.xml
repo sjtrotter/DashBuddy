@@ -54,11 +54,6 @@
     <!-- copy-audit: retranslated es -->
     <string name="locale_notice_text">Tu teléfono no está en inglés. gig.log solo lee las aplicaciones de reparto en inglés, así que puede omitir la mayoría de las ofertas y entregas, y sus filtros de privacidad pueden omitir datos de clientes. Cambiar el teléfono a inglés corrige ambas cosas, aunque ningún filtro lo detecta todo.</string>
 
-    <string name="recognition_health_notice_title">gig.log no puede leer %1$s ahora mismo</string>
-    <!-- copy-audit: retranslated es -->
-    <string name="recognition_health_notice_text">gig.log no reconoció el %2$d%% de las pantallas recientes de %1$s. Es probable que esa aplicación haya cambiado. Las ofertas, recogidas y entregas pueden no registrarse hasta que gig.log se actualice.</string>
-    <string name="recognition_health_notice_platform_fallback">esta aplicación de entrega</string>
-
     <!-- #991 — aviso del motor de voz. Traducido aquí porque la lectura de ofertas en voz alta ya
          respeta el idioma elegido (#428 mitad B): un aviso de que esa voz se apagó debe hablar el
          mismo idioma que hablaba. -->

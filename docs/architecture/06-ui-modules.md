@@ -42,7 +42,9 @@ editor family, and the Dashboard-hosted `setup/consent/` #843 + `setup/permissio
 over the shared `DashboardRow` vocabulary, pure data-in/lambdas-out over `:domain` +
 `:core:designsystem`; Home's review rows are the hub's own `reviewTexts`/`ReviewList` reused from
 `:app` as a composable slot, so flag thresholds/copy keep ONE owner, and `DashboardScreen`/
-`DashboardViewModel`/`DashboardUiState` stay in `:app`);
+`DashboardViewModel`/`DashboardUiState` stay in `:app`; Home's recognition card (#1560,
+`RecognitionIncidentCard`) lives in `:app` beside `RecognitionHealthNotifier` because
+`RecognitionNoticeCopy` is the one owner of the copy both render);
 
 and `:feature:bubble` (#96/#867 — the HUD's
 presentational content: the #1333 `hud/*` package (S2a: `HudScreen` with its live / offer / log / resting modes and

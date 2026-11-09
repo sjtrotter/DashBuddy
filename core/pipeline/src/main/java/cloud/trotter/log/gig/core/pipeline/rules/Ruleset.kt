@@ -155,20 +155,6 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
                     emptyMap()
                 }
 
-                // #1036 — matched, but did the declared parse yield anything? Measured against
-                // the RAW parser output, before validate: a `DropParsed` validator is a DECLARED
-                // decision to discard a parse, not the silent anchor rot this signal names. A
-                // thrown parse (rawFields empty above) DOES count — it yielded nothing either.
-                //
-                // Reported BEFORE the `Skip` continue below (review R5): a branch that matched,
-                // parsed nothing, and was then skipped by its own validator is exactly the case
-                // where a lower-priority text rule claims the frame and the rot leaves no trace
-                // at all — so it must be counted even though this branch returns no result.
-                // #1093: an OPTIONAL bind that resolved nothing rides the same sink — the target
-                // anchor can rot exactly like a parse anchor, and an optional bind is the one
-                // place a rot leaves no trace at all (a mandatory one skips the rule).
-                onParseShortfall?.let { sink -> shortfallOf(rule.id, branch, rawFields, allBindings)?.let(sink) }
-
                 // Phase 5: Validate
                 var branchSkip = false
                 var dropParsed = false
@@ -185,6 +171,23 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
                         }
                     }
                 }
+
+                // #1036 — matched, but did the declared parse yield anything? Measured against
+                // the RAW parser output, before `DropParsed` applies: a `DropParsed` validator is a
+                // DECLARED decision to discard a parse, not the silent anchor rot this signal names
+                // (validators read `rawFields` as an immutable map, so it is unchanged here). A
+                // thrown parse (rawFields empty above) DOES count — it yielded nothing either.
+                //
+                // Reported BEFORE the `Skip` continue below (review R5): a branch that matched,
+                // parsed nothing, and was then skipped by its own validator is exactly the case
+                // where a lower-priority text rule claims the frame and the rot leaves no trace
+                // at all — so it must be counted even though this branch returns no result.
+                // #1560: the report now carries whether the branch was skipped, so the parse-rot
+                // tracker can tell a rotted winner from a skipped sibling branch of a healthy one.
+                // #1093: an OPTIONAL bind that resolved nothing rides the same sink — the target
+                // anchor can rot exactly like a parse anchor, and an optional bind is the one
+                // place a rot leaves no trace at all (a mandatory one skips the rule).
+                onParseShortfall?.let { sink -> shortfallOf(rule.id, branch, rawFields, allBindings, branchSkip)?.let(sink) }
                 if (branchSkip) continue
 
                 val effectiveFields = if (dropParsed) emptyMap() else rawFields
@@ -238,6 +241,7 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
                         refusedBindings = refused.sorted(),
                         unprovableBindings = unprovable.map { it.first }.sorted(),
                         unprovableReasons = unprovable.toMap(),
+                        shape = branch.shape,
                     ),
                 )
 
@@ -279,6 +283,7 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
         branch: CompiledBranch<TInput>,
         rawFields: Map<String, Any?>,
         bindings: Bindings,
+        branchSkipped: Boolean,
     ): ParseShortfall? {
         val evidence = branch.parseEvidenceFields
         val allNull = evidence.isNotEmpty() &&
@@ -293,6 +298,8 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
             allNullFieldCount = if (allNull) evidence.size else 0,
             nullRequiredFields = nullRequired,
             unresolvedOptionalBindings = unresolvedBinds,
+            shape = branch.shape,
+            branchSkipped = branchSkipped,
         )
     }
 

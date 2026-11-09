@@ -5,9 +5,11 @@ import cloud.trotter.log.gig.domain.capture.ReplayMetadataProvider
 import cloud.trotter.log.gig.core.pipeline.CachingPlatformAppVersions
 import cloud.trotter.log.gig.core.pipeline.PipelineStats
 import cloud.trotter.log.gig.core.pipeline.PlatformAppVersions
+import cloud.trotter.log.gig.core.pipeline.RecognitionHealthMonitor
 import cloud.trotter.log.gig.core.pipeline.ReplayMetadataProviderImpl
 import cloud.trotter.log.gig.core.pipeline.rules.JsonRuleInterpreter
 import cloud.trotter.log.gig.core.pipeline.rules.ScreenRedactionSource
+import cloud.trotter.log.gig.domain.pipeline.RecognitionIncidents
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -30,6 +32,10 @@ abstract class PipelineModule {
     // that owns the loaded rulesets.
     @Binds @Singleton
     abstract fun bindScreenRedactionSource(impl: JsonRuleInterpreter): ScreenRedactionSource
+
+    // #1560: Home reads the open recognition incidents from their one owner.
+    @Binds @Singleton
+    abstract fun bindRecognitionIncidents(impl: RecognitionHealthMonitor): RecognitionIncidents
 
     companion object {
 

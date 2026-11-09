@@ -15,6 +15,7 @@ class BackupRulesGuardTest {
         "file" to "datastore/dev_settings.preferences_pb",
         "file" to "datastore/rule_capability_grants.preferences_pb",
         "file" to "datastore/consent_event_receipt.preferences_pb",
+        "file" to "datastore/recognition_notices.preferences_pb",
         "file" to "census/",
     ) + listOf("file", "external").flatMap { domain ->
         listOf("captures/", "app.log", "shareable.log", "shareable.log.1", "logs/")

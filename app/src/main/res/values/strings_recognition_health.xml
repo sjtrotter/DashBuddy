@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #1560 recognition incident: the App notices channel notice and Home's card share this copy
+     (RecognitionNoticeCopy is its one owner). Labels are keyed by shape and field, never by
+     platform. No string carries a percentage. -->
+<resources>
+    <!-- The platform name when the wire is not one this build carries. -->
+    <string name="recognition_platform_fallback">Delivery app</string>
+    <!-- "DoorDash offers: pay and distance not read" — platform, screen kind, missing values. -->
+    <string name="recognition_rot_line_format">%1$s %2$s: %3$s not read</string>
+    <!-- "DoorDash screens not recognized" -->
+    <string name="recognition_unknown_line_format">%1$s screens not recognized</string>
+    <!-- The title when an incident has several causes. -->
+    <string name="recognition_incident_title_format">%1$s: some screens not read</string>
+    <string name="recognition_fields_pair_format">%1$s and %2$s</string>
+    <string name="recognition_still_other">Other screens may still record.</string>
+    <string name="recognition_shape_offer">offers</string>
+    <string name="recognition_shape_post_task">delivery receipts</string>
+    <string name="recognition_shape_session_ended">shift summaries</string>
+    <string name="recognition_shape_other">screens</string>
+    <string name="recognition_field_pay_amount">pay</string>
+    <string name="recognition_field_distance">distance</string>
+    <string name="recognition_field_total_pay">pay</string>
+    <string name="recognition_field_total_earnings">total</string>
+    <string name="recognition_field_other">some values</string>
+    <!-- Home card: how long the incident has been open, "For 2h 5m". -->
+    <string name="recognition_home_since_format">For %1$s</string>
+</resources>
