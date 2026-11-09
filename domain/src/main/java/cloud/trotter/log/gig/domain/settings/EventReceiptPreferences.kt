@@ -31,6 +31,21 @@ enum class EventReceiptConsent {
          */
         fun of(allowed: Boolean): EventReceiptConsent = if (allowed) ALLOWED else DECLINED
 
+        /**
+         * #1414 — the ONE rule for what a build enforces. [offered] is whether this build offers Screen
+         * events at all (the Play build does not: Play allows the wide receipt only for a declared
+         * accessibility tool). Not offered ⇒ [DECLINED] for every [stored] value, an unread `null` and
+         * an earlier [ALLOWED] included, so the listener keeps the package filter and the permission
+         * flow never asks. Offered ⇒ [stored] unchanged (`null` stays `null`). Read-side only: the
+         * stored decision is never rewritten, [EventReceiptPreferences] stays its one owner.
+         *
+         * A build that does not offer the option is never a debug build (the build table in
+         * `app/build.gradle.kts`, pinned by `AccessibilityToolFlagGuardTest`), so the [DECLINED] here
+         * never reaches the debug build's decline handling.
+         */
+        fun enforced(stored: EventReceiptConsent?, offered: Boolean): EventReceiptConsent? =
+            if (offered) stored else DECLINED
+
         /** Android 11 (API 30) — see [isWideReceiptReliable]. */
         const val UNRELIABLE_WIDE_RECEIPT_SDK = 30
 

@@ -7,6 +7,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.log.gig.BuildConfig
+import cloud.trotter.log.gig.domain.di.WideEventReceiptOffered
 import cloud.trotter.log.gig.domain.settings.EventReceiptConsent
 import cloud.trotter.log.gig.domain.settings.EventReceiptPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,6 +37,9 @@ import javax.inject.Inject
  * launcher's echoed boolean. The one thing a launcher result adds (#1457) is whether Android will
  * still show its dialog: a refusal with no rationale routes that step to Android settings.
  *
+ * #1414: a build that does not offer Screen events ([screenEventsOffered] false, the Play build) has no
+ * Screen-events step, and its accessibility step waits for nothing.
+ *
  * #1457: the steps the dasher put off live in the process-wide [PermissionDeferrals]; this holds
  * no presentation state — which card is on screen, and the exit animation that outlives the last
  * step, belong to the sheet (see [PermissionsBottomSheet]).
@@ -46,6 +50,7 @@ class PermissionsViewModel internal constructor(
     private val eventReceipt: EventReceiptPreferences,
     private val isDebugBuild: Boolean,
     private val deferrals: PermissionDeferrals,
+    private val screenEventsOffered: Boolean = true,
 ) : ViewModel() {
 
     @Inject
@@ -53,7 +58,8 @@ class PermissionsViewModel internal constructor(
         @ApplicationContext context: Context,
         eventReceipt: EventReceiptPreferences,
         deferrals: PermissionDeferrals,
-    ) : this({ OsPermissionPoll.of(context) }, eventReceipt, BuildConfig.DEBUG, deferrals)
+        @WideEventReceiptOffered screenEventsOffered: Boolean,
+    ) : this({ OsPermissionPoll.of(context) }, eventReceipt, BuildConfig.DEBUG, deferrals, screenEventsOffered)
 
     private val osPoll = MutableStateFlow(pollOs())
 
@@ -68,7 +74,7 @@ class PermissionsViewModel internal constructor(
      */
     val uiState: StateFlow<PermissionsUiState> =
         combine(osPoll, eventReceipt.consent, deferrals.deferred, settingsRouted) { poll, consent, deferred, routed ->
-            buildPermissionsUiState(poll, consent, isDebugBuild, deferred, routed)
+            buildPermissionsUiState(poll, consent, isDebugBuild, deferred, routed, screenEventsOffered)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
@@ -78,6 +84,7 @@ class PermissionsViewModel internal constructor(
                 isDebugBuild,
                 deferrals.deferred.value,
                 settingsRouted.value,
+                screenEventsOffered,
             ),
         )
 
@@ -184,6 +191,8 @@ data class PermissionsUiState(
     val deferred: Set<PermissionStep> = emptySet(),
     /** #1457 — missing permissions whose card opens Android settings instead of the dialog. */
     val settingsRouted: Set<PermissionType> = emptySet(),
+    /** #1414 — this build offers Screen events; false in the Play build, whose gate then has one step fewer. */
+    val screenEventsOffered: Boolean = true,
 ) {
     /** The cards still to show, head first: Screen events (if due), then the OS permissions, minus [deferred]. */
     val pendingSteps: List<PermissionStep>
@@ -196,6 +205,14 @@ data class PermissionsUiState(
 
     /** Every step answered and granted — only ever true once the consent was read; a deferral never makes it true. */
     val allGranted: Boolean get() = consentRead && !screenEventsDue && missing.isEmpty()
+
+    /** #1414 — the gate's length for "Step N of M": one fewer when this build has no Screen-events step. */
+    val stepCount: Int get() = PermissionType.STEP_COUNT - screenEventsShift
+
+    /** #1414 — [step]'s place in this build's gate; the steps after Screen events move up one when it is absent. */
+    fun stepNumberOf(step: PermissionStep): Int = step.stepNumber - screenEventsShift
+
+    private val screenEventsShift: Int get() = if (screenEventsOffered) 0 else 1
 }
 
 /**
@@ -209,14 +226,21 @@ fun accessibilityOffered(consent: EventReceiptConsent?, isDebugBuild: Boolean): 
     EventReceiptConsent.ALLOWED -> true
 }
 
-/** Pure assembly of one poll + the consent + the deferrals and settings routes into the gate's state. */
+/**
+ * Pure assembly of one poll + the consent + the deferrals and settings routes into the gate's state.
+ * #1414: [stored] goes through [EventReceiptConsent.enforced] first, so a build that does not offer Screen
+ * events ([screenEventsOffered] false) reads as decided: no Screen-events step, no wait on the store, and the
+ * accessibility step offered at once.
+ */
 fun buildPermissionsUiState(
     poll: OsPermissionPoll,
-    consent: EventReceiptConsent?,
+    stored: EventReceiptConsent?,
     isDebugBuild: Boolean,
     deferred: Set<PermissionStep> = emptySet(),
     settingsRouted: Set<PermissionType> = emptySet(),
+    screenEventsOffered: Boolean = true,
 ): PermissionsUiState {
+    val consent = EventReceiptConsent.enforced(stored, screenEventsOffered)
     val missing = missingPermissions(
         accessibilityGranted = poll.accessibility,
         accessibilityOffered = accessibilityOffered(consent, isDebugBuild),
@@ -231,6 +255,7 @@ fun buildPermissionsUiState(
         consentRead = consent != null,
         deferred = deferred,
         settingsRouted = settingsRouted.filterTo(mutableSetOf()) { it in missing },
+        screenEventsOffered = screenEventsOffered,
     )
 }
 

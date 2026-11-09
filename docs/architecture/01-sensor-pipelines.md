@@ -385,7 +385,7 @@ on the **UNKNOWN screen + click envelopes only** (a recognized frame keeps its r
 decisions — #886 leaves `pickup_navigation`'s MERCHANT address raw — so an id scan there would
 fight the ruleset; scrubbing the dasher's own `user_name` greeting on an UNKNOWN frame is the
 accepted fail-toward-privacy cost). UNKNOWN frames and UNKNOWN clicks remain the documented
-debug-only exception (behind the release `NoOpCaptureBus` #346 + the `SensitiveTextMarkers` drop
+debug-only exception (behind the non-debug builds' `NoOpCaptureBus` #346 + the `SensitiveTextMarkers` drop
 backstop + the #806 scrub + the #910 id scan); the residual (a name-at-start body, an id-less
 address/gate-code line with no customer lead-in outside an address block, #1116) persists on UNKNOWN frames until the surface is
 recognized (#806 direction 1). The on-disk `captures/` directory is excluded from every Android backup channel in BOTH storage domains (`external` and `file`, since `DiskCaptureBus` falls back to `filesDir`) — legacy full backup, cloud backup and device transfer — so a plaintext debug envelope cannot ride a backup or a device transfer (#1202, pinned by `CensusVariantBindingTest`). The UNKNOWN-notification diagnostic in `ObservationClassifier` is DEBUG only when the push carries text; a text-less push (the ~1 Hz ongoing-dash notification) logs at VERBOSE (#1001, principle 7). `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass recognized (#806 direction 1). Family-wide bounded-alphabet hygiene (#1126): EVERY id-anchored `address_line_2` / `bottom_sheet_address_line_2` redact entry in `dropoff.json5` is `plainMask` (city/ST/ZIP is a bounded alphabet — the #1122 grade), and every `Building Name` label-sibling HASH entry is preceded by the digit-bearing plain entry; `DropoffSheetRedactionParityTest` scans the generated dropoff family for both. `PipelineV2.events` is a HOT `shareIn` stream — one upstream pass
@@ -443,7 +443,16 @@ frames the pipeline ever sees*:
   as the first permission-chain step, BEFORE the accessibility grant; on a DEBUG build that declines,
   the listener calls `disableSelf()` once (`ServiceInfoPolicy.shouldDisableSelf`, INFO "event receipt
   declined on a debug build — disabling the accessibility service"), so recognition and the HUD stop
-  even when the service had been granted earlier. A release build never disables itself.
+  even when the service had been granted earlier. A non-debug build (Play, sideload) never disables itself.
+  **Offered per build (#1414):** whether a build offers Screen events at all is a build-table fact
+  (`app/build.gradle.kts` `distribution`, `BuildConfig.WIDE_EVENT_RECEIPT_OFFERED`, injected as the `:domain`
+  qualifier `@WideEventReceiptOffered`): true in debug and sideload, false in the Play build (`release`), which also
+  declares `isAccessibilityTool="false"` (main's XML; the debug and sideload builds take the
+  `src/accessibilityTool/res` copy that says true, pinned by `AccessibilityToolFlagGuardTest` and PR CI's aapt2
+  check). The ONE rule is `EventReceiptConsent.enforced(stored, offered)`: not offered ⇒ DECLINED whatever the
+  store holds, offered ⇒ the stored value. The listener and the permission flow read through it; Settings hides the
+  section on `offered` directly. The stored decision is never rewritten. Debug-only behaviour (event types, the
+  self-disable, the census) stays keyed on `BuildConfig.DEBUG`, never on `offered`.
 - **D3 — per-key coalescer.** `coalesceByKey(quietMs, maxWaitMs, keyOf, merge, maxKeys,
   leadingEdge)` (`event/coalesce/CoalesceByKey.kt`) replaced `debounceWithTimeout`. Per key, a
   burst opens on the first event, folds every event into an accumulator, and emits when EITHER the
@@ -761,9 +770,10 @@ The UNKNOWN screen/notification census (Epic #1138, #1189) is specified by ADR-0
   and the server operator can read them. Trusted installs are the operator's own device today.
   Envelopes follow a drained skeleton spool; pairing only queues work, and projection/scanning run on IO.
   Sharing off or an identity boundary forgets held, queued, and spooled envelopes, serialized against the writer.
-  A `not_trusted` response turns sharing off and invalidates the sink; release binds `NoOpCensusEnvelopeSink`.
+  A `not_trusted` response turns sharing off and invalidates the sink; every non-debug build (Play, sideload) binds
+  `NoOpCensusEnvelopeSink`.
 - *Uploader (#1182)* — debug binds `HttpCensusSink` behind the default-off developer switch;
-  release binds `NoOpCensusSink` and schedules no census work. `offer` only calls `trySend` on a
+  every non-debug build (Play, sideload) binds `NoOpCensusSink` and schedules no census work. `offer` only calls `trySend` on a
   256-item drop-oldest channel; one IO consumer writes atomically to `filesDir/census/spool/`.
   Both skeleton schemas decode through `CensusSkeletonSchema` in the same spool; rejection codes derive from
   the contract enum. **Enrolment declares what the policy accepts (#1522):** a pending identity first reads
@@ -923,7 +933,7 @@ The UNKNOWN screen/notification census (Epic #1138, #1189) is specified by ADR-0
   `androidx.RileyButton`) unless it is a KNOWN framework class (`FrameworkClasses.KNOWN`, exact names: the
   inventory `census/framework-classes.txt` — `android.view.View` subclasses only, 233 names under a
   `#sha256=` header (#1160 AL2) — generated from the RELEASE runtime classpath listed by
-  `:app:censusReleaseClasspath` (AK4), diffed by `:app`'s
+  `:app:censusReleaseClasspath` (AK4; the sideload build resolves the same library variants, #1414), diffed by `:app`'s
   `FrameworkClassInventoryTest` — regenerate with `-DupdateFrameworkClasses=true` — ∪ the corpus set). `IdPathJudgement.isStaticId` is
   memoized process-wide in a bounded LRU (512). A malformed (NUL / lone-surrogate) CLASS is emitted absent and counted
   (`Outcome.Built.malformedClass`); a malformed VIEW ID refuses the frame (`INVALID_TREE` — its identity
@@ -945,7 +955,7 @@ are #1146 (M1b); the opt-in debug uploader is #1182 (S7b).
 **The whole recognition + text-scrub layer assumes an ENGLISH device (#938).** Rule anchors and
 BOTH text-marker SSOTs (`SensitiveTextMarkers.KEYWORDS`, `CustomerTextMarkers.MARKERS`) are literal
 English strings, so on a non-`en` device recognition drops toward zero (survivable — everything
-falls to UNKNOWN, and release binds `NoOpCaptureBus`) **but the Pledge layers thin**: the
+falls to UNKNOWN, and every non-debug build binds `NoOpCaptureBus`) **but the Pledge layers thin**: the
 sensitive-screen backstop, the UNKNOWN-capture PII scrub, and the shareable-log scrub all weaken.
 `CustomerTextMarkers.ID_MARKERS` (#910) is the one **locale-immune** defence — view ids don't
 localize — and is the pattern any future translation work should prefer. #938 makes the boundary

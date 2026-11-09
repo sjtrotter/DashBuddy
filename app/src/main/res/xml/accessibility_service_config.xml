@@ -1,5 +1,9 @@
+<!-- #1414: the Play build's copy. Play allows isAccessibilityTool="true" only for disability tools, so this
+     says false. The debug and sideload builds use app/src/accessibilityTool/res/xml/accessibility_service_config.xml,
+     identical except for that flag (wired by the build table in app/build.gradle.kts). Keep the two files in step;
+     AccessibilityToolFlagGuardTest fails when they differ in anything but the flag. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:isAccessibilityTool="true"
+    android:isAccessibilityTool="false"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewClicked|typeWindowsChanged"
     android:packageNames="com.doordash.driverapp,com.ubercab.driver,com.instacart.shopper,com.walmart.spark"
     android:accessibilityFeedbackType="feedbackSpoken"

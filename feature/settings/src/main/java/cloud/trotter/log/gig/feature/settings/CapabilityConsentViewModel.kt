@@ -6,6 +6,7 @@ import cloud.trotter.log.gig.domain.action.RuleAction
 import cloud.trotter.log.gig.domain.capability.ConsentReceipt
 import cloud.trotter.log.gig.domain.capability.RuleCapability
 import cloud.trotter.log.gig.domain.capability.RuleCapabilityGrants
+import cloud.trotter.log.gig.domain.di.WideEventReceiptOffered
 import cloud.trotter.log.gig.domain.settings.EventReceiptConsent
 import cloud.trotter.log.gig.domain.settings.EventReceiptPreferences
 import cloud.trotter.log.gig.domain.state.Platform
@@ -32,12 +33,14 @@ import javax.inject.Inject
  *
  * #1151 — the screen also records the wide-event-receipt FEATURE consent ("Screen events"). That
  * value is owned by [EventReceiptPreferences] (never the grant store) and enforced by the
- * accessibility listener; the switch here only writes through [setEventReceiptAllowed].
+ * accessibility listener; the switch here only writes through [setEventReceiptAllowed]. A build that does
+ * not offer Screen events ([eventReceiptOffered] false, the Play build, #1414) shows no Screen events section.
  */
 @HiltViewModel
 class CapabilityConsentViewModel @Inject constructor(
     private val grants: RuleCapabilityGrants,
     private val eventReceipt: EventReceiptPreferences,
+    @param:WideEventReceiptOffered private val eventReceiptOffered: Boolean,
 ) : ViewModel() {
 
     val uiState: StateFlow<ConsentUiState> =
@@ -48,7 +51,7 @@ class CapabilityConsentViewModel @Inject constructor(
             eventReceipt.receipt,
         ) { (capabilities, grantedKeys, deniedKeys), consent, receipts, eventRecord ->
             buildConsentUiState(capabilities, grantedKeys, deniedKeys)
-                .withEventReceipt(consent, receipts, eventRecord)
+                .withEventReceipt(eventReceiptOffered, consent, receipts, eventRecord)
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -58,7 +61,12 @@ class CapabilityConsentViewModel @Inject constructor(
                 grants.capabilities.value,
                 grants.grantedKeys.value,
                 grants.deniedKeys.value,
-            ).withEventReceipt(eventReceipt.consent.value, grants.receipts.value, eventReceipt.receipt.value),
+            ).withEventReceipt(
+                eventReceiptOffered,
+                eventReceipt.consent.value,
+                grants.receipts.value,
+                eventReceipt.receipt.value,
+            ),
         )
 
     /** Grant or revoke one capability. Revoking is fail-closed (persists a denial). */
@@ -82,6 +90,8 @@ class CapabilityConsentViewModel @Inject constructor(
 /** Immutable per-screen state (UDF). Empty [sources] ⇒ the empty-state copy. */
 data class ConsentUiState(
     val sources: List<ConsentSourceGroup> = emptyList(),
+    /** #1414 — this build offers Screen events; false in the Play build, which shows no Screen events section. */
+    val eventReceiptOffered: Boolean = false,
     /** #1151 — the "Screen events" switch: true only when the consent is ALLOWED. */
     val eventReceiptAllowed: Boolean = false,
     /** #1457 — the Screen events status line, from the decision itself (never from a receipt). */
@@ -104,10 +114,12 @@ fun EventReceiptConsent?.toConsentStatus(): ConsentStatus = when (this) {
 }
 
 private fun ConsentUiState.withEventReceipt(
+    offered: Boolean,
     consent: EventReceiptConsent?,
     receipts: Map<String, ConsentReceipt>,
     eventRecord: ConsentReceipt?,
 ): ConsentUiState = copy(
+    eventReceiptOffered = offered,
     eventReceiptAllowed = consent == EventReceiptConsent.ALLOWED,
     eventReceiptStatus = consent.toConsentStatus(),
     receipts = receipts,

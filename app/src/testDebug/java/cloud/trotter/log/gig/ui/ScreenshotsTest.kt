@@ -425,7 +425,7 @@ class ScreenshotsTest(private val theme: String) {
         )
         val viewModel = remember(consent) {
             val grants = Grants(caps, setOf("dd-expand"), mapOf("dd-expand" to receipt(true), "dd-confirm" to receipt(false)))
-            CapabilityConsentViewModel(grants, Prefs(consent, if (consent == EventReceiptConsent.UNDECIDED) null else receipt(true)))
+            CapabilityConsentViewModel(grants, Prefs(consent, if (consent == EventReceiptConsent.UNDECIDED) null else receipt(true)), eventReceiptOffered = true)
         }
         CapabilityConsentScreen(onBack = {}, viewModel = viewModel)
     }

@@ -82,13 +82,15 @@ fun CapabilityConsentScreen(
                 .verticalScroll(rememberScrollState()),
         ) {
             Spacer(Modifier.height(8.dp))
-            EventReceiptSection(
-                allowed = uiState.eventReceiptAllowed,
-                status = uiState.eventReceiptStatus,
-                receipt = uiState.eventReceipt,
-                onAllowedChange = viewModel::setEventReceiptAllowed,
-            )
-            Spacer(Modifier.height(16.dp))
+            if (uiState.eventReceiptOffered) {
+                EventReceiptSection(
+                    allowed = uiState.eventReceiptAllowed,
+                    status = uiState.eventReceiptStatus,
+                    receipt = uiState.eventReceipt,
+                    onAllowedChange = viewModel::setEventReceiptAllowed,
+                )
+                Spacer(Modifier.height(16.dp))
+            }
             DisclosureHeader()
 
             if (uiState.sources.isEmpty()) {

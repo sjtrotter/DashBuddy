@@ -37,6 +37,17 @@ class ServiceInfoPolicyTest {
     }
 
     @Test
+    fun `a build that does not offer Screen events keeps the watched registry even when ALLOWED is stored (#1414)`() {
+        (EventReceiptConsent.entries + listOf<EventReceiptConsent?>(null)).forEach { stored ->
+            val enforced = EventReceiptConsent.enforced(stored, offered = false)!!
+            val names = ServiceInfoPolicy.packageNamesFor(enforced, watched)
+            assertNotNull("stored $stored must never widen", names)
+            assertEquals(watched, names!!.toSet())
+            assertFalse("a release build never disables itself", ServiceInfoPolicy.shouldDisableSelf(enforced, isDebugBuild = false))
+        }
+    }
+
+    @Test
     fun `the filtered list never names our own package`() {
         EventReceiptConsent.entries.forEach { consent ->
             val names = ServiceInfoPolicy.packageNamesFor(consent, watched) ?: return@forEach

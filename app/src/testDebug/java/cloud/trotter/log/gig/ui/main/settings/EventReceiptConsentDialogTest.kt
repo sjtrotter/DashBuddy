@@ -63,7 +63,7 @@ class EventReceiptConsentDialogTest {
     }
 
     private fun show(prefs: FakeEventReceipt) {
-        val vm = CapabilityConsentViewModel(NoCapabilities(), prefs)
+        val vm = CapabilityConsentViewModel(NoCapabilities(), prefs, eventReceiptOffered = true)
         compose.setContent { GigLogTheme { CapabilityConsentScreen(onBack = {}, viewModel = vm) } }
     }
 

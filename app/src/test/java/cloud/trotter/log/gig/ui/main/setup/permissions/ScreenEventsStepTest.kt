@@ -85,6 +85,43 @@ class ScreenEventsStepTest {
         assertEquals(5, s.pendingSteps.size) // Screen-events + the four non-accessibility OS cards
     }
 
+    // ---- #1414: a build that does not offer Screen events (the Play build) ------------------
+
+    @Test
+    fun `not offered - no Screen-events step and the accessibility step is offered at once, whatever is stored`() {
+        (EventReceiptConsent.entries + listOf<EventReceiptConsent?>(null)).forEach { stored ->
+            val s = buildPermissionsUiState(nothingGranted, stored, isDebugBuild = false, screenEventsOffered = false)
+            assertFalse("stored $stored", s.screenEventsDue)
+            assertTrue("stored $stored: the gate never waits on the store", s.consentRead)
+            assertEquals("stored $stored", PermissionStep.Os(PermissionType.Accessibility), s.pendingSteps.first())
+            assertFalse(PermissionStep.ScreenEvents in s.pendingSteps)
+        }
+    }
+
+    @Test
+    fun `not offered - the gate counts five steps, accessibility first`() {
+        val s = buildPermissionsUiState(nothingGranted, EventReceiptConsent.UNDECIDED, isDebugBuild = false, screenEventsOffered = false)
+        assertEquals(5, s.stepCount)
+        assertEquals(listOf(1, 2, 3, 4, 5), s.pendingSteps.map(s::stepNumberOf))
+    }
+
+    @Test
+    fun `offered - the gate counts six steps, Screen events first`() {
+        val s = buildPermissionsUiState(nothingGranted, EventReceiptConsent.UNDECIDED, isDebugBuild = false)
+        assertEquals(PermissionType.STEP_COUNT, s.stepCount)
+        assertEquals(1, s.stepNumberOf(PermissionStep.ScreenEvents))
+        assertEquals(2, s.stepNumberOf(PermissionStep.Os(PermissionType.Accessibility)))
+    }
+
+    @Test
+    fun `not offered - the ViewModel shows no Screen-events step and writes nothing`() = runTest {
+        val prefs = FakePrefs(EventReceiptConsent.UNDECIDED)
+        val vm = PermissionsViewModel({ nothingGranted }, prefs, isDebugBuild = false, PermissionDeferrals(), screenEventsOffered = false)
+        assertEquals(PermissionStep.Os(PermissionType.Accessibility), vm.uiState.value.pendingSteps.first())
+        assertTrue("the stored value is ignored, never rewritten", prefs.writes.isEmpty())
+        assertEquals(EventReceiptConsent.UNDECIDED, prefs.flow.value)
+    }
+
     // ---- ViewModel ------------------------------------------------------------------------
 
     private class FakePrefs(initial: EventReceiptConsent?) : EventReceiptPreferences {

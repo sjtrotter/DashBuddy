@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Build
 import android.view.accessibility.AccessibilityEvent
 import cloud.trotter.log.gig.core.pipeline.BuildConfig
+import cloud.trotter.log.gig.domain.di.WideEventReceiptOffered
 import cloud.trotter.log.gig.domain.pipeline.LocaleBoundaryReporter
 import cloud.trotter.log.gig.domain.settings.EventReceiptConsent
 import cloud.trotter.log.gig.domain.settings.EventReceiptPreferences
@@ -51,6 +52,16 @@ class AccessibilityListener : AccessibilityService() {
      */
     @Inject
     lateinit var eventReceiptPreferences: EventReceiptPreferences
+
+    /**
+     * #1414 — whether this build offers Screen events at all. When it does not (the Play build), the consent is
+     * enforced as declined ([EventReceiptConsent.enforced]) whatever the store holds, so `packageNames` is
+     * always the manifest list. Starts false, the filtered posture, until Hilt injects it in `onCreate`.
+     */
+    @JvmField
+    @Inject
+    @field:WideEventReceiptOffered
+    var wideEventReceiptOffered: Boolean = false
 
     /** QQ3 — `disableSelf()` is called at most once per service instance. */
     private var disabledSelf = false
@@ -171,7 +182,7 @@ class AccessibilityListener : AccessibilityService() {
         // once-per-install). The collector's own disable branch covers a decline that arrives
         // LATER, after registration, where tearing down the live service is legitimate.
         if (ServiceInfoPolicy.shouldDisableSelf(
-                eventReceiptPreferences.consent.value ?: EventReceiptConsent.UNDECIDED,
+                enforcedConsent(eventReceiptPreferences.consent.value),
                 BuildConfig.DEBUG,
             )
         ) {
@@ -203,7 +214,7 @@ class AccessibilityListener : AccessibilityService() {
             // change), so the collect sees each value and the output dedup lives here.
             var appliedWide: Boolean? = null
             eventReceiptPreferences.consent
-                .map { it ?: EventReceiptConsent.UNDECIDED }
+                .map { enforcedConsent(it) }
                 .distinctUntilChanged()
                 .collectLatest { consent ->
                     // QQ3: a debug decline disables BEFORE any apply — it never waits on IPC.
@@ -244,6 +255,13 @@ class AccessibilityListener : AccessibilityService() {
             Timber.tag("Pipeline").e(t, "Locale boundary report failed (#938) — sensing unaffected")
         }
     }
+
+    /**
+     * The consent this build enforces: [EventReceiptConsent.enforced] (a build that does not offer Screen
+     * events enforces DECLINED), then an unread store as UNDECIDED, the filtered footprint.
+     */
+    private fun enforcedConsent(stored: EventReceiptConsent?): EventReceiptConsent =
+        EventReceiptConsent.enforced(stored, wideEventReceiptOffered) ?: EventReceiptConsent.UNDECIDED
 
     companion object {
         /** MM2 — the Android 11 caveat WARN fires once per process. */

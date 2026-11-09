@@ -141,6 +141,17 @@ jobs:
           ./gradlew $GRADLE_CI_FLAGS --continue :app:assembleDebug testDebugUnitTest :domain:test censusContractTest \
             $lint 2>&1 | tee gate.log
 
+      - name: Accessibility-tool flag (the debug APK declares true)
+        if: ${{ env.RUN_GATE == 'true' }}
+        # #1414 — main's accessibility_service_config.xml says false (the Play build); the debug and sideload builds
+        # take the accessibilityTool overlay. Read the flag from the built APK, so a broken wiring fails here.
+        shell: bash
+        run: |
+          aapt2="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/aapt2"
+          dump="$("$aapt2" dump xmltree app/build/outputs/apk/debug/app-debug.apk --file res/xml/accessibility_service_config.xml)"
+          echo "$dump" | grep -E 'isAccessibilityTool[^=]*='
+          echo "$dump" | grep -qE 'isAccessibilityTool[^=]*=true' || { echo '::error::app-debug.apk does not declare isAccessibilityTool="true"'; exit 1; }
+
       - name: Schemas committed (Room export drift)
         if: ${{ env.RUN_GATE == 'true' }}
         # With the destructive fallback retired (#690), an uncommitted Room schema export is a

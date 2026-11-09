@@ -275,7 +275,7 @@ class ConsentToActuationE2ETest {
 
     /** The real Settings consent VM; its event-receipt half is irrelevant here (a fixed ALLOWED value). */
     private fun settingsScreen(replay: E2ESessionReplay): CapabilityConsentViewModel =
-        viewModel { CapabilityConsentViewModel(replay.grants, AllowedEventReceipt) }
+        viewModel { CapabilityConsentViewModel(replay.grants, AllowedEventReceipt, eventReceiptOffered = true) }
 
     private inline fun <reified VM : ViewModel> viewModel(crossinline create: () -> VM): VM {
         val store = ViewModelStore()

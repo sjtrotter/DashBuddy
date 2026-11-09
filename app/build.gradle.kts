@@ -68,6 +68,52 @@ val gitDirty: Boolean = (gitOutput("status", "--porcelain") ?: "")
  */
 val buildTimeMs: Long = System.currentTimeMillis()
 
+// ---------------------------------------------------------------------------
+// #1414: three builds, one table of what differs between them.
+//
+// - `release` is the Play build. Play allows `isAccessibilityTool="true"` only for disability tools, so it
+//   declares false, and it does not offer Screen events (wide event receipt).
+// - `sideload` is the build from outside Play: a release build (no debug extras: the library modules serve it
+//   their `release` variant, so captures and census bind their no-op sinks) whose only differences from Play
+//   are the two below. Android 14+ shows Uber's offer pop-up only to a service that declares the flag true.
+// - `debug` is the developer's test build; it keeps its application ID, signing key and versionCode.
+//
+// Every per-build fact below derives from this table. `AccessibilityToolFlagGuardTest` pins its rows.
+// ---------------------------------------------------------------------------
+
+/** What one build declares: the accessibility-tool flag, and whether it offers Screen events. */
+data class Distribution(val accessibilityTool: Boolean, val wideEventReceipt: Boolean)
+
+val distribution = mapOf(
+    "debug" to Distribution(accessibilityTool = true, wideEventReceipt = true),
+    "release" to Distribution(accessibilityTool = false, wideEventReceipt = false),
+    "sideload" to Distribution(accessibilityTool = true, wideEventReceipt = true),
+)
+
+/**
+ * Reads a release-style signing key from the environment (CI: `<envPrefix>KEYSTORE_PATH`, `STORE_PASSWORD`,
+ * `KEY_ALIAS`, `KEY_PASSWORD`) or `local.properties` (`<propPrefix>.path`, `.store.password`, `.key.alias`,
+ * `.key.password`). Unset leaves the config empty, so the build comes out unsigned: never a default key.
+ */
+fun com.android.build.api.dsl.ApkSigningConfig.signFrom(envPrefix: String, propPrefix: String) {
+    val keystorePath = System.getenv("${envPrefix}KEYSTORE_PATH")
+        ?: localProperties.getProperty("$propPrefix.path")
+    val storePass = System.getenv("${envPrefix}STORE_PASSWORD")
+        ?: localProperties.getProperty("$propPrefix.store.password")
+    val keyAliasVal = System.getenv("${envPrefix}KEY_ALIAS")
+        ?: localProperties.getProperty("$propPrefix.key.alias")
+    // The key password is optional: without it the store password is used.
+    val keyPass = System.getenv("${envPrefix}KEY_PASSWORD")
+        ?: localProperties.getProperty("$propPrefix.key.password")
+
+    if (keystorePath != null) {
+        storeFile = rootProject.file(keystorePath)
+        storePassword = storePass
+        keyAlias = keyAliasVal
+        keyPassword = keyPass.takeIf { !it.isNullOrBlank() } ?: storePass
+    }
+}
+
 
 android {
     namespace = "cloud.trotter.log.gig"
@@ -129,25 +175,10 @@ android {
                 keyPassword = password
             }
         }
-        create("release") {
-            val keystorePath = System.getenv("KEYSTORE_PATH")
-                ?: localProperties.getProperty("keystore.path")
-            val storePass = System.getenv("STORE_PASSWORD")
-                ?: localProperties.getProperty("keystore.store.password")
-            val keyAliasVal = System.getenv("KEY_ALIAS")
-                ?: localProperties.getProperty("keystore.key.alias")
-            // KEY_PASSWORD is optional — if not set, falls back to store password
-            val keyPass = System.getenv("KEY_PASSWORD")
-                ?: localProperties.getProperty("keystore.key.password")
-
-            if (keystorePath != null) {
-                storeFile = rootProject.file(keystorePath)
-                storePassword = storePass
-                keyAlias = keyAliasVal
-                // Fall back to store password when no separate key password was set
-                keyPassword = keyPass.takeIf { !it.isNullOrBlank() } ?: storePass
-            }
-        }
+        // The Play build's upload key (KEYSTORE_PATH …, or local.properties keystore.*).
+        create("release") { signFrom(envPrefix = "", propPrefix = "keystore") }
+        // The sideload build's own key (SIDELOAD_KEYSTORE_PATH …, or local.properties sideload.keystore.*).
+        create("sideload") { signFrom(envPrefix = "SIDELOAD_", propPrefix = "sideload.keystore") }
     }
 
     buildTypes {
@@ -156,6 +187,7 @@ android {
             // app signed with a different key, so the two need different application IDs (#1411).
             applicationIdSuffix = ".debug"
         }
+        // The Play build (#1414).
         release {
             // R8 posture (#434): minify stays OFF until the remaining
             // reflective surfaces are keep-ruled or removed — Gson over
@@ -171,6 +203,29 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        // #1414: the build from outside Play. `initWith(release)` keeps it not debuggable with the same minify
+        // posture; `matchingFallbacks` makes every library module serve it its `release` variant, which binds
+        // the no-op capture and census sinks (`BuildConfig.DEBUG` is false everywhere). Its own suffix lets it
+        // install beside the Play build, which is signed with a different key.
+        create("sideload") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".sideload"
+            matchingFallbacks += listOf("release")
+            signingConfig = signingConfigs.getByName("sideload")
+        }
+        configureEach {
+            val facts = distribution.getValue(name)
+            buildConfigField("boolean", "WIDE_EVENT_RECEIPT_OFFERED", facts.wideEventReceipt.toString())
+        }
+    }
+
+    // #1414: main's accessibility_service_config.xml declares isAccessibilityTool="false" (the Play posture, so
+    // a build left out of this wiring fails toward what Play accepts). A build whose row says true gets the
+    // overlay copy that declares true.
+    sourceSets {
+        distribution.filterValues { it.accessibilityTool }.keys.forEach { buildType ->
+            maybeCreate(buildType).res.directories.add("$projectDir/src/accessibilityTool/res")
         }
     }
 

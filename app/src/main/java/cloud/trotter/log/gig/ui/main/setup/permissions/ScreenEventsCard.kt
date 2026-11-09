@@ -26,11 +26,12 @@ import cloud.trotter.log.gig.feature.settings.eventReceiptDisclosureParts
  * decision goes up through [onDecision].
  */
 @Composable
-fun ScreenEventsCard(onDecision: (allow: Boolean) -> Unit) {
+fun ScreenEventsCard(stepNumber: Int, stepCount: Int, onDecision: (allow: Boolean) -> Unit) {
     val disclosure = eventReceiptDisclosureParts()
     PermissionStepColumn {
         PermissionStepHeader(
-            stepNumber = PermissionStep.ScreenEvents.stepNumber,
+            stepNumber = stepNumber,
+            stepCount = stepCount,
             iconRes = null,
             titleRes = SettingsR.string.event_receipt_title,
         )
