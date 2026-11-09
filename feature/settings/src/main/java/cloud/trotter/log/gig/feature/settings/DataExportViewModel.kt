@@ -12,13 +12,14 @@ import cloud.trotter.log.gig.core.data.log.LogRepository
 import cloud.trotter.log.gig.core.data.vehicle.DashVehicleRepository
 import cloud.trotter.log.gig.core.data.vehicle.GarageRepository
 import cloud.trotter.log.gig.domain.capability.ConsentReceipt
+import cloud.trotter.log.gig.domain.capability.ConsentReceiptReader
 import cloud.trotter.log.gig.domain.capability.RuleCapability
 import cloud.trotter.log.gig.domain.capability.RuleCapabilityGrants
 import cloud.trotter.log.gig.domain.di.IoDispatcher
 import cloud.trotter.log.gig.domain.model.vehicle.DashVehicles
-import cloud.trotter.log.gig.domain.settings.EventReceiptPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -47,7 +48,7 @@ class DataExportViewModel @Inject constructor(
     private val dashVehicleRepository: DashVehicleRepository,
     private val garageRepository: GarageRepository,
     private val capabilityGrants: RuleCapabilityGrants,
-    private val eventReceipt: EventReceiptPreferences,
+    private val receiptReader: ConsentReceiptReader,
     @param:ApplicationContext private val context: Context,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
@@ -135,7 +136,8 @@ class DataExportViewModel @Inject constructor(
      * #170: a "Consent receipts" section follows the log: each automatic-tap decision and the Screen events
      * decision, with its date, app version and privacy notice version. Those lines never passed the sink, so
      * they go through the same scrubber here ([LogRepository.scrubForExport]); if it fails, the section is
-     * left out and the file says so.
+     * left out and the file says so. The receipts are read from their stores now ([ConsentReceiptReader]), never
+     * from the caches; a read that fails says the records are unavailable, never "no choices".
      */
     fun exportLog(treeUri: Uri) {
         if (_logState.value == LogExportState.InProgress) return
@@ -186,10 +188,26 @@ class DataExportViewModel @Inject constructor(
         append(receipts)
     }
 
-    /** #170 — the stored consent receipts as lines, labelled with the same strings Automation & consent shows. */
-    private fun storedReceiptLines(): List<String> = consentReceiptLines(
-        eventReceipt = eventReceipt.receipt.value,
-        receipts = capabilityGrants.receipts.value,
+    /**
+     * #170 — the stored consent receipts as lines, labelled with the same strings Automation & consent shows; null
+     * when the stores can't be read. The capability list only names an action and rule beside a key.
+     */
+    private suspend fun storedReceiptLines(): List<String>? {
+        val stored = try {
+            receiptReader.read()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // P7: the class only; a storage message can carry a path.
+            Timber.tag("Export").w("Consent receipts unreadable for the bug report: %s", e.javaClass.simpleName)
+            return null
+        }
+        return receiptLines(stored.screenEvents, stored.capabilities)
+    }
+
+    private fun receiptLines(eventReceipt: ConsentReceipt?, receipts: Map<String, ConsentReceipt>) = consentReceiptLines(
+        eventReceipt = eventReceipt,
+        receipts = receipts,
         capabilities = capabilityGrants.capabilities.value,
         labels = ReceiptLabels(
             allowed = context.getString(R.string.consent_receipt_allowed),
@@ -303,12 +321,14 @@ internal fun consentReceiptLines(
 }
 
 /**
- * #170 — the bug report's consent receipts section. [scrub] is the shareable sink's scrubber; null from it means
- * the scrubber failed, so the receipts are left out and the section says so. Never the lines unscrubbed.
+ * #170 — the bug report's consent receipts section. [lines] null means the stores could not be read, which the
+ * section says, never "no choices". [scrub] is the shareable sink's scrubber; null from it means the scrubber
+ * failed, so the receipts are left out and the section says so. Never the lines unscrubbed.
  */
-internal fun consentReceiptsSection(lines: List<String>, scrub: (List<String>) -> List<String>?): String = buildString {
+internal fun consentReceiptsSection(lines: List<String>?, scrub: (List<String>) -> List<String>?): String = buildString {
     append("# Consent receipts: each choice, its date, the app version and the privacy notice version.\n")
     when {
+        lines == null -> append("# Consent records unavailable: they could not be read.\n")
         lines.isEmpty() -> append("# No choices recorded.\n")
         else -> {
             val scrubbed = scrub(lines)

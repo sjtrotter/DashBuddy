@@ -20,7 +20,13 @@ import cloud.trotter.log.gig.domain.model.vehicle.DashVehicleStamp
 import cloud.trotter.log.gig.domain.model.vehicle.Vehicle
 import cloud.trotter.log.gig.domain.action.RuleAction
 import cloud.trotter.log.gig.domain.capability.ConsentReceipt
+import cloud.trotter.log.gig.domain.capability.ConsentReceiptReader
 import cloud.trotter.log.gig.domain.capability.RuleCapability
+import cloud.trotter.log.gig.domain.capability.RuleCapabilityGrants
+import cloud.trotter.log.gig.domain.capability.StoredConsentReceipts
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
@@ -58,7 +64,7 @@ class DataExportViewModelTest {
         dashVehicleRepository = mock(),
         garageRepository = mock(),
         capabilityGrants = mock(),
-        eventReceipt = mock(),
+        receiptReader = mock(),
         context = mock(),
         ioDispatcher = Dispatchers.Unconfined,
     )
@@ -210,5 +216,87 @@ class DataExportViewModelTest {
         lines.forEach { assertFalse("never raw: $it", failed.contains(it)) }
 
         assertTrue(consentReceiptsSection(emptyList()) { error("not called") }.contains("# No choices recorded."))
+    }
+
+    /**
+     * #170 (Sol F1) — the export reads the stored receipts through [ConsentReceiptReader], not the caches: a read
+     * that answers late still exports what is stored, and a read that fails says the records are unavailable,
+     * never "no choices".
+     */
+    @Test
+    fun `exportLog waits for a slow receipt read and exports the stored receipts`() {
+        val stored = StoredConsentReceipts(
+            screenEvents = ConsentReceipt(1_791_244_800_000L, "0.230.1+abc", 16, true),
+            capabilities = mapOf("k" to ConsentReceipt(1_791_244_800_000L, "0.230.1+abc", 16, false)),
+        )
+        val out = exportLogWith(object : ConsentReceiptReader {
+            override suspend fun read(): StoredConsentReceipts {
+                delay(5_000)
+                return stored
+            }
+        })
+        assertTrue(out, out.contains("Screen events: Allowed, "))
+        assertTrue(out, out.contains("Capability k: Not allowed, "))
+        assertFalse(out, out.contains("No choices recorded"))
+    }
+
+    @Test
+    fun `exportLog says the records are unavailable when the read fails`() {
+        val out = exportLogWith(object : ConsentReceiptReader {
+            override suspend fun read(): StoredConsentReceipts = throw java.io.IOException("store unreadable")
+        })
+        assertTrue(out, out.contains("# Consent records unavailable: they could not be read."))
+        assertFalse(out, out.contains("No choices recorded"))
+    }
+
+    /** Runs [DataExportViewModel.exportLog] over a mocked SAF folder and returns the file it wrote. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun exportLogWith(reader: ConsentReceiptReader): String {
+        var written = ""
+        runTest { exportLogInto(reader) { written = it } }
+        return written
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private suspend fun kotlinx.coroutines.test.TestScope.exportLogInto(reader: ConsentReceiptReader, onWritten: (String) -> Unit) {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val log: LogRepository = mock()
+            whenever(log.shareableLogContents()).thenReturn("")
+            whenever(log.autoScrubbedLineCount).thenReturn(0)
+            whenever(log.scrubForExport(any())).thenAnswer { it.getArgument<List<String>>(0) }
+            val grants: RuleCapabilityGrants = mock()
+            whenever(grants.capabilities).thenReturn(MutableStateFlow(emptyList<RuleCapability>()))
+            val context: Context = mock()
+            val labels = mapOf(
+                R.string.consent_receipt_allowed to "Allowed",
+                R.string.consent_receipt_denied to "Not allowed",
+                R.string.consent_receipt_format to "%1${'$'}s, %2${'$'}s, app %3${'$'}s, privacy notice %4${'$'}d",
+                R.string.event_receipt_title to "Screen events",
+            )
+            whenever(context.getString(any())).thenAnswer { labels.getValue(it.getArgument<Int>(0)) }
+            val resolver: ContentResolver = mock()
+            whenever(context.contentResolver).thenReturn(resolver)
+            val tree: Uri = mock()
+            val directory: Uri = mock()
+            val file: Uri = mock()
+            val output = ByteArrayOutputStream()
+            whenever(resolver.openOutputStream(file)).thenReturn(output)
+            mockStatic(DocumentsContract::class.java).use { documents ->
+                documents.`when`<String> { DocumentsContract.getTreeDocumentId(tree) }.thenReturn("root")
+                documents.`when`<Uri> { DocumentsContract.buildDocumentUriUsingTree(tree, "root") }.thenReturn(directory)
+                documents.`when`<Uri> {
+                    DocumentsContract.createDocument(eq(resolver), eq(directory), eq("text/plain"), any())
+                }.thenReturn(file)
+                val vm = DataExportViewModel(mock(), mock(), log, mock(), mock(), grants, reader, context, dispatcher)
+                vm.exportLog(tree)
+                advanceUntilIdle()
+                assertEquals(DataExportViewModel.LogExportState.Success(0), vm.logState.value)
+            }
+            onWritten(output.toString(Charsets.UTF_8.name()))
+        } finally {
+            Dispatchers.resetMain()
+        }
     }
 }

@@ -1,6 +1,8 @@
 package cloud.trotter.log.gig.core.data.di
 
 import cloud.trotter.log.gig.core.data.capability.RuleCapabilityRepository
+import cloud.trotter.log.gig.core.data.capability.StoreConsentReceiptReader
+import cloud.trotter.log.gig.domain.capability.ConsentReceiptReader
 import cloud.trotter.log.gig.domain.capability.RuleCapabilityGrants
 import dagger.Binds
 import dagger.Module
@@ -22,4 +24,11 @@ abstract class CapabilityBindModule {
     abstract fun bindRuleCapabilityGrants(
         impl: RuleCapabilityRepository,
     ): RuleCapabilityGrants
+
+    /** #170 — the bug-report export reads the stored receipts through this, never the caches. */
+    @Binds
+    @Singleton
+    abstract fun bindConsentReceiptReader(
+        impl: StoreConsentReceiptReader,
+    ): ConsentReceiptReader
 }
