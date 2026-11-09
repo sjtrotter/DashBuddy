@@ -13,7 +13,8 @@ step writes). The layout follows fastlane's supply convention (play/listing/READ
 
 check reads the files against Play's limits (text lengths, image sizes and PNG formats) and needs no
 credentials and no Google libraries. upload runs the same check and refuses before it opens an edit on any
-problem, so an empty, half-filled or malformed tree never publishes.
+problem, so an empty or half-filled tree never publishes. The PNG checks cover the chunk structure, CRCs, IHDR
+first and IEND last, critical chunk types and tRNS, not every ordering rule of the PNG specification.
 
 Usage: play_listing.py inspect|upload|check [listing root, default play/listing]
 """
