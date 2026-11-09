@@ -1,0 +1,52 @@
+name: Play store listing
+
+# Manually triggered. "inspect" prints what the Play Console holds (listing text, image ids, tracks) and changes
+# nothing; "upload" replaces the en-US listing text and images with what is under play/listing/ and commits the
+# edit. tools/play/play_listing.py does the work; play/listing/README.md is the layout. docs/RELEASE.md, Play
+# Console setup, covers the service account. Keyless auth accepts only master and v* tags of this repo.
+# Needs "View app information" for inspect and "Manage store presence" for upload.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: inspect or upload
+        required: true
+        default: inspect
+        type: choice
+        options: [inspect, upload]
+
+jobs:
+  listing:
+    runs-on: ubuntu-latest
+    permissions: { contents: read, id-token: write }
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - name: Refuse to run without variables
+        env:
+          PLAY_WIF_PROVIDER: ${{ vars.PLAY_WIF_PROVIDER }}
+          PLAY_SERVICE_ACCOUNT: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+        run: |
+          ok=1
+          for n in PLAY_WIF_PROVIDER PLAY_SERVICE_ACCOUNT; do
+            [ -n "${!n}" ] || { echo "::error::the $n variable is missing; see docs/RELEASE.md, Secrets and variables."; ok=0; }
+          done
+          [ "$ok" = 1 ] || exit 1
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.PLAY_WIF_PROVIDER }}
+          service_account: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install --quiet google-api-python-client==2.154.0 google-auth==2.37.0
+
+      - run: python tools/play/play_listing.py "$MODE"
+        env:
+          MODE: ${{ inputs.mode }}
