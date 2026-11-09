@@ -197,7 +197,12 @@ jobs:
         run: |
           aapt2="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/aapt2"
           check() { # <apk> <expected flag> <expected version code>
-            flag="$("$aapt2" dump xmltree "$1" --file res/xml/accessibility_service_config.xml \
+            # A minified build shortens resource paths (res/xml/accessibility_service_config.xml becomes something
+            # like res/Xy.xml), so find the file through the resource table, by its resource name.
+            cfg="$("$aapt2" dump resources "$1" | grep -A1 -E 'xml/accessibility_service_config$' \
+              | sed -nE 's/.*\(file\) ([^ ]+) type=XML.*/\1/p' | head -1 || true)"
+            [ -n "$cfg" ] || { echo "::error::$1 has no xml/accessibility_service_config resource"; exit 1; }
+            flag="$("$aapt2" dump xmltree "$1" --file "$cfg" \
               | grep -oE 'isAccessibilityTool[^=]*=[a-z]+' | sed 's/.*=//' || true)"
             vc="$("$aapt2" dump badging "$1" | sed -nE "s/^package: .* versionCode='([0-9]+)'.*/\1/p" || true)"
             echo "$1: isAccessibilityTool=$flag versionCode=$vc"
