@@ -29,6 +29,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -67,13 +68,16 @@ import cloud.trotter.log.gig.feature.dashboard.R as DashboardR
  * #1416 — the Play listing's pictures from the app, rendered into `play-listing/<name>-<theme>.png` with the PR CI
  * screenshots (`tools/play/stage_listing_images.sh` stages them). Runs only with `-PscreenShots=true`.
  *
+ * Supported-platform labels (the platform name gig.log shows on a shift) are allowed; merchant, brand and vehicle
+ * names are not, and none may read "debug".
+ *
  * The phone screenshots are the real tab bodies in the app shell's frame and the real shift page over
- * [ScreenshotData] and [ShiftPageFixtures.sampleStackAndAddOn] (made-up store names only), on a Pixel 7's width
- * and density at 16:9 (1078 x 1918 px). The icon is the launcher icon's two layers drawn full-bleed into 512 x 512;
+ * [ScreenshotData] and [ShiftPageFixtures.sampleStackAndAddOn] (made-up store names only), at 412 x 732 dp and
+ * 420 dpi (about 1081 x 1921 px, Play's 1080 x 1920 recommendation). The icon is the launcher icon's two layers drawn full-bleed into 512 x 512;
  * the feature graphic is 1024 x 500 in the dark brand theme. Those two are the same picture in both themes.
  */
 @RunWith(ParameterizedRobolectricTestRunner::class)
-@Config(sdk = [35], qualifiers = "w411dp-h731dp-420dpi")
+@Config(sdk = [35], qualifiers = "w412dp-h732dp-420dpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class PlayListingScreenshotsTest(private val theme: String) {
     @get:Rule val compose = createComposeRule()
@@ -139,8 +143,9 @@ class PlayListingScreenshotsTest(private val theme: String) {
     @Test @Config(qualifiers = "w1024dp-h500dp-mdpi")
     fun featureGraphic() {
         val tagline = string(R.string.play_feature_graphic_tagline)
+        assertEquals(WORDMARK, string(R.string.play_wordmark))
         shot("featureGraphic", {
-            listOf(string(R.string.app_name), tagline).forEach { label ->
+            listOf(WORDMARK, tagline).forEach { label ->
                 val bounds = compose.onNodeWithText(label).assertIsDisplayed().getBoundsInRoot()
                 assertTrue("'$label' is outside the margin: $bounds", bounds.left >= MARGIN && bounds.top >= MARGIN &&
                     bounds.right <= GRAPHIC_WIDTH - MARGIN && bounds.bottom <= GRAPHIC_HEIGHT - MARGIN)
@@ -161,7 +166,7 @@ class PlayListingScreenshotsTest(private val theme: String) {
             Column(Modifier.weight(1f)) {
                 AppIcon(72.dp)
                 Spacer(Modifier.height(20.dp))
-                Text(stringResource(R.string.app_name), color = c.text, style = MaterialTheme.typography.displayLarge)
+                Text(stringResource(R.string.play_wordmark), color = c.text, style = MaterialTheme.typography.displayLarge)
                 Spacer(Modifier.height(12.dp))
                 Text(tagline, color = c.text2, style = MaterialTheme.typography.headlineSmall)
             }
@@ -190,10 +195,15 @@ class PlayListingScreenshotsTest(private val theme: String) {
 
     private fun recording() = System.getProperty("roborazzi.test.record") == "true"
 
-    /** A phone screenshot: the shot's own [assertion], and no store or car name that is not made up. */
+    /**
+     * A listing picture: the shot's own [assertion]; no store or car name that is not made up; and no "debug" (these
+     * tests run the debug build, whose app name is "gig.log debug") in any text or description.
+     */
     private fun shot(name: String, assertion: () -> Unit, content: @Composable () -> Unit) =
         compose.renderShot(theme, "play-listing/$name", window = false, assertion = {
             NOT_SAMPLE_NAMES.forEach { compose.onAllNodesWithText(it, substring = true, ignoreCase = true).assertCountEquals(0) }
+            compose.onAllNodesWithText("debug", substring = true, ignoreCase = true).assertCountEquals(0)
+            compose.onAllNodes(hasContentDescription("debug", substring = true, ignoreCase = true)).assertCountEquals(0)
             assertion()
         }, content = content)
 
@@ -204,6 +214,7 @@ class PlayListingScreenshotsTest(private val theme: String) {
 
     companion object {
         private const val ICON_PX = 512
+        private const val WORDMARK = "gig.log"
         private val MARGIN = 50.dp
         private val GRAPHIC_WIDTH = 1024.dp
         private val GRAPHIC_HEIGHT = 500.dp

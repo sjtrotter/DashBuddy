@@ -83,14 +83,15 @@ shift/orphan-card 1078 2399
 shift/orphan-card-font-200 1078 2399
 shift/orphan-sheet 1078 2399
 shift/orphan-sheet-font-200 1078 2399
-# The Play listing (#1416, PlayListingScreenshotsTest in :feature:bubble and :app): phone shots at a Pixel 7's width
-# and density at 16:9 (411 x 731 dp); the icon and the feature graphic are the same picture in both themes.
-play-listing/offer 1078 1918
-play-listing/shift 1078 1918
-play-listing/log 1078 1918
-play-listing/home 1078 1918
-play-listing/recap-week 1078 1918
-play-listing/shift-page 1078 1918
-play-listing/playbook 1078 1918
+# The Play listing (#1416, PlayListingScreenshotsTest in :feature:bubble and :app): phone shots at 412 x 732 dp,
+# 420 dpi (Play's 1080 x 1920 recommendation; 1081.5 x 1921.5 px, written truncated as the 411 dp shots measure);
+# the icon and the feature graphic are the same picture in both themes.
+play-listing/offer 1081 1921
+play-listing/shift 1081 1921
+play-listing/log 1081 1921
+play-listing/home 1081 1921
+play-listing/recap-week 1081 1921
+play-listing/shift-page 1081 1921
+play-listing/playbook 1081 1921
 play-listing/icon 512 512
 play-listing/featureGraphic 1024 500

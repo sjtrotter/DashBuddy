@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -42,11 +43,12 @@ import org.robolectric.annotation.GraphicsMode
  *
  * The real [HudScreen] at the bubble's commonly visible size (DESIGN.md: about 510 dp of the 600 dp it asks for),
  * the screen's width less the bubble's margins, on a plain surface with one caption line above it, outside the HUD.
- * The phone is a Pixel 7's width and density at 16:9 (1078 x 1918 px). Sample data only: made-up store and car
- * names, on [HudScreenFixture]'s clock.
+ * The phone is 412 x 732 dp at 420 dpi (about 1081 x 1921 px, Play's 1080 x 1920 recommendation). Sample data only:
+ * made-up store and car names, on [HudScreenFixture]'s clock. Supported-platform labels (the HUD head's "DoorDash")
+ * are allowed; merchant, brand and vehicle names are not, and no text may read "debug".
  */
 @RunWith(ParameterizedRobolectricTestRunner::class)
-@Config(sdk = [35], qualifiers = "w411dp-h731dp-420dpi")
+@Config(sdk = [35], qualifiers = "w412dp-h732dp-420dpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 internal class PlayListingScreenshotsTest(theme: String) : HudShotFixture(theme) {
 
@@ -96,6 +98,8 @@ internal class PlayListingScreenshotsTest(theme: String) : HudShotFixture(theme)
         render("play-listing/$name", assertion = {
             compose.onNodeWithText(caption).assertIsDisplayed()
             NOT_SAMPLE_NAMES.forEach { compose.onAllNodesWithText(it, substring = true).assertCountEquals(0) }
+            compose.onAllNodesWithText("debug", substring = true, ignoreCase = true).assertCountEquals(0)
+            compose.onAllNodes(hasContentDescription("debug", substring = true, ignoreCase = true)).assertCountEquals(0)
             assertion()
         }) { Frame(hud) }
 

@@ -16,8 +16,8 @@ play/listing/en-US/images/phoneScreenshots/*.png   required, 2 to 8, 24-bit PNG 
 ```
 
 - `python3 tools/play/play_listing.py check [root]` checks the tree (default `play/listing`) against the limits
-  above, including each PNG's structure, bit depth and colour type, and needs no credentials or Google
-  libraries. `upload` runs the same check and refuses on any problem before it opens an edit; the workflow also
+  above, including each PNG's structure, bit depth and colour type (no `tRNS` chunk and no critical chunk the PNG
+  specification does not define), and needs no credentials or Google libraries. `upload` runs the same check and refuses on any problem before it opens an edit; the workflow also
   runs `check` before its auth step. Its tests: `python3 -m unittest tools/play/test_play_listing.py` (PR CI
   runs them).
 - Only `en-US` is read. Another locale folder is ignored until the script's `LOCALES` names it.
@@ -39,5 +39,6 @@ tools/play/stage_listing_images.sh <run-id> <light|dark>
 
 It downloads that run's artifact with `gh`, takes the phone screenshots of the chosen theme, `icon-light.png` and
 `featureGraphic-dark.png`, converts them with ImageMagick (`magick`) to sRGB with no metadata (the icon as RGBA,
-the rest as opaque RGB), checks the result with `check`, and only then replaces `images/`. Look at every image
-before committing them.
+the rest as opaque RGB), checks the result with `check`, and only then swaps it in: the new set is copied beside
+`images/` (`.images.new`), the old one is moved aside (`.images.old`) and put back if the swap fails. Look at every
+image before committing them.

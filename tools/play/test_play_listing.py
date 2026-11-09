@@ -21,12 +21,19 @@ def chunk(kind, body):
     return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body))
 
 
-def png(width, height, colour, depth=8, extra=()):
-    """A well-formed, all-zero PNG; [extra] chunks go between IHDR and IDAT."""
+def png_chunks(width, height, colour, depth=8, extra=()):
+    """The (type, body) chunks of a well-formed, all-zero PNG; [extra] chunks go between IHDR and IDAT."""
     row = b"\x00" + bytes((width * SAMPLES[colour] * depth + 7) // 8)
     ihdr = struct.pack(">IIBBBBB", width, height, depth, colour, 0, 0, 0)
-    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + b"".join(chunk(k, b) for k, b in extra)
-            + chunk(b"IDAT", zlib.compress(row * height)) + chunk(b"IEND", b""))
+    return [(b"IHDR", ihdr), *extra, (b"IDAT", zlib.compress(row * height)), (b"IEND", b"")]
+
+
+def assemble(chunks):
+    return b"\x89PNG\r\n\x1a\n" + b"".join(chunk(k, b) for k, b in chunks)
+
+
+def png(width, height, colour, depth=8, extra=()):
+    return assemble(png_chunks(width, height, colour, depth, extra))
 
 
 class CheckTest(unittest.TestCase):
@@ -92,6 +99,32 @@ class CheckTest(unittest.TestCase):
     def test_feature_graphic_with_trns_is_rejected(self):
         self.write_image("featureGraphic.png", png(1024, 500, 2, extra=[(b"tRNS", bytes(6))]))
         self.assertOneProblem("featureGraphic.png", "tRNS")
+
+    def test_icon_with_trns_is_rejected(self):
+        self.write_image("icon.png", png(512, 512, 6, extra=[(b"tRNS", bytes(6))]))
+        self.assertOneProblem("icon.png", "tRNS")
+
+    def test_screenshot_with_trns_is_rejected(self):
+        self.write_image("phoneScreenshots/01-shot.png", png(320, 640, 2, extra=[(b"tRNS", bytes(6))]))
+        self.assertOneProblem("01-shot.png", "tRNS")
+
+    def test_unknown_critical_chunk_is_rejected(self):
+        self.write_image("featureGraphic.png", png(1024, 500, 2, extra=[(b"ZZZZ", b"x")]))
+        self.assertOneProblem("featureGraphic.png", "unknown critical chunk ZZZZ")
+
+    def test_unknown_ancillary_chunk_is_allowed(self):
+        self.write_image("featureGraphic.png", png(1024, 500, 2, extra=[(b"zzzz", b"x")]))
+        self.assertEqual([], self.problems())
+
+    def test_ihdr_not_first_is_rejected(self):
+        chunks = png_chunks(512, 512, 6)
+        chunks.insert(0, (b"tEXt", b"k\x00v"))
+        self.write_image("icon.png", assemble(chunks))
+        self.assertOneProblem("icon.png", "IHDR is not the first chunk")
+
+    def test_iend_not_last_is_rejected(self):
+        self.write_image("icon.png", assemble(png_chunks(512, 512, 6) + [(b"tEXt", b"k\x00v")]))
+        self.assertOneProblem("icon.png", "no empty IEND as the last chunk")
 
     def test_feature_graphic_at_16_bits_is_rejected(self):
         self.write_image("featureGraphic.png", png(1024, 500, 2, depth=16))

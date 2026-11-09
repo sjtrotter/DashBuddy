@@ -44,6 +44,8 @@ SCREENSHOT_COUNT = (2, 8)
 SCREENSHOT_SIDE = (320, 3840)
 # PNG colour types: 2 is RGB (24-bit at depth 8), 6 is RGB with alpha (32-bit at depth 8).
 RGB, RGBA = 2, 6
+# The critical chunks the PNG specification defines; a critical chunk is one whose type starts upper-case.
+KNOWN_CRITICAL = {b"IHDR", b"PLTE", b"IDAT", b"IEND"}
 
 
 def service():
@@ -57,8 +59,9 @@ def service():
 
 
 def image_problems(path, colour, size=None, max_bytes=None):
-    """Problems with one PNG: its structure, bit depth 8 and [colour] (RGB with no tRNS), then [size], else
-    Play's screenshot side and ratio limits, then [max_bytes]."""
+    """Problems with one PNG: its structure (png_structure.read: IHDR first, IEND last, CRCs, image data), bit depth 8
+    and [colour], no tRNS, no critical chunk the PNG specification does not define, then [size], else Play's
+    screenshot side and ratio limits, then [max_bytes]."""
     try:
         png = png_structure.read(path)
     except png_structure.ERRORS as error:
@@ -68,8 +71,12 @@ def image_problems(path, colour, size=None, max_bytes=None):
         want = "24-bit RGB with no alpha" if colour == RGB else "32-bit RGBA"
         problems.append(f"{path}: colour type {png.colour} at bit depth {png.depth}, Play wants {want} "
                         f"(colour type {colour}, bit depth 8)")
-    if colour == RGB and b"tRNS" in png.kinds:
-        problems.append(f"{path}: has a tRNS (transparency) chunk, Play wants no alpha")
+    if b"tRNS" in png.kinds:
+        problems.append(f"{path}: has a tRNS (transparency) chunk")
+    unknown = sorted({kind.decode("latin-1") for kind in png.kinds if kind[:1].isupper()} -
+                     {kind.decode("latin-1") for kind in KNOWN_CRITICAL})
+    if unknown:
+        problems.append(f"{path}: unknown critical chunk {', '.join(unknown)}")
     if size is not None:
         if (png.width, png.height) != size:
             problems.append(f"{path}: {png.width} x {png.height} px, Play wants {size[0]} x {size[1]}")

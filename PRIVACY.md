@@ -118,9 +118,10 @@ what is forwarded). Only the platforms the service is bound to (§2.1) can be en
   limits) before it can move the mileage. A location is never written to a log line — a rejected fix is logged as
   numbers and a reason, never as a coordinate (`domain/.../OdometerFixPolicy`).
 - **The gas-price refresh** (`FuelPriceRepository`, off by default on new installs; an existing setting is kept, §6): once per refresh the last known location
-  is read (`FusedLocationDataSource.getUserLocation`) and passed to Android's `Geocoder` to resolve the state for
-  the regional price. `Geocoder` is a platform service that may use the network to do that, so on this feature the
-  device's coordinates do leave the app, to Android's geocoding provider — not to gig.log and not to the EIA.
+  is read (`FusedLocationDataSource.getUserLocation`), rounded to one decimal place of a degree (about 11 km;
+  `GeocoderInput`), and that rounded point is passed to Android's `Geocoder` to resolve the state for the regional
+  price. `Geocoder` never gets the exact fix. It is a platform service that may use the network, so on this feature
+  the rounded location does leave the app, to Android's geocoding provider — not to gig.log and not to the EIA.
   The daily worker checks the saved automatic-refresh setting before fetching. Tap the bubble's gas price to enter manual mode, or turn off daily updates in setup and save setup, to stop automatic refreshes. Setup waits for the saved settings before its initial gas-price fetch (`WizardViewModel.loadExistingSettings`).
 
 ### 2.5 What gig.log never processes
@@ -187,7 +188,7 @@ There is no account, no analytics SDK, no advertising identifier. Gas-price refr
 
 | Feature | Default | Where it goes | What is sent |
 |---|---|---|---|
-| Gas-price refresh (`isGasPriceAuto`, `AppPreferencesDataSource`) | **off by default on new installs; an existing setting is kept**; tap the bubble gas price for manual mode, or disable daily updates in setup and save | the U.S. EIA public price API (`api.eia.gov`, `core/network/.../eia`), after Android's `Geocoder` resolves your state (§2.4) | a request for the regional price for your fuel type; no account, no identifier. The API key is never logged (#348). |
+| Gas-price refresh (`isGasPriceAuto`, `AppPreferencesDataSource`) | **off by default on new installs; an existing setting is kept**; tap the bubble gas price for manual mode, or disable daily updates in setup and save | the U.S. EIA public price API (`api.eia.gov`, `core/network/.../eia`), after Android's `Geocoder` resolves your state from your location rounded to about 11 km, never the exact fix (§2.4) | a request for the regional price for your fuel type; no account, no identifier. The API key is never logged (#348). |
 | Vehicle list in the setup wizard (`EpaVehicleDataSource`) | asks first (#1258): off until "Look up my vehicle" is tapped; choice is saved | the U.S. EPA public vehicle API (`fueleconomy.gov`) | vehicle-list request after opt-in, including on later setup visits; selected year, make, model and vehicle ID as the user chooses, to retrieve MPG; no account or install ID |
 | Google MPG search | manual button press | Google in the user's browser (`VehicleCard`) | entered vehicle year, make and model plus `mpg`; browser cookies/account settings apply |
 | Text-to-speech (`TtsEffectHandler`) | used for spoken offers | your phone's text-to-speech engine | the offer sentence; the engine may use the network under its own terms |
@@ -357,6 +358,10 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r18 (2026-11-09)** — §2.4 and §6: the gas-price lookup gives Android's `Geocoder` the location rounded to one
+  decimal place of a degree (about 11 km, `GeocoderInput`), never the exact fix; the Privacy page's "What leaves
+  your phone" (`privacy_leaves_body`), the location permission card (`perm_body_location`) and setup's gas-price
+  card (`wizard_gas_price_auto_update_desc`) say so.
 - **r17 (2026-11-09)** — §7: how the data is stored (app-private storage under Android's encryption, no app-level
   encryption, HTTPS for the two lookups, screenshots and exports outside it), shown in the app as "How it is stored"
   (`privacy_storage_*`) and on the public policy page; the public policy at https://gig.log.trotter.cloud/privacy/ is

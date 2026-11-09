@@ -37,7 +37,18 @@ shots=(
 )
 
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
+# Beside the destination, so the swap below is two renames on one filesystem.
+new_tree=play/listing/en-US/.images.new
+old_tree=play/listing/en-US/.images.old
+# A killed earlier run can leave the previous set aside; put it back before starting over.
+if [ -e "$old_tree" ] && [ ! -e "$dest" ]; then mv "$old_tree" "$dest"; fi
+rm -rf "$new_tree" "$old_tree"
+# On any exit: a previous set that was moved aside and not replaced goes back, then the work dirs go.
+cleanup() {
+  if [ -e "$old_tree" ] && [ ! -e "$dest" ]; then mv "$old_tree" "$dest"; fi
+  rm -rf "$tmp" "$new_tree" "$old_tree"
+}
+trap cleanup EXIT
 gh run download "$run_id" --pattern 'screenshots-*' --dir "$tmp/artifact"
 
 # The one file under the artifact whose path ends in $1.
@@ -71,8 +82,10 @@ done
 
 python3 tools/play/play_listing.py check "$tmp/listing"
 
-rm -rf "$dest"
-mkdir -p "$(dirname "$dest")"
-cp -R "$listing/images" "$dest"
+cp -R "$listing/images" "$new_tree"
+diff -r "$listing/images" "$new_tree" >/dev/null || { echo "error: the copy beside $dest differs from the checked set" >&2; exit 1; }
+if [ -e "$dest" ]; then mv "$dest" "$old_tree"; fi
+mv "$new_tree" "$dest"
+rm -rf "$old_tree"
 echo "staged run $run_id ($theme) into $dest:"
 find "$dest" -type f -name '*.png' | sort

@@ -88,6 +88,10 @@ class FusedLocationDataSource @Inject constructor(
         val coords = getLastKnownLocation() ?: return null
         val userLocation = UserLocation(coordinates = coords)
 
+        // Rounded (GeocoderInput): the lookup may go to the provider's network service, so it never gets the exact fix.
+        val latitude = GeocoderInput.degrees(coords.latitude)
+        val longitude = GeocoderInput.degrees(coords.longitude)
+
         return try {
             val geocoder = Geocoder(context, Locale.getDefault())
 
@@ -98,8 +102,8 @@ class FusedLocationDataSource @Inject constructor(
                 // The API-33+ listener lookup (the pre-#1162 body, unchanged; inline so lint sees the SDK check).
                 suspendCancellableCoroutine { continuation ->
                     geocoder.getFromLocation(
-                        coords.latitude,
-                        coords.longitude,
+                        latitude,
+                        longitude,
                         1,
                         object : Geocoder.GeocodeListener {
                             override fun onGeocode(addresses: MutableList<Address>) {
@@ -114,7 +118,7 @@ class FusedLocationDataSource @Inject constructor(
                 }
             } else {
                 @Suppress("DEPRECATION")
-                val legacy = withContext(ioDispatcher) { geocoder.getFromLocation(coords.latitude, coords.longitude, 1) }
+                val legacy = withContext(ioDispatcher) { geocoder.getFromLocation(latitude, longitude, 1) }
                 legacy?.firstOrNull()
             }
 
