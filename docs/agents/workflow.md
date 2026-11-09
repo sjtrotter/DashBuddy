@@ -107,7 +107,11 @@ PR CI (`pr-check.yml`, job `build-and-test`) is the gate because the laptop cann
 
 - `master` is protected by a ruleset (#1450): a PR is required, merge commits only, `build-and-test` must pass (a
   skipped run counts), no approvals, and the admin bypass applies to PRs only.
-- The signing secrets live in the `release` environment, which only `v*.*.*` tags can use.
+- The signing secrets live in the `release` environment, which only `v*.*.*` tags can use. `release.yml` runs on a
+  version tag: it uploads the Play build to the internal testing track (while the `PLAY_PUBLISH` variable is `true`)
+  and attaches the sideload and debug APKs to a GitHub Release; its signing job and its release-writing job are
+  separate. `play-listing.yml` pushes `play/listing/` by hand. The runbook, secrets and version-code rule are in
+  `docs/RELEASE.md`.
 - The full gate (`build-and-test`, not a draft's `draft-check`) also runs `:app:lintVitalRelease` (#907) after the
   unit tests; `:app`'s `lint { checkDependencies = true }` folds the library modules into that one run, so a local `:app:build` or `assembleRelease` also pays the
   multi-module vital pass (accepted). Only the `NewApi` id is promoted to fatal (root `lint.xml`, #1162);

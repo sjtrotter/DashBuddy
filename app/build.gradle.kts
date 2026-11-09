@@ -68,6 +68,9 @@ val gitDirty: Boolean = (gitOutput("status", "--porcelain") ?: "")
  */
 val buildTimeMs: Long = System.currentTimeMillis()
 
+/** A build's versionName: the marketing version, then `+<sha>`, then `.dirty` for an uncommitted tree. */
+fun versionNameFor(base: String): String = "$base+$gitSha" + if (gitDirty) ".dirty" else ""
+
 // ---------------------------------------------------------------------------
 // #1414: three builds, one table of what differs between them.
 //
@@ -125,18 +128,20 @@ android {
         targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // versionCode stays a hand-bumped constant. It must NOT be derived from git (a commit
-        // count, a timestamp): Android refuses to install an APK whose versionCode is LOWER than
-        // the installed one, so a derived-monotonic code would make installing a branch build
-        // over a newer master build fail with INSTALL_FAILED_VERSION_DOWNGRADE. The build's
-        // identity rides versionName + BuildConfig.GIT_SHA instead, which nothing enforces
-        // ordering on.
+        // Every local build, and the debug build everywhere, has code 1. It must NOT be derived
+        // from git (a commit count, a timestamp): Android refuses to install an APK whose code is
+        // LOWER than the installed one, so a derived code would make a branch build fail to install
+        // over a newer master build (INSTALL_FAILED_VERSION_DOWNGRADE). The build's identity rides
+        // versionName + BuildConfig.GIT_SHA instead. Only a tag's release run sets a real code, and
+        // only for the Play and sideload builds (`giglogVersionCode`, below the android block), so
+        // the developer's local debug builds keep installing over a CI debug one.
         versionCode = 1
 
         // The base marketing version, hand-bumped. The `+<sha>` suffix is what makes each
-        // build self-identifying; `.dirty` marks an uncommitted working tree.
+        // build self-identifying; `.dirty` marks an uncommitted working tree. A release tag must
+        // equal this value (.github/workflows/release.yml refuses one that does not).
         val baseVersionName = "0.230.0"
-        versionName = "$baseVersionName+$gitSha" + if (gitDirty) ".dirty" else ""
+        versionName = versionNameFor(baseVersionName)
 
         buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
         buildConfigField("long", "BUILD_TIME_MS", "${buildTimeMs}L")
@@ -321,6 +326,35 @@ android {
     // every library module, and the root `lint.xml` (the severity owner) promotes `NewApi` to fatal there too.
     lint {
         checkDependencies = true
+    }
+}
+
+// #1415: a tag's release run passes the version it read from the tag. The code rule
+// (major*1_000_000 + minor*1_000 + patch) and its bounds live in .github/workflows/release.yml;
+// this only applies the result, to the Play and sideload builds. The debug build is never
+// overridden. The name keeps the `+<sha>` suffix, so a tagged build names its commit like any other.
+val tagVersionCode: Int? = providers.gradleProperty("giglogVersionCode").orNull?.let { raw ->
+    requireNotNull(raw.toIntOrNull()?.takeIf { it in 1..2_100_000_000 }) {
+        "giglogVersionCode must be an integer from 1 to 2100000000, got '$raw'"
+    }
+}
+val tagVersionName: String? = providers.gradleProperty("giglogVersionName").orNull?.trim()?.ifEmpty { null }
+require((tagVersionCode == null) == (tagVersionName == null)) {
+    "set giglogVersionCode and giglogVersionName together, or neither"
+}
+
+androidComponents {
+    val tagCode = tagVersionCode
+    val tagName = tagVersionName
+    if (tagCode != null && tagName != null) {
+        listOf("release", "sideload").forEach { buildType ->
+            onVariants(selector().withBuildType(buildType)) { variant ->
+                variant.outputs.forEach { output ->
+                    output.versionCode.set(tagCode)
+                    output.versionName.set(versionNameFor(tagName))
+                }
+            }
+        }
     }
 }
 
