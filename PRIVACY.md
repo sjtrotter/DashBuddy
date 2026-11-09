@@ -22,7 +22,16 @@ Declared in `app/src/main/res/xml/accessibility_service_config.xml` (the Play bu
 `app/src/accessibilityTool/res/xml/accessibility_service_config.xml` (the sideload and debug builds); the two
 differ only in the first flag below (`AccessibilityToolFlagGuardTest`). There are three builds (`app/build.gradle.kts`):
 the **Play** build (`cloud.trotter.log.gig`), the **sideload** build from outside Play (`cloud.trotter.log.gig.sideload`,
-a release build with none of the debug extras) and the developer's **debug** build (`cloud.trotter.log.gig.debug`).
+a release build with none of the debug extras) and the **debug** build (`cloud.trotter.log.gig.debug`).
+
+**The debug build is the tester build, and it is public.** Every version tag attaches it to the GitHub Release as
+`giglog-debug-<version>.apk` (`.github/workflows/release.yml`), beside the sideload APK, so anyone can install it.
+It is meant for the developer and the testers the developer invites, not for other drivers. On top of everything
+the sideload build does, it keeps capture envelopes of UNKNOWN screens on the device under the app's files (§3, §7),
+writes a verbose on-device log, and offers the census upload and capture sharing in developer settings (§6). Both
+are off until the tester turns them on. They send to gig.log's census server, whose address is built into the debug
+build (`https://census.dashbuddy.trotter.cloud`, `DevSettingsDataSource.DEFAULT_CENSUS_BASE_URL`); turning census
+upload on enrols the install there automatically. Nothing reaches a server before the tester turns a switch on.
 
 - `android:isAccessibilityTool` — `false` in the Play build, `true` in the sideload and debug builds. Google Play
   allows `true` only for apps built for people with disabilities, so the Play build does not declare it. The flag
@@ -157,8 +166,8 @@ There is no account, no analytics SDK, no advertising identifier. Gas-price refr
 | Vehicle list in the setup wizard (`EpaVehicleDataSource`) | asks first (#1258): off until "Look up my vehicle" is tapped; choice is saved | the U.S. EPA public vehicle API (`fueleconomy.gov`) | vehicle-list request after opt-in, including on later setup visits; selected year, make, model and vehicle ID as the user chooses, to retrieve MPG; no account or install ID |
 | Google MPG search | manual button press | Google in the user's browser (`VehicleCard`) | entered vehicle year, make and model plus `mpg`; browser cookies/account settings apply |
 | Text-to-speech (`TtsEffectHandler`) | used for spoken offers | your phone's text-to-speech engine | the offer sentence; the engine may use the network under its own terms |
-| UNKNOWN screen/notification census (developer builds only, `censusUploadEnabled`) | off | a census server you configure | a **skeleton** of an admitted UNKNOWN screen or platform notification: screen view classes/ids, or a grammar-bounded notification channel id and five filtered slots; text slots carry coarse kinds or hashes under a k-anonymity gate, never source text — see `docs/adr/ADR-0011-unknown-census-privacy-model.md` — plus daily recognition-health counts per platform and app version, sent with this install's ID. Every other build (Play, sideload) binds a no-op sink (`NoOpCensusSink`) and cannot upload at all. |
-| Share UNKNOWN captures (developer builds only, `censusShareCaptures`, trusted installs) | off | the same census server, only while its operator has marked this install trusted | the **text** of UNKNOWN screens (`CensusUploadWorker.uploadEnvelopes`). An UNKNOWN screen gets no rule redaction — only the marker and address-block backstops (§3) — so a capture can still contain customer details, and the operator can read them. The switch says exactly this (`developer_settings_census_share_captures_explainer`). |
+| UNKNOWN screen/notification census (debug build only, the developer's and testers' build, §2.1; `censusUploadEnabled`) | off | gig.log's census server, built into the debug build (§2.1); turning the switch on enrols the install | a **skeleton** of an admitted UNKNOWN screen or platform notification: screen view classes/ids, or a grammar-bounded notification channel id and five filtered slots; text slots carry coarse kinds or hashes under a k-anonymity gate, never source text — see `docs/adr/ADR-0011-unknown-census-privacy-model.md` — plus daily recognition-health counts per platform and app version, sent with this install's ID. Every other build (Play, sideload) binds a no-op sink (`NoOpCensusSink`) and cannot upload at all. |
+| Share UNKNOWN captures (debug build only, §2.1; `censusShareCaptures`, trusted installs) | off | the same census server, only while its operator has marked this install trusted | the **text** of UNKNOWN screens (`CensusUploadWorker.uploadEnvelopes`). An UNKNOWN screen gets no rule redaction — only the marker and address-block backstops (§3) — so a capture can still contain customer details, and the operator can read them. The switch says exactly this (`developer_settings_census_share_captures_explainer`). |
 | Bug-report export | manual | a folder/provider the user chooses (`DataExportViewModel.exportLog`) | INFO+ milestones checked against known sensitive markers before writing; matches are replaced, but unknown sensitive details can escape filtering. A cloud provider may upload the file. gig.log does not deliver it to the developer. |
 | CSV export | manual | a folder/provider the user chooses (`DataExportViewModel` → `CsvExporter`) | all recorded sessions and deliveries, including merchant names and which saved vehicle drove each dash (its id and label — the dasher's own text), plus deductible miles per vehicle per tax year and logged expenses and fill-ups (amounts, categories, the dasher’s own labels, gallons and the app's tracked miles at the fill-up, plus the saved vehicle id and label for car-care and gas receipts), including voided entries. No customer data or customer/address hashes. A cloud provider may upload the files. |
 
@@ -302,6 +311,12 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r15 (2026-11-09)** — §2.1: the debug build is published on every GitHub Release as the tester build;
+  it keeps UNKNOWN capture envelopes and a verbose log on the device, and its census switches (off by default) send
+  to gig.log's census server, whose address is built in, enrolling the install when census upload is turned on
+  (#1561). §6: the census rows say "debug build", not "developer builds", and name that server instead of "a
+  server you configure". Nothing the app reads, stores or sends changed. The debug build's privacy section
+  (`privacy_test_builds_body`) now names the server; the Play and sideload privacy page is unchanged.
 - **r14 (2026-11-09)** — §7: a `recognition_notices` file on the device holds when gig.log last showed each
   delivery app's "screens not read" notice; §6: it is excluded from backup and device transfer (#1560). Which
   screens broke is kept in memory only. The in-app privacy page does not list every exclusion and is unchanged.
