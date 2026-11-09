@@ -1,6 +1,5 @@
 package cloud.trotter.log.gig.ui.main.settings
 
-import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
 import androidx.activity.ComponentDialog
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOff
@@ -12,6 +11,7 @@ import androidx.compose.ui.test.performClick
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import cloud.trotter.log.gig.domain.action.RuleAction
 import cloud.trotter.log.gig.domain.capability.ConsentReceipt
+import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
 import cloud.trotter.log.gig.domain.capability.RuleCapability
 import cloud.trotter.log.gig.domain.capability.RuleCapabilityGrants
 import cloud.trotter.log.gig.domain.settings.EventReceiptConsent
