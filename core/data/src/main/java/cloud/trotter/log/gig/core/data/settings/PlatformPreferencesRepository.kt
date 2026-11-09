@@ -30,11 +30,15 @@ class PlatformPreferencesRepository @Inject constructor(
      * Eagerly shared for the app's lifetime so every consumer — listeners,
      * filters, pipelines, UI — reads one always-current value instead of
      * holding a private cache. Defaults to installed apps if nothing saved.
+     *
+     * Only [Platform.bound] platforms can be enabled (#170): a saved wire for a platform gig.log has no
+     * ruleset for (an older install's Instacart or Walmart Spark) is ignored, so no listener, filter or
+     * pipeline reads that app.
      */
     override val enabledPlatforms: StateFlow<Set<Platform>> = dataSource.enabledPlatforms
         .map { saved ->
             if (saved != null) {
-                saved.mapNotNull { Platform.fromWire(it) }.toSet()
+                readablePlatforms(saved)
             } else {
                 detectInstalledPlatforms()
             }
@@ -65,10 +69,9 @@ class PlatformPreferencesRepository @Inject constructor(
     override val graceConfig: StateFlow<Map<Platform, GraceConfig>> =
         MutableStateFlow(emptyMap())
 
-    /** Check which supported platforms are installed on device. */
+    /** Check which bound platforms are installed on device. */
     fun detectInstalledPlatforms(): Set<Platform> =
-        Platform.entries
-            .filter { it.packageName != null }
+        Platform.boundPlatforms
             .filter { platform ->
                 try {
                     packageManager.getPackageInfo(platform.packageName!!, 0)
@@ -85,5 +88,11 @@ class PlatformPreferencesRepository @Inject constructor(
             val current = saved ?: detectInstalledPlatforms().map { it.wire }.toSet()
             if (enabled) current + platform.wire else current - platform.wire
         }
+    }
+
+    internal companion object {
+        /** The bound platforms that [saved] wire names enable; every other wire is ignored (#170). */
+        fun readablePlatforms(saved: Set<String>): Set<Platform> =
+            saved.mapNotNull { Platform.fromWire(it) }.filter { it.bound }.toSet()
     }
 }

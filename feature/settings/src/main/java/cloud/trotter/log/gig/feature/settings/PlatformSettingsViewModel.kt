@@ -31,7 +31,8 @@ class PlatformSettingsViewModel @Inject constructor(
 
     private val packageManager: PackageManager = context.packageManager
 
-    private val monitorablePlatforms = Platform.entries.filter { it.packageName != null }
+    /** The apps gig.log can read (#170): the bound registry, never a platform with no ruleset. */
+    private val monitorablePlatforms = Platform.boundPlatforms
 
     val platforms: StateFlow<List<PlatformUiState>> = repository.enabledPlatforms
         .map { enabled ->

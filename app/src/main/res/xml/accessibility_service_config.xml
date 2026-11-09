@@ -5,7 +5,7 @@
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:isAccessibilityTool="false"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewClicked|typeWindowsChanged"
-    android:packageNames="com.doordash.driverapp,com.ubercab.driver,com.instacart.shopper,com.walmart.spark"
+    android:packageNames="com.doordash.driverapp,com.ubercab.driver"
     android:accessibilityFeedbackType="feedbackSpoken"
     android:notificationTimeout="100"
     android:canTakeScreenshot="true"

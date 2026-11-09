@@ -19,6 +19,13 @@ import java.util.Locale
  * sensor layer then admits that platform's large system-layer windows as snapshot candidates (by
  * size + package). Adding an overlay platform is flipping this one flag (principle 8).
  *
+ * [bound] (#170) declares that gig.log ships a ruleset for the platform, so the accessibility service is bound to
+ * its package and reads it. It is the one owner of "which apps gig.log reads": [watchedPackages] derives from it,
+ * and so do the enabled-platform preference, the platform settings list and the permission card's app names. A
+ * platform with no ruleset stays a registry entry (other code keys on it) but is never read, whatever a saved
+ * preference says. `AccessibilityPackageParityTest` pins the bound set to the generated rules assets, the
+ * service config's `packageNames` and the manifest's `<queries>`.
+ *
  * [wire] values are assumed **non-empty and dot-free** — they are used as the
  * platform namespace prefix of rule ids (`<wire>.<section>.<name>`), so a wire
  * containing a `.` or an empty wire would break prefix-based resolution
@@ -31,9 +38,10 @@ enum class Platform(
     val shortName: String,
     val appName: String,
     val offerOverlay: Boolean = false,
+    val bound: Boolean = false,
 ) {
-    DoorDash("doordash", "com.doordash.driverapp", "DoorDash", "DD", "DoorDash"),
-    Uber("uber", "com.ubercab.driver", "Uber Driver", "Uber", "Uber", offerOverlay = true),
+    DoorDash("doordash", "com.doordash.driverapp", "DoorDash", "DD", "DoorDash", bound = true),
+    Uber("uber", "com.ubercab.driver", "Uber Driver", "Uber", "Uber", offerOverlay = true, bound = true),
     Instacart("instacart", "com.instacart.shopper", "Instacart Shopper", "IC", "Instacart"),
     WalmartSpark("walmart_spark", "com.walmart.spark", "Walmart Spark", "Spark", "Walmart Spark"),
     Unknown("_unknown", null, "Unknown", "", "Unknown"),
@@ -82,9 +90,13 @@ enum class Platform(
         fun fromPackage(packageName: String?): Platform =
             byPackage[packageName] ?: Unknown
 
-        /** All known package names for OS-level event subscription. */
+        /** The platforms gig.log reads ([bound]), in registry order. Each has a package. */
+        val boundPlatforms: List<Platform> =
+            entries.filter { it.bound && it.packageName != null }
+
+        /** The bound platforms' package names: the OS-level event subscription. Derived from [bound]. */
         val watchedPackages: Set<String> =
-            entries.mapNotNull { it.packageName }.toSet()
+            boundPlatforms.mapNotNull { it.packageName }.toSet()
 
         /**
          * Packages of the platforms whose offers arrive as a system-layer overlay ([offerOverlay],

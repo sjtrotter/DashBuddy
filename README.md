@@ -73,7 +73,7 @@ gig.log is alpha. One developer builds it and tests it on one phone while delive
 
 - DoorDash is the platform gig.log is built and field-tested against. Its rules cover offers, pickups, drop-offs, shift start and end, receipts and notifications.
 - Uber has a smaller rule set: the offer card, online and offline screens, trip screens, shift summaries and trip notifications. It has had much less field testing. gig.log infers an accepted Uber offer when Uber's trip screen follows the offer, but this detection is incomplete ([#826](https://github.com/sjtrotter/gig.log/issues/826)). The Uber rules do not point gig.log at Uber's Accept and Decline buttons, so pressing Accept or Decline in gig.log does not tap them in Uber.
-- Instacart Shopper and Walmart Spark are listed in the code but have no rules, so they are not supported.
+- Instacart Shopper and Walmart Spark are listed in the code but have no rules, so gig.log does not read them: the accessibility service is bound to DoorDash and Uber Driver only.
 - Recognition expects the delivery app to be in English. In another language, screens go unrecognized. If the phone itself is set to a language other than English, gig.log shows a notice once.
 
 ### Supported apps
