@@ -59,6 +59,7 @@ import cloud.trotter.log.gig.ui.main.analytics.RecapDatePickerButton
 import cloud.trotter.log.gig.ui.main.analytics.allCheckLines
 import cloud.trotter.log.gig.ui.main.analytics.landingRowOf
 import cloud.trotter.log.gig.ui.main.analytics.recap.RecapNoShiftsYet
+import cloud.trotter.log.gig.ui.main.analytics.search.SearchButton
 import cloud.trotter.log.gig.ui.main.analytics.windowRange
 import java.time.LocalDate
 import kotlinx.coroutines.flow.filter
@@ -67,17 +68,22 @@ import kotlinx.coroutines.flow.filter
  * The Shifts list (#1515): every shift, newest first, under one header per Monday-to-Sunday week ("Oct 26 to Nov 1").
  * Opened from Recap's Shifts row, scrolled so Recap's week is at the top; that week shows "No shifts" when it has
  * none. A row is the date, the app with its times, Earned, and a shift's first check reason; a tap opens its shift
- * page. Title bar: Back, "Shifts" and the date picker (Cancel, Week), which jumps the list to the picked date's week.
+ * page. Title bar: Back, "Shifts", search (every shift, by store) and the date picker (Cancel, Week), which jumps the
+ * list to the picked date's week.
  * No ticker: a past shift's row is fixed, and a running one reads "to now".
  */
 @Composable
 fun ShiftsScreen(
     onBack: () -> Unit,
     onOpenSession: (sessionId: String, row: String?) -> Unit,
+    onOpenSearch: () -> Unit = {},
     viewModel: ShiftsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    ShiftsContent(uiState, onBack, onOpenSession, viewModel::onVisibleWeeks, viewModel::retry, onJumpTo = viewModel::jumpTo)
+    ShiftsContent(
+        uiState, onBack, onOpenSession, viewModel::onVisibleWeeks, viewModel::retry,
+        onJumpTo = viewModel::jumpTo, onOpenSearch = onOpenSearch,
+    )
 }
 
 /** The Shifts list's stateless body; tests and screenshots compose this. */
@@ -90,6 +96,7 @@ internal fun ShiftsContent(
     onVisibleWeeks: (Set<LocalDate>) -> Unit,
     onRetry: () -> Unit,
     onJumpTo: (LocalDate) -> Unit = {},
+    onOpenSearch: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -101,6 +108,7 @@ internal fun ShiftsContent(
                     }
                 },
                 actions = {
+                    SearchButton(stringResource(R.string.search_all_shifts), onOpenSearch)
                     // Cancel and Week: the list jumps to the picked date's week, opening on the week it shows.
                     RecapDatePickerButton(uiState.targetWeek, listOf(DatePickerChoice.WEEK), onWeek = onJumpTo)
                 },

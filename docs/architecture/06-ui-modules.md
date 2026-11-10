@@ -76,7 +76,8 @@ plus the stateless `PlatformSwitcherRow`); no Hilt/`:core:data`/`:core:state`, w
 as a legal `:app → :feature` dependency).
 
 Recap (`ui/main/analytics/*`: the week in `AnalyticsScreen` with its sections under `recap/`, the day page under
-`day/`, the Shifts list under `shifts/`, the Month screen under `month/`, the shift page) is a separate sibling surface, left for a future extraction.
+`day/`, the Shifts list under `shifts/`, the Month screen under `month/`, the Search screen under `search/`, the shift
+page) is a separate sibling surface, left for a future extraction.
 
 **Navigation (#1447):** a Material 3 bottom bar with three icon-only tabs, Home,
 Recap and Plan (`TopLevel`, enum names `ANALYTICS` and `PLAYBOOK`; each name is the icon's content description and
@@ -98,6 +99,16 @@ a `RecapMeasure` name, default Earned; `MainNavActions.openMonth(month, measure)
 row writes Recap's week, then `backToRecap()` pops to Recap. The date picker (`RecapDatePickerButton`) has three
 contexts: Recap (Cancel, Week, Month; opens on the week's Monday, or today in this week), the Shifts list (Cancel,
 Week; jumps the list) and Month (Cancel, Month; moves the screen in place). The shift page and the day page have none.
+**Store search (#1540)** has two scopes, one title-bar search icon each. Recap's and the Shifts list's icon ("Search
+all shifts") opens the Search screen (`Screen.Search`, `analytics/search?query={query}`, an optional query;
+`MainNavActions.openSearch(query)`), an argument route on Recap's stack, never a tab root or a deep-link target. Its
+title bar is Back and a search field, focused with the keyboard up on open and not on a return from a result; "All
+shifts" labels the results once the query has text; a job opens the shift page with `row = card.key` (its sheet up), a
+passed offer with `row = offer:<seq>`, a group header at the top. The shift page's icon ("Search this shift") turns
+its title into the field and filters the timeline in place under "This shift", keeping the summary, the money check,
+the checks and the corrections; Back (system or the bar's) closes the search before the page, and the last row,
+"Search all shifts for "…"", opens the Search screen with the query. A `row` link that lands on a passed offer
+highlights its thin row once, a tint that fades over 2 s on the frame clock (`Animatable`).
 
 ## Module catalogue
 

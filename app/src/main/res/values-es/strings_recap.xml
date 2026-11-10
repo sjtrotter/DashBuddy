@@ -55,4 +55,14 @@
     <string name="month_comparison_none_format">%1$s, sin turnos</string>
     <string name="month_week_open">Abrir la semana en Recap</string>
     <string name="month_could_not_load_what">este mes</string>
+    <string name="search_all_shifts">Buscar en todos los turnos</string>
+    <string name="search_this_shift">Buscar en este turno</string>
+    <string name="search_scope_all">Todos los turnos</string>
+    <string name="search_scope_this">Este turno</string>
+    <string name="search_no_match_format">No hay ofertas ni entregas de \"%1$s\"</string>
+    <string name="search_all_for_format">Buscar \"%1$s\" en todos los turnos</string>
+    <string name="search_show_more">Mostrar más turnos</string>
+    <string name="search_clear">Borrar</string>
+    <string name="search_group_header_format">%1$s · %2$s</string>
+    <string name="search_could_not_load_what">los resultados</string>
 </resources>

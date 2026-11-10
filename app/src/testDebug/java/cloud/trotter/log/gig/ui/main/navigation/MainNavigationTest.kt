@@ -251,6 +251,25 @@ class MainNavigationTest {
         assertEquals(analytics, current())
     }
 
+    @Test fun `search pushes over Recap, a result over it, and Back returns to the results as they were`() {
+        show()
+        bar(TopLevel.ANALYTICS)
+        ui { actions.openSearch("Wingstop") }
+        assertEquals(Screen.Search.route, current())
+        assertEquals("Wingstop", nav.currentBackStackEntry?.arguments?.getString(Screen.Search.ARG_QUERY))
+        assertBarShown(false)
+        // The placeholder's saved counter stands in for the entry's saved state: the query, the page count, the scroll.
+        tap(2)
+        ui { actions.openSession("s1", row = "offer:7") }
+        assertEquals(stackOf(dashboard, analytics, Screen.Search.route, Screen.SessionDetail.route), stack())
+        back()
+        assertEquals(Screen.Search.route, current())
+        assertEquals("Wingstop", nav.currentBackStackEntry?.arguments?.getString(Screen.Search.ARG_QUERY))
+        assertEquals(2, counter())
+        back()
+        assertEquals(analytics, current())
+    }
+
     @Test fun `Back from Playbook returns Home, then leaves`() {
         show()
         bar(TopLevel.PLAYBOOK)

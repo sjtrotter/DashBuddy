@@ -1,5 +1,8 @@
 package cloud.trotter.log.gig.ui.main.analytics
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +20,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,6 +33,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -43,9 +48,16 @@ import cloud.trotter.log.gig.domain.analytics.timeline.JobCard
 import cloud.trotter.log.gig.domain.analytics.timeline.JobState
 import cloud.trotter.log.gig.domain.analytics.timeline.PassedOffer
 import cloud.trotter.log.gig.domain.analytics.timeline.PassedRun
+import cloud.trotter.log.gig.domain.analytics.search.SearchRow
+import cloud.trotter.log.gig.domain.analytics.search.StoreQuery
+import cloud.trotter.log.gig.domain.analytics.search.TimelineSearch
 import cloud.trotter.log.gig.domain.format.formatWeekdayMonthDay
 import cloud.trotter.log.gig.ui.components.RebuildingRecords
 import cloud.trotter.log.gig.ui.components.UpdatingRecordsLine
+import cloud.trotter.log.gig.ui.main.analytics.search.SearchButton
+import cloud.trotter.log.gig.ui.main.analytics.search.SearchField
+import cloud.trotter.log.gig.ui.main.analytics.search.SearchNoMatch
+import cloud.trotter.log.gig.ui.main.analytics.search.SearchScopeLabel
 import java.time.Instant
 import java.time.ZoneId
 
@@ -64,6 +76,7 @@ import java.time.ZoneId
 @Composable
 fun SessionDetailScreen(
     onBack: () -> Unit,
+    onSearchAll: (query: String) -> Unit = {},
     viewModel: SessionDetailViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -72,6 +85,7 @@ fun SessionDetailScreen(
         landingRow = viewModel.landingRow,
         actions = ShiftPageActions(
             onBack = onBack,
+            onSearchAll = onSearchAll,
             onRetry = viewModel::retry,
             onAddManualDelivery = viewModel::addManualDelivery,
             onAdjustDelivery = viewModel::adjustDelivery,
@@ -89,6 +103,8 @@ fun SessionDetailScreen(
 /** The page's intents, hoisted to the ViewModel. */
 internal class ShiftPageActions(
     val onBack: () -> Unit,
+    /** The search's last row: the same query over every shift. */
+    val onSearchAll: (query: String) -> Unit = {},
     val onRetry: () -> Unit = {},
     val onAddManualDelivery: (pay: Double, tip: Double?, cashTip: Double?, storeName: String?, note: String?) -> Unit = { _, _, _, _, _ -> },
     val onAdjustDelivery: (
@@ -121,18 +137,46 @@ internal class ShiftPageActions(
     val onUndoMarkedUnassigned: (offerEventSequenceId: Long) -> Unit = {},
 )
 
-/** The page's stateless body over [uiState]; tests and screenshots compose this. */
+/**
+ * The page's stateless body over [uiState]; tests and screenshots compose this. The store search ([searchOpen] and
+ * [query] seed it for tests) is UI state saved across recreation: open, the title is the search field, Back closes
+ * it first and restores the full timeline.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun ShiftPageContent(uiState: SessionDetailUiState, landingRow: String?, actions: ShiftPageActions) {
+internal fun ShiftPageContent(
+    uiState: SessionDetailUiState,
+    landingRow: String?,
+    actions: ShiftPageActions,
+    searchOpen: Boolean = false,
+    query: String = "",
+) {
     val detail = uiState.detail
+    var searching by rememberSaveable { mutableStateOf(searchOpen) }
+    var text by rememberSaveable { mutableStateOf(query) }
+    val closeSearch = {
+        searching = false
+        text = ""
+    }
+    BackHandler(enabled = searching, onBack = closeSearch)
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(detail?.let { shiftDay(it) } ?: stringResource(R.string.session_detail_title)) },
+                title = {
+                    if (searching) {
+                        SearchField(text, { text = it }, stringResource(R.string.search_this_shift))
+                    } else {
+                        Text(detail?.let { shiftDay(it) } ?: stringResource(R.string.session_detail_title))
+                    }
+                },
                 navigationIcon = {
-                    IconButton(onClick = actions.onBack) {
+                    IconButton(onClick = { if (searching) closeSearch() else actions.onBack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_content_desc_back))
+                    }
+                },
+                actions = {
+                    if (!searching && detail != null && uiState.figuresShown()) {
+                        SearchButton(stringResource(R.string.search_this_shift)) { searching = true }
                     }
                 },
             )
@@ -149,10 +193,13 @@ internal fun ShiftPageContent(uiState: SessionDetailUiState, landingRow: String?
             detail == null -> Box(modifier, contentAlignment = Alignment.Center) {
                 Text(stringResource(R.string.session_detail_not_found), style = MaterialTheme.typography.bodyMedium, color = AppTheme.colors.text2)
             }
-            else -> ShiftPageBody(uiState, detail, landingRow, actions, modifier)
+            else -> ShiftPageBody(uiState, detail, landingRow, actions, modifier, query = if (searching) text else "")
         }
     }
 }
+
+/** How long a landed passed offer's highlight takes to fade. */
+private const val LANDING_HIGHLIGHT_MS = 2_000
 
 /** "Wed, Oct 28": the shift's start day, in the device zone. */
 internal fun shiftDay(detail: SessionDetail): String =
@@ -167,18 +214,42 @@ private sealed interface PageItem {
     data object Checks : PageItem { override val key = "checks" }
     data object Corrections : PageItem { override val key = "corrections" }
     data object Empty : PageItem { override val key = "empty" }
+    data object SearchScope : PageItem { override val key = "search-scope" }
+    data object NoMatch : PageItem { override val key = "search-none" }
+    data object SearchAll : PageItem { override val key = "search-all" }
     data class Card(val card: JobCard) : PageItem { override val key get() = card.key }
     data class Run(val run: PassedRun, val expanded: Boolean) : PageItem { override val key get() = run.key }
     data class Passed(val offer: PassedOffer) : PageItem { override val key get() = passedRowKey(offer.eventSequenceId) }
 }
 
-/** The page's rows: the summary, then (unless held back) the check, the corrections and the timeline. */
-private fun pageItems(state: SessionDetailUiState, check: MoneyCheck?, expanded: Set<String>): List<PageItem> = buildList {
+/**
+ * The page's rows: the summary, then (unless held back) the check, the corrections and the timeline. While a search
+ * has text ([hits] non-null), the timeline is its matching rows under the scope label, or the no-match line, and the
+ * last row searches every shift.
+ */
+private fun pageItems(
+    state: SessionDetailUiState,
+    check: MoneyCheck?,
+    expanded: Set<String>,
+    hits: List<SearchRow>?,
+): List<PageItem> = buildList {
     add(PageItem.Summary)
     if (!state.figuresShown()) return@buildList
     if (check != null) add(PageItem.Check)
     if (hasCheckLines(state.checks)) add(PageItem.Checks)
     add(PageItem.Corrections)
+    if (hits != null) {
+        add(PageItem.SearchScope)
+        if (hits.isEmpty()) add(PageItem.NoMatch)
+        for (hit in hits) {
+            when (hit) {
+                is SearchRow.Job -> add(PageItem.Card(hit.card))
+                is SearchRow.Passed -> add(PageItem.Passed(hit.offer))
+            }
+        }
+        add(PageItem.SearchAll)
+        return@buildList
+    }
     if (state.timeline.isEmpty()) add(PageItem.Empty)
     for (item in state.timeline) {
         when (item) {
@@ -205,18 +276,25 @@ private fun ShiftPageBody(
     landingRow: String?,
     actions: ShiftPageActions,
     modifier: Modifier,
+    query: String,
 ) {
     var expanded by rememberSaveable(saver = expandedSaver) { mutableStateOf(emptySet()) }
     var sheetKey by rememberSaveable { mutableStateOf<String?>(null) }
     var landed by rememberSaveable { mutableStateOf(false) }
-    var pendingScroll by remember { mutableStateOf<String?>(null) }
+    var pendingLanding by remember { mutableStateOf<RowLanding?>(null) }
+    var highlightKey by remember { mutableStateOf<String?>(null) }
+    val highlight = remember { Animatable(0f) }
     val dialogs = remember(detail.session.sessionId) { ShiftPageDialogState() }
     val listState = rememberLazyListState()
 
     val shown = state.figuresShown()
     val check = remember(detail) { MoneyCheck.of(detail) }
     val money = remember(detail) { ShiftMoney.of(detail) }
-    val rows = pageItems(state, check, expanded)
+    val search = StoreQuery.of(query)
+    val hits = remember(state.timeline, state.offers, state.deliveries, search) {
+        search?.let { TimelineSearch.filter(state.timeline, state.offers, state.deliveries, it) }
+    }
+    val rows = pageItems(state, check, expanded, hits)
 
     // A row link lands once, after the timeline has loaded: open its run and its sheet, then scroll to it.
     LaunchedEffect(landingRow, state.timeline, shown) {
@@ -225,16 +303,25 @@ private fun ShiftPageBody(
         val landing = RowLanding.of(state.timeline, landingRow) ?: return@LaunchedEffect
         landing.expandRun?.let { expanded = expanded + it }
         landing.openJob?.let { sheetKey = it }
-        pendingScroll = landing.scrollKey
+        pendingLanding = landing
     }
-    LaunchedEffect(pendingScroll, rows) {
-        val key = pendingScroll ?: return@LaunchedEffect
-        val index = rows.indexOfFirst { it.key == key }
+    LaunchedEffect(pendingLanding, rows) {
+        val landing = pendingLanding ?: return@LaunchedEffect
+        val index = rows.indexOfFirst { it.key == landing.scrollKey }
         if (index >= 0) {
             listState.scrollToItem(index)
-            pendingScroll = null
+            pendingLanding = null
+            // A passed offer's thin row is highlighted once, after the scroll; a job's sheet needs no highlight.
+            if (landing.expandRun != null) highlightKey = landing.scrollKey
         }
     }
+    LaunchedEffect(highlightKey) {
+        if (highlightKey == null) return@LaunchedEffect
+        highlight.snapTo(1f)
+        highlight.animateTo(0f, tween(LANDING_HIGHLIGHT_MS))
+        highlightKey = null
+    }
+    val highlightTint = MaterialTheme.colorScheme.secondaryContainer
 
     Column(modifier) {
         UpdatingRecordsLine(updating = state.records == RecordsStatus.UPDATING)
@@ -267,6 +354,11 @@ private fun ShiftPageBody(
                         style = MaterialTheme.typography.bodyMedium,
                         color = AppTheme.colors.text2,
                     )
+                    PageItem.SearchScope -> SearchScopeLabel(stringResource(R.string.search_scope_this))
+                    PageItem.NoMatch -> SearchNoMatch(query)
+                    PageItem.SearchAll -> TextButton(onClick = { actions.onSearchAll(query.trim()) }) {
+                        Text(stringResource(R.string.search_all_for_format, query.trim()))
+                    }
                     is PageItem.Card -> JobCardRow(
                         item.card,
                         onOpen = { sheetKey = item.card.key },
@@ -275,7 +367,14 @@ private fun ShiftPageBody(
                     is PageItem.Run -> PassedRunRow(item.run, item.expanded, onToggle = {
                         expanded = if (item.expanded) expanded - item.run.key else expanded + item.run.key
                     })
-                    is PageItem.Passed -> PassedOfferRow(item.offer)
+                    is PageItem.Passed -> PassedOfferRow(
+                        item.offer,
+                        if (item.key == highlightKey) {
+                            Modifier.drawBehind { drawRect(highlightTint.copy(alpha = highlight.value)) }
+                        } else {
+                            Modifier
+                        },
+                    )
                 }
             }
         }

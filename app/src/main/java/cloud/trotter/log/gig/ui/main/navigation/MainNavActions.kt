@@ -40,6 +40,9 @@ class MainNavActions(private val nav: NavController) {
     /** Recap's date picker, Month: [month] on Recap's stack, opening on Recap's switch value. */
     fun openMonth(month: YearMonth, measure: RecapMeasure) = nav.navigate(Screen.Month.route(month, measure))
 
+    /** Search all shifts by store (Recap, the Shifts list, a shift page's "Search all shifts for …"), with [query]. */
+    fun openSearch(query: String? = null) = nav.navigate(Screen.Search.route(query))
+
     /** A Month row: back to Recap under it. Nothing moves when Recap is not on the stack. */
     fun backToRecap() {
         nav.popBackStack(Screen.Analytics.route, inclusive = false)

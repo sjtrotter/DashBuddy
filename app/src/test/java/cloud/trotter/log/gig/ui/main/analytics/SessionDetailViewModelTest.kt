@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import cloud.trotter.log.gig.core.data.analytics.AnalyticsRepository
 import cloud.trotter.log.gig.core.data.analytics.CorrectionRepository
 import cloud.trotter.log.gig.core.data.analytics.RecordsStatusRepository
+import cloud.trotter.log.gig.core.data.analytics.ShiftTimelineRead
 import cloud.trotter.log.gig.core.data.analytics.ShiftTimelineRepository
 import cloud.trotter.log.gig.domain.analytics.DeliveryRecord
 import cloud.trotter.log.gig.domain.analytics.PayBasis
@@ -56,7 +57,7 @@ class SessionDetailViewModelTest {
     private val analyticsRepository: AnalyticsRepository = mock()
     private val correctionRepository: CorrectionRepository = mock()
     private val shiftTimelineRepository: ShiftTimelineRepository = mock {
-        on { timeline(any(), any()) } doReturn flowOf(emptyList())
+        on { read(any(), any()) } doReturn flowOf(ShiftTimelineRead(emptyList(), emptyList(), emptyList()))
     }
     private val recordsStatus = MutableStateFlow(RecordsStatus.UP_TO_DATE)
     private val recordsStatusRepository: RecordsStatusRepository = mock { on { status } doReturn recordsStatus }
@@ -190,7 +191,7 @@ class SessionDetailViewModelTest {
         testScheduler.advanceUntilIdle()
         assertFalse(viewModel.uiState.value.loading)
         assertTrue(viewModel.uiState.value.figuresShown())
-        verify(shiftTimelineRepository).timeline("r", true)
+        verify(shiftTimelineRepository).read("r", true)
         job.cancel()
 
         whenever(analyticsRepository.sessionDetail(eq("e"))).thenReturn(flowOf(SessionDetail(session("e"), emptyList())))
@@ -198,7 +199,7 @@ class SessionDetailViewModelTest {
         assertNull(ended.landingRow)
         val job2 = launch { ended.uiState.collect {} }
         testScheduler.advanceUntilIdle()
-        verify(shiftTimelineRepository).timeline("e", false)
+        verify(shiftTimelineRepository).read("e", false)
         job2.cancel()
     }
 

@@ -8,7 +8,6 @@ import cloud.trotter.log.gig.domain.analytics.SessionRecord
 import cloud.trotter.log.gig.domain.analytics.checks.ShiftChecks
 import cloud.trotter.log.gig.domain.analytics.timeline.ShiftTimeline
 import cloud.trotter.log.gig.domain.analytics.timeline.TimelineDelivery
-import cloud.trotter.log.gig.domain.analytics.timeline.TimelineItem
 import cloud.trotter.log.gig.domain.analytics.timeline.TimelineOffer
 import cloud.trotter.log.gig.domain.analytics.timeline.TimelinePickup
 import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeResolution
@@ -94,7 +93,7 @@ internal object ShiftPageFixtures {
         val detail = SessionDetail(
             session(if (running) null else 366, 25.50, SessionEndSource.SUMMARY_SCREEN, 41.0, records.size), records,
         )
-        return state(detail, ShiftTimeline.fold(offers, pickups, deliveries, running))
+        return state(detail, offers, pickups, deliveries, running)
     }
 
     /** The stack's merchants under made-up names: the Play listing's shift page shows no real store. */
@@ -124,7 +123,7 @@ internal object ShiftPageFixtures {
             offer(1_000L + i, 3 + i * 7, outcome, "Sample Store ${i % 6 + 1}", 3.0 + (i % 5), 2.0 + (i % 7))
         }
         val detail = SessionDetail(session(366, null, SessionEndSource.SUMMARY_SCREEN, 58.0, 0), emptyList())
-        return state(detail, ShiftTimeline.fold(offers, emptyList(), emptyList(), running = false))
+        return state(detail, offers, emptyList(), emptyList(), running = false)
     }
 
     /**
@@ -161,9 +160,21 @@ internal object ShiftPageFixtures {
             )
         }
         val detail = SessionDetail(session(366, 13.75, SessionEndSource.SUMMARY_SCREEN, 22.0, records.size), records)
-        return state(detail, ShiftTimeline.fold(offers, emptyList(), deliveries, running = false))
+        return state(detail, offers, emptyList(), deliveries, running = false)
     }
 
-    private fun state(detail: SessionDetail, timeline: List<TimelineItem>) =
-        SessionDetailUiState(detail = detail, timeline = timeline, loading = false, checks = ShiftChecks.of(detail, timeline))
+    /** The page's state as the ViewModel builds it: the fold, and the offers and deliveries the store search reads. */
+    private fun state(
+        detail: SessionDetail,
+        offers: List<TimelineOffer>,
+        pickups: List<TimelinePickup>,
+        deliveries: List<TimelineDelivery>,
+        running: Boolean,
+    ): SessionDetailUiState {
+        val timeline = ShiftTimeline.fold(offers, pickups, deliveries, running)
+        return SessionDetailUiState(
+            detail = detail, timeline = timeline, loading = false, checks = ShiftChecks.of(detail, timeline),
+            offers = offers, deliveries = deliveries,
+        )
+    }
 }

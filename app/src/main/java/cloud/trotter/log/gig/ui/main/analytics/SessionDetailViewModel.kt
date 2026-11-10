@@ -30,9 +30,9 @@ import javax.inject.Inject
 
 /**
  * State holder for the shift page: one immutable [SessionDetailUiState] assembled reactively from the shift's
- * record and deliveries ([AnalyticsRepository.sessionDetail]), its folded timeline
- * ([ShiftTimelineRepository.timeline]) and the records status (Principle 1, state out), plus the correction
- * intents (events up). The sessionId and the optional landing row are nav arguments read from [SavedStateHandle].
+ * record and deliveries ([AnalyticsRepository.sessionDetail]), its folded timeline with the offers and deliveries
+ * it came from ([ShiftTimelineRepository.read], the store search's names) and the records status (Principle 1, state
+ * out), plus the correction intents (events up). The sessionId and the optional landing row are nav arguments read from [SavedStateHandle].
  *
  * Reactive by construction: every source is a Room-invalidation `Flow`, so a correction or a newly folded
  * delivery re-emits the page with no refresh. The corrections are **events, never destructive edits**: an intent
@@ -81,10 +81,13 @@ class SessionDetailViewModel @Inject constructor(
         val detail = analyticsRepository.sessionDetail(sessionId)
         val timeline = detail.map { it?.session?.endedAt == null }
             .distinctUntilChanged()
-            .flatMapLatest { running -> shiftTimelineRepository.timeline(sessionId, running) }
+            .flatMapLatest { running -> shiftTimelineRepository.read(sessionId, running) }
         return combine(detail, timeline, recordsStatusRepository.status) { d, t, records ->
-            val checks = d?.let { ShiftChecks.of(it, t) }.orEmpty()
-            SessionDetailUiState(detail = d, timeline = t, loading = false, records = records, checks = checks)
+            val checks = d?.let { ShiftChecks.of(it, t.items) }.orEmpty()
+            SessionDetailUiState(
+                detail = d, timeline = t.items, loading = false, records = records, checks = checks,
+                offers = t.offers, deliveries = t.deliveries,
+            )
         }
     }
 
