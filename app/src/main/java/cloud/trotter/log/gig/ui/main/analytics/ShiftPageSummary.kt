@@ -48,14 +48,19 @@ internal fun moneyText(amount: Double, estimated: Boolean): String =
 @Composable
 internal fun ShiftAppTimesLine(detail: SessionDetail) {
     val s = detail.session
-    val app = s.platform.displayName
-    val start = formatClockTime(s.startedAt)
     Text(
-        text = s.endedAt?.let { stringResource(R.string.shift_page_app_times_format, app, start, formatClockTime(it)) }
-            ?: stringResource(R.string.shift_page_app_since_format, app, start),
+        text = shiftAppTimesText(s.platform.displayName, s.startedAt, s.endedAt),
         style = MaterialTheme.typography.bodyMedium,
         color = AppTheme.colors.text2,
     )
+}
+
+/** The shift page's app and times wording, shared with the search's group headers. */
+@Composable
+internal fun shiftAppTimesText(app: String, startedAt: Long, endedAt: Long?): String {
+    val start = formatClockTime(startedAt)
+    return endedAt?.let { stringResource(R.string.shift_page_app_times_format, app, start, formatClockTime(it)) }
+        ?: stringResource(R.string.shift_page_app_since_format, app, start)
 }
 
 /** Earned, with the cash inside it named under it; the em dash when nothing is known. */

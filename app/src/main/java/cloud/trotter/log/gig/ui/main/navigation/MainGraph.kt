@@ -34,6 +34,14 @@ fun NavGraphBuilder.mainGraph(render: @Composable (route: String, entry: NavBack
                         defaultValue = null
                     },
                 )
+            Screen.Search.route ->
+                listOf(
+                    navArgument(Screen.Search.ARG_QUERY) {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                )
             Screen.Month.route ->
                 listOf(
                     navArgument(Screen.Month.ARG_MONTH) { type = NavType.StringType },

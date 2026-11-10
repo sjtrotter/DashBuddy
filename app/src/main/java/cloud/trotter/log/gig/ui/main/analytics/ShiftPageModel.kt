@@ -9,7 +9,9 @@ import cloud.trotter.log.gig.domain.analytics.checks.ShiftChecks
 import cloud.trotter.log.gig.domain.analytics.checks.effectiveReport
 import cloud.trotter.log.gig.domain.analytics.timeline.JobCard
 import cloud.trotter.log.gig.domain.analytics.timeline.PassedRun
+import cloud.trotter.log.gig.domain.analytics.timeline.TimelineDelivery
 import cloud.trotter.log.gig.domain.analytics.timeline.TimelineItem
+import cloud.trotter.log.gig.domain.analytics.timeline.TimelineOffer
 import cloud.trotter.log.gig.domain.evaluation.NetProfit
 
 /**
@@ -26,6 +28,10 @@ data class SessionDetailUiState(
     val records: RecordsStatus = RecordsStatus.UP_TO_DATE,
     /** What this shift needs checked ([ShiftChecks]); empty while it runs. */
     val checks: List<ShiftCheck> = emptyList(),
+    /** The offers [timeline] was folded from: the store search reads their names. */
+    val offers: List<TimelineOffer> = emptyList(),
+    /** The deliveries [timeline] was folded from: the store search reads their names. */
+    val deliveries: List<TimelineDelivery> = emptyList(),
 )
 
 /** True when the page may show the shift's figures, timeline and corrections. */

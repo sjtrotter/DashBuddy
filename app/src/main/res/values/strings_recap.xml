@@ -74,4 +74,21 @@
     <!-- A week row, read aloud: what a tap does. -->
     <string name="month_week_open">Open week in Recap</string>
     <string name="month_could_not_load_what">this month</string>
+    <!-- Store search (#1540). The search button's name and tooltip on Recap and the Shifts list, and the field's placeholder. -->
+    <string name="search_all_shifts">Search all shifts</string>
+    <!-- The shift page's search button and the field's placeholder. -->
+    <string name="search_this_shift">Search this shift</string>
+    <!-- The scope label above the results once the dasher types. -->
+    <string name="search_scope_all">All shifts</string>
+    <string name="search_scope_this">This shift</string>
+    <!-- No row matched the typed store: "No offers or deliveries from "Wingstop"". -->
+    <string name="search_no_match_format">No offers or deliveries from \"%1$s\"</string>
+    <!-- The shift page's last row while it searches: opens the search over every shift. -->
+    <string name="search_all_for_format">Search all shifts for \"%1$s\"</string>
+    <string name="search_show_more">Show more shifts</string>
+    <!-- The search field's clear button, read aloud. -->
+    <string name="search_clear">Clear</string>
+    <!-- A result group's header: "Wed, Oct 28 · DoorDash, 4:58 PM to 11:04 PM". -->
+    <string name="search_group_header_format">%1$s · %2$s</string>
+    <string name="search_could_not_load_what">the results</string>
 </resources>

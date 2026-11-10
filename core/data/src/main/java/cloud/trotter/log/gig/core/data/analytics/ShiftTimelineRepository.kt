@@ -33,11 +33,21 @@ class ShiftTimelineRepository @Inject constructor(private val analyticsDao: Anal
         analyticsDao.deliveriesForSession(sessionId).map { rows -> rows.map { it.toTimeline() } }
 
     /** The folded timeline; re-emits on every projector commit to any of the three tables. */
-    fun timeline(sessionId: String, running: Boolean): Flow<List<TimelineItem>> =
+    fun timeline(sessionId: String, running: Boolean): Flow<List<TimelineItem>> = read(sessionId, running).map { it.items }
+
+    /** The folded timeline with the offers and deliveries it came from: the shift page's store search reads the names. */
+    fun read(sessionId: String, running: Boolean): Flow<ShiftTimelineRead> =
         combine(offersForSession(sessionId), pickupsForSession(sessionId), deliveriesForSession(sessionId)) { o, p, d ->
-            ShiftTimeline.fold(o, p, d, running)
+            ShiftTimelineRead(ShiftTimeline.fold(o, p, d, running), o, d)
         }
 }
+
+/** One shift's folded [items] and the [offers] and [deliveries] rows they were folded from. */
+data class ShiftTimelineRead(
+    val items: List<TimelineItem>,
+    val offers: List<TimelineOffer>,
+    val deliveries: List<TimelineDelivery>,
+)
 
 internal fun OfferRecordEntity.toTimeline() = TimelineOffer(
     eventSequenceId = eventSequenceId,

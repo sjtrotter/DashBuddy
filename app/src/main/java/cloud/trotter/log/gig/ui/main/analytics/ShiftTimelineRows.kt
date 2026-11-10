@@ -48,10 +48,11 @@ private const val SEPARATOR = " · "
 /**
  * A job: line one the stores as recorded with the paid total right-aligned ("est." when estimated); the offer and
  * add-on lines, the delivery lines, the cash line and the state as supporting text. A one-drop job folds its
- * delivery into one line with no second pay. Tapping opens the job's sheet.
+ * delivery into one line with no second pay. Tapping opens the job's sheet. The Undo of "It was unassigned" shows only
+ * with an [onUndoMarked] handler.
  */
 @Composable
-internal fun JobCardRow(card: JobCard, onOpen: () -> Unit, onUndoMarked: () -> Unit = {}) {
+internal fun JobCardRow(card: JobCard, onOpen: () -> Unit, onUndoMarked: (() -> Unit)? = null) {
     val c = AppTheme.colors
     AppCard(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onOpen)) {
         Row(verticalAlignment = Alignment.Top) {
@@ -89,8 +90,9 @@ internal fun JobCardRow(card: JobCard, onOpen: () -> Unit, onUndoMarked: () -> U
             }
         }
         supporting.forEach { Text(it, style = MaterialTheme.typography.bodyMedium, color = c.text2) }
-        // The dasher's "It was unassigned" can be taken back here; the offer is open again once it folds.
-        if (card.state == JobState.MARKED_UNASSIGNED && card.markedOfferSeqs.isNotEmpty()) {
+        // The dasher's "It was unassigned" can be taken back here; the offer is open again once it folds. The search's
+        // results pass no handler: the Undo lives on the shift page.
+        if (onUndoMarked != null && card.state == JobState.MARKED_UNASSIGNED && card.markedOfferSeqs.isNotEmpty()) {
             TextButton(onClick = onUndoMarked) { Text(stringResource(R.string.shift_page_undo)) }
         }
     }
@@ -118,9 +120,12 @@ internal fun PassedRunRow(run: PassedRun, expanded: Boolean, onToggle: () -> Uni
     }
 }
 
-/** One passed offer, a thin row on the background: "4:58 PM Chick-fil-A · Declined · $6.50 · 4.1 mi". */
+/**
+ * One passed offer, a thin row on the background: "4:58 PM Chick-fil-A · Declined · $6.50 · 4.1 mi". [modifier] comes
+ * first in the row's chain, so a landing highlight's background fills the row under its padding.
+ */
 @Composable
-internal fun PassedOfferRow(offer: PassedOffer) {
+internal fun PassedOfferRow(offer: PassedOffer, modifier: Modifier = Modifier) {
     val outcome = stringResource(
         if (offer.outcome == OfferOutcome.TIMED_OUT) R.string.shift_page_outcome_expired else R.string.shift_page_outcome_declined,
     )
@@ -132,7 +137,7 @@ internal fun PassedOfferRow(offer: PassedOffer) {
     ).joinToString(SEPARATOR)
     Text(
         text,
-        Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         style = MaterialTheme.typography.bodyMedium,
         color = AppTheme.colors.text,
     )

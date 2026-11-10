@@ -41,6 +41,7 @@ import cloud.trotter.log.gig.ui.main.analytics.recap.RecapShiftsToCheck
 import cloud.trotter.log.gig.ui.main.analytics.recap.RecapTiles
 import cloud.trotter.log.gig.ui.main.analytics.recap.RecapTotal
 import cloud.trotter.log.gig.ui.main.analytics.recap.RecapWeekOff
+import cloud.trotter.log.gig.ui.main.analytics.search.SearchButton
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -58,6 +59,7 @@ fun AnalyticsScreen(
     onOpenDay: (LocalDate) -> Unit,
     onOpenShifts: (weekStart: LocalDate) -> Unit,
     onOpenMonth: (YearMonth, RecapMeasure) -> Unit,
+    onOpenSearch: () -> Unit = {},
     viewModel: AnalyticsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -80,6 +82,7 @@ fun AnalyticsScreen(
         onRetry = viewModel::retry,
         onPickWeek = viewModel::selectWeek,
         onPickMonth = { month -> onOpenMonth(month, uiState.measure) },
+        onOpenSearch = onOpenSearch,
     )
 
     // The assign dialog is a correction action: held back while the records rebuild or a read has failed.
@@ -95,8 +98,8 @@ fun AnalyticsScreen(
 
 /**
  * Recap's Scaffold, stateless (a screenshot or Compose test renders it without Hilt). A tab root: no back button. The
- * title bar holds the date picker (Cancel, Week, Month; it opens on the week's Monday, or today in this week) and
- * Settings.
+ * title bar holds search (every shift, by store), the date picker (Cancel, Week, Month; it opens on the week's Monday,
+ * or today in this week) and Settings.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,12 +115,14 @@ internal fun AnalyticsContent(
     onRetry: () -> Unit,
     onPickWeek: (LocalDate) -> Unit = {},
     onPickMonth: (YearMonth) -> Unit = {},
+    onOpenSearch: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.analytics_screen_title)) },
                 actions = {
+                    SearchButton(stringResource(R.string.search_all_shifts), onOpenSearch)
                     RecapDatePickerButton(
                         contextDate = recapPickerDate(uiState),
                         choices = listOf(DatePickerChoice.WEEK, DatePickerChoice.MONTH),

@@ -1248,6 +1248,29 @@ time, store pin and re-price time. Known pinned gap: `applyPay` has no suspect-r
   `OFFER_OUTCOME_CORRECTION` with no resolution, the documented undo shape; the offer is open again and its check
   returns.
 
+### Store search (#1540)
+
+- **The all-shifts read.** `StoreSearchDao` (its own DAO; `AnalyticsDao` is near the size limit) reads names and ids
+  only: `(eventSequenceId, sessionId, merchantName)` of every offer and `(eventSequenceId, sessionId, storeName)` of
+  every delivery that has a shift and a recorded name. A row with no shift is out of scope (it has no shift page).
+  `StoreSearchRepository.matchingShifts(query)` filters those rows in Kotlin with `domain.analytics.search.StoreQuery`
+  (lowercased with `Locale.ROOT`, whitespace runs collapsed, trimmed; a substring of the name, never
+  `StoreKeys.normalizedChain`) and joins the matched ids to `RecapRepository.allShifts()`, newest first. Filtering
+  runs over every row before any page is taken, so a match in an old shift is found.
+- **A page.** `results(shifts, query)` reads the page's offers, pickups and deliveries in three batched flows
+  (`sessionId IN (:ids)`), groups them by shift, folds each with `ShiftTimeline.fold` (running while the shift has no
+  end) and keeps the matching rows with `TimelineSearch.filter`: a `JobCard` whole when any of its accepted offers
+  (add-ons included) or deliveries matched, and from a `PassedRun` only the matching `PassedOffer`s, each alone and
+  keyed `offer:<seq>` like its thin row. Resolved offers count. One `ShiftMatches` per shift, so two shifts on one
+  date, and two apps, never share a group. The Search screen (`SearchViewModel`) folds 10 matched shifts per page; the
+  query and the page count live in its `SavedStateHandle`, and `WhileSubscribed` keeps the last results, so a return
+  from a result never blanks the list.
+- **This shift.** The shift page needs no new SQL: `ShiftTimelineRepository.read(sessionId, running)` returns the fold
+  with the offers and deliveries it came from (`ShiftTimelineRead`), and `SessionDetailUiState` carries them so the
+  page filters its own timeline with the same `TimelineSearch`.
+- **Logs.** The query is a merchant name and is still never written to an INFO or higher line; the one log is the
+  failed read's WARN with the exception class only (`SearchViewModelTest` plants a recording tree to prove it).
+
 ### Records status (#1512)
 
 Every look-back screen reads one value, `RecordsStatus` (`:domain`): REBUILDING, UPDATING or UP_TO_DATE. Its one

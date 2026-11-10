@@ -55,4 +55,14 @@
     <string name="month_comparison_none_format">%1$s, aucun service</string>
     <string name="month_week_open">Ouvrir la semaine dans Recap</string>
     <string name="month_could_not_load_what">ce mois</string>
+    <string name="search_all_shifts">Rechercher dans tous les services</string>
+    <string name="search_this_shift">Rechercher dans ce service</string>
+    <string name="search_scope_all">Tous les services</string>
+    <string name="search_scope_this">Ce service</string>
+    <string name="search_no_match_format">Aucune offre ni livraison de \"%1$s\"</string>
+    <string name="search_all_for_format">Rechercher \"%1$s\" dans tous les services</string>
+    <string name="search_show_more">Afficher plus de services</string>
+    <string name="search_clear">Effacer</string>
+    <string name="search_group_header_format">%1$s · %2$s</string>
+    <string name="search_could_not_load_what">les résultats</string>
 </resources>

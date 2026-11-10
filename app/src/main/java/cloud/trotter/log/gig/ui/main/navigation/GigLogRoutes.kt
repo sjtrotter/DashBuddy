@@ -71,6 +71,16 @@ sealed class Screen(val route: String) {
             "analytics/month/$month?measure=${measure.name}"
     }
 
+    /**
+     * Search all shifts by store (#1540), opened from Recap's and the Shifts list's title bars and from a shift page's
+     * "Search all shifts for …" row; it sits on Recap's stack, never a tab root. The optional `query` is the text it
+     * opens with; the screen keeps the live query under the same key in its `SavedStateHandle`.
+     */
+    data object Search : Screen("analytics/search?query={query}") {
+        const val ARG_QUERY = "query"
+        fun route(query: String? = null): String = "analytics/search" + (query?.let { "?query=${Uri.encode(it)}" } ?: "")
+    }
+
     // Settings Hierarchy
     // Note: We use "settings/home" as the landing page for settings
     data object SettingsHome : Screen("settings/home")
@@ -117,7 +127,7 @@ sealed class Screen(val route: String) {
          * the routes no external link may target — the wizard, Ratings and the argument routes.
          */
         val graphRoutes: Set<String> by lazy {
-            allRoutes + setOf(Wizard.route, Ratings.route, SessionDetail.route, Day.route, Shifts.route, Month.route, VehicleEdit.route)
+            allRoutes + setOf(Wizard.route, Ratings.route, SessionDetail.route, Day.route, Shifts.route, Month.route, Search.route, VehicleEdit.route)
         }
     }
 }

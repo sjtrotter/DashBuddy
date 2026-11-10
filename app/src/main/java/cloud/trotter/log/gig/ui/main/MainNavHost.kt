@@ -19,6 +19,7 @@ import cloud.trotter.log.gig.ui.main.analytics.AnalyticsScreen
 import cloud.trotter.log.gig.ui.main.analytics.SessionDetailScreen
 import cloud.trotter.log.gig.ui.main.analytics.day.DayScreen
 import cloud.trotter.log.gig.ui.main.analytics.month.MonthScreen
+import cloud.trotter.log.gig.ui.main.analytics.search.SearchScreen
 import cloud.trotter.log.gig.ui.main.analytics.shifts.ShiftsScreen
 import cloud.trotter.log.gig.ui.main.dashboard.DashboardScreen
 import cloud.trotter.log.gig.ui.main.navigation.MainNavActions
@@ -80,6 +81,7 @@ private fun MainScreen(route: String, actions: MainNavActions) {
             onOpenDay = actions::openDay,
             onOpenShifts = actions::openShifts,
             onOpenMonth = actions::openMonth,
+            onOpenSearch = { actions.openSearch() },
         )
         Screen.Playbook.route -> PlaybookScreen(
             onOpenSettings = actions::openSettings,
@@ -89,9 +91,14 @@ private fun MainScreen(route: String, actions: MainNavActions) {
         // --- Below a tab ---
         Screen.Ratings.route -> RatingsScreen(onBack = actions::back)
         Screen.WeeklyPlan.route -> WeeklyPlanScreen(onBack = actions::back)
-        Screen.SessionDetail.route -> SessionDetailScreen(onBack = actions::back)
+        Screen.SessionDetail.route -> SessionDetailScreen(onBack = actions::back, onSearchAll = actions::openSearch)
         Screen.Day.route -> DayScreen(onBack = actions::back, onOpenSession = { actions.openSession(it) })
-        Screen.Shifts.route -> ShiftsScreen(onBack = actions::back, onOpenSession = actions::openSession)
+        Screen.Shifts.route -> ShiftsScreen(
+            onBack = actions::back,
+            onOpenSession = actions::openSession,
+            onOpenSearch = { actions.openSearch() },
+        )
+        Screen.Search.route -> SearchScreen(onBack = actions::back, onOpenSession = actions::openSession)
         Screen.Month.route -> MonthScreen(onBack = actions::back, onOpenRecapWeek = actions::backToRecap)
         Screen.Wizard.route -> WizardScreen(onComplete = actions::back, onExit = actions::back)
 
