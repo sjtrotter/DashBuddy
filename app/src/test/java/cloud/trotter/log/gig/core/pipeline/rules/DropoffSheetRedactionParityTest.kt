@@ -5,7 +5,7 @@ import cloud.trotter.log.gig.core.pipeline.rules.CaptureRedactionCorpusTest.Comp
 import cloud.trotter.log.gig.core.pipeline.rules.CaptureRedactionCorpusTest.Companion.WHOLE_MASK_HEX
 import cloud.trotter.log.gig.domain.capture.schema.UiNodeSchema
 import cloud.trotter.log.gig.domain.model.accessibility.UiNode
-import cloud.trotter.log.gig.test.util.DropoffRuleSource
+import cloud.trotter.log.gig.test.util.DoorDashRuleSource
 import cloud.trotter.log.gig.test.util.TestResourceLoader
 import cloud.trotter.log.gig.test.util.TestRulesetFactory
 import kotlinx.serialization.json.Json
@@ -71,7 +71,7 @@ class DropoffSheetRedactionParityTest {
         }
     }
 
-    private fun screensFromDropoffSource(): Set<String> = DropoffRuleSource.screenRuleIds().toSet()
+    private fun screensFromDropoffSource(): Set<String> = DoorDashRuleSource.screenRuleIds("dropoff").toSet()
 
     @Test
     fun `receipt and both live sheets declare the same plain item-note mask in generated assets (#935 r3)`() {

@@ -403,7 +403,7 @@
                                                                                                                         },
                                                                                                                         "children": [
                                                                                                                             {
-                                                                                                                                "text": "Enter the store and pick up the order.",
+                                                                                                                                "text": "[redacted]",
                                                                                                                                 "id": "com.doordash.driverapp:id/instructions_line_2_collapsed",
                                                                                                                                 "class": "android.widget.TextView",
                                                                                                                                 "isEnabled": true,
@@ -426,7 +426,7 @@
                                                                                                                                 },
                                                                                                                                 "children": [
                                                                                                                                     {
-                                                                                                                                        "text": "Enter the store and pick up the order.",
+                                                                                                                                        "text": "[redacted]",
                                                                                                                                         "id": "com.doordash.driverapp:id/instructions_line_2_expanded",
                                                                                                                                         "class": "android.widget.TextView",
                                                                                                                                         "isEnabled": true,

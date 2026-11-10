@@ -2754,6 +2754,20 @@
       "priority": 162,
       "redact": [
         {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
           "comment": "#1079 COMPLETE belt (Astra r1 of PR #1245, DO NOT MERGE finding): the sheet is a bottom sheet over the dropoff flow, so a combined frame can carry the arrival card's `user_name` / `customer_name` and the address trio under it — and once this rule RECOGNIZES the frame the UNKNOWN-path `ID_MARKERS` backstop no longer runs (#910), so the four file-wide belts alone would have exported `user_name` raw. Every `CustomerTextMarkers.ID_MARKERS` suffix follows with the family posture, copied VERBATIM from `pickup_going_to_store_sheet` / `pickup_order_picker` (same bytes, same mask hex); the two label-anchored Apt/Suite belts and the id-less name shape close it. Pinned by the recognize-only-carries-every-id check in `CaptureRedactionCorpusTest`.",
           "find": {
             "hasIdSuffix": "customer_name"
@@ -3641,6 +3655,20 @@
       "id": "doordash.screen.dropoff_customer_unavailable",
       "priority": 161,
       "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
         {
           "comment": "#1107 combined-frame belt (the #993/#1039 precedent): the 8.97.8 'Drop off steps' wrapper's customer-instruction body (`description_text_view`) can inflate under ANY dropoff-phase surface, and a redact protects only the frames its OWN rule wins — so every rule in this file (plus `navigation_generic` and `dash_summary`) masks it whole-node `plainMask`, exactly as `dropoff_step_instructions` declares it. Inert on any frame without the node; pinned by the #1107 parity test in `CaptureRedactionCorpusTest`, so a new dropoff surface cannot forget.",
           "find": {

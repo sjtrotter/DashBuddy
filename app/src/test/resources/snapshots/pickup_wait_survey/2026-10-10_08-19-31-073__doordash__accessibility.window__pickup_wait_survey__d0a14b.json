@@ -476,7 +476,7 @@
                                                                                                                                 },
                                                                                                                                 "children": [
                                                                                                                                     {
-                                                                                                                                        "text": "Please use this ID instead of customer name",
+                                                                                                                                        "text": "[redacted]",
                                                                                                                                         "id": "com.doordash.driverapp:id/instructions_line_2_expanded",
                                                                                                                                         "class": "android.widget.TextView",
                                                                                                                                         "isEnabled": true,
@@ -567,7 +567,7 @@
                                                                                                                                 },
                                                                                                                                 "children": [
                                                                                                                                     {
-                                                                                                                                        "text": "Enter the store and pick up the order.",
+                                                                                                                                        "text": "[redacted]",
                                                                                                                                         "id": "com.doordash.driverapp:id/instructions_line_2_expanded",
                                                                                                                                         "class": "android.widget.TextView",
                                                                                                                                         "isEnabled": true,
@@ -663,7 +663,7 @@
                                                                                                                                 },
                                                                                                                                 "children": [
                                                                                                                                     {
-                                                                                                                                        "text": "For stacked orders, make sure to confirm picked up for EACH order as it is ready. If the store doesn't have the Pickup ID, ask them to check the tablet for the Customer's name (not Pickup ID) and order information.",
+                                                                                                                                        "text": "[redacted]",
                                                                                                                                         "id": "com.doordash.driverapp:id/instructions_line_2_expanded",
                                                                                                                                         "class": "android.widget.TextView",
                                                                                                                                         "isEnabled": true,

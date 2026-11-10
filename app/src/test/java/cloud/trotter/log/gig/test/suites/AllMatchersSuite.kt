@@ -9,6 +9,7 @@ import cloud.trotter.log.gig.core.pipeline.recognition.matchers.GoldenSnapshotRe
 import cloud.trotter.log.gig.core.pipeline.recognition.matchers.NegativeCorpusStaysUnknownTest
 import cloud.trotter.log.gig.core.pipeline.recognition.matchers.OfferPipelineTest
 import cloud.trotter.log.gig.core.pipeline.recognition.matchers.PickupNoCustomerIdentityTest
+import cloud.trotter.log.gig.core.pipeline.recognition.matchers.PickupPreArrivalStoreNameTest
 import cloud.trotter.log.gig.core.pipeline.recognition.matchers.SensitiveSurfaceBlockTest
 import cloud.trotter.log.gig.core.pipeline.rules.CaptureRedactionCorpusTest
 import cloud.trotter.log.gig.core.pipeline.rules.UberTripRadarBoardRedactTest
@@ -25,6 +26,7 @@ import cloud.trotter.log.gig.core.pipeline.rules.GoPuffRecognitionTest
 import cloud.trotter.log.gig.core.pipeline.rules.PickupWaitArrivalRecognitionTest
 import cloud.trotter.log.gig.core.pipeline.rules.ReceiptAnchorTest
 import cloud.trotter.log.gig.core.pipeline.rules.PickupArrivedRedactParityTest
+import cloud.trotter.log.gig.core.pipeline.rules.PickupInstructionBodyRedactTest
 import cloud.trotter.log.gig.core.pipeline.rules.NotificationRulesetTest
 import cloud.trotter.log.gig.core.pipeline.rules.ParseOutputGoldenTest
 import cloud.trotter.log.gig.core.pipeline.rules.ScreenRulesetTest
@@ -149,6 +151,10 @@ import org.junit.runners.Suite
  *   `earnings_pill` id renders "This dash" and "This week", and a weekly total written into
  *   `Session.runningEarnings` would be a large, plausible, STABLE lie the settle gate would happily
  *   commit.
+ * - [PickupPreArrivalStoreNameTest] — #1396: the going-to-store sheet's `storeName` reads only the
+ *   `user_name` after a "Pickup from" label, so a customer card rendered first is never the store.
+ * - [PickupInstructionBodyRedactTest] — #1397: the merchant's free-text pickup instruction body is masked
+ *   whole and plain by every pickup-section rule (plus the belt rules), and is in `ID_MARKERS`.
  * - [CurrencyShapePinTest] — #1029: every rule-declared money scan uses `CurrencyShape` verbatim,
  *   so the rules and `parseGlyphCurrency` cannot drift into accepting different figures.
  *
@@ -215,5 +221,7 @@ import org.junit.runners.Suite
     DeliverySummaryReanchorTest::class,
     SessionPayOwnershipTest::class,
     CurrencyShapePinTest::class,
+    PickupPreArrivalStoreNameTest::class,
+    PickupInstructionBodyRedactTest::class,
 )
 class AllMatchersSuite

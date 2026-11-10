@@ -548,7 +548,7 @@
                                                                                                                                 },
                                                                                                                                 "children": [
                                                                                                                                     {
-                                                                                                                                        "text": "Please use this ID instead of customer name",
+                                                                                                                                        "text": "[redacted]",
                                                                                                                                         "id": "com.doordash.driverapp:id/instructions_line_2_expanded",
                                                                                                                                         "class": "android.widget.TextView",
                                                                                                                                         "isEnabled": true,
