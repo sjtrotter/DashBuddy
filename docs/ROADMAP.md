@@ -14,7 +14,8 @@ the per-figure screens and Plan remain. The signed-feeds epic (#1559) is approve
 was triaged on 2026-11-10; the order below was reviewed by the council (Claude, Sol, Fable) the same day.
 
 **Dated:** #1580 the Play precise-location declaration is due **2027-01-27** (about an hour of Console work). #1506
-(the July 1 IRS rate change) must ship **before 2027-01-01**, when 2026 mileage gets filed. #1349 rewrites the
+(the July 1 IRS rate change) must ship **before 2027-01-01**, so the year-end CSV export a dasher hands to an
+accountant carries the right 2026 deduction. #1349 rewrites the
 accessibility description once the closed-track review settles. #1412 (the Play epic) closes when #1417 and #1580 do.
 
 ## Strategic pillars (detail)
@@ -47,7 +48,8 @@ Each line is one PR unless noted.
    saves the customer's name as `storeName` in `app_events` (release builds too; the fix is a parse change that moves
    the parse golden) · **#1397** a merchant instruction naming the customer (debug captures) · **#1402 rule half**
    Uber's Driver's License screens have no sensitive rule (the block side of the Pledge; a text-anchored rule and a
-   sanitized SENSITIVE fixture, no new capture needed).
+   hand-built SENSITIVE fixture carrying the license text, no new capture needed; over-blocking is
+   the safe direction).
 2. **Gas prices on Play:** release builds read `EIA_API_KEY` only from `local.properties`, so every CI-built APK
    (v0.231.0 included) has a blank key and the automatic gas price fails for every tester. Gradle reads the key from
    an environment variable too, and the release workflow passes an `EIA_API_KEY` secret (**needs your OK to add the
@@ -60,8 +62,8 @@ Each line is one PR unless noted.
 4. **#1528** a two-order shop offer is scored as a quick pickup (11-01 and 11-05 captures).
 5. **#1473** setup says "saved" before it saves, so first-install answers can be lost.
 6. **Decision checkpoint (yours, no build):** #1326 receipt-to-offer identity and #1119 linking an offer to its job by
-   evidence. Both lose real pay today ($21.40 on 10-26; $28.51 on 09-20); a choice here ranks their build ahead of
-   the later look-back screens.
+   evidence. Both lose real pay today (#1119: two accepts recorded as timeouts, $21.40, on 10-26; #1326: a receipt
+   split that under-recorded $28.51 on 09-20); a choice here ranks their build ahead of the later look-back screens.
 7. **Tag v0.232.0**, the first release that uploads itself.
 
 ## 2. Next: the look-back redesign (#1510), heaviest last
@@ -92,7 +94,7 @@ choices. #1579 one-tap wipe (not a Play requirement; also the blunt answer to #1
 
 ## 4. Correctness backlog (each has a council default so a builder can start)
 
-- **Money folds:** #1049 parse `optional` (default: `optional: true`) → #1051 label-based receipt rows (absorbs #921)
+- **Money folds:** #1049 parse `optional` (default: the per-field `optional: true` form, not a rule-level `atLeastOne`) → #1051 label-based receipt rows (absorbs #921)
   · **#1330** an unanchored job budget folds a false 0.0 mi into a frozen row (items 1 and 3; default: fold null, never
   wrong; item 2's recovery behaviour goes to §6) · #1428 legacy pay correction guard · #1432 early-end receipt shares
   · #1490/#1491 stacked-job re-price · #1084 owed tests.
