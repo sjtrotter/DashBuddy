@@ -1,22 +1,17 @@
-# DashBuddy Roadmap (living doc)
+# gig.log Roadmap (living doc)
 
-**Updated:** 2026-10-04 (post #1197 health ledger, #1199 cluster IA, #1200 trusted-envelope uploader
-+ wireframe). Buckets reflect the board reality — when an issue's state changes, move it here or
-this doc rots (#946: the previous revision sat untouched from 07-12 to 10-04; the agreed cadence is
-**every PR that changes a bucket updates this file**, same rule as `CLAUDE.md`). Companions:
-`CLAUDE.md` (architecture summary), `docs/architecture/0N-*.md` (receipt-level references),
-`docs/field-testing/CHECKLIST.md` (the live checklist index; dated logs in `docs/field-testing/README.md`).
+**Updated:** 2026-11-10, from a review of all 164 open issues against master `dfb9a52eb`. When an issue's state
+changes, move it here in the same PR. Companions: `CLAUDE.md` (architecture summary), `docs/architecture/0N-*.md`,
+`docs/field-testing/CHECKLIST.md`, `docs/RELEASE.md`.
 
-## Where the project is (one paragraph)
+## Where the project is
 
-The on-device product is feature-complete for a single dasher: recognition → state machine →
-analytics hub (Today · Money/Offers/Time · Playbook) with frozen-per-record economics, consented
-per-action automation, CSV export, and a PII-safe shareable log. Since September the work has
-shifted to the **UNKNOWN-screen census** (epic #1138, ADR-0011): hash-only skeletons from opted-in
-debug phones → a self-hosted AGPL server (`sjtrotter/dashbuddy-census`, v0.10.0) that clusters them,
-counts installs per label hash, posts daily recognition health, and gives the operator a dashboard to
-triage unfamiliar screens — the upstream half of rule distribution (#192). DoorDash is the fielded
-platform; Uber recognition exists but is thin (#826 accept undetectable, #251 multi-offer).
+gig.log is on Google Play: the internal-testing track is live and the closed (alpha) track is in Google review.
+`PLAY_PUBLISH` is on, so a `v*` tag on master builds and uploads to internal testing by itself. The app reads
+DoorDash (fielded daily) and Uber (thin: accepts are not detected, #826). The look-back redesign (#1510) is half
+built: Recap is the week, with a date picker, a Month screen, the Shifts list, the shift timeline and store search;
+the per-figure screens and Plan remain. The signed-feeds epic (#1559) is approved and not started. Every open issue
+was triaged on 2026-11-10; the verdicts below come from that pass.
 
 ## Strategic pillars (detail)
 
@@ -38,92 +33,98 @@ Related: the UNKNOWN-screen census epic #1138 (privacy model ADR-0011: hash-only
 trusted installs; server #1157). The cloud-data-platform RFC #141 was closed 2026-07-12 with its un-built cloud half
 folded into the pillar epics.
 
-## Now / in flight (2026-10-04)
 
-- **#1200 (app PR #1201 + server PR #43)** — trusted-install envelope uploader + the cluster-page
-  wireframe; fixes #1196. Merging today; field check 0/2 on the checklist.
-- **Census S7c remainder** (`~/dashbuddy/design/2026-10-03-s7c-phone-health-envelopes/PLAN.md`):
-  A1 health ledger SHIPPED (#1197); B envelopes SHIPPED (#1200); next is **#1188** M6 — classify a
-  cluster in the `Flow` vocabulary, mark parse fields, draft a rule from the wireframe.
-- **Phone field validation** of #1185 (status line / Copy install id), #1197 (daily health post),
-  #1200 (captures shared) — see the checklist.
+## 1. Now: privacy and money a tester would see
 
-## Next up (unblocked, ranked by value × boundedness)
+The Play build changes who can be hurt by a bug, so Pledge breaks in stored data and money that is lost or wrong come
+first. All are small rule or code fixes with captures already in hand unless noted.
 
-1. **#1188** census M6 review + rule-drafting tool (needs #1200 live). Then **#1189** census coverage
-   for UNKNOWN clicks/notifications; **#1175** class/id unblinding at k (design).
-2. **Census server hygiene:** #1177 purge/retention vs the advertised policy + vocabulary quarantine;
-   #1193 enrol/admission bucket scope (dev decides figures); #1192 withdrawal replay after a restore
-   (dev decides option 1/2); #1180 pledge wording (dev decides the IP posture); #1202 `captures/`
-   backup exclusion (small, app).
-3. **Pledge-class recognition gaps on 8.99.x** (customer PII reaching UNKNOWN capture — each is a small
-   sensitive/redact rule): #1127, #1128, #1139, #1116, #1088, #1079, #1022 (signature pad), #1126,
-   #985 (in progress), #856 (Uber Trip Radar), #919 (chat compose box), #1131 (classifier DEBUG log).
-   The census wireframe is now the drafting surface for these.
-4. **Offer/accept correctness:** #1119 (link offer→job by evidence — replaces click-less accept
-   inference), #1121 (add-on offer card unrecognized), #1104 (confirm-decline tap beats its sheet),
-   #1069 (presentationKey collision), #1097 (double CONFIRM_DECLINE), #1101 (Σ > Σ quoted).
-5. **Money-fold correctness:** #1120 (single-drop receipt re-priced a 2-offer job), #1108 (mixed
-   mileage bases on a stacked job), #1133, #1134, #1051, #1041, #1035/#1056 (settle gate), #921.
-6. **Recognition coverage batches (no PII):** #1114 residuals, #1096, #1089, #1090, #1047, #988,
-   #989, #922, #923, #912, #998 (return-order flow), #1002, #1141, #999 (receipt sheet vanished?).
-7. **Resilience:** #913 (wedged drain worker), #916 (bubble lifecycle unlogged), #917 (odometer
-   survives an engine outage), #1164 (LinkageError backstop), #731 (notification listener flapping),
-   #1076/#1083/#1084/#1086 (accepted residuals from the #1054/#1073/#1053 families).
-8. **Hygiene:** #1045, #1049 (parse `optional` declaration), #1048, #1001, #1003, #906, #925, #897,
-   #864, #965, #1021.
+1. **#1396** a pickup frame rendered customer-card-first saves the customer's name as `storeName` in `app_events`
+   (release builds too). Then **#1397** (merchant instruction naming the customer, debug captures).
+2. **Offer recognition losing money:** #1343 a boost badge drops the whole card to UNKNOWN (accepted offer lost);
+   #1528 a two-order shop offer is scored as a quick pickup; #1399 DoorDash 8.104.3's new offer push channel.
+3. **#1506** the 2026 mileage rate changes on July 1 (shape the table for the #695 constants feed). Tax season.
+4. **#1507** online hours double-count two apps and include paused time. It blocks #1518 and #1519.
+5. Then tag **v0.232.0**: the first release that uploads itself.
 
-## Needs design / dev decision first
+## 2. Next: finish the look-back redesign (#1510)
 
-- **Evaluator redesign (#1113)** — the two-line experiment's catalogue of 16 models and the
-  reconciled auto-accept path; months of qualification before any auto-accept ships.
-- **#1135** Earned-as-hero historical record (reported-vs-recorded ledger). **#964** ratings trend.
-- **#1137** market-pulse free-until-k≥10 cohort engine; **#1194** canonical REGION cell per install
-  (ties #252 zones + ADR-0007's zone hash); both blocked by **#193**.
-- **#245** ADR-0007 canonical domain schema → unblocks **#251** Uber multi-offer → **#826/#249/#250**
-  Uber lifecycle. **#785** Uber per-leg notification flows (corpus-gated).
-- **#527** job lifetime; **#528** per-dropoff GPS $/mi; **#756** settlement re-price at job close;
-  **#816** timeline owed-set reconciliation (capture-first); **#1081** stale post:task fabrication.
-- **#579** voice accept/decline (vetted: arm-once-per-dash mic FGS; hands-free is a hard requirement).
-- **#254** auto-tuned time constants; **#823** shopping-list intelligence; **#550** pay-adjust toast.
-- **#294/#918** odometer arbitration follow-ups (the #1057 gate shipped; stationary flows residual).
-- **#883** pixel-redacted evidence screenshots; **#695** OTA app-config channel; **#723** profile screen;
-  **#741** zone leaderboard; **#428** i18n (locale allowlist en/es/fr, `values-es` ~84/393 keys).
-- **#945** field-testing checklist triage/aging policy (dev). **#505** replay-harness frontier.
+#1507 → #1518 (Est. Profit/hr + Waiting) → #1519 (Est. Profit/mi) → #1520 (Spending) → #1521 (Home week card) →
+#1513 (Plan opens on best hours) → #1514 (Miles and taxes, after #1506) → #1484 (stores ranked by profit/delivery).
+Fold #1240 (every hourly figure names its denominator) into #1518. #1509 (ratings say when they were read) is a
+one-line companion.
 
-## Blocked / parked (with the gate)
+## 3. Alongside: tester polish (#1441 children, no decisions needed)
 
-- **#246 LEGAL counsel** ← pacing gate for **#170** (disclosure flow + PRIVACY.md) and the matchers
-  repo split **#637 → #636 → #638 → #640/#641** (PARKED by the 2026-07-03 keep-in-tree decision;
-  reopened as an architecture question 2026-10-04 — whether the ruleset ships from its own Apache-2.0
-  repo or is published by the census server; see #192).
-- **#192 epic** — in-tree M1 done (#635/#639 JSON5 source + canonicalizer; #416 signature
-  verification in-tree); the census (#1138/#1157) is its upstream half; distribution M2 (#640) is the
-  open design question above. **#214** DSL onboarding rides with it.
-- **#193/#194** academic-pillar RFCs — future; **#1137/#1194** depend on them.
-- **#84** Play internal track — after the first tagged release (none pushed yet).
-- **#590** phase-2 unseeded fuzzing — runs nightly behind `-Dgiglog.propExplore=true`; the
-  remaining items are gated on #192.
+#1473 setup says saved after it saved · #1478 gas price source + failed lookup · #1482 cash-tip buttons always add ·
+#1483 Settings counts · #1449 confirm "Reset to defaults" · #1498 Home tiles at 200 % text · #1472 48 dp targets ·
+#1474 setup asks which vehicle · #1448 loading/empty/failed states (re-audit first) · #1417 README "Supported apps"
+and its stale "Planned" list. Needs a design call: #1446 theme setting, #1479 offer-picking choices.
 
-## Recently resolved (2026-09 → 2026-10-04)
+## 4. Correctness backlog with no decision needed (small, contained)
 
-- **Census:** #1145/#1146 skeleton builder + publisher; #1173 `census-contract` included build
-  (Apache-2.0); #1157 server v0.6.0 live (S1–S7a) → v0.7.0 VPN-only `/ops` + TOTP login (#1181) →
-  v0.8.0 dashboard (#1176) → v0.9.0 platform→version cluster summary + review pages (#1199) →
-  v0.10.0 envelope pairing + wireframe (#1200, fixes #1196); #1178 per-IP edge rate limits; #1179
-  memory limits + first restore drill; #1191 blind memory alarm fixed; #1182 phone uploader (S7b);
-  #1185 reset identity + Copy install id; #1197 daily recognition-health ledger (S7c-A1).
-- **Pledge / privacy:** #1151 wide-event-receipt consent as the first permission-chain step; #1160
-  census kind table + `ID_MARKERS` projection; #1167 one consent key per (rule, action) + `enables`;
-  #1147 TalkBack-study node fields; #1148 coalescer + window selection; #1152 Uber overlays.
-- **Recognition / state:** #1114 8.97.8 Compose offer card; #1104 outcomes on transition evidence;
-  #1123/#1122 dropoff_pre_arrival vs workflow sheet; #1093/#1149 bind shortfall + owner resolution +
-  label horizon; #1102 tap-that-never-landed throttle; #1107 drop-off steps wrapper; #1095/#1078
-  close-edge tripwire + absorbed retire; #1073 receipt coverage; #1057 odometer fix gate; #1053
-  RE2J rule regexes (ADR-0010); #1054 timer identity + recovery hygiene; #1033/#1029 settle gate +
-  receipt re-price; #1030/#1036/#1037 health + parse-shortfall census.
-- **Product:** #1024 three destinations (Today · hub · Playbook); #981 weekly plan + Sunday grading;
-  #977/#979/#983 Today, heatmap/leaderboard, Time tab; #969/#970/#973/#975 hub redesign; #991 TTS
-  recovery; #942 formatting SSOT; #96/#97/#98/#99 MAD Phase 6 feature modules (complete).
-- **Infra / quality:** #1162 `NewApi` vital lint across modules; #1066 build id in the logs; #941
-  negative corpus + loud corpus reads; #937/#909 liveness family; #907 release lint in PR CI.
+- **Money folds:** #1049 parse `optional` → #1051 label-based receipt rows (absorbs #921) · #1428 legacy pay
+  correction guard · #1432 early-end receipt shares · #1490/#1491 stacked-job re-price · #1084 owed tests.
+- **State:** #1140 End dash then backgrounded leaves the shift open (phantom online minutes) · #1056 settle gate
+  re-admission on resume · #1347 waiting time re-anchors on resume · #1331 swap guard on shared store tokens ·
+  #1335 JOB_ABANDON residuals · #1083 recovery clamp · #1097 double CONFIRM_DECLINE.
+- **Recognition:** #1342 the side-nav drawer rule hides new DoorDash screens from UNKNOWN and the census
+  (prerequisite for recognition health, #1571) · #1217 picker-row redact suffix · #1322 `CLICK_INTENTS` contract.
+- **App and CI:** #1336 heads-up tap opens the full screen · #1351 chat line kinds · #1494 deep-link pop race ·
+  #1308 SnapshotLibrarian cap · #1465 `.dirty` CI version · #917 odometer heartbeat + engine-death alarm (parts 1-2).
+
+## 5. The signed-feeds and rules program (#1559, approved 2026-11-09)
+
+Feeds: #1561 ADRs → #1562 accounts and keys (developer) → #1563 feed-contract → #1564 fuel publisher and #1565
+transport → #1566 fuel prices from the feed (the EIA key leaves the app) → #1567 custom feed. Rules: #1568 batch
+loader → #640 phone fetch and #641 tag-sign publishing → #695 constants feed → #1569/#1570. Census editor and health:
+#1571, #1572, #1573 (each blocked by a census-repo issue), #1209. #192 stays the rules parent.
+
+## 6. Needs a developer decision first
+
+- **#1326** receipt→offer identity (options i-iii). Unblocks **#1120** (under-recorded pay on 09-20 and 10-11) and
+  probably #1101.
+- **#1119** link an offer to its job by evidence: accepts are still logged as timeouts. A spec with defaults exists.
+  #1398 (late-confirmed decline recorded as a timeout) rides with it.
+- **#1320 + #1309 slice 2** (Pledge): a rule-independent belt for recognized frames (you leaned to option 1).
+- #1400 store an additional tip (and trace the double run) · #1401 vs #1529 Mark-as-delivered timing · #1316 does an
+  unassigned accept count · #1354 correcting a typed odometer reading (then #1386) · #1076 restored offer re-arm or
+  time out · #1081 deferred completion · #1337 TTS stream vs DoorDash's alarm chime · #1228 composite text inputs ·
+  #1193 census admission figures · #1505 (ADR-0012 revision) · #1508 store wait on the offer card · #527 job
+  lifetime · #964 ratings history · #1035 the running-total wheel · #998 the return-order flow · #1373 car-care
+  receipts.
+
+## 7. Gated on field data
+
+- **One re-census pass** over the latest pull replaces six stale UNKNOWN batches from July to September (DoorDash
+  8.93-8.97; the field now runs 8.104+): #912, #922, #988, #989, #1047, #1088, #1089, #1313, #550.
+- **#301** support-chat unassigns leave phantom pickups (six dashes since September): frames are in the 10-05 and
+  10-21 pulls, so desk triage, not a new dash.
+- Uber: #826 (one Uber dash with a real accept), then #249, #250, #785, #1402, #1271's last journey; #251 board
+  parse is designed and buildable.
+- #1489 (needs the #1458 DEBUG line in a pull), #1529, #985 remainder, #897 pin chip, #741 zones, #816.
+
+## 8. Long-term or parked
+
+#193/#194 academic RFCs → #1137 and #1194 (#252 likely superseded by #1194's region cells) · #1113 evaluator
+redesign and auto-accept (#1238, #1239; months of labelled data) · #579 voice accept · #1338 Android Auto · #1504
+measured offer rate · #883 pixel-redacted screenshots · #1386/#1389 fuel economy and EV charging · #1204 on-device
+drafter (mostly overtaken by #1559 track E) · #1138 census community half · #214 DSL onboarding · #505 replay
+frontier · #590 phase 2 (after #1568) · #245 re-scope to the `contains("pay")` heuristic · #428 es/fr consent strings
+and tap labels · #1349 accessibility description (after the Play review) · #1580 precise-location declaration, due
+2027-01-27 · #246 counsel review (external) · #1271/#1272/#1276 test-suite tail · #1364 economy fields.
+
+## Housekeeping from the 2026-11-10 triage
+
+Likely done or superseded, pending the developer's OK to close: #84 (Play internal track live), #636 (no consumer),
+#921 (into #1051), #823 (phases 1-2 shipped), #1177 (done in the census repo), #1488 (`AnalyticsRepository` is 703
+lines). Close or rewrite after a ruling: #1135, #1272, #1289, #723. #1364's `in-progress` label is stale.
+
+## Recently resolved (2026-10-05 → 2026-11-10)
+
+- **Play:** #1411 rename to gig.log; #1413/#170 non-tool disclosure; #1414 build types; #1415 release pipeline;
+  #1416 listing; #1582 privacy policy site; v0.231.0; internal track live 2026-11-10.
+- **Look-back redesign:** #1511, #1512, #1516 shift timeline, #1517 checks and repair, #1515 Recap week + date picker
+  + Month + Shifts list, #1540 store search, #1587 money thousands separator.
+- **Earlier:** #1188/#1200 census review and envelopes, #1333 HUD slices S0-S3, #1357 vehicles (#1358-#1361),
+  #1441 design decisions (#1442-#1447), #1547 CI speed.
