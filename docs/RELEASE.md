@@ -69,8 +69,9 @@ The debug key reads `giglog.debugKeystore.path` and `giglog.debugKeystore.passwo
 3. **First bundle by hand.** Push a tag with `PLAY_PUBLISH` unset (§6): the run builds the AAB and keeps it as
    the `play-bundle` workflow artifact for 7 days. Upload it in the Console to the internal testing track and
    accept **Play App Signing** when asked. Play treats the app as a draft until that first release is published,
-   and a draft app's API accepts only draft releases, so keep `PLAY_PUBLISH` off until the release is out of
-   draft. Publishing it needs the App content forms done, including the accessibility declaration's video
+   and a draft app's API accepts only draft releases, while the workflow uploads with `status: completed`. Keep
+   `PLAY_PUBLISH` off until that first release is published and available to internal testers. Publishing it needs
+   the App content items the Console requires, including the accessibility declaration and its video
    (`play/accessibility-declaration.md`); record that video from the run's AAB, built into an APK with `bundletool`
    and installed over USB, because the Play Store cannot serve the app before the release is published. From then
    on the pipeline uploads.
