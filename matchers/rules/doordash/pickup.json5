@@ -332,8 +332,16 @@
           "phase": "PICKUP",
           "subFlow": "NAVIGATION",
           "storeName": {
+            "comment": "#1396: the sheet renders two `user_name` cards, the merchant's (`Pickup from`) and the customer's (`Delivery for`). A mid-render frame put the customer card first with an empty label, and a first-`user_name` read stored the customer's name as the store. Read only the `user_name` whose immediately preceding sibling is the `Pickup from` label; with no such pair the field is null, never another card's value. Not an optional bind + `from`: an absent bind falls back to the whole tree.",
             "find": {
-              "hasIdSuffix": "user_name"
+              "all": [
+                {
+                  "hasIdSuffix": "user_name"
+                },
+                {
+                  "hasPrecedingSiblingText": "Pickup from"
+                }
+              ]
             },
             "read": "text",
             "transform": {
