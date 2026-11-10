@@ -42,6 +42,7 @@ import cloud.trotter.log.gig.ui.main.analytics.recap.RecapTiles
 import cloud.trotter.log.gig.ui.main.analytics.recap.RecapTotal
 import cloud.trotter.log.gig.ui.main.analytics.recap.RecapWeekOff
 import java.time.LocalDate
+import java.time.YearMonth
 
 /**
  * Recap, the week (#1515): the period bar, the Earned / Est. Profit switch, the week's total and its comparison, the
@@ -56,6 +57,7 @@ fun AnalyticsScreen(
     onOpenSession: (sessionId: String, row: String?) -> Unit,
     onOpenDay: (LocalDate) -> Unit,
     onOpenShifts: (weekStart: LocalDate) -> Unit,
+    onOpenMonth: (YearMonth, RecapMeasure) -> Unit,
     viewModel: AnalyticsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -76,6 +78,8 @@ fun AnalyticsScreen(
         onOpenShifts = onOpenShifts,
         onOpenNoSession = { showAssignSheet = true },
         onRetry = viewModel::retry,
+        onPickWeek = viewModel::selectWeek,
+        onPickMonth = { month -> onOpenMonth(month, uiState.measure) },
     )
 
     // The assign dialog is a correction action: held back while the records rebuild or a read has failed.
@@ -90,8 +94,9 @@ fun AnalyticsScreen(
 }
 
 /**
- * Recap's Scaffold, stateless (a screenshot or Compose test renders it without Hilt). A tab root: no back button;
- * Settings is the title bar's one action.
+ * Recap's Scaffold, stateless (a screenshot or Compose test renders it without Hilt). A tab root: no back button. The
+ * title bar holds the date picker (Cancel, Week, Month; it opens on the week's Monday, or today in this week) and
+ * Settings.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -105,12 +110,20 @@ internal fun AnalyticsContent(
     onOpenShifts: (weekStart: LocalDate) -> Unit,
     onOpenNoSession: () -> Unit,
     onRetry: () -> Unit,
+    onPickWeek: (LocalDate) -> Unit = {},
+    onPickMonth: (YearMonth) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.analytics_screen_title)) },
                 actions = {
+                    RecapDatePickerButton(
+                        contextDate = recapPickerDate(uiState),
+                        choices = listOf(DatePickerChoice.WEEK, DatePickerChoice.MONTH),
+                        onWeek = onPickWeek,
+                        onMonth = onPickMonth,
+                    )
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.settings_home_title))
                     }
@@ -176,9 +189,13 @@ private fun ColumnScope.RecapWeekBody(
     }
 }
 
-/** The switch, Earned first; identity stays the enum, never the resolved label. */
+/** The date Recap's picker opens on: the week's Monday, or today when the week is this week. */
+private fun recapPickerDate(uiState: AnalyticsUiState): LocalDate =
+    uiState.week.startDate?.takeUnless { uiState.week.contains(uiState.today) } ?: uiState.today
+
+/** The switch, Earned first; identity stays the enum, never the resolved label. Recap's and the Month screen's. */
 @Composable
-private fun MeasureSwitch(selected: RecapMeasure, onSelect: (RecapMeasure) -> Unit) {
+internal fun MeasureSwitch(selected: RecapMeasure, onSelect: (RecapMeasure) -> Unit) {
     val options = listOf(
         RecapMeasure.EARNED to stringResource(R.string.recap_measure_earned),
         RecapMeasure.PROFIT to stringResource(R.string.recap_measure_profit),

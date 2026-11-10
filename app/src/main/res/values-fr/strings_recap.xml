@@ -44,4 +44,15 @@
     <string name="shifts_week_none">Aucun service</string>
     <string name="shifts_app_to_now_format">%1$s, %2$s jusqu\'à maintenant</string>
     <string name="shifts_could_not_load_what">vos services</string>
+    <string name="recap_picker_open">Choisir une date</string>
+    <string name="recap_picker_cancel">Annuler</string>
+    <string name="recap_picker_week">Semaine</string>
+    <string name="recap_picker_month">Mois</string>
+    <string name="month_title">Mois</string>
+    <string name="month_previous">Mois précédent</string>
+    <string name="month_next">Mois suivant</string>
+    <string name="month_none_format">Aucun service en %1$s</string>
+    <string name="month_comparison_none_format">%1$s, aucun service</string>
+    <string name="month_week_open">Ouvrir la semaine dans Recap</string>
+    <string name="month_could_not_load_what">ce mois</string>
 </resources>

@@ -153,6 +153,26 @@ class AnalyticsWindowsTest {
         }
     }
 
+    @Test fun `a picked date selects its Monday week, never a future one`() {
+        // #1515: the date picker's Week and the Month screen's rows. Today is Wednesday 2026-07-15 (Monday 07-13).
+        data class Case(val name: String, val picked: LocalDate, val today: LocalDate, val offset: Int)
+        listOf(
+            Case("a date in this week", date("2026-07-14"), wednesday, 0),
+            Case("today", wednesday, wednesday, 0),
+            Case("a later date this week", date("2026-07-19"), wednesday, 0),
+            Case("a picked Monday", date("2026-07-06"), wednesday, -1),
+            Case("a picked Sunday is its own week's last day", date("2026-07-12"), wednesday, -1),
+            Case("a Sunday three weeks back", date("2026-06-28"), wednesday, -3),
+            Case("a date after this week", date("2026-07-27"), wednesday, 0),
+            Case("across the year boundary", date("2025-12-31"), date("2026-01-07"), -1),
+            Case("the boundary week's Monday", date("2025-12-29"), date("2026-01-01"), 0),
+        ).forEach { (name, picked, today, offset) ->
+            val selection = AnalyticsWindowSelection.weekOf(picked, today)
+            assertEquals(name, AnalyticsWindowSelection(offset), selection)
+            if (!picked.isAfter(current(WEEK, today).endDateInclusive)) assertTrue(name, selection.resolve(today).contains(picked))
+        }
+    }
+
     @Test fun `rolling periods bridge to current windows`() {
         listOf(AnalyticsPeriod.TODAY to DAY, AnalyticsPeriod.THIS_WEEK to WEEK,
             AnalyticsPeriod.THIS_MONTH to MONTH, AnalyticsPeriod.LIFETIME to LIFETIME)

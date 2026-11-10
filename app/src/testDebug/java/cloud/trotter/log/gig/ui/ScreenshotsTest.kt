@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
@@ -65,7 +66,12 @@ import cloud.trotter.log.gig.feature.settings.PrivacyViewModel
 import cloud.trotter.log.gig.feature.settings.StrategySettingsContent
 import cloud.trotter.log.gig.feature.settings.eventReceiptDisclosureParts
 import cloud.trotter.log.gig.ui.bubble.BubbleManager
+import cloud.trotter.log.gig.ui.main.analytics.DatePickerChoice
+import cloud.trotter.log.gig.ui.main.analytics.RecapDatePickerContent
 import cloud.trotter.log.gig.ui.main.analytics.day.DayContent
+import cloud.trotter.log.gig.ui.main.analytics.month.MonthContent
+import cloud.trotter.log.gig.ui.main.analytics.month.MonthUiState
+import cloud.trotter.log.gig.ui.main.analytics.rememberRecapDatePickerState
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsUiState
 import cloud.trotter.log.gig.ui.main.analytics.shifts.SHIFTS_LIST_TAG
 import cloud.trotter.log.gig.ui.main.analytics.shifts.ShiftsContent
@@ -333,6 +339,31 @@ class ScreenshotsTest(private val theme: String) {
         compose.onNodeWithTag("shifts-row-${rows.last()}").assertIsDisplayed()
     }) { ShiftsBody(ScreenshotData.busyWeek) }
 
+    // ── The date picker and the Month screen (#1515) ────────────────────
+
+    /** Recap's picker on this week's Monday: Cancel, Week, Month, and the two periods it would open. */
+    @Test fun recapDatePicker() = datePicker("recap/date-picker")
+
+    @Test @Config(fontScale = 2f)
+    fun recapDatePickerFont200() = datePicker("recap/date-picker-font-200")
+
+    /** September, finished: whole months compared, every week row. */
+    @Test fun monthFinished() = month("month/finished", ScreenshotData.monthFinished)
+
+    @Test @Config(fontScale = 2f)
+    fun monthFinishedFont200() = month("month/finished-font-200", ScreenshotData.monthFinished)
+
+    /** October, today's month: the completed dates compared, only the weeks that have started, "This week". */
+    @Test fun monthCurrent() = month("month/current", ScreenshotData.monthCurrent)
+
+    @Test @Config(fontScale = 2f)
+    fun monthCurrentFont200() = month("month/current-font-200", ScreenshotData.monthCurrent)
+
+    @Test fun monthEmpty() = render("month/empty", assertion = {
+        text(string(R.string.month_none_format, "July")).assertExists()
+        text(string(R.string.month_comparison_none_format, "June")).assertExists()
+    }) { MonthBody(ScreenshotData.monthEmpty) }
+
     // ── The Playbook ─────────────────────────────────────────────────────
 
     /** Simple mode: the plan summary, the Rate heatmap and the top three stores by net. */
@@ -481,6 +512,33 @@ class ScreenshotsTest(private val theme: String) {
         text(string(R.string.shifts_title)).assertExists()
         compose.onNodeWithTag("shifts-row-s4").assertIsDisplayed()
     }) { ShiftsBody(ScreenshotData.shifts()) }
+
+    private fun datePicker(path: String) = render(path, assertion = {
+        text(string(R.string.recap_picker_month)).assertExists()
+        text("Oct 26 to Nov 1").assertExists()
+    }) {
+        Box(Modifier.fillMaxSize().background(AppTheme.colors.bg), contentAlignment = Alignment.Center) {
+            RecapDatePickerContent(
+                state = rememberRecapDatePickerState(ScreenshotData.today, ScreenshotData.today),
+                choices = listOf(DatePickerChoice.WEEK, DatePickerChoice.MONTH),
+                today = ScreenshotData.today,
+                onCancel = {},
+                onWeek = {},
+                onMonth = {},
+            )
+        }
+    }
+
+    private fun month(path: String, state: MonthUiState) = render(path, assertion = {
+        text(string(R.string.month_title)).assertExists()
+        text(Formats.money(state.total)).assertExists()
+        compose.onNodeWithTag("month-week-${state.weeks.first().monday}").assertExists()
+    }) { MonthBody(state) }
+
+    @Composable
+    private fun MonthBody(state: MonthUiState) = MonthContent(
+        uiState = state, onBack = {}, onStep = {}, onPickMonth = {}, onSelectMeasure = {}, onOpenWeek = {}, onRetry = {},
+    )
 
     @Composable
     private fun ShiftsBody(state: ShiftsUiState) =

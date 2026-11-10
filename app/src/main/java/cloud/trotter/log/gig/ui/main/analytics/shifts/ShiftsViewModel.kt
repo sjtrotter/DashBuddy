@@ -15,6 +15,7 @@ import cloud.trotter.log.gig.ui.main.navigation.Screen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -55,23 +56,30 @@ data class ShiftsUiState(
  * argument; absent or unparsable, this week). Reads every shift once ([RecapRepository.allShifts]) and groups it with
  * the pure [ShiftWeeks]. **Checks** come from [ShiftChecksRepository] (`ShiftChecks` stays the only judge), and only
  * for the ended shifts of the weeks the list reports on screen ([onVisibleWeeks]): each id costs two Room flows, so
- * the list never fans out over every shift. This screen never writes Recap's week. Follows the shared states:
+ * the list never fans out over every shift. The date picker's Week moves the list ([jumpTo]); this screen never writes
+ * Recap's week. Follows the shared states:
  * loading, updating, rebuilding, couldn't load.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class ShiftsViewModel @Inject constructor(
-    savedStateHandle: SavedStateHandle,
+    private val savedStateHandle: SavedStateHandle,
     private val recapRepository: RecapRepository,
     private val shiftChecksRepository: ShiftChecksRepository,
     private val recordsStatusRepository: RecordsStatusRepository,
 ) : ViewModel() {
 
-    private val weekArg: LocalDate? = savedStateHandle.get<String>(Screen.Shifts.ARG_WEEK)?.let {
-        try {
-            ShiftWeeks.weekStart(LocalDate.parse(it))
-        } catch (_: DateTimeParseException) {
-            null
+    /**
+     * The week the list opens at: the route's `week`, until the date picker's [jumpTo] writes the same key in saved
+     * state (overriding the route argument, and surviving process death).
+     */
+    private val weekArg: Flow<LocalDate?> = savedStateHandle.getStateFlow<String?>(Screen.Shifts.ARG_WEEK, null).map { arg ->
+        arg?.let {
+            try {
+                ShiftWeeks.weekStart(LocalDate.parse(it))
+            } catch (_: DateTimeParseException) {
+                null
+            }
         }
     }
 
@@ -85,6 +93,14 @@ class ShiftsViewModel @Inject constructor(
         visibleWeeks.value = weeks
     }
 
+    /**
+     * UDF intent: the date picker's Week. The list moves to [date]'s Monday week (inserted empty when it has no shift)
+     * and scrolls its header to the top. Recap's week is never written here.
+     */
+    fun jumpTo(date: LocalDate) {
+        savedStateHandle[Screen.Shifts.ARG_WEEK] = ShiftWeeks.weekStart(date).toString()
+    }
+
     /** UDF intent: the failure pattern's Retry. */
     fun retry() {
         attempts.value++
@@ -92,8 +108,8 @@ class ShiftsViewModel @Inject constructor(
 
     val uiState: StateFlow<ShiftsUiState> = attempts.flatMapLatest { attempt ->
         val zone = ZoneId.systemDefault()
-        combine(recapRepository.allShifts(), currentLocalDateFlow(zone)) { shifts, today ->
-            val target = weekArg ?: ShiftWeeks.weekStart(today)
+        combine(recapRepository.allShifts(), currentLocalDateFlow(zone), weekArg) { shifts, today, arg ->
+            val target = arg ?: ShiftWeeks.weekStart(today)
             ShiftsUiState(today = today, targetWeek = target, weeks = ShiftWeeks.of(shifts, target, zone))
         }
             .distinctUntilChanged()

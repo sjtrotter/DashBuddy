@@ -44,4 +44,15 @@
     <string name="shifts_week_none">Sin turnos</string>
     <string name="shifts_app_to_now_format">%1$s, %2$s hasta ahora</string>
     <string name="shifts_could_not_load_what">tus turnos</string>
+    <string name="recap_picker_open">Elegir una fecha</string>
+    <string name="recap_picker_cancel">Cancelar</string>
+    <string name="recap_picker_week">Semana</string>
+    <string name="recap_picker_month">Mes</string>
+    <string name="month_title">Mes</string>
+    <string name="month_previous">Mes anterior</string>
+    <string name="month_next">Mes siguiente</string>
+    <string name="month_none_format">Sin turnos en %1$s</string>
+    <string name="month_comparison_none_format">%1$s, sin turnos</string>
+    <string name="month_week_open">Abrir la semana en Recap</string>
+    <string name="month_could_not_load_what">este mes</string>
 </resources>

@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.ui.main.analytics.shifts
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
@@ -42,13 +43,17 @@ class ShiftsListTest {
     private val opened = mutableListOf<Pair<String, String?>>()
     private val reported = mutableListOf<Set<LocalDate>>()
 
+    /** The state shown; a test replaces it as the ViewModel would (the date picker's jump). */
+    private val shown = mutableStateOf(ScreenshotData.shifts())
+
     private fun show(state: ShiftsUiState) {
+        shown.value = state
         compose.mainClock.autoAdvance = false
         compose.setContent {
             GigLogTheme {
                 CompositionLocalProvider(LocalNowProvider provides ScreenshotData.clock) {
                     ShiftsContent(
-                        uiState = state,
+                        uiState = shown.value,
                         onBack = {},
                         onOpenSession = { id, row -> opened.add(id to row) },
                         onVisibleWeeks = { reported.add(it) },
@@ -87,6 +92,22 @@ class ShiftsListTest {
         show(ScreenshotData.shifts(target = empty))
         compose.onNodeWithTag("shifts-week-$empty").assertIsDisplayed()
         compose.onNodeWithText(context.getString(R.string.shifts_week_none)).assertIsDisplayed()
+    }
+
+    @Test fun `the date picker's jump puts the picked week's header first, an empty week showing No shifts`() {
+        show(ScreenshotData.shifts())
+        compose.onNodeWithTag("shifts-week-$thisWeek").assertIsDisplayed()
+        val empty = thisWeek.minusWeeks(2)
+        shown.value = ScreenshotData.shifts(target = empty)
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+        compose.onNodeWithTag("shifts-week-$empty").assertIsDisplayed()
+        compose.onNodeWithText(context.getString(R.string.shifts_week_none)).assertIsDisplayed()
+        // The header is the first item on screen: the newer weeks sit above it, out of view.
+        compose.onNodeWithTag("shifts-week-$thisWeek").assertDoesNotExist()
+        assertTrue("reported: $reported", reported.lastOrNull()?.contains(empty) == true)
     }
 
     @Test fun `a tap opens the shift, at the check's row when it has one`() {

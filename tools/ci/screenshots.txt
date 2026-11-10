@@ -58,6 +58,13 @@ recap/failed 1078 2399
 shifts/list 1078 2399
 shifts/list-font-200 1078 2399
 shifts/busy-week-font-200 1078 2399
+recap/date-picker 1078 2399
+recap/date-picker-font-200 1078 2399
+month/finished 1078 2399
+month/finished-font-200 1078 2399
+month/current 1078 2399
+month/current-font-200 1078 2399
+month/empty 1078 2399
 playbook 1078 2399
 playbook-full 1078 5250
 playbook-empty 1078 2399

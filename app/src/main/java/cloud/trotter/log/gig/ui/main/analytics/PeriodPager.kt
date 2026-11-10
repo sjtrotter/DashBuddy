@@ -68,11 +68,20 @@ object WindowLabel {
         val start = window.startDate ?: return null
         val end = window.endDateInclusive ?: return null
         val sameYearAsToday = start.year == today.year && end.year == today.year
+        if (window.granularity == WindowGranularity.MONTH) {
+            val month = YearMonth.from(start)
+            return RangeParts(if (sameYearAsToday) formatMonthName(month, locale) else formatMonthYear(month, locale), null)
+        }
+        return dates(start, end, today, locale)
+    }
+
+    /**
+     * A span of dates, [start] to [end] inclusive, under the same rules as a week's range: "Oct 26" to "Nov 1", "Oct 1"
+     * to "4" inside one month, the one date of a one-day span, the year only when the span leaves [today]'s year.
+     */
+    fun dates(start: LocalDate, end: LocalDate, today: LocalDate, locale: Locale = Locale.getDefault()): RangeParts {
+        val sameYearAsToday = start.year == today.year && end.year == today.year
         return when {
-            window.granularity == WindowGranularity.MONTH -> {
-                val month = YearMonth.from(start)
-                RangeParts(if (sameYearAsToday) formatMonthName(month, locale) else formatMonthYear(month, locale), null)
-            }
             start == end ->
                 RangeParts(if (sameYearAsToday) formatMonthDay(start, locale) else formatMonthDayYear(start, locale), null)
             start.year != end.year -> RangeParts(formatMonthDayYear(start, locale), formatMonthDayYear(end, locale))
@@ -85,10 +94,15 @@ object WindowLabel {
 
 /** "Oct 26 to Nov 1", or the one date of a one-day window. */
 @Composable
-internal fun windowRange(window: AnalyticsWindow, today: LocalDate): String? {
-    val parts = WindowLabel.range(window, today) ?: return null
-    return parts.end?.let { stringResource(R.string.recap_range_format, parts.start, it) } ?: parts.start
-}
+internal fun windowRange(window: AnalyticsWindow, today: LocalDate): String? = WindowLabel.range(window, today)?.let { rangeText(it) }
+
+/** "Oct 1 to 4", "Oct 27 to 31", or "Nov 30" alone: a span of dates as the period bar prints a week. */
+@Composable
+internal fun datesRange(start: LocalDate, end: LocalDate, today: LocalDate): String = rangeText(WindowLabel.dates(start, end, today))
+
+@Composable
+private fun rangeText(parts: RangeParts): String =
+    parts.end?.let { stringResource(R.string.recap_range_format, parts.start, it) } ?: parts.start
 
 /** "This week, Oct 26 to Nov 1", "Last week, Oct 19 to 25", or the range alone for an older week. */
 @Composable
@@ -113,26 +127,41 @@ internal fun RecapPeriodBar(
     canStepForward: Boolean,
     onStep: (Int) -> Unit,
     modifier: Modifier = Modifier,
+) = PeriodBar(
+    label = weekTitle(week, today),
+    previousDescription = stringResource(R.string.recap_week_previous),
+    nextDescription = stringResource(R.string.recap_week_next),
+    canStepForward = canStepForward,
+    onStep = onStep,
+    modifier = modifier,
+)
+
+/**
+ * The period bar's look, "‹ label ›": Recap's week and the Month screen's month. `‹` steps back (`-1`), `›` forward
+ * (`1`) and is disabled when [canStepForward] is false. Stateless.
+ */
+@Composable
+internal fun PeriodBar(
+    label: String,
+    previousDescription: String,
+    nextDescription: String,
+    canStepForward: Boolean,
+    onStep: (Int) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { onStep(-1) }) {
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                contentDescription = stringResource(R.string.recap_week_previous),
-            )
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = previousDescription)
         }
         Text(
-            text = weekTitle(week, today),
+            text = label,
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.titleMedium,
             color = AppTheme.colors.text,
             textAlign = TextAlign.Center,
         )
         IconButton(onClick = { onStep(1) }, enabled = canStepForward) {
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = stringResource(R.string.recap_week_next),
-            )
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = nextDescription)
         }
     }
 }

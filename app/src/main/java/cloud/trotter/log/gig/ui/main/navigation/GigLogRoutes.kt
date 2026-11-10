@@ -1,7 +1,9 @@
 package cloud.trotter.log.gig.ui.main.navigation
 
 import android.net.Uri
+import cloud.trotter.log.gig.domain.analytics.recap.RecapMeasure
 import java.time.LocalDate
+import java.time.YearMonth
 
 sealed class Screen(val route: String) {
     // Top Level
@@ -58,6 +60,17 @@ sealed class Screen(val route: String) {
         fun route(weekStart: LocalDate? = null): String = "analytics/shifts" + (weekStart?.let { "?week=$it" } ?: "")
     }
 
+    /**
+     * The Month screen (#1515): one calendar month, opened from Recap's date picker; it sits on Recap's stack. `month`
+     * is `yyyy-MM` ("2026-10"); `measure` is the [RecapMeasure] name it opens on (absent, Earned).
+     */
+    data object Month : Screen("analytics/month/{month}?measure={measure}") {
+        const val ARG_MONTH = "month"
+        const val ARG_MEASURE = "measure"
+        fun route(month: YearMonth, measure: RecapMeasure = RecapMeasure.EARNED): String =
+            "analytics/month/$month?measure=${measure.name}"
+    }
+
     // Settings Hierarchy
     // Note: We use "settings/home" as the landing page for settings
     data object SettingsHome : Screen("settings/home")
@@ -104,7 +117,7 @@ sealed class Screen(val route: String) {
          * the routes no external link may target — the wizard, Ratings and the argument routes.
          */
         val graphRoutes: Set<String> by lazy {
-            allRoutes + setOf(Wizard.route, Ratings.route, SessionDetail.route, Day.route, Shifts.route, VehicleEdit.route)
+            allRoutes + setOf(Wizard.route, Ratings.route, SessionDetail.route, Day.route, Shifts.route, Month.route, VehicleEdit.route)
         }
     }
 }

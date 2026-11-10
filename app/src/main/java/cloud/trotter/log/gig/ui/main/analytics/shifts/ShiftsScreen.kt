@@ -23,7 +23,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
@@ -50,7 +53,9 @@ import cloud.trotter.log.gig.domain.format.formatClockTime
 import cloud.trotter.log.gig.domain.format.formatWeekdayMonthDay
 import cloud.trotter.log.gig.ui.components.RebuildingRecords
 import cloud.trotter.log.gig.ui.components.UpdatingRecordsLine
+import cloud.trotter.log.gig.ui.main.analytics.DatePickerChoice
 import cloud.trotter.log.gig.ui.main.analytics.HubPlaceholder
+import cloud.trotter.log.gig.ui.main.analytics.RecapDatePickerButton
 import cloud.trotter.log.gig.ui.main.analytics.allCheckLines
 import cloud.trotter.log.gig.ui.main.analytics.landingRowOf
 import cloud.trotter.log.gig.ui.main.analytics.recap.RecapNoShiftsYet
@@ -62,7 +67,8 @@ import kotlinx.coroutines.flow.filter
  * The Shifts list (#1515): every shift, newest first, under one header per Monday-to-Sunday week ("Oct 26 to Nov 1").
  * Opened from Recap's Shifts row, scrolled so Recap's week is at the top; that week shows "No shifts" when it has
  * none. A row is the date, the app with its times, Earned, and a shift's first check reason; a tap opens its shift
- * page. Title bar: Back and "Shifts". No ticker: a past shift's row is fixed, and a running one reads "to now".
+ * page. Title bar: Back, "Shifts" and the date picker (Cancel, Week), which jumps the list to the picked date's week.
+ * No ticker: a past shift's row is fixed, and a running one reads "to now".
  */
 @Composable
 fun ShiftsScreen(
@@ -71,7 +77,7 @@ fun ShiftsScreen(
     viewModel: ShiftsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    ShiftsContent(uiState, onBack, onOpenSession, viewModel::onVisibleWeeks, viewModel::retry)
+    ShiftsContent(uiState, onBack, onOpenSession, viewModel::onVisibleWeeks, viewModel::retry, onJumpTo = viewModel::jumpTo)
 }
 
 /** The Shifts list's stateless body; tests and screenshots compose this. */
@@ -83,6 +89,7 @@ internal fun ShiftsContent(
     onOpenSession: (String, String?) -> Unit,
     onVisibleWeeks: (Set<LocalDate>) -> Unit,
     onRetry: () -> Unit,
+    onJumpTo: (LocalDate) -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -92,6 +99,10 @@ internal fun ShiftsContent(
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_content_desc_back))
                     }
+                },
+                actions = {
+                    // Cancel and Week: the list jumps to the picked date's week, opening on the week it shows.
+                    RecapDatePickerButton(uiState.targetWeek, listOf(DatePickerChoice.WEEK), onWeek = onJumpTo)
                 },
             )
         },
@@ -157,6 +168,17 @@ private fun ShiftsList(
             .indexOfFirst { it is ShiftsEntry.Header && it.week == uiState.targetWeek }
             .coerceAtLeast(0),
     )
+    // The date picker's jump: a target the list has not shown yet scrolls its header to the top. Saved, so a restored
+    // list keeps its own position rather than snapping back to the target.
+    var shownTarget by rememberSaveable { mutableStateOf(uiState.targetWeek.toString()) }
+    LaunchedEffect(uiState.targetWeek, entries) {
+        if (uiState.targetWeek.toString() == shownTarget) return@LaunchedEffect
+        val index = entries.indexOfFirst { it is ShiftsEntry.Header && it.week == uiState.targetWeek }
+        if (index >= 0) {
+            listState.scrollToItem(index)
+            shownTarget = uiState.targetWeek.toString()
+        }
+    }
     val currentEntries by rememberUpdatedState(entries)
     val report by rememberUpdatedState(onVisibleWeeks)
     LaunchedEffect(listState) {

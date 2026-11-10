@@ -6,6 +6,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import cloud.trotter.log.gig.domain.analytics.recap.RecapMeasure
 
 /**
  * The app's one flat graph (#1447): every [Screen.graphRoutes] entry, with the argument routes'
@@ -31,6 +32,14 @@ fun NavGraphBuilder.mainGraph(render: @Composable (route: String, entry: NavBack
                         type = NavType.StringType
                         nullable = true
                         defaultValue = null
+                    },
+                )
+            Screen.Month.route ->
+                listOf(
+                    navArgument(Screen.Month.ARG_MONTH) { type = NavType.StringType },
+                    navArgument(Screen.Month.ARG_MEASURE) {
+                        type = NavType.StringType
+                        defaultValue = RecapMeasure.EARNED.name
                     },
                 )
             Screen.VehicleEdit.route ->
