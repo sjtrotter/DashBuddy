@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.ui.main.analytics.search
 
+import cloud.trotter.log.gig.domain.state.Platform
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshots.Snapshot
@@ -107,8 +108,8 @@ class SearchScreenTest {
         show("Chipotle", SearchFixtures.results())
         assertEquals(1, count(string(R.string.search_scope_all)))
         // Two shifts on Tue, Oct 27: two groups, each naming its app.
-        assertEquals(1, count(header("DoorDash", "16:58", "23:04")))
-        assertEquals(1, count(header("Uber", "11:10", "13:40")))
+        assertEquals(1, count(header(Platform.DoorDash.displayName, "16:58", "23:04")))
+        assertEquals(1, count(header(Platform.Uber.displayName, "11:10", "13:40")))
         // The stack shows whole: its card, not its Chipotle drop alone.
         assertEquals(1, count("Five Guys & Chipotle"))
         assertEquals(1, count("Chipotle · Declined · $5.25 · 2.2 mi"))

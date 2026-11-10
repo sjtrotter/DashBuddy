@@ -86,7 +86,7 @@ class SearchViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
-        Timber.uproot(tree)
+        if (tree in Timber.forest()) Timber.uproot(tree)
     }
 
     private fun TestScope.settle() {
