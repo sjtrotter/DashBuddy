@@ -158,7 +158,7 @@ restaurant-wait replay fixture.
 ## Housekeeping decided by the council (2026-11-10)
 
 Claude, Sol and Fable reviewed the triage's close list; majority decides, with the developer's own rulings kept.
-Closed as done: #84, #823, #1177 (census follow-up filed there), #1488 (the projector split filed instead as #1591), #1357.
+Closed as done: #84, #823, #1177 (follow-up: dashbuddy-census#71), #1488 (the projector split filed instead as #1591), #1357.
 Closed as superseded: #636 (→ #640/#641), #723 (→ the Garage), #252 (→ #1194), #1204 (→ #1559 track E; reopen if
 wanted). Folded: #921 into #1051. Rewritten: #1135 (weekly total the dasher types in; the ledger card dropped, the
 pill read moved to #1035), #1441 (checklist mapped to its issues), #1333 (now the S4 cleanup; no longer blocks #1347
