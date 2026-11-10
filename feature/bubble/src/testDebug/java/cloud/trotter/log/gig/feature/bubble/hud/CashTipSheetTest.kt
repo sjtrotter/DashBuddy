@@ -159,7 +159,7 @@ class CashTipSheetTest {
 
         // Also force wrapping if the font renderer fits the $20 label on one line.
         compose.runOnIdle { model = model.copy(totalCents = 99_999_999) }
-        val wrapped = compose.onNodeWithText("Remove $999999.99 cash tip", useUnmergedTree = true).assertIsDisplayed()
+        val wrapped = compose.onNodeWithText("Remove $999,999.99 cash tip", useUnmergedTree = true).assertIsDisplayed()
         val wrappedLayout = textLayout(wrapped)
         assertEquals(2, wrappedLayout.lineCount)
         assertEquals(wrappedLayout.layoutInput.text.length, wrappedLayout.getLineEnd(1, visibleEnd = true))

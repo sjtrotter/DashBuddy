@@ -43,7 +43,7 @@ object Formats {
      */
     private const val SUB_CENT = 0.005
 
-    /** "$7.50" — standard money. A negative renders `-$65.94` (see [signedMoney]). */
+    /** "$7.50", "$1,063.85" — standard money, grouped by the locale. A negative renders `-$65.94` (see [signedMoney]). */
     fun money(amount: Double): String = signedMoney(amount, decimals = 2)
 
     /** Cents below a dollar, using the same cent rounding as money. */
@@ -91,10 +91,10 @@ object Formats {
      * and a bad offer's `$/hr` hero ([money0]) is negative whenever costs outrun the pay. So all
      * three arities share this shape rather than diverging by precision.
      *
-     * The digits are produced by the **same** `"%.Nf"` conversion as before — `"$%.Nf"` is exactly
-     * that conversion with a literal `$` glued on — applied to the magnitude, which is exact for a
-     * `Double`. Rounding, the locale decimal separator and the absence of grouping are therefore
-     * byte-identical to the old output: `-0.005` → `-$0.01`, HALF_UP on the magnitude.
+     * The digits come from `"%,.Nf"` on the magnitude, which is exact for a `Double`: HALF_UP
+     * rounding (`-0.005` → `-$0.01`), the locale decimal separator, and the locale's thousands
+     * grouping, so `1063.85` reads `$1,063.85` in English, `$1.063,85` in Spanish and `$1 063,85`
+     * in French.
      *
      * **The sign is dropped only for a genuinely sub-cent magnitude that also renders as zero.**
      * `money(-0.004)` is `$0.00`, `money0(-0.004)` is `$0`, `money3(-0.0004)` is `$0.000` — the old
@@ -113,7 +113,7 @@ object Formats {
      */
     private fun signedMoney(amount: Double, decimals: Int): String {
         val loc = locale
-        val pattern = "%.${decimals}f"
+        val pattern = "%,.${decimals}f"
         val magnitude = String.format(loc, pattern, abs(amount))
         val rendersZero = magnitude == String.format(loc, pattern, 0.0)
         val dropSign = rendersZero && abs(amount) < SUB_CENT

@@ -6,6 +6,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.text.DecimalFormatSymbols
 import java.util.Locale
 
 /**
@@ -62,6 +63,23 @@ class FormatsTest {
         Locale.setDefault(Locale.GERMANY)
         assertEquals("$7,50", Formats.money(7.5))
         assertEquals("12.500", Formats.commaInt(12_500))
+    }
+
+    @Test
+    fun `money groups thousands the way each app language does`() {
+        Locale.setDefault(Locale.US)
+        assertEquals("$1,063.85", Formats.money(1063.85))
+        assertEquals("-$12,345", Formats.money0(-12_345.0))
+        assertEquals("$999.99", Formats.money(999.99))
+        assertEquals(MoneyParts("", "$", "1,063", ".85"), Formats.moneyParts(1063.85))
+
+        Locale.setDefault(Locale.forLanguageTag("es"))
+        assertEquals("$1.063,85", Formats.money(1063.85))
+        assertEquals(",85", Formats.moneyParts(1063.85).fraction)
+
+        Locale.setDefault(Locale.FRENCH)
+        val space = DecimalFormatSymbols.getInstance(Locale.FRENCH).groupingSeparator
+        assertEquals("$1${space}063,85", Formats.money(1063.85))
     }
 
     /**
