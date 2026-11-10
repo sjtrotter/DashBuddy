@@ -8,15 +8,17 @@ import timber.log.Timber
 /**
  * Writes Recap's week (#1515). The persisted [AnalyticsWindowSelection] is the one owner of the week Recap shows: the
  * period bar's arrows, the date picker's Week and the Month screen's rows all write it through here, and Recap reads it
- * back, so the period bar and the picker never disagree. A failed write is logged and dropped (the week stays put).
+ * back, so the period bar and the picker never disagree. A failed write is logged and the week stays put; false tells
+ * a caller that would leave for Recap to stay.
  */
-internal suspend fun AppPreferencesRepository.writeRecapWeek(selection: AnalyticsWindowSelection, tag: String) {
+internal suspend fun AppPreferencesRepository.writeRecapWeek(selection: AnalyticsWindowSelection, tag: String): Boolean =
     try {
         setAnalyticsWindow(selection)
+        true
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         // P7: no PII, an offset only.
         Timber.tag(tag).w(e, "week selection not persisted")
+        false
     }
-}

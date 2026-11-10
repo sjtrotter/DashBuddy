@@ -63,9 +63,9 @@ class MonthWeeksTest {
         val days = RecapDays.ofMonth(october, date("2026-11-09"), facts)
         val weeks = MonthWeeks.of(days, date("2026-11-09"))
         for (measure in RecapMeasure.entries) {
-            assertEquals(measure.name, MonthWeeks.total(days, measure), weeks.sumOf { it.value(measure) ?: 0.0 }, 1e-9)
+            assertEquals(measure.name, MonthWeeks.total(days, measure)!!, weeks.sumOf { it.value(measure) ?: 0.0 }, 1e-9)
         }
-        assertEquals(112.75, MonthWeeks.total(days, RecapMeasure.EARNED), 1e-9)
+        assertEquals(112.75, MonthWeeks.total(days, RecapMeasure.EARNED)!!, 1e-9)
         assertEquals(52.5, weeks.first().value(RecapMeasure.EARNED)!!, 1e-9)
         // Oct 12 to 18: one shift whose pay was never found reads the em dash, not $0.00; it is not a week off.
         val noPay = weeks.single { it.first == date("2026-10-12") }

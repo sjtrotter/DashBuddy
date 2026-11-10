@@ -68,7 +68,7 @@ data class MonthUiState(
     val monthOff: Boolean get() = days.all { it.mark == DayMark.NO_SHIFT || it.mark == DayMark.AHEAD }
 
     /** The month's total for the switch; the rows sum to it. */
-    val total: Double get() = MonthWeeks.total(days, measure)
+    val total: Double? get() = MonthWeeks.total(days, measure)
 
     /** The Monday-to-Sunday rows, oldest first; in the current month only the weeks that have started. */
     val weeks: List<MonthWeek> get() = MonthWeeks.of(days, today)
@@ -162,11 +162,11 @@ class MonthViewModel @Inject constructor(
 
     /**
      * UDF intent: a week row. Writes Recap's week to [monday]'s week, the one selection Recap's period bar and picker
-     * write, and returns once it is stored, so the caller can go back to Recap on that week.
+     * write, and returns once it is stored: true when it was, so the caller goes back to Recap on that week, false when
+     * the write failed and this screen stays.
      */
-    suspend fun selectWeek(monday: LocalDate) {
+    suspend fun selectWeek(monday: LocalDate): Boolean =
         appPreferencesRepository.writeRecapWeek(AnalyticsWindowSelection.weekOf(monday, today.value), TAG)
-    }
 
     private fun failedRead(e: Throwable): MonthUiState {
         if (e is CancellationException) throw e

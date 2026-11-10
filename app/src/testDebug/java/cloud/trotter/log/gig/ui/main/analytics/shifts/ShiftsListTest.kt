@@ -98,7 +98,7 @@ class ShiftsListTest {
         show(ScreenshotData.shifts())
         compose.onNodeWithTag("shifts-week-$thisWeek").assertIsDisplayed()
         val empty = thisWeek.minusWeeks(2)
-        shown.value = ScreenshotData.shifts(target = empty)
+        shown.value = ScreenshotData.shifts(target = empty).copy(jumps = 1)
         compose.mainClock.advanceTimeBy(2_000)
         compose.waitForIdle()
         compose.mainClock.advanceTimeByFrame()
@@ -108,6 +108,29 @@ class ShiftsListTest {
         // The header is the first item on screen: the newer weeks sit above it, out of view.
         compose.onNodeWithTag("shifts-week-$thisWeek").assertDoesNotExist()
         assertTrue("reported: $reported", reported.lastOrNull()?.contains(empty) == true)
+    }
+
+    @Test fun `a new target without a jump does not move the list`() {
+        show(ScreenshotData.shifts())
+        shown.value = ScreenshotData.shifts(target = thisWeek.minusWeeks(2))
+        settle()
+        compose.onNodeWithTag("shifts-week-$thisWeek").assertIsDisplayed()
+    }
+
+    @Test fun `a second jump to the week already picked scrolls back to its header`() {
+        show(ScreenshotData.shifts())
+        scrollTo("shift:o1")
+        compose.onNodeWithTag("shifts-week-$thisWeek").assertDoesNotExist()
+        shown.value = shown.value.copy(jumps = 1)
+        settle()
+        compose.onNodeWithTag("shifts-week-$thisWeek").assertIsDisplayed()
+    }
+
+    private fun settle() {
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
     }
 
     @Test fun `a tap opens the shift, at the check's row when it has one`() {

@@ -29,11 +29,11 @@ class MonthComparisonsTest {
         val comparison = requireNotNull(MonthComparisons.of(october, september, RecapMeasure.EARNED, shiftRunning = false))
         assertTrue(comparison.wholeMonths)
         assertEquals(date("2026-10-01") to date("2026-10-31"), comparison.first to comparison.last)
-        assertEquals(310.0, comparison.total, 1e-9)
+        assertEquals(310.0, comparison.total!!, 1e-9)
         assertEquals(date("2026-09-01") to date("2026-09-30"), comparison.beforeFirst to comparison.beforeLast)
         assertEquals(600.0, comparison.beforeTotal!!, 1e-9)
         val profit = MonthComparisons.of(october, september, RecapMeasure.PROFIT, shiftRunning = false)!!
-        assertEquals(186.0, profit.total, 1e-9)
+        assertEquals(186.0, profit.total!!, 1e-9)
     }
 
     @Test fun `the current month compares its completed dates with the same dates of the month before`() {
@@ -43,7 +43,7 @@ class MonthComparisonsTest {
         val comparison = requireNotNull(MonthComparisons.of(november, october, RecapMeasure.EARNED, shiftRunning = false))
         assertFalse(comparison.wholeMonths)
         assertEquals(date("2026-11-01") to date("2026-11-08"), comparison.first to comparison.last)
-        assertEquals(80.0, comparison.total, 1e-9)
+        assertEquals(80.0, comparison.total!!, 1e-9)
         assertEquals(date("2026-10-01") to date("2026-10-08"), comparison.beforeFirst to comparison.beforeLast)
         assertEquals(40.0, comparison.beforeTotal!!, 1e-9)
     }
@@ -72,11 +72,26 @@ class MonthComparisonsTest {
         val november = everyDay(YearMonth.of(2026, 11), today, 10.0)
         val emptyOctober = RecapDays.ofMonth(YearMonth.of(2026, 10), today, emptyList())
         val comparison = requireNotNull(MonthComparisons.of(november, emptyOctober, RecapMeasure.EARNED, shiftRunning = false))
+        assertTrue(comparison.beforeNoShift)
         assertNull(comparison.beforeTotal)
         // A shift on Oct 20, outside Oct 1 to 8, does not count for the current month's comparison.
         val lateOctober = RecapDays.ofMonth(YearMonth.of(2026, 10), today, listOf(
             DayFacts(date("2026-10-20"), listOf(DayShift("late", Platform.DoorDash, 0L, 1L, 30.0, 18.0, paySeen = true))),
         ))
-        assertNull(MonthComparisons.of(november, lateOctober, RecapMeasure.EARNED, shiftRunning = false)!!.beforeTotal)
+        assertTrue(MonthComparisons.of(november, lateOctober, RecapMeasure.EARNED, shiftRunning = false)!!.beforeNoShift)
+    }
+
+    @Test fun `a side whose shifts all had no pay found is null, not zero, and not no shifts`() {
+        val today = date("2026-11-09")
+        val unpriced = { month: YearMonth ->
+            RecapDays.ofMonth(month, today, (1..8).map { month.atDay(it) }.map {
+                DayFacts(it, listOf(DayShift("u-$it", Platform.DoorDash, 0L, 1L, 0.0, 0.0, paySeen = false)))
+            })
+        }
+        val comparison = requireNotNull(MonthComparisons.of(unpriced(YearMonth.of(2026, 11)), unpriced(YearMonth.of(2026, 10)),
+            RecapMeasure.EARNED, shiftRunning = false))
+        assertNull(comparison.total)
+        assertNull(comparison.beforeTotal)
+        assertFalse(comparison.beforeNoShift)
     }
 }

@@ -23,7 +23,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -168,15 +168,15 @@ private fun ShiftsList(
             .indexOfFirst { it is ShiftsEntry.Header && it.week == uiState.targetWeek }
             .coerceAtLeast(0),
     )
-    // The date picker's jump: a target the list has not shown yet scrolls its header to the top. Saved, so a restored
-    // list keeps its own position rather than snapping back to the target.
-    var shownTarget by rememberSaveable { mutableStateOf(uiState.targetWeek.toString()) }
-    LaunchedEffect(uiState.targetWeek, entries) {
-        if (uiState.targetWeek.toString() == shownTarget) return@LaunchedEffect
+    // The date picker's jump: each jump not yet shown scrolls the target's header to the top, the same week again
+    // included. Saved, so a restored list keeps its own position rather than snapping back to the target.
+    var shownJumps by rememberSaveable { mutableIntStateOf(uiState.jumps) }
+    LaunchedEffect(uiState.jumps, entries) {
+        if (uiState.jumps == shownJumps) return@LaunchedEffect
         val index = entries.indexOfFirst { it is ShiftsEntry.Header && it.week == uiState.targetWeek }
         if (index >= 0) {
             listState.scrollToItem(index)
-            shownTarget = uiState.targetWeek.toString()
+            shownJumps = uiState.jumps
         }
     }
     val currentEntries by rememberUpdatedState(entries)

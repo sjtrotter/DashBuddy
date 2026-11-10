@@ -11,10 +11,13 @@ data class MonthComparison(
     val wholeMonths: Boolean,
     val first: LocalDate,
     val last: LocalDate,
-    val total: Double,
+    /** Null when no completed date has a value (shifts whose pay was never found): the em dash, never $0.00. */
+    val total: Double?,
     val beforeFirst: LocalDate,
     val beforeLast: LocalDate,
-    /** Null when the month before had no shift on those dates: "no shifts" in words, never $0.00. */
+    /** True when the month before had no shift on those dates: "no shifts" in words. */
+    val beforeNoShift: Boolean,
+    /** Null when none of those dates has a value: "no shifts" when [beforeNoShift], else the em dash. */
     val beforeTotal: Double?,
 )
 
@@ -26,7 +29,7 @@ object MonthComparisons {
      * leading [DayTime.HAPPENED] run: every date of a finished month, the 1st to yesterday in the current month. A
      * finished month compares with the whole month before; the current month with the same dates of the month before,
      * cut at that month's length (on March 30 the other side is Feb 1 to 28). Null on the 1st of the current month and
-     * while a shift runs, as the week's. A day with no value counts $0 on either side.
+     * while a shift runs, as the week's. A day with no value counts $0 on either side; a side where no day has one is null.
      */
     fun of(
         month: List<RecapDay>,
@@ -43,10 +46,11 @@ object MonthComparisons {
             wholeMonths = whole,
             first = completed.first().date,
             last = completed.last().date,
-            total = completed.sumOf { it.value(measure) ?: 0.0 },
+            total = MonthWeeks.total(completed, measure),
             beforeFirst = before.first().date,
             beforeLast = before.last().date,
-            beforeTotal = if (before.all { it.mark == DayMark.NO_SHIFT }) null else before.sumOf { it.value(measure) ?: 0.0 },
+            beforeNoShift = before.all { it.mark == DayMark.NO_SHIFT },
+            beforeTotal = MonthWeeks.total(before, measure),
         )
     }
 }

@@ -150,6 +150,11 @@ class ShiftsViewModelTest {
             assertEquals(empty, state.targetWeek)
             assertEquals(listOf(thisWeek, lastWeek, empty), state.weeks.map { it.start })
             assertTrue(state.weeks.last().shifts.isEmpty())
+            assertEquals(1, state.jumps)
+            viewModel.jumpTo(empty)
+            testScheduler.runCurrent()
+            assertEquals(empty, viewModel.uiState.value.targetWeek)
+            assertEquals("a repeated week is still a jump", 2, viewModel.uiState.value.jumps)
         }
     }
 

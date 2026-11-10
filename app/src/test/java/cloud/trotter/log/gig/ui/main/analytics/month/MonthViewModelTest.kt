@@ -117,7 +117,7 @@ class MonthViewModelTest {
             assertEquals(last, state.month)
             assertEquals(RecapMeasure.PROFIT, state.measure)
             assertEquals(last.lengthOfMonth(), state.days.size)
-            assertEquals(last.lengthOfMonth() * 6.0, state.total, 1e-9)
+            assertEquals(last.lengthOfMonth() * 6.0, state.total!!, 1e-9)
             assertTrue(requireNotNull(state.comparison).wholeMonths)
             assertTrue(state.canStepForward)
         }
@@ -161,10 +161,19 @@ class MonthViewModelTest {
     fun `a week row writes Recap's week`() = runTest {
         runWithViewModel(month = thisMonth.minusMonths(2).toString()) { viewModel ->
             val row = viewModel.uiState.value.weeks[1]
-            viewModel.selectWeek(row.monday)
+            assertTrue(viewModel.selectWeek(row.monday))
             assertEquals(AnalyticsWindowSelection.weekOf(row.monday, today), selectionFlow.value)
             assertEquals(row.monday, selectionFlow.value.resolve(today).startDate)
             assertEquals(ShiftWeeks.weekStart(row.first), row.monday)
+        }
+    }
+
+    @Test
+    fun `a failed week write reports false, so the Month screen stays`() = runTest {
+        whenever(runBlocking { appPreferencesRepository.setAnalyticsWindow(any()) }).thenThrow(IllegalStateException("disk"))
+        runWithViewModel(month = thisMonth.minusMonths(2).toString()) { viewModel ->
+            assertFalse(viewModel.selectWeek(viewModel.uiState.value.weeks[1].monday))
+            assertEquals(AnalyticsWindowSelection.DEFAULT, selectionFlow.value)
         }
     }
 

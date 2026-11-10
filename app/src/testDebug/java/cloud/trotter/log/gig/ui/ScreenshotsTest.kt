@@ -531,7 +531,7 @@ class ScreenshotsTest(private val theme: String) {
 
     private fun month(path: String, state: MonthUiState) = render(path, assertion = {
         text(string(R.string.month_title)).assertExists()
-        text(Formats.money(state.total)).assertExists()
+        text(Formats.money(requireNotNull(state.total))).assertExists()
         compose.onNodeWithTag("month-week-${state.weeks.first().monday}").assertExists()
     }) { MonthBody(state) }
 

@@ -46,6 +46,8 @@ data class ShiftsUiState(
     val weeks: List<ShiftWeek> = emptyList(),
     /** The checks of the ended shifts in the weeks on screen, by id; a shift not in it shows no reason. */
     val checks: Map<String, List<ShiftCheck>> = emptyMap(),
+    /** Counts the date picker's jumps; each one scrolls [targetWeek]'s header to the top, a repeated week included. */
+    val jumps: Int = 0,
 ) {
     /** False when no shift has ever been recorded: the "no shifts yet" line. */
     val anyShift: Boolean get() = weeks.any { it.shifts.isNotEmpty() }
@@ -99,6 +101,7 @@ class ShiftsViewModel @Inject constructor(
      */
     fun jumpTo(date: LocalDate) {
         savedStateHandle[Screen.Shifts.ARG_WEEK] = ShiftWeeks.weekStart(date).toString()
+        savedStateHandle[KEY_JUMPS] = (savedStateHandle.get<Int>(KEY_JUMPS) ?: 0) + 1
     }
 
     /** UDF intent: the failure pattern's Retry. */
@@ -108,9 +111,14 @@ class ShiftsViewModel @Inject constructor(
 
     val uiState: StateFlow<ShiftsUiState> = attempts.flatMapLatest { attempt ->
         val zone = ZoneId.systemDefault()
-        combine(recapRepository.allShifts(), currentLocalDateFlow(zone), weekArg) { shifts, today, arg ->
+        combine(
+            recapRepository.allShifts(),
+            currentLocalDateFlow(zone),
+            weekArg,
+            savedStateHandle.getStateFlow(KEY_JUMPS, 0),
+        ) { shifts, today, arg, jumps ->
             val target = arg ?: ShiftWeeks.weekStart(today)
-            ShiftsUiState(today = today, targetWeek = target, weeks = ShiftWeeks.of(shifts, target, zone))
+            ShiftsUiState(today = today, targetWeek = target, weeks = ShiftWeeks.of(shifts, target, zone), jumps = jumps)
         }
             .distinctUntilChanged()
             .flatMapLatest { state ->
@@ -135,6 +143,7 @@ class ShiftsViewModel @Inject constructor(
 
     private companion object {
         const val TAG = "ShiftsVm"
+        const val KEY_JUMPS = "shifts_jumps"
     }
 }
 

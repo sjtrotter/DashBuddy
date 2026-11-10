@@ -79,8 +79,7 @@ fun MonthScreen(
         onSelectMeasure = viewModel::setMeasure,
         onOpenWeek = { monday ->
             scope.launch {
-                viewModel.selectWeek(monday)
-                onOpenRecapWeek()
+                if (viewModel.selectWeek(monday)) onOpenRecapWeek()
             }
         },
         onRetry = viewModel::retry,
@@ -178,7 +177,7 @@ private fun monthName(month: YearMonth, today: LocalDate): String =
 @Composable
 private fun MonthTotal(uiState: MonthUiState) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(Formats.money(uiState.total), style = AppTheme.num.heroNum, color = AppTheme.colors.text)
+        Text(uiState.total?.let { Formats.money(it) } ?: EMPTY_VALUE, style = AppTheme.num.heroNum, color = AppTheme.colors.text)
         uiState.comparison?.let { ComparisonLines(it, uiState.today, showThis = true) }
     }
 }
@@ -213,14 +212,17 @@ private fun ComparisonLines(comparison: MonthComparison, today: LocalDate, showT
     }
     if (showThis) {
         Text(
-            stringResource(R.string.recap_comparison_this_format, thisSpan, Formats.money(comparison.total)),
+            stringResource(R.string.recap_comparison_this_format, thisSpan, comparison.total?.let { Formats.money(it) } ?: EMPTY_VALUE),
             style = MaterialTheme.typography.bodyMedium,
             color = AppTheme.colors.text,
         )
     }
     Text(
-        comparison.beforeTotal?.let { stringResource(R.string.recap_comparison_this_format, beforeSpan, Formats.money(it)) }
-            ?: stringResource(R.string.month_comparison_none_format, beforeSpan),
+        if (comparison.beforeNoShift) {
+            stringResource(R.string.month_comparison_none_format, beforeSpan)
+        } else {
+            stringResource(R.string.recap_comparison_this_format, beforeSpan, comparison.beforeTotal?.let { Formats.money(it) } ?: EMPTY_VALUE)
+        },
         style = MaterialTheme.typography.bodyMedium,
         color = AppTheme.colors.text2,
     )

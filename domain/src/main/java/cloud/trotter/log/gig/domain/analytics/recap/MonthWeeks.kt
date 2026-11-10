@@ -42,6 +42,10 @@ object MonthWeeks {
             .filterValues { days -> !days.first().date.isAfter(today) }
             .map { (monday, days) -> MonthWeek(monday, days) }
 
-    /** The month's total for the switch: every day's value, a day with none counting $0. The rows sum to it. */
-    fun total(monthDays: List<RecapDay>, measure: RecapMeasure): Double = monthDays.sumOf { it.value(measure) ?: 0.0 }
+    /**
+     * The total of [days] for the switch: a day with no value counts $0, and the rows sum to it. Null when no day has a
+     * value (no shift, or only shifts whose pay was never found), so it reads the em dash or "No shifts", never $0.00.
+     */
+    fun total(days: List<RecapDay>, measure: RecapMeasure): Double? =
+        days.mapNotNull { it.value(measure) }.takeIf { it.isNotEmpty() }?.sum()
 }
