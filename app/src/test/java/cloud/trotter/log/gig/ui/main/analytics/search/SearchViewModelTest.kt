@@ -115,9 +115,9 @@ class SearchViewModelTest {
         assertFalse(vm.uiState.value.hasMore)
 
         // A new query starts again at the first page.
-        vm.setQuery("WINGSTOP ")
+        vm.onQueryChange("WINGSTOP ")
         assertEquals(25, vm.uiState.value.groups.size)
-        vm.setQuery("wing")
+        vm.onQueryChange("wing")
         settle()
         assertEquals(10, vm.uiState.value.groups.size)
         assertEquals("wing", vm.uiState.value.resultsFor)
@@ -133,7 +133,7 @@ class SearchViewModelTest {
         assertNull(vm.uiState.value.resultsFor)
         assertTrue(vm.uiState.value.groups.isEmpty())
 
-        vm.setQuery("Chipotle")
+        vm.onQueryChange("Chipotle")
         settle()
         assertEquals("chipotle", vm.uiState.value.resultsFor)
         assertTrue(vm.uiState.value.groups.isEmpty())
@@ -162,13 +162,35 @@ class SearchViewModelTest {
     }
 
     @Test
+    fun `after a Retry, a return after the subscription lapsed still keeps the results`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        fail = IllegalStateException("read failed")
+        val vm = viewModel("wingstop")
+        val first = launch { vm.uiState.collect {} }
+        settle()
+        assertTrue(vm.uiState.value.failed)
+        fail = null
+        vm.retry()
+        settle()
+        assertEquals(10, vm.uiState.value.groups.size)
+        first.cancel()
+        advanceTimeBy(10_000)
+
+        val seen = mutableListOf<SearchUiState>()
+        val again = launch { vm.uiState.collect { seen += it } }
+        settle()
+        assertTrue("never blank on return", seen.isNotEmpty() && seen.all { it.groups.size == 10 })
+        again.cancel()
+    }
+
+    @Test
     fun `the query never reaches an INFO or higher line, a failure included`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         Timber.plant(tree)
         val query = "Zqxwingstop"
         val vm = viewModel(null)
         val job = launch { vm.uiState.collect {} }
-        vm.setQuery(query)
+        vm.onQueryChange(query)
         settle()
         fail = IllegalStateException("no such table near $query")
         vm.retry()

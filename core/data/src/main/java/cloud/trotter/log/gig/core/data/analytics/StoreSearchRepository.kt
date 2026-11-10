@@ -6,10 +6,12 @@ import cloud.trotter.log.gig.domain.analytics.search.ShiftMatches
 import cloud.trotter.log.gig.domain.analytics.search.StoreQuery
 import cloud.trotter.log.gig.domain.analytics.search.TimelineSearch
 import cloud.trotter.log.gig.domain.analytics.timeline.ShiftTimeline
+import cloud.trotter.log.gig.domain.state.Platform
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.flowOf
 
 /**
@@ -30,14 +32,24 @@ class StoreSearchRepository @Inject constructor(
             offers.forEach { if (it.sessionId !in ids && query.matches(it.name)) ids += it.sessionId }
             drops.forEach { if (it.sessionId !in ids && query.matches(it.name)) ids += it.sessionId }
             shifts.filter { it.sessionId in ids }
-        }
+        }.distinctUntilChangedBy { shifts -> shifts.map { ShiftHeader(it.sessionId, it.platform, it.startedAt, it.endedAt) } }
 
     /**
      * The matching rows of [shifts] (one page, in its order), each shift folded as running while it has no end. A shift
      * whose matches fold to no row (an offer of an outcome this build does not know) is left out.
      */
-    fun results(shifts: List<DayShift>, query: StoreQuery): Flow<List<ShiftMatches>> {
+    fun results(
+        shifts: List<DayShift>,
+        query: StoreQuery,
+        batchSize: Int = SEARCH_BATCH_SHIFTS,
+    ): Flow<List<ShiftMatches>> {
         if (shifts.isEmpty()) return flowOf(emptyList())
+        // Each batch binds at most [batchSize] ids, well under SQLite's 999 bind limit however many pages are loaded.
+        val batches = shifts.chunked(batchSize).map { batch -> batchResults(batch, query) }
+        return combine(batches) { parts -> parts.flatMap { it } }
+    }
+
+    private fun batchResults(shifts: List<DayShift>, query: StoreQuery): Flow<List<ShiftMatches>> {
         val ids = shifts.map { it.sessionId }
         return combine(
             storeSearchDao.offersForSessions(ids),
@@ -56,3 +68,9 @@ class StoreSearchRepository @Inject constructor(
         }
     }
 }
+
+/** What a result group shows of its shift; a change elsewhere in the shift (its pay) does not restart the reads. */
+private data class ShiftHeader(val sessionId: String, val platform: Platform, val startedAt: Long, val endedAt: Long?)
+
+/** Shifts per batched read: one page is 10, so a batch covers ten pages. */
+internal const val SEARCH_BATCH_SHIFTS = 100

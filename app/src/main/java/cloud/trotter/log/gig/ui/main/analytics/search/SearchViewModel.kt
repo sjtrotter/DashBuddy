@@ -73,7 +73,7 @@ class SearchViewModel @Inject constructor(
     private val attempts = MutableStateFlow(0)
 
     /** UDF intent: the field changed. A new query starts again at the first page. */
-    fun setQuery(text: String) {
+    fun onQueryChange(text: String) {
         if (StoreQuery.normalize(text) != StoreQuery.normalize(query)) savedStateHandle[KEY_PAGES] = 1
         query = text
         savedStateHandle[Screen.Search.ARG_QUERY] = text
@@ -95,7 +95,9 @@ class SearchViewModel @Inject constructor(
             .distinctUntilChanged()
             .debounce { if (it == null) 0L else SEARCH_DEBOUNCE_MS }
             .flatMapLatest { search -> if (search == null) flowOf(SearchUiState()) else results(search) }
-            .onStart { if (attempt > 0) emit(SearchUiState()) }
+            // Only a Retry from the failed state starts blank; a resubscribe after WhileSubscribed lapses (Back from a
+            // result) keeps the last results, so the list keeps its position.
+            .onStart { if (attempt > 0 && uiState.value.failed) emit(SearchUiState()) }
             .catch { e -> emit(failedRead(e)) }
             .combine(recordsStatusRepository.status) { state, records -> state.copy(records = records) }
             .catch { e -> emit(failedRead(e)) }

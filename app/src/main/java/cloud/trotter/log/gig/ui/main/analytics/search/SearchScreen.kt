@@ -69,7 +69,7 @@ fun SearchScreen(
     SearchContent(
         query = viewModel.query,
         uiState = uiState,
-        onQueryChange = viewModel::setQuery,
+        onQueryChange = viewModel::onQueryChange,
         onBack = onBack,
         onOpenSession = onOpenSession,
         onShowMore = viewModel::showMore,

@@ -117,4 +117,16 @@ class StoreSearchReadsTest {
         assertEquals("ACCEPTED_NO_DELIVERY_YET", card.card.state.name)
         assertTrue(search.results(emptyList(), query("wingstop")).first().isEmpty())
     }
+
+    @Test
+    fun `a page larger than one batch reads every shift, in order`() = runBlocking {
+        val dao = db.analyticsDao()
+        for (i in 0 until 5) {
+            dao.upsertSession(session("s$i", t0 + i * day))
+            dao.upsertOffer(offer(100L + i, "s$i", t0 + i * day + 60_000, "Wingstop"))
+        }
+        val shifts = search.matchingShifts(query("wingstop")).first()
+        val groups = search.results(shifts, query("wingstop"), batchSize = 2).first()
+        assertEquals(listOf("s4", "s3", "s2", "s1", "s0"), groups.map { it.shift.sessionId })
+    }
 }
