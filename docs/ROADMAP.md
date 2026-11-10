@@ -50,11 +50,11 @@ Each line is one PR unless noted.
    Uber's Driver's License screens have no sensitive rule (the block side of the Pledge; a text-anchored rule and a
    hand-built SENSITIVE fixture carrying the license text, no new capture needed; over-blocking is
    the safe direction).
-2. **Gas prices on Play:** release builds read `EIA_API_KEY` only from `local.properties`, so every CI-built APK
-   (v0.231.0 included) has a blank key and the automatic gas price fails for every tester. Gradle reads the key from
-   an environment variable too, and the release workflow passes an `EIA_API_KEY` secret (**needs your OK to add the
-   secret**), with **#1478** (a failed lookup says so instead of showing the old figure as "Regional average"). #1566
-   later takes the key out of the app.
+2. **Gas prices on Play: #1478.** Release builds read `EIA_API_KEY` only from `local.properties`, so every CI-built
+   APK (v0.231.0 included) has a blank key and the automatic gas price fails for every tester. Decided 11-10: no key
+   in CI, because a key in the Play APK is readable by anyone who unpacks it. #1478 makes the failed lookup say so
+   (and keep the last real figure, dated) instead of showing the old figure as "Regional average"; testers type a
+   price until #1566 serves prices from the signed feed with no key in the app.
 3. **Offers lost, one PR (`offer.json5` + `chrome.json5`):** **#1343** a "Very busy" boost badge drops the whole card
    to UNKNOWN and the accepted offer is lost, with **#1342** the drawer rule that copies the same reject and claims
    every closed-drawer frame (one byte-pin edit, not two; council default: option 1, `hasClickAction`). Confirm a real
