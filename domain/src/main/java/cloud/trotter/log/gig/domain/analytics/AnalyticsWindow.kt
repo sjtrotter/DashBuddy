@@ -85,6 +85,17 @@ data class AnalyticsWindowSelection(val weekOffset: Int) {
     companion object {
         /** Recap's opening week when nothing is persisted: the current pay week. */
         val DEFAULT: AnalyticsWindowSelection = AnalyticsWindowSelection(0)
+
+        /**
+         * The selection that shows [date]'s Monday week against [today] (#1515: the date picker's Week and the Month
+         * screen's rows): whole Monday weeks from this week's Monday back to [date]'s. A date after this week selects
+         * this week, so the offset is never positive.
+         */
+        fun weekOf(date: LocalDate, today: LocalDate): AnalyticsWindowSelection {
+            val thisMonday = requireNotNull(AnalyticsWindows.current(WindowGranularity.WEEK, today).startDate)
+            val monday = requireNotNull(AnalyticsWindows.current(WindowGranularity.WEEK, date).startDate)
+            return AnalyticsWindowSelection(ChronoUnit.WEEKS.between(thisMonday, monday).toInt().coerceAtMost(0))
+        }
     }
 }
 

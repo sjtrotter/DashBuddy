@@ -331,6 +331,25 @@ old target to scroll it to the very top, `LazyColumn` clamps at the end and the 
 header, which stays in view (an accepted limit). The list never writes Recap's `AnalyticsWindowSelection`, so Back
 returns to Recap on the same week. An empty visible set (not laid out yet) is never reported.
 
+**The date picker and the Month screen (#1515, PR C).** One title-bar picker (`RecapDatePicker.kt`: Material's
+`DatePickerDialog`, dates after today disabled by `UpToToday`, today from `LocalNowProvider` in the device zone) offers
+Cancel plus a context's choices and prints the period each would open ("Week  Oct 26 to Nov 1", "Month  October
+2026") as the selection moves. **One week owner:** Recap's Week (`AnalyticsViewModel.selectWeek`), its arrows
+(`stepWeek`) and a Month row all write the persisted `AnalyticsWindowSelection` through `writeRecapWeek`; the offset
+is the pure `AnalyticsWindowSelection.weekOf(date, today)` (whole Monday weeks back, never positive), so the period
+bar and the picker never disagree. The Shifts list's Week (`ShiftsViewModel.jumpTo`) writes only the list's own
+`week` key in its `SavedStateHandle` and never Recap's week. **The Month screen** (`MonthViewModel`) holds its month
+and switch in its `SavedStateHandle` under the route's keys (a future or unparsable month resolves to the current
+one) and reads `RecapRepository.days` for the month and the month before, judged by `RecapDays.ofMonth`; no new SQL.
+Its total is `MonthWeeks.total` (each day's value, none counting $0); its rows are `MonthWeeks.of`: Monday-to-Sunday
+weeks cut at the month's edges, oldest first, only the weeks that have started in the current month, each summing
+the days that draw a value (null = the em dash, a week with no shift = "No shifts"), and they sum to the total.
+**The comparison** (`MonthComparisons.of`): a finished month against the whole month before; the current month's
+completed dates (the leading HAPPENED run) against the same dates of the month before, cut at its length (March 30
+compares Mar 1 to 29 with Feb 1 to 28); null on the current month's 1st and while a shift runs; a month before with
+no shift on those dates reads "no shifts". No percent. A month with no shift shows "No shifts in October" and the
+comparison's other side.
+
 **Home = "Today" (#977, stage 4).** A forward-looking glance over the SAME read-model, **zero** new
 queries: **So far today** is the rolling `TODAY` `periodEconomics` (replacing the old four-window
 `PeriodReview` selector, whose windows live on the #970 pager now); **This week** is

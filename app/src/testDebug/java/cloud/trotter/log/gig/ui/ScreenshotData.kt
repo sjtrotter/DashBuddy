@@ -34,6 +34,7 @@ import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.ui.main.analytics.AnalyticsUiState
 import cloud.trotter.log.gig.ui.main.analytics.ShiftToCheck
 import cloud.trotter.log.gig.ui.main.analytics.day.DayUiState
+import cloud.trotter.log.gig.ui.main.analytics.month.MonthUiState
 import cloud.trotter.log.gig.ui.main.analytics.shifts.ShiftsUiState
 import cloud.trotter.log.gig.ui.main.dashboard.DashboardUiState
 import cloud.trotter.log.gig.ui.main.playbook.PlaybookUiState
@@ -41,6 +42,7 @@ import cloud.trotter.log.gig.R
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneOffset
 
 /**
@@ -334,6 +336,44 @@ internal object ScreenshotData {
     }
 
     const val BUSY_WEEK_SHIFTS = 29
+
+    // ── Month (#1515) ───────────────────────────────────────────────────
+
+    /** One shift on each listed day of [month], earning the amount given (profit 76 % of it). */
+    private fun monthFacts(month: YearMonth, earnedByDay: Map<Int, Double>): List<DayFacts> = earnedByDay.map { (day, earned) ->
+        val date = month.atDay(day)
+        DayFacts(date, listOf(shift("m-$date", "${date}T15:00:00Z", 5.0, earned, earned * 0.76)))
+    }
+
+    private val august = YearMonth.of(2026, 8)
+    private val september = YearMonth.of(2026, 9)
+    private val october = YearMonth.of(2026, 10)
+
+    private val augustFacts = monthFacts(august, mapOf(3 to 84.20, 7 to 131.45, 12 to 77.90, 15 to 142.30, 21 to 96.75, 28 to 118.10))
+    private val septemberFacts = monthFacts(
+        september,
+        mapOf(1 to 92.40, 4 to 118.60, 5 to 134.25, 10 to 88.35, 12 to 141.90, 17 to 95.10, 19 to 152.30, 24 to 101.20, 26 to 139.75),
+    )
+
+    /** October to today: earlier shifts, then last week's and this week's (today's still running). */
+    private val octoberFacts = monthFacts(october, mapOf(2 to 87.20, 3 to 128.40, 8 to 96.30, 10 to 144.10, 15 to 102.75)) +
+        lastWeekFacts + weekFacts
+
+    private fun month(month: YearMonth, facts: List<DayFacts>, beforeFacts: List<DayFacts>) = MonthUiState(
+        month = month,
+        today = today,
+        days = RecapDays.ofMonth(month, today, facts),
+        monthBeforeDays = RecapDays.ofMonth(month.minusMonths(1), today, beforeFacts),
+    )
+
+    /** September, finished: against the whole of August. */
+    val monthFinished: MonthUiState get() = month(september, septemberFacts, augustFacts)
+
+    /** October, the current month: Oct 1 to 27 against Sep 1 to 27; the weeks that have started; Oct 24's shift had no pay found. */
+    val monthCurrent: MonthUiState get() = month(october, octoberFacts, septemberFacts)
+
+    /** July with no shift; June had none either, said in words. */
+    val monthEmpty: MonthUiState get() = month(YearMonth.of(2026, 7), emptyList(), emptyList())
 
     fun playbook(showMore: Boolean) = PlaybookUiState(
         showMore = showMore,

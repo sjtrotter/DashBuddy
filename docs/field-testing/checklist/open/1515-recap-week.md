@@ -10,4 +10,7 @@ issues: #1515
   bars, and nothing shows $0.00 for a day with no shift.
   The Shifts row opens every shift at Recap's week: that week's header is at the top (an empty week reads "No
   shifts"), a shift with a check carries its reason, and Back returns to Recap on the same week.
+  The date picker's Week and Month, and a Month row back to Recap: Week moves Recap's period bar to the picked
+  week; Month opens the Month screen on that month, whose week rows sum to its total; a row's tap returns to Recap
+  on that week; in the Shifts list the picker jumps to the picked week's header.
   - Confirmed: 0/2.

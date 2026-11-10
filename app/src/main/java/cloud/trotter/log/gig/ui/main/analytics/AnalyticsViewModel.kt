@@ -48,8 +48,8 @@ import javax.inject.Inject
  * State holder for Recap, the week (#1515): one immutable [AnalyticsUiState] assembled from the read model for the
  * selected Monday week and the week before (Principle 1, state down, intents up).
  *
- * **The week.** The selection is persisted in app preferences and is its one owner: [stepWeek] writes it and the
- * resolved week comes back through [AppPreferencesRepository.analyticsWindow], with no local copy (Principle 5).
+ * **The week.** The selection is persisted in app preferences and is its one owner: [stepWeek] and the date picker's
+ * [selectWeek] write it (as the Month screen's rows do) and the resolved week comes back through [AppPreferencesRepository.analyticsWindow], with no local copy (Principle 5).
  * Home writes this week before it opens Recap. The week resolves against [currentLocalDateFlow], so it re-anchors at
  * local midnight without a per-second tick.
  *
@@ -183,16 +183,16 @@ class AnalyticsViewModel @Inject constructor(
         if (steps == 0) return
         val next = selection.value.weekOffset + steps
         if (next > 0) return
-        viewModelScope.launch {
-            try {
-                appPreferencesRepository.setAnalyticsWindow(AnalyticsWindowSelection(next))
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // P7: no PII, an offset only.
-                Timber.tag(TAG).w(e, "week selection not persisted")
-            }
-        }
+        viewModelScope.launch { appPreferencesRepository.writeRecapWeek(AnalyticsWindowSelection(next), TAG) }
+    }
+
+    /**
+     * UDF intent: the date picker's Week. Recap moves to [date]'s Monday week through the same selection the arrows
+     * write ([AnalyticsWindowSelection.weekOf]); a date after this week selects this week.
+     */
+    fun selectWeek(date: LocalDate) {
+        val selection = AnalyticsWindowSelection.weekOf(date, today.value)
+        viewModelScope.launch { appPreferencesRepository.writeRecapWeek(selection, TAG) }
     }
 
     /** The shifts a delivery with no shift could be assigned to; the repository owns the policy (±48 h, ended, same app). */

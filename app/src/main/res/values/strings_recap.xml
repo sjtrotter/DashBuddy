@@ -57,4 +57,21 @@
     <!-- A running shift: "DoorDash, 2:30 PM to now". -->
     <string name="shifts_app_to_now_format">%1$s, %2$s to now</string>
     <string name="shifts_could_not_load_what">your shifts</string>
+    <!-- The date picker (Recap, the Shifts list, Month): its button, read aloud and on long press. -->
+    <string name="recap_picker_open">Choose a date</string>
+    <string name="recap_picker_cancel">Cancel</string>
+    <!-- A choice, and the label of the period it opens: "Week  Oct 26 to Nov 1", "Month  October 2026". -->
+    <string name="recap_picker_week">Week</string>
+    <string name="recap_picker_month">Month</string>
+    <!-- The Month screen. -->
+    <string name="month_title">Month</string>
+    <string name="month_previous">Previous month</string>
+    <string name="month_next">Next month</string>
+    <!-- A month with no shift: "No shifts in October". -->
+    <string name="month_none_format">No shifts in %1$s</string>
+    <!-- The comparison's other side with no shift on those dates: "September, no shifts", "Oct 1 to 8, no shifts". -->
+    <string name="month_comparison_none_format">%1$s, no shifts</string>
+    <!-- A week row, read aloud: what a tap does. -->
+    <string name="month_week_open">Open week in Recap</string>
+    <string name="month_could_not_load_what">this month</string>
 </resources>

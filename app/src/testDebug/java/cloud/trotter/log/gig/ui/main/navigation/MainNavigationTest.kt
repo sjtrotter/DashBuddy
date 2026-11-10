@@ -19,6 +19,15 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
+import cloud.trotter.log.gig.domain.analytics.recap.ShiftWeeks
+import cloud.trotter.log.gig.ui.main.analytics.month.MonthScreen
+import cloud.trotter.log.gig.ui.main.analytics.month.MonthViewModel
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -623,7 +632,8 @@ class MainNavigationTest {
                 ).also { created += it }
             }
             AnalyticsScreen(
-                onOpenSettings = {}, onOpenSession = { _, _ -> }, onOpenDay = {}, onOpenShifts = {}, viewModel = vm,
+                onOpenSettings = {}, onOpenSession = { _, _ -> }, onOpenDay = {}, onOpenShifts = {}, onOpenMonth = { _, _ -> },
+                viewModel = vm,
             )
         })
         // The ViewModelStore a process death loses: the restored composition reads the replacement.
@@ -674,6 +684,7 @@ class MainNavigationTest {
             }
             AnalyticsScreen(
                 onOpenSettings = {}, onOpenSession = { _, _ -> }, onOpenDay = {}, onOpenShifts = { actions.openShifts(it) },
+                onOpenMonth = { _, _ -> },
                 viewModel = vm,
             )
         })
@@ -695,6 +706,104 @@ class MainNavigationTest {
         assertBarShown(false)
         back()
         assertEquals(analytics, current())
+    }
+
+    // ── (l) The date picker and the Month screen ───────────────────────
+
+    /** Recap's week, written through the mocked preferences as DataStore would. */
+    private val recapWeek = MutableStateFlow(AnalyticsWindowSelection.DEFAULT)
+
+    private fun stubWeekWrites() {
+        whenever(hubPreferences.analyticsWindow).thenReturn(recapWeek)
+        whenever(runBlocking { hubPreferences.setAnalyticsWindow(any()) }).thenAnswer {
+            recapWeek.value = it.getArgument(0)
+            Unit
+        }
+    }
+
+    private fun clickNode(matcher: SemanticsMatcher) {
+        compose.onNode(matcher).performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitForIdle()
+    }
+
+    private fun openPicker() {
+        clickNode(hasContentDescription(compose.activity.getString(R.string.recap_picker_open)) and hasClickAction())
+    }
+
+    private fun choice(id: Int) = hasText(compose.activity.getString(id)) and hasClickAction()
+
+    @Test fun `Recap's date picker moves the week, and its Month opens Month on that month`() {
+        stubHub()
+        stubWeekWrites()
+        val created = mutableListOf<AnalyticsViewModel>()
+        realScreens = mapOf(Screen.Analytics.route to { _ ->
+            val vm = viewModel {
+                AnalyticsViewModel(
+                    hubRepository, recapRepository, shiftChecksRepository, ledgerRepository, mock<CorrectionRepository>(),
+                    hubPreferences, hubStatus, stateManager, createSavedStateHandle(),
+                ).also { created += it }
+            }
+            AnalyticsScreen(
+                onOpenSettings = {}, onOpenSession = { _, _ -> }, onOpenDay = {}, onOpenShifts = {},
+                onOpenMonth = actions::openMonth, viewModel = vm,
+            )
+        })
+        show()
+        bar(TopLevel.ANALYTICS)
+        val today = LocalDate.now()
+
+        // The calendar opens on this month; the 15th of the month before is always in an earlier week.
+        openPicker()
+        clickNode(hasContentDescription("previous month", substring = true, ignoreCase = true))
+        val picked = today.minusMonths(1).withDayOfMonth(15)
+        val described = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.US).format(picked)
+        clickNode(hasText(described, substring = true) or hasContentDescription(described, substring = true))
+        clickNode(choice(R.string.recap_picker_week))
+        assertEquals(AnalyticsWindowSelection.weekOf(picked, today), recapWeek.value)
+        assertEquals(ShiftWeeks.weekStart(picked), created.last().uiState.value.week.startDate)
+        assertEquals(analytics, current())
+
+        // Reopened, it starts on that week's Monday; Month opens that month on Recap's switch value.
+        ui { created.last().setMeasure(RecapMeasure.PROFIT) }
+        openPicker()
+        clickNode(choice(R.string.recap_picker_month))
+        assertEquals(Screen.Month.route, current())
+        val args = nav.currentBackStackEntry?.arguments
+        assertEquals(YearMonth.from(ShiftWeeks.weekStart(picked)).toString(), args?.getString(Screen.Month.ARG_MONTH))
+        assertEquals(RecapMeasure.PROFIT.name, args?.getString(Screen.Month.ARG_MEASURE))
+        assertEquals(stackOf(dashboard, analytics, Screen.Month.route), stack())
+        assertBarShown(false)
+    }
+
+    @Test fun `a Month row returns to Recap on that week`() {
+        stubHub()
+        stubWeekWrites()
+        realScreens = mapOf(Screen.Month.route to { _ ->
+            val vm = viewModel {
+                MonthViewModel(createSavedStateHandle(), recapRepository, hubStatus, hubPreferences, stateManager)
+            }
+            MonthScreen(onBack = actions::back, onOpenRecapWeek = actions::backToRecap, viewModel = vm)
+        })
+        show()
+        bar(TopLevel.ANALYTICS)
+        val today = LocalDate.now()
+        val month = YearMonth.from(today).minusMonths(1)
+        ui { actions.openMonth(month, RecapMeasure.EARNED) }
+        assertEquals(Screen.Month.route, current())
+
+        val monday = ShiftWeeks.weekStart(month.atDay(1)).plusWeeks(1)
+        val row = compose.onNodeWithTag("month-week-$monday")
+        assertEquals(
+            compose.activity.getString(R.string.month_week_open),
+            row.fetchSemanticsNode().config[SemanticsActions.OnClick].label,
+        )
+        row.performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitForIdle()
+
+        assertEquals(analytics, current())
+        assertEquals(stackOf(dashboard, analytics), stack())
+        assertEquals(AnalyticsWindowSelection.weekOf(monday, today), recapWeek.value)
+        assertEquals(monday, recapWeek.value.resolve(today).startDate)
     }
 
     private val verticalScroll = SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange)

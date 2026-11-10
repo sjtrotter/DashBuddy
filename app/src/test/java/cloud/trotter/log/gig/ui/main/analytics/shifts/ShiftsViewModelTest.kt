@@ -139,6 +139,26 @@ class ShiftsViewModelTest {
     }
 
     @Test
+    fun `the date picker's jump moves the target week over the route argument`() = runTest {
+        shifts = listOf(shift("a", thisWeek), shift("c", lastWeek))
+        runWithViewModel(week = lastWeek.toString()) { viewModel ->
+            assertEquals(lastWeek, viewModel.uiState.value.targetWeek)
+            val empty = thisWeek.minusWeeks(4)
+            viewModel.jumpTo(empty.plusDays(3))
+            testScheduler.runCurrent()
+            val state = viewModel.uiState.value
+            assertEquals(empty, state.targetWeek)
+            assertEquals(listOf(thisWeek, lastWeek, empty), state.weeks.map { it.start })
+            assertTrue(state.weeks.last().shifts.isEmpty())
+            assertEquals(1, state.jumps)
+            viewModel.jumpTo(empty)
+            testScheduler.runCurrent()
+            assertEquals(empty, viewModel.uiState.value.targetWeek)
+            assertEquals("a repeated week is still a jump", 2, viewModel.uiState.value.jumps)
+        }
+    }
+
+    @Test
     fun `no week argument, or one that does not parse, opens this week`() = runTest {
         shifts = listOf(shift("c", lastWeek))
         runWithViewModel { viewModel -> assertEquals(thisWeek, viewModel.uiState.value.targetWeek) }

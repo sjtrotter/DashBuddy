@@ -3,6 +3,7 @@ package cloud.trotter.log.gig.domain.analytics.recap
 import cloud.trotter.log.gig.domain.analytics.ANALYTICS_MONEY_EPSILON
 import cloud.trotter.log.gig.domain.state.Platform
 import java.time.LocalDate
+import java.time.YearMonth
 import kotlin.math.abs
 
 /**
@@ -98,6 +99,15 @@ object RecapDays {
         val byDate = facts.associateBy { it.date }
         return (0 until WEEK_DAYS).map { offset ->
             val date = weekStart.plusDays(offset.toLong())
+            day(date, today, byDate[date] ?: DayFacts(date))
+        }
+    }
+
+    /** Every day of [month], one mark each, against [today]; as [of], a day missing from [facts] has no shift. */
+    fun ofMonth(month: YearMonth, today: LocalDate, facts: List<DayFacts>): List<RecapDay> {
+        val byDate = facts.associateBy { it.date }
+        return (1..month.lengthOfMonth()).map { dayOfMonth ->
+            val date = month.atDay(dayOfMonth)
             day(date, today, byDate[date] ?: DayFacts(date))
         }
     }

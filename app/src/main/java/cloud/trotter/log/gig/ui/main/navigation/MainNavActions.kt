@@ -1,7 +1,9 @@
 package cloud.trotter.log.gig.ui.main.navigation
 
 import androidx.navigation.NavController
+import cloud.trotter.log.gig.domain.analytics.recap.RecapMeasure
 import java.time.LocalDate
+import java.time.YearMonth
 
 /**
  * One method per navigation intent (#1447). The NavHost's screens call only these, so how each intent
@@ -34,6 +36,14 @@ class MainNavActions(private val nav: NavController) {
 
     /** Recap's Shifts row: every shift, opened at the Monday [weekStart]. */
     fun openShifts(weekStart: LocalDate) = nav.navigate(Screen.Shifts.route(weekStart))
+
+    /** Recap's date picker, Month: [month] on Recap's stack, opening on Recap's switch value. */
+    fun openMonth(month: YearMonth, measure: RecapMeasure) = nav.navigate(Screen.Month.route(month, measure))
+
+    /** A Month row: back to Recap under it. Nothing moves when Recap is not on the stack. */
+    fun backToRecap() {
+        nav.popBackStack(Screen.Analytics.route, inclusive = false)
+    }
 
     /** A static route pushed over the current screen (the Settings menu, Garage, Costs). */
     fun open(route: String) = nav.push(route)

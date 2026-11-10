@@ -233,6 +233,26 @@ class AnalyticsViewModelTest {
     }
 
     @Test
+    fun `the date picker's Week writes the offset the arrows would`() = runTest {
+        runWithViewModel { viewModel ->
+            val threeBack = thisWeek().startDate!!.minusWeeks(3)
+            // A Sunday: the last day of the week three back.
+            viewModel.selectWeek(threeBack.plusDays(6))
+            testScheduler.runCurrent()
+            assertEquals(AnalyticsWindowSelection(-3), selectionFlow.value)
+            assertEquals(threeBack, viewModel.uiState.value.week.startDate)
+            // The arrows step from the same owner the picker wrote.
+            viewModel.stepWeek(1)
+            testScheduler.runCurrent()
+            assertEquals(AnalyticsWindowSelection(-2), selectionFlow.value)
+            viewModel.selectWeek(today)
+            testScheduler.runCurrent()
+            assertEquals(AnalyticsWindowSelection.DEFAULT, selectionFlow.value)
+            assertFalse(viewModel.uiState.value.canStepForward)
+        }
+    }
+
+    @Test
     fun `no shift ever recorded is the no-shifts-yet state, and a week off is told apart`() = runTest {
         anyShift = false
         runWithViewModel { viewModel ->
