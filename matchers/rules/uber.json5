@@ -76,6 +76,13 @@
                 },
                 {
                   "hasTextContaining": "Enter the code we sent"
+                },
+                // #1402: the dasher's own Driver's License pages (account documents), fielded 2026-10-21
+                // reaching UNKNOWN with only the marker backstop behind them. Case-insensitive, so it
+                // covers "Driver's license" too. The text is the `SensitiveTextMarkers` keyword verbatim,
+                // ASCII apostrophe: the backstop does not fold U+2019, and the fielded hits matched it.
+                {
+                  "hasTextContaining": "Driver's License"
                 }
               ]
             }
