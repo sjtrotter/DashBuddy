@@ -24,6 +24,7 @@ or a new data type in `PRIVACY.md` § 6.
 | Data safety: installed apps | Not collected | The app checks only the two driver apps it names in the manifest's `<queries>`, and the result stays on the phone. |
 | Data safety: encrypted in transit | Yes | Every endpoint is HTTPS; the target SDK blocks cleartext and the app does not re-enable it. |
 | Data safety: deletion | gig.log runs no server and keeps no copy of user data | Clearing the app's storage or uninstalling deletes its private data. Exports, screenshots and the Android backup are separate copies the user deletes where they live (`PRIVACY.md` § 7). |
+| Countries/regions | United States only, on closed testing and production (internal testing has no country list) | Recognition reads the U.S. English driver apps; money is dollars and miles; gas prices (EIA), vehicles (EPA) and the IRS mileage deduction are U.S.-only. The API cannot set this. |
 | App category | Finance | Where the comparable driver earnings apps are listed. Business is the alternative. |
 | Contact details | Email `support@trotter.cloud`, website `https://gig.log.trotter.cloud/` | The same address as the About screen and the privacy page. trotter.cloud forwards it with Cloudflare Email Routing. |
 | Accessibility API | Declaration and video per `play/accessibility-declaration.md` | `isAccessibilityTool` is false in the Play build. |

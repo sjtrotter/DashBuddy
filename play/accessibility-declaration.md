@@ -82,7 +82,10 @@ settings; Don't allow leaves the service off. The service description in Android
 
 ## Demo video script
 
-Before recording: install the Play build from internal testing. In Android settings, grant gig.log every other
+Before recording: install the Play build. For the first declaration the Play Store cannot serve the app yet (the
+release waits on this video), so build an APK from the tag run's `play-bundle` AAB with `bundletool build-apks
+--mode=universal`, signed with any local key, and install it over USB (`docs/RELEASE.md` §3); uninstall it before
+installing from Play. For later recordings, install from internal testing. In Android settings, grant gig.log every other
 setup permission, so the screen reading card is the only step left: notification access, location (precise),
 notifications and bubbles. Leave gig.log's accessibility service off. Force-stop gig.log, so the process is new and
 no earlier "Don't allow" is remembered. Scroll slowly enough that every line of the card can be read.
