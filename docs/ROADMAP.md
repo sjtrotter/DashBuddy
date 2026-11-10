@@ -70,15 +70,20 @@ and its stale "Planned" list. Needs a design call: #1446 theme setting, #1479 of
   #1335 JOB_ABANDON residuals · #1083 recovery clamp · #1097 double CONFIRM_DECLINE.
 - **Recognition:** #1342 the side-nav drawer rule hides new DoorDash screens from UNKNOWN and the census
   (prerequisite for recognition health, #1571) · #1217 picker-row redact suffix · #1322 `CLICK_INTENTS` contract.
-- **App and CI:** #1336 heads-up tap opens the full screen · #1351 chat line kinds · #1494 deep-link pop race ·
-  #1308 SnapshotLibrarian cap · #1465 `.dirty` CI version · #917 odometer heartbeat + engine-death alarm (parts 1-2).
+- **App and CI:** #1336 heads-up tap opens the full screen · #1333 HUD S4 (prune chat lines older than 30 days,
+  dead code, docs) · #1351 chat line kinds and #1347 waiting time on resume (no longer blocked by #1333) · #1494
+  deep-link pop race · #1308 SnapshotLibrarian cap · #1465 `.dirty` CI version · #917 odometer heartbeat +
+  engine-death alarm (parts 1-2).
+- **Structure:** split `AnalyticsProjector` (1,020 lines; new issue) · #1364 PR 2, the flat economy fields derived
+  from the typed vehicle inputs (spec agreed, unblocked).
 
 ## 5. The signed-feeds and rules program (#1559, approved 2026-11-09)
 
 Feeds: #1561 ADRs → #1562 accounts and keys (developer) → #1563 feed-contract → #1564 fuel publisher and #1565
 transport → #1566 fuel prices from the feed (the EIA key leaves the app) → #1567 custom feed. Rules: #1568 batch
 loader → #640 phone fetch and #641 tag-sign publishing → #695 constants feed → #1569/#1570. Census editor and health:
-#1571, #1572, #1573 (each blocked by a census-repo issue), #1209. #192 stays the rules parent.
+#1571, #1572, #1573 (each blocked by a census-repo issue), #1209. #192 stays the rules epic, nested under #1559.
+#1561's ADR-0009 update also retires the pinned-artifact production path.
 
 ## 6. Needs a developer decision first
 
@@ -92,7 +97,9 @@ loader → #640 phone fetch and #641 tag-sign publishing → #695 constants feed
   time out · #1081 deferred completion · #1337 TTS stream vs DoorDash's alarm chime · #1228 composite text inputs ·
   #1193 census admission figures · #1505 (ADR-0012 revision) · #1508 store wait on the offer card · #527 job
   lifetime · #964 ratings history · #1035 the running-total wheel · #998 the return-order flow · #1373 car-care
-  receipts.
+  receipts · **#1135** a weekly total the dasher types in, with Recap naming the difference (wanted at all?) ·
+  **#1289** close the snapshot-durability gap as documented, or keep it open as you ruled on 10-07 · crash reporting
+  for Play installs (#84's never-built prerequisite; a privacy call).
 
 ## 7. Gated on field data
 
@@ -112,13 +119,17 @@ measured offer rate · #883 pixel-redacted screenshots · #1386/#1389 fuel econo
 drafter (mostly overtaken by #1559 track E) · #1138 census community half · #214 DSL onboarding · #505 replay
 frontier · #590 phase 2 (after #1568) · #245 re-scope to the `contains("pay")` heuristic · #428 es/fr consent strings
 and tap labels · #1349 accessibility description (after the Play review) · #1580 precise-location declaration, due
-2027-01-27 · #246 counsel review (external) · #1271/#1272/#1276 test-suite tail · #1364 economy fields.
+2027-01-27 · #246 counsel review (external) · #1271/#1272/#1276 test-suite tail (four of #1272's five missing
+journeys can be built from existing captures; the Uber one waits on #826).
 
-## Housekeeping from the 2026-11-10 triage
+## Housekeeping decided by the council (2026-11-10)
 
-Likely done or superseded, pending the developer's OK to close: #84 (Play internal track live), #636 (no consumer),
-#921 (into #1051), #823 (phases 1-2 shipped), #1177 (done in the census repo), #1488 (`AnalyticsRepository` is 703
-lines). Close or rewrite after a ruling: #1135, #1272, #1289, #723. #1364's `in-progress` label is stale.
+Claude, Sol and Fable reviewed the triage's close list; majority decides, with the developer's own rulings kept.
+Closed as done: #84, #823, #1177 (census follow-up filed there), #1488 (the projector split filed instead), #1357.
+Closed as superseded: #636 (→ #640/#641), #723 (→ the Garage), #252 (→ #1194), #1204 (→ #1559 track E; reopen if
+wanted). Folded: #921 into #1051. Rewritten: #1135 (weekly total the dasher types in; the ledger card dropped, the
+pill read moved to #1035), #1441 (checklist mapped to its issues), #1333 (now the S4 cleanup; no longer blocks #1347
+and #1351), #1364 (PR 2, unblocked). Kept: #1272, #1289 (developer's call), #192 (nested under #1559).
 
 ## Recently resolved (2026-10-05 → 2026-11-10)
 
