@@ -73,7 +73,7 @@ Each line is one PR unless noted.
 - **#1507 online hours**, in two parts. (a) The overlap union (two apps at once count once) is a query change in
   `sessionTotals`; `ShiftPageModel.onlineMillis` must use the same rule. (b) Paused time needs a resume event (there
   is only `DASH_PAUSED`), a pause column, a schema bump and a refold, and a rule for old shifts with no resume marks:
-  a design pass first, and **split `AnalyticsProjector` (1,020 lines, new issue) before (b) adds to it**. **#1140**
+  a design pass first, and **split `AnalyticsProjector` (1,020 lines, #1591) before (b) adds to it**. **#1140**
   (End dash then backgrounded leaves the shift open: 31.7 phantom online minutes) inflates the same figure and has
   its own open decisions (which end signal, what back-dating threshold); decide it with (b).
 - Then **#1518** Est. Profit/hr + Waiting and **#1519** Est. Profit/mi (both blocked by #1507). #1518 adopts #1240's
@@ -158,7 +158,7 @@ restaurant-wait replay fixture.
 ## Housekeeping decided by the council (2026-11-10)
 
 Claude, Sol and Fable reviewed the triage's close list; majority decides, with the developer's own rulings kept.
-Closed as done: #84, #823, #1177 (census follow-up filed there), #1488 (the projector split filed instead), #1357.
+Closed as done: #84, #823, #1177 (census follow-up filed there), #1488 (the projector split filed instead as #1591), #1357.
 Closed as superseded: #636 (→ #640/#641), #723 (→ the Garage), #252 (→ #1194), #1204 (→ #1559 track E; reopen if
 wanted). Folded: #921 into #1051. Rewritten: #1135 (weekly total the dasher types in; the ledger card dropped, the
 pill read moved to #1035), #1441 (checklist mapped to its issues), #1333 (now the S4 cleanup; no longer blocks #1347
