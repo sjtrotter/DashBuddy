@@ -108,14 +108,16 @@ class TripLineMapperTest {
         assertEquals(2, nodes.count { it.icon == TrackIcon.HOUSE })
         assertEquals(listOf("New"), CombinedOffer.build(owned, offer)!!.orders.drop(1).map { it.storeName })
     }
-    @Test fun `padded owned store keeps the historical added stop counts`() {
+    // #1119 S2 (OQ9, category G): the route store key is the chain key, which trims, so a padded owned " Old " is the
+    // card's "Old" — one added store and two added drops (was two stores and one drop under the untrimmed key).
+    @Test fun `a padded owned store is the same store under the chain key`() {
         val owned = job.copy(tasks = job.tasks.map { if (it.phase == TaskPhase.PICKUP)
             it.copy(expectedStoreHint = " Old ", storeName = " Old ") else it })
         val offer = OfferFixtures.addon().copy(stopCount = 3,
             orders = listOf(OfferFixtures.order("Old"), OfferFixtures.order("New", 3)))
         val nodes = TripLineMapper.withAddOn(owned, offer).nodes.filter { it.added }
-        assertEquals(2, nodes.count { it.icon == TrackIcon.STORE })
-        assertEquals(1, nodes.count { it.icon == TrackIcon.HOUSE })
+        assertEquals(1, nodes.count { it.icon == TrackIcon.STORE })
+        assertEquals(2, nodes.count { it.icon == TrackIcon.HOUSE })
     }
 
 }

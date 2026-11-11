@@ -99,6 +99,19 @@ class HudStateMapperTest {
         }
     }
 
+    // #1119 S2: a pooled offer has no outcome event yet, so the received count adds the shift's pool.
+    @Test
+    fun `the live received count includes the shift's pooled offers`() {
+        val offer = PendingOffer("h", ParsedFields.OfferFields(parsedOffer = cloud.trotter.log.gig.domain.model.offer.ParsedOffer("h")),
+            1_000, returnFlow = Flow.Idle)
+        val pooled = PooledOffer(offer, 2_000, PoolEntryVia.FRAME, "dash", setOf("store a"))
+        val region = PlatformRegion(Platform.DoorDash, mode = Mode.Online, session = Session("dash", 1_000),
+            offerPool = listOf(pooled, pooled, pooled.copy(sessionId = "other")))
+        val open = lastDash().copy(sessionId = "dash", endedAt = null, offersReceived = 3)
+        val resting = map(shift = liveShift().copy(record = open), region = region).resting!!
+        assertEquals(5, resting.offersReceived)
+    }
+
     @Test
     fun `resting hero reads the displayed shift`() {
         val state = map(rest = true)

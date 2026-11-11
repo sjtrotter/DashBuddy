@@ -80,7 +80,8 @@ object FlowCardMapper {
 
                 AppEventType.OFFER_ACCEPTED,
                 AppEventType.OFFER_DECLINED,
-                AppEventType.OFFER_TIMEOUT -> {
+                AppEventType.OFFER_TIMEOUT,
+                AppEventType.OFFER_NOT_TAKEN -> {
                     val payload = event.payload as? OfferPayload ?: continue
                     // Defensive close of Awaiting using the offer's presentedAt.
                     // The rule-declared OFFER_RECEIVED log effect currently
@@ -120,7 +121,8 @@ object FlowCardMapper {
                     }
                     // Re-open Awaiting if the dasher returned to the
                     // waiting-for-offer state (declined / timeout). Accept
-                    // skips this — they're going into pickup.
+                    // skips this — they're going into pickup. #1119 S2: a
+                    // NOT_TAKEN arrives at the shift end, so it re-opens nothing.
                     if (payload.outcome == AppEventType.OFFER_DECLINED ||
                         payload.outcome == AppEventType.OFFER_TIMEOUT
                     ) {

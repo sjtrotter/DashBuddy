@@ -62,6 +62,13 @@ class LogMapperTest {
         assertTrue(row.dimmed)
         assertEquals(AppEventType.OFFER_TIMEOUT, row.outcome)
     }
+    @Test fun `not-taken offer is a dim thin row with its own label (#1119 S2)`() {
+        val row = map(CardStack(listOf(logOffer(outcome = AppEventType.OFFER_NOT_TAKEN)))).single() as OfferRow
+        assertTrue(row.dimmed)
+        assertEquals(AppEventType.OFFER_NOT_TAKEN, row.outcome)
+        assertEquals(cloud.trotter.log.gig.feature.bubble.R.string.hud_log_not_taken, offerRowLabel(row.outcome))
+        assertEquals(cloud.trotter.log.gig.feature.bubble.R.string.hud_log_timed_out, offerRowLabel(AppEventType.OFFER_TIMEOUT))
+    }
     @Test fun `an unlinked accept is its own thin row`() {
         val items = LogMapper.map(logStack(), LogData.Empty, emptyList(), null)
         val row = items.filterIsInstance<OfferRow>().single()

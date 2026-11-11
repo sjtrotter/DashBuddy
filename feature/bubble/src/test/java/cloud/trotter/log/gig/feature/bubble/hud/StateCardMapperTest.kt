@@ -176,6 +176,13 @@ class StateCardMapperTest {
             offer("open", null, null))))
         assertEquals(LastOfferOutcome.ACCEPTED, m.lastOffer!!.outcome)
     }
+    @Test fun `waiting's received count includes the shift's pooled offers (#1119 S2)`() {
+        val offer = PendingOffer("h", ParsedFields.OfferFields(parsedOffer = cloud.trotter.log.gig.domain.model.offer.ParsedOffer("h")),
+            1_000, returnFlow = Flow.Idle)
+        val pooled = region.copy(offerPool = listOf(PooledOffer(offer, 2_000, PoolEntryVia.FRAME, "last", setOf("store a"))))
+        val card = StateCardMapper.map(Flow.Idle, Mode.Online, null, CardStack.Empty, pooled, lastDash()) as StateCardModel.Waiting
+        assertEquals(lastDash().offersReceived + 1, card.received)
+    }
     @Test fun `timed out offer reads expired`() {
         assertEquals(LastOfferOutcome.EXPIRED,
             waiting(CardStack(listOf(offer("expired", 5_000, AppEventType.OFFER_TIMEOUT)))).lastOffer!!.outcome)

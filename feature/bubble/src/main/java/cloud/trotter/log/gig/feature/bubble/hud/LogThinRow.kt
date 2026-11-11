@@ -19,6 +19,14 @@ import cloud.trotter.log.gig.feature.bubble.R
 import cloud.trotter.log.gig.feature.bubble.hud.expense.ExpensePick
 import cloud.trotter.log.gig.feature.bubble.hud.expense.labelResource
 
+/** The thin offer row's label for [outcome]; #1119 S2 gives `OFFER_NOT_TAKEN` its own, never the accepted text. */
+internal fun offerRowLabel(outcome: AppEventType?): Int = when (outcome) {
+    AppEventType.OFFER_DECLINED -> R.string.hud_log_declined
+    AppEventType.OFFER_TIMEOUT -> R.string.hud_log_timed_out
+    AppEventType.OFFER_NOT_TAKEN -> R.string.hud_log_not_taken
+    else -> R.string.hud_log_accepted_row
+}
+
 @Composable
 internal fun LogThinRow(item: LogItem) {
     val c = AppTheme.colors
@@ -28,11 +36,8 @@ internal fun LogThinRow(item: LogItem) {
             LogTime(rememberTimeFormatter()(item.at))
             Box(Modifier.weight(1f)) {
                 when (item) {
-                    is OfferRow -> Text(stringResource(when (item.outcome) {
-                        AppEventType.OFFER_DECLINED -> R.string.hud_log_declined
-                        AppEventType.OFFER_TIMEOUT -> R.string.hud_log_timed_out
-                        else -> R.string.hud_log_accepted_row
-                    }, item.store ?: stringResource(R.string.hud_log_offer_unknown_store)),
+                    is OfferRow -> Text(stringResource(offerRowLabel(item.outcome),
+                        item.store ?: stringResource(R.string.hud_log_offer_unknown_store)),
                         color = if (item.dimmed) c.neutral else c.text2, fontSize = 14.sp)
                     is ExpenseRow -> {
                         val category = stringResource(ExpensePick.Expense(item.category).labelResource)

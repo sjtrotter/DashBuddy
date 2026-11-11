@@ -424,6 +424,24 @@ class FlowCardMapperTest {
         assertEquals(AppEventType.OFFER_TIMEOUT, offer.outcome)
     }
 
+    @Test
+    fun `not-taken closes the offer card and re-opens no Awaiting (#1119 S2)`() {
+        val events = listOf(
+            event(AppEventType.DASH_START,
+                SessionStartPayload("s1", "DoorDash", 1000L, "interaction", "WaitingForOffer"),
+                occurredAt = 1000L),
+            event(AppEventType.OFFER_RECEIVED, null, occurredAt = 2000L),
+            event(AppEventType.OFFER_NOT_TAKEN,
+                offerPayload("nt-1", AppEventType.OFFER_NOT_TAKEN, 2000L, 2030L),
+                occurredAt = 9000L),
+        )
+
+        val cards = FlowCardMapper.fold(events)
+        val offer = cards.filterIsInstance<FlowCardSnapshot.Offer>().single()
+        assertEquals(AppEventType.OFFER_NOT_TAKEN, offer.outcome)
+        assertEquals("the offer card is the last card: no Awaiting re-opened after it", offer, cards.last())
+    }
+
     // =========================================================================
     // Multi-delivery dash
     // =========================================================================
