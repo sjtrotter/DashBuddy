@@ -34,6 +34,8 @@ class DoorDashMultiOrderShopRowTest {
         assertEquals(CountUnit.ITEMS, order.countUnit)
         assertEquals(29, offer.itemCount)
         assertTrue(offer.isShop)
+        // #1598: the holder's own drop count.
+        assertEquals(2, offer.dropoffCount)
     }
 
     @Test
