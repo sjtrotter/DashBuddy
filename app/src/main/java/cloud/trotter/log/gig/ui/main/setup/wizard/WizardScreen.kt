@@ -23,8 +23,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.log.gig.R
+import cloud.trotter.log.gig.feature.setup.R as SetupR
 import cloud.trotter.log.gig.core.designsystem.time.rememberNow
 import cloud.trotter.log.gig.domain.config.OfferStrategy
 import cloud.trotter.log.gig.feature.setup.wizard.WizardViewModel
@@ -135,10 +138,16 @@ fun WizardScreen(
             )
         }
     ) { paddingValues ->
+        // #1473: save() works from a snapshot of the answers, so no step input may change them while it runs;
+        // otherwise the screen would show a value the save did not write, and "Setup saved" would confirm it.
+        // While saving, the steps drop their accessibility nodes (so no action such as a slider's set-progress can
+        // reach them; TalkBack reads "Saving") and the shield below takes every touch.
+        val savingLabel = stringResource(SetupR.string.wizard_bottom_bar_saving)
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .then(if (saving) Modifier.clearAndSetSemantics { contentDescription = savingLabel } else Modifier)
         ) {
             HorizontalPager(
                 state = pagerState,
@@ -270,8 +279,6 @@ fun WizardScreen(
                     }
                 }
             }
-            // #1473: save() works from a snapshot of the answers, so no step input may change them while it runs;
-            // otherwise the screen would show a value the save did not write, and "Setup saved" would confirm it.
             if (saving) SaveInputShield(Modifier.matchParentSize())
         }
     }

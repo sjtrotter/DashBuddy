@@ -40,7 +40,7 @@ stamp) and the host's `rememberNow()`, passed in as `nowMillis` since the module
 never says "Regional average" of a figure no lookup returned, and a failed lookup keeps the figure, says so and offers
 Retry and the price input; typing a price turns auto off, as the Costs screen's manual price does (#1478);
 the completion sheet renders the save's outcome from `WizardViewModel.saveStatus` (`SaveStatus`), so nothing says
-saved before the write finishes; the save writes a snapshot of the answers, so the steps take no input while it runs; a failure names what failed and offers Retry, closing it returns to the last step with
+saved before the write finishes; the save writes a snapshot of the answers, so the steps take no touch or accessibility input while it runs (TalkBack reads "Saving"); a failure names what failed and offers Retry, closing it returns to the last step with
 the answers intact, and Skip has its own sheet that writes nothing until Done (#1473); the
 `WizardScreen` shell + `EconomyCostsCard` stay in `:app` with the shared `ui/components/economy/*`
 editor family, and the Dashboard-hosted `setup/consent/` #843 + `setup/permissions/` sheets stay in

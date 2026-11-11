@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.ui.main.setup.wizard
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -171,14 +172,19 @@ class WizardScreenTest {
         assertNotEquals(5f, moved) // the slider takes a tap when no save runs
         val shown = Formats.money(moved.toDouble())
         compose.onNodeWithText(shown).assertIsDisplayed()
+        val track = slider.fetchSemanticsNode().boundsInRoot
 
         compose.onNodeWithText("Save setup").performClick()
         compose.onNodeWithText("Saving").assertIsDisplayed()
+        // No accessibility action reaches a step input while the save runs; TalkBack reads "Saving" there.
+        compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsActions.SetProgress)).assertCountEquals(0)
+        compose.onNodeWithContentDescription("Saving").assertExists()
         clearInvocations(vm)
-        slider.performTouchInput { click(percentOffset(0.1f, 0.5f)) }
+        // The slider has no semantics node now, so tap where its track is.
+        compose.onRoot().performTouchInput { click(Offset(track.left + track.width * 0.1f, track.center.y)) }
         compose.waitForIdle()
         verify(vm, never()).updateMinPayout(any())
-        compose.onNodeWithText(shown).assertIsDisplayed()
+        assertEquals(moved, state.value.minPayout)
 
         saveStatus.value = SaveStatus.Saved
         compose.onNodeWithText("Setup saved").assertIsDisplayed()
