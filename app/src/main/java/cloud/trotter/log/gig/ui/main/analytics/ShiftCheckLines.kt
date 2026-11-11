@@ -16,7 +16,8 @@ import cloud.trotter.log.gig.domain.format.Formats
 
 /**
  * The shift's checks under the money check, one line each: "1 accepted offer has no delivery recorded" for the
- * offers with no delivery together, one line per job with more accepted offers than deliveries. The money check's
+ * offers with no delivery together, one line per job with more accepted offers than deliveries, and (#1119 S2) one
+ * line per job whose work tied two or more offers at its store ("1 job could be from 2 offers"). The money check's
  * own line stays in its block. Nothing when there is no such check.
  */
 @Composable
@@ -35,6 +36,10 @@ internal fun shiftCheckLines(checks: List<ShiftCheck>): List<String> = buildList
     if (noDelivery > 0) add(pluralStringResource(R.plurals.shift_check_no_delivery, noDelivery, noDelivery))
     checks.filterIsInstance<ShiftCheck.MoreAcceptsThanDeliveries>().forEach {
         add(pluralStringResource(R.plurals.shift_check_more_accepts, it.delivered, it.accepted, it.delivered))
+    }
+    checks.filterIsInstance<ShiftCheck.OfferNotMatched>().forEach {
+        val n = it.offerEventSequenceIds.size
+        add(pluralStringResource(R.plurals.shift_check_offer_unmatched, n, n))
     }
 }
 
@@ -59,8 +64,10 @@ internal fun allCheckLines(checks: List<ShiftCheck>, appName: String): List<Stri
 
 /**
  * Where a link to a shift with [checks] lands: the first offer with no delivery, else the first job with more accepts
- * than deliveries, else the page's top (null), where the money check shows.
+ * than deliveries, else the first job a tie left unmatched (#1119 S2), else the page's top (null), where the money
+ * check shows.
  */
 internal fun landingRowOf(checks: List<ShiftCheck>): String? =
     checks.firstNotNullOfOrNull { (it as? ShiftCheck.NoDelivery)?.let { check -> offerRowKey(check.offerEventSequenceId) } }
         ?: checks.firstNotNullOfOrNull { (it as? ShiftCheck.MoreAcceptsThanDeliveries)?.let { check -> jobRowKey(check.jobId) } }
+        ?: checks.firstNotNullOfOrNull { (it as? ShiftCheck.OfferNotMatched)?.let { check -> jobRowKey(check.jobId) } }
