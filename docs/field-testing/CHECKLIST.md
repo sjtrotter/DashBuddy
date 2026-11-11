@@ -67,6 +67,7 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 ## §2 Active
 
 - [The going-to-store sheet's store name is the store (#1396)](checklist/open/1396-going-to-store-sheet-store-name.md)
+- [A two-order shop offer reads as a shop (#1528)](checklist/open/1528-two-order-shop-offer-reads-as-a-shop.md)
 - [The Play build's screen reading card (#170, #1413)](checklist/open/170-play-build-screen-reading-card.md)
 - [The Play build does not read an Uber offer pop-up (#1413)](checklist/open/1413-play-build-uber-offer-not-read.md)
 - [A recognition incident posts one notice and shows on Home (#1560)](checklist/open/1560-recognition-incident-notice.md)

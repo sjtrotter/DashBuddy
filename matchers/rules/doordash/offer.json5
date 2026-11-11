@@ -637,6 +637,7 @@
                     // pickup merchant's sibling(2) is the NEXT holder, whose text never starts
                     // with `Shop for`, so the regex arm yields null and the literal wins. Verified
                     // on the fielded mixed stack (Smoothie King PICKUP + Target SHOP_FOR_ITEMS).
+                    // #1528: the same row reads `Shop for N orders (M items, …)` for a two-order shop.
                     "coalesce": [
                       {
                         "find": {
@@ -647,7 +648,7 @@
                         "transform": [
                           {
                             "regex": {
-                              "pattern": "^(Shop for) \\d+ items?\\b",
+                              "pattern": "^(Shop for) \\d+ (?:items?|orders?)\\b",
                               "group": 1
                             }
                           },
@@ -665,18 +666,38 @@
                     ]
                   },
                   "itemCount": {
-                    "find": {
-                      "hasClassName": "androidx.compose.ui.viewinterop.ViewFactoryHolder"
-                    },
-                    "navigate": "sibling(2)",
-                    "read": "allText",
-                    "transform": {
-                      "regex": {
-                        "pattern": "^Shop for (\\d+) items?\\b",
-                        "group": 1,
-                        "then": "toInt"
+                    // #1528: a two-order shop row reads `Shop for 2 orders (29 items, ~35 min)`;
+                    // the one-order form `Shop for 22 items (24 units, ~25 min)` is tried first.
+                    "coalesce": [
+                      {
+                        "find": {
+                          "hasClassName": "androidx.compose.ui.viewinterop.ViewFactoryHolder"
+                        },
+                        "navigate": "sibling(2)",
+                        "read": "allText",
+                        "transform": {
+                          "regex": {
+                            "pattern": "^Shop for (\\d+) items?\\b",
+                            "group": 1,
+                            "then": "toInt"
+                          }
+                        }
+                      },
+                      {
+                        "find": {
+                          "hasClassName": "androidx.compose.ui.viewinterop.ViewFactoryHolder"
+                        },
+                        "navigate": "sibling(2)",
+                        "read": "allText",
+                        "transform": {
+                          "regex": {
+                            "pattern": "^Shop for \\d+ orders? \\((\\d+) items?\\b",
+                            "group": 1,
+                            "then": "toInt"
+                          }
+                        }
                       }
-                    }
+                    ]
                   },
                   "itemCountUnit": "ITEMS",
                   "isRedCard": {
@@ -980,7 +1001,7 @@
                         "transform": [
                           {
                             "regex": {
-                              "pattern": "^(Shop for) \\d+ items?\\b",
+                              "pattern": "^(Shop for) \\d+ (?:items?|orders?)\\b",
                               "group": 1
                             }
                           },
@@ -998,18 +1019,38 @@
                     ]
                   },
                   "itemCount": {
-                    "find": {
-                      "hasClassName": "androidx.compose.ui.viewinterop.ViewFactoryHolder"
-                    },
-                    "navigate": "sibling(2)",
-                    "read": "allText",
-                    "transform": {
-                      "regex": {
-                        "pattern": "^Shop for (\\d+) items?\\b",
-                        "group": 1,
-                        "then": "toInt"
+                    // #1528: a two-order shop row reads `Shop for 2 orders (29 items, ~35 min)`;
+                    // the one-order form `Shop for 22 items (24 units, ~25 min)` is tried first.
+                    "coalesce": [
+                      {
+                        "find": {
+                          "hasClassName": "androidx.compose.ui.viewinterop.ViewFactoryHolder"
+                        },
+                        "navigate": "sibling(2)",
+                        "read": "allText",
+                        "transform": {
+                          "regex": {
+                            "pattern": "^Shop for (\\d+) items?\\b",
+                            "group": 1,
+                            "then": "toInt"
+                          }
+                        }
+                      },
+                      {
+                        "find": {
+                          "hasClassName": "androidx.compose.ui.viewinterop.ViewFactoryHolder"
+                        },
+                        "navigate": "sibling(2)",
+                        "read": "allText",
+                        "transform": {
+                          "regex": {
+                            "pattern": "^Shop for \\d+ orders? \\((\\d+) items?\\b",
+                            "group": 1,
+                            "then": "toInt"
+                          }
+                        }
                       }
-                    }
+                    ]
                   },
                   "itemCountUnit": "ITEMS",
                   "isRedCard": {
