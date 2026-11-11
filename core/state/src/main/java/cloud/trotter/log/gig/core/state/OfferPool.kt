@@ -98,18 +98,26 @@ internal fun PlatformRegionStepper.leavePresentation(
             }
         }
         else -> {
+            val sheet = sheetSightingCounts(offer, obs.timestamp, via, region, policy)
+            // The card coming back after the last sighting is the dasher cancelling the sheet.
+            val cardBack = sheet && (offer.lastCardFrameAt ?: Long.MIN_VALUE) > (offer.declineSheetSeenAt ?: Long.MAX_VALUE)
             val entry = PooledOffer(
                 offer = offer.copy(targets = emptyMap()),
                 leftAt = obs.timestamp,
                 via = via,
                 sessionId = region.session?.sessionId,
                 candidateStoreKeys = candidateStoreKeys(offer, region.activeJob),
-                demoted = isDemoted(offer, obs.timestamp, via, region, policy),
+                demoted = sheet && !cardBack,
             )
             val pool = region.offerPool + entry
             Timber.tag(TAG).d(
                 "#1119 offer %s pooled via %s (pool=%d)%s",
-                offer.offerHash.take(8), via, pool.size, if (entry.demoted) " demoted by the decline sheet" else "",
+                offer.offerHash.take(8), via, pool.size,
+                when {
+                    entry.demoted -> " demoted by the decline sheet"
+                    cardBack -> " card back after the decline sheet"
+                    else -> ""
+                },
             )
             region.copy(pendingOffers = rest, offerPool = pool)
         }
@@ -117,12 +125,12 @@ internal fun PlatformRegionStepper.leavePresentation(
 }
 
 /**
- * Council round 6: the confirm-decline sheet DEMOTES a leaving offer when its last sighting is at most
+ * Council round 6: the confirm-decline sheet COUNTS against a leaving offer when its last sighting is at most
  * `declineSheetWindowMs` before the leave, the countdown was parsed and more than `countdownExpirySlackMs` remained,
- * the leave is not the expiry timer, and no card frame of this presentation arrived after that sighting (the card
- * coming back is the dasher cancelling the sheet).
+ * and the leave is not the expiry timer. It DEMOTES the offer unless a card frame of this presentation arrived after
+ * that sighting ([PendingOffer.lastCardFrameAt]: the card coming back is the dasher cancelling the sheet).
  */
-private fun isDemoted(
+private fun sheetSightingCounts(
     offer: PendingOffer,
     leftAt: Long,
     via: PoolEntryVia,
@@ -133,8 +141,7 @@ private fun isDemoted(
     val seen = offer.declineSheetSeenAt ?: return false
     val expiresAt = offer.countdownExpiresAt ?: return false
     if (leftAt - seen !in 0..policy.declineSheetWindowMs(region.platform)) return false
-    if (leftAt >= expiresAt - policy.countdownExpirySlackMs(region.platform)) return false
-    return (offer.lastCardFrameAt ?: Long.MIN_VALUE) <= seen
+    return leftAt < expiresAt - policy.countdownExpirySlackMs(region.platform)
 }
 
 /**
@@ -182,16 +189,19 @@ internal fun PlatformRegionStepper.poolWorkEdge(
     val held = region.heldWorkFrame
     val store = storeOf(obs)
     if (held != null) {
-        if (!nextFlow.isTaskFlow() || obs.timestamp - held.at > policy.storelessHoldMs(region.platform)) {
-            return releaseHeldBare(sink, region, held, policy)
+        if (!nextFlow.isTaskFlow()) return releaseHeldBare(sink, region, held, policy, "non-task frame")
+        if (obs.timestamp - held.at > policy.storelessHoldMs(region.platform)) {
+            return releaseHeldBare(sink, region, held, policy, "time cap")
         }
         if (store == null) {
             val frames = held.frames + 1
-            if (frames >= policy.storelessHoldFrames(region.platform)) return releaseHeldBare(sink, region, held, policy)
+            if (frames >= policy.storelessHoldFrames(region.platform)) {
+                return releaseHeldBare(sink, region, held, policy, "frame cap")
+            }
             return region.copy(heldWorkFrame = held.copy(frames = frames))
         }
         return linkAtWorkEdge(sink, region.copy(heldWorkFrame = null), obs, store, policy, held)
-            ?: releaseHeldBare(sink, region, held, policy)
+            ?: releaseHeldBare(sink, region, held, policy, "no candidate at the store")
     }
     if (!nextFlow.isTaskFlow() || region.offerPool.isEmpty()) return null
     if (store == null) {
@@ -199,6 +209,7 @@ internal fun PlatformRegionStepper.poolWorkEdge(
         Timber.tag(TAG).d("#1119 store-less work frame, %d pooled offer(s) wait", region.offerPool.size)
         val holds = region.offerPool.any { !it.demoted } && policy.storelessHoldFrames(region.platform) > 1
         if (!holds) return null
+        Timber.tag(TAG).d("#1119 store-less work frame held for the store")
         return region.copy(
             heldWorkFrame = HeldWorkFrame(
                 at = obs.timestamp,
@@ -243,7 +254,7 @@ private fun PlatformRegionStepper.linkAtWorkEdge(
     val job = region.activeJob
     if (job == null || startsNewJob(region)) {
         return if (candidates.size == 1 && guards.isEmpty()) {
-            link(sink, region, obs, candidates.single(), edgeAt, "FRESH")
+            link(sink, region, obs, candidates.single(), edgeAt, if (held != null) "FRESH_AFTER_HOLD" else "FRESH")
         } else {
             tie(sink, region, obs, if (candidates.size == 1) candidates + guards else candidates, held, policy)
         }
@@ -304,12 +315,12 @@ private fun PlatformRegionStepper.tie(
     policy: TransitionPolicy,
 ): PlatformRegion {
     val closed = if (region.activeJob != null) closeCompletedJob(sink, region, obs) else region
-    val minted = if (held != null) releaseHeldBare(sink, closed, held, policy) else mintBareJob(closed, obs)
+    val minted = if (held != null) releaseHeldBare(sink, closed, held, policy, "tie") else mintBareJob(closed, obs)
     val jobId = minted.activeJob?.jobId ?: return minted
     val keys = tied.mapTo(HashSet()) { it.instanceKey }
     Timber.tag(TAG).w(
-        "#1119 %d pooled offers tie at job %s (%s) — none linked",
-        tied.size, jobId, tied.joinToString(",") { it.offer.offerHash.take(8) },
+        "#1119 %d pooled offers tie at job %s (%s) — none linked (%d demoted)",
+        tied.size, jobId, tied.joinToString(",") { it.offer.offerHash.take(8) }, tied.count { it.demoted },
     )
     return minted.copy(
         offerPool = minted.offerPool.map {
@@ -327,7 +338,9 @@ private fun PlatformRegionStepper.releaseHeldBare(
     region: PlatformRegion,
     held: HeldWorkFrame,
     policy: TransitionPolicy,
+    reason: String,
 ): PlatformRegion {
+    Timber.tag(TAG).d("#1119 store-less hold ends in a bare job (%s, %d frame(s))", reason, held.frames)
     val heldObs = Observation.Screen(
         timestamp = held.at,
         captureId = null,
