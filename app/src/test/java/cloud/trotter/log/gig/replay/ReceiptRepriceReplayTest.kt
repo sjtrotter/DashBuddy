@@ -3,6 +3,9 @@ package cloud.trotter.log.gig.replay
 import cloud.trotter.log.gig.domain.model.event.AppEventType
 import cloud.trotter.log.gig.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.log.gig.domain.model.event.payload.DeliveryReceiptRepricePayload
+import cloud.trotter.log.gig.domain.model.event.payload.ReceiptObservedPayload
+import cloud.trotter.log.gig.domain.state.ReceiptProofGap
+import cloud.trotter.log.gig.domain.state.ReceiptScope
 import cloud.trotter.log.gig.test.util.SessionReplay
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -30,6 +33,11 @@ import org.junit.Test
  *
  * The offset between the two spliced frames is the REAL one (3.86 s); only the base instant is
  * chosen, so the timing under test is the field's, not the test's.
+ *
+ * **#1598 (OQ1):** the chain's offer is the legacy View card, which shows no drop count, so every receipt here is
+ * UNPROVEN (`CARD_COUNT_MISSING`): it places no money, removes no estimate, and is saved as `RECEIPT_OBSERVED`
+ * evidence. The layer 1 and layer 2 mechanics stay covered on proven fixtures in `:core:state`
+ * (`ReceiptRepriceTest`, `LateReceiptGuardTest`).
  */
 class ReceiptRepriceReplayTest {
 
@@ -69,8 +77,22 @@ class ReceiptRepriceReplayTest {
             .filter { it.type == AppEventType.DELIVERY_RECEIPT_REPRICE }
             .map { it.payload as DeliveryReceiptRepricePayload }
 
+    private fun evidence(steps: List<SessionReplay.ReplayStep>): List<ReceiptObservedPayload> =
+        steps.flatMap { it.events }
+            .filter { it.type == AppEventType.RECEIPT_OBSERVED }
+            .map { it.payload as ReceiptObservedPayload }
+
+    /** #1598: an unproven receipt leaves no receipt money on the completion and marks it UNPROVEN. */
+    private fun assertNoReceiptMoney(payload: DeliveryPayload, steps: List<SessionReplay.ReplayStep>) {
+        assertNull("no itemization\n" + SessionReplay.trace(steps), payload.parsedPay)
+        assertNull("no bare total", payload.totalPay)
+        assertNull("no share", payload.dropRealizedPay)
+        assertEquals(ReceiptScope.UNPROVEN, payload.receiptScope)
+        assertNotNull("the drop keeps the offer estimate", payload.offerPayShare)
+    }
+
     @Test
-    fun `layer 1 — the fielded 3_9s expansion now lands INSIDE the grace, so the completion is receipt-priced`() {
+    fun `layer 1 — #1598 the expansion inside the grace is evidence only on the legacy card`() {
         val base = chainBeforeTheReceipt()
         val t0 = base.maxOf { it.atMs } + 1_000L
 
@@ -89,37 +111,20 @@ class ReceiptRepriceReplayTest {
 
         val completed = completions(steps)
         assertEquals("the delivery completes exactly once", 1, completed.size)
-        val payload = completed.single()
-        assertNotNull(
-            "the completion carries the EXPANDED receipt's itemization (#1033 layer 1)\n" +
-                SessionReplay.trace(steps),
-            payload.parsedPay,
-        )
-        assertNotNull(
-            "…and therefore an apportioned share — the fold's DROP_SHARE arm keys on exactly this",
-            payload.dropRealizedPay,
-        )
-        assertEquals(
-            "a sole drop's share IS the receipt total",
-            payload.parsedPay!!.total,
-            payload.dropRealizedPay!!,
-            0.005,
-        )
-        // The stepper no longer tries to know that the mint already carried this itemization (#1033
-        // review round 8 — two rounds of trying refused legitimate corrections), so it may still emit
-        // a REDUNDANT "the receipt says X". What matters is that it says the same X: the projector
-        // compares the row and no-ops it, leaving the row byte-identical.
-        reprices(steps).forEach {
-            assertEquals(
-                "a redundant re-price must carry the SAME itemization the completion did",
-                payload.parsedPay,
-                it.parsedPay,
-            )
-        }
+        assertNoReceiptMoney(completed.single(), steps)
+        assertTrue("no re-price", reprices(steps).isEmpty())
+
+        // One receipt, one episode: the collapsed read and its expansion are two revisions of one record.
+        val ev = evidence(steps)
+        assertEquals(listOf(1, 2), ev.map { it.revision })
+        assertEquals(1, ev.map { it.evidenceId }.toSet().size)
+        assertEquals(listOf(false, true), ev.map { it.isExpanded })
+        assertTrue(ev.all { it.scope == ReceiptScope.UNPROVEN && it.proofGap == ReceiptProofGap.CARD_COUNT_MISSING })
+        assertEquals(completed.single().taskId, ev.first().subjectTaskId)
     }
 
     @Test
-    fun `layer 2 — an expansion that still lands after the completion re-prices the drop`() {
+    fun `layer 2 — #1598 an expansion after the completion re-prices nothing on the legacy card`() {
         val base = chainBeforeTheReceipt()
         val t0 = base.maxOf { it.atMs } + 1_000L
         // The receipt stays collapsed past the whole 8 s window, so the completion commits off it.
@@ -137,27 +142,13 @@ class ReceiptRepriceReplayTest {
 
         val completed = completions(steps)
         assertEquals("the delivery still completes exactly once", 1, completed.size)
-        assertNull(
-            "the completion was minted off the COLLAPSED receipt — no itemization\n" +
-                SessionReplay.trace(steps),
-            completed.single().parsedPay,
-        )
+        assertNoReceiptMoney(completed.single(), steps)
+        assertTrue("no re-price\n" + SessionReplay.trace(steps), reprices(steps).isEmpty())
 
-        val repriced = reprices(steps)
-        assertEquals(
-            "the late expansion emits exactly one re-price for the delivered drop\n" +
-                SessionReplay.trace(steps),
-            1,
-            repriced.size,
-        )
-        val e = repriced.single()
-        assertEquals("it targets the drop the completion recorded", completed.single().taskId, e.taskId)
-        assertEquals(completed.single().jobId, e.jobId)
-        assertEquals(
-            "a sole drop's re-price share IS the receipt total",
-            e.parsedPay.total,
-            e.dropRealizedPay,
-            0.005,
-        )
+        // The idle frame ended the first receipt's episode, so the late expansion is a second record, read after
+        // the close.
+        val ev = evidence(steps)
+        assertEquals(2, ev.map { it.evidenceId }.toSet().size)
+        assertEquals(listOf(ReceiptProofGap.CARD_COUNT_MISSING, ReceiptProofGap.NO_LIVE_JOB), ev.map { it.proofGap })
     }
 }

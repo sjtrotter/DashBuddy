@@ -205,11 +205,12 @@ class InterleavedPlatformsE2ETest {
             val deliveries = rows(replay, "delivery_records")
             assertEquals("two delivery rows", 2, deliveries.size)
             assertTrue("both are DoorDash's, in DoorDash's session", deliveries.all { it["platform"] == "doordash" && it["sessionId"] == ddSession })
-            assertEquals(
-                "each half of the \$16.70 receipt (DROP_SHARE)",
-                listOf("DROP_SHARE" to 8.35, "DROP_SHARE" to 8.35),
-                deliveries.map { it["payBasis"] to it.getValue("realizedPay")!!.toDouble() },
-            )
+            // #1598 (OQ1): the legacy card's receipt is unproven, so both drops keep the offer estimate and the
+            // receipt is evidence only.
+            assertTrue("both drops are priced from the offer estimate", deliveries.all { it["payBasis"] == "OFFER_PAY" })
+            val receipts = rows(replay, "receipt_records")
+            assertTrue("the receipt is saved as evidence", receipts.isNotEmpty())
+            assertTrue("…and unproven", receipts.all { it["scope"] == "UNPROVEN" && it["sessionId"] == ddSession })
 
             val offers = rows(replay, "offer_records")
             assertEquals("four offer rows", 4, offers.size)
