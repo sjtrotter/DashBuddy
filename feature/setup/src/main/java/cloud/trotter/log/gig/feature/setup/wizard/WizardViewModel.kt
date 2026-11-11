@@ -342,8 +342,11 @@ class WizardViewModel @Inject constructor(
         if (isAuto) attemptAutoGasPriceFetch()
     }
 
+    /** A typed price turns auto off, as the Costs screen's manual price does (#722), so no lookup replaces it. */
     fun updateGasPrice(price: Float) {
-        _state.update { it.copy(gasPrice = price, gasPriceSource = GasPriceSource.Typed, gasPriceLookupFailed = false) }
+        _state.update {
+            it.copy(gasPrice = price, isGasPriceAuto = false, gasPriceSource = GasPriceSource.Typed, gasPriceLookupFailed = false)
+        }
     }
 
     fun attemptAutoGasPriceFetch() {

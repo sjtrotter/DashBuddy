@@ -38,7 +38,7 @@ the gas price card's line renders from `WizardState.gasPriceSource` (`GasPriceSo
 from the stored `gas_price_fetched_at` or a fresh lookup; typed, which auto off implies; or saved, auto on with no
 stamp) and the host's `rememberNow()`, passed in as `nowMillis` since the module carries no `:core:designsystem`; it
 never says "Regional average" of a figure no lookup returned, and a failed lookup keeps the figure, says so and offers
-Retry (#1478); the
+Retry and the price input; typing a price turns auto off, as the Costs screen's manual price does (#1478); the
 `WizardScreen` shell + `EconomyCostsCard` stay in `:app` with the shared `ui/components/economy/*`
 editor family, and the Dashboard-hosted `setup/consent/` #843 + `setup/permissions/` sheets stay in
 `:app`);

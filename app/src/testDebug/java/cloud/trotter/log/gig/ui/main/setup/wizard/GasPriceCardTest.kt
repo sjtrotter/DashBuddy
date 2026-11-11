@@ -2,6 +2,7 @@ package cloud.trotter.log.gig.ui.main.setup.wizard
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.test.*
@@ -54,6 +55,10 @@ class GasPriceCardTest {
         whenever(vm.toggleAutoGasPrice(any())).thenAnswer {
             state.value = state.value.copy(isGasPriceAuto = it.getArgument(0))
         }
+        whenever(vm.updateGasPrice(any())).thenAnswer {
+            state.value = state.value.copy(gasPrice = it.getArgument(0), isGasPriceAuto = false,
+                gasPriceSource = GasPriceSource.Typed, gasPriceLookupFailed = false)
+        }
         compose.mainClock.autoAdvance = false
         compose.setContent {
             GigLogTheme {
@@ -103,6 +108,37 @@ class GasPriceCardTest {
             isFetchingGasPrice = true))
         compose.onNodeWithText("Regional average", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Retry").assertDoesNotExist()
+    }
+
+    private val priceInput = SemanticsMatcher.keyIsDefined(SemanticsActions.SetProgress)
+
+    @Test
+    fun `with auto on the price input appears only after a failed lookup`() {
+        show()
+        compose.onNode(priceInput).assertDoesNotExist()
+
+        given(state.value.copy(isFetchingGasPrice = true))
+        compose.onNode(priceInput).assertDoesNotExist()
+
+        given(state.value.copy(isFetchingGasPrice = false, gasPriceLookupFailed = true))
+        compose.onNode(priceInput).assertExists()
+        assertLine("Couldn't get today's price. Using $3.29 from Oct 20.", retry = true)
+    }
+
+    @Test
+    fun `typing a price after a failed lookup turns the auto row off`() {
+        state.value = state.value.copy(gasPriceLookupFailed = true)
+        show()
+        val row = compose.onNode(isToggleable() and hasText("Update gas price daily"))
+        row.assert(SemanticsMatcher.expectValue(SemanticsProperties.ToggleableState, ToggleableState.On))
+
+        compose.onNode(priceInput).performSemanticsAction(SemanticsActions.SetProgress) { it(4.0f) }
+        settle()
+
+        verify(vm).updateGasPrice(any())
+        row.assert(SemanticsMatcher.expectValue(SemanticsProperties.ToggleableState, ToggleableState.Off))
+        assertLine("Price you entered", retry = false)
+        compose.onNode(priceInput).assertExists()
     }
 
     @Test

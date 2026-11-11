@@ -131,10 +131,14 @@ class WizardGasPriceSourceTest {
     }
 
     @Test
-    fun `typing a price makes it typed and clears the failure`() = runTest {
+    fun `typing a price after a failed lookup turns auto off, makes it typed and clears the failure`() = runTest {
         val vm = wizard(auto = true, price = 3.29f, stamp = EARLIER)
+        assertEquals(true, vm.state.value.gasPriceLookupFailed)
+
         vm.updateGasPrice(3.75f)
 
+        assertEquals(3.75f, vm.state.value.gasPrice, 0f)
+        assertEquals(false, vm.state.value.isGasPriceAuto)
         assertEquals(GasPriceSource.Typed, vm.state.value.gasPriceSource)
         assertEquals(false, vm.state.value.gasPriceLookupFailed)
     }
@@ -194,7 +198,7 @@ class WizardGasPriceSourceTest {
         looked.updateGasPrice(3.75f)
         looked.saveAndFinish {}
         testScheduler.advanceUntilIdle()
-        verify(appPreferencesRepository).mirrorEconomySettings(any(), any(), any(), any(), any(), eq(true), eq(3.75f), isNull())
+        verify(appPreferencesRepository).mirrorEconomySettings(any(), any(), any(), any(), any(), eq(false), eq(3.75f), isNull())
         verify(appPreferencesRepository, times(2)).mirrorEconomySettings(any(), any(), any(), any(), any(), any(), any(), anyOrNull())
     }
 

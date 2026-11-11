@@ -129,18 +129,8 @@ fun GasPriceCard(
 
         val displayAuto = isAuto && fuelType != FuelType.ELECTRICITY
 
-        if (displayAuto) {
-            if (isFetching) {
-                CircularProgressIndicator(modifier = Modifier.size(48.dp))
-            } else {
-                Text(
-                    text = Formats.money(price.toDouble()),
-                    style = MaterialTheme.typography.displayMedium,
-                    fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                GasPriceSourceLine(line, onRetry)
-            }
+        if (displayAuto && isFetching) {
+            CircularProgressIndicator(modifier = Modifier.size(48.dp))
         } else {
             Text(
                 text = Formats.money(price.toDouble()),
@@ -149,21 +139,25 @@ fun GasPriceCard(
                 color = MaterialTheme.colorScheme.primary
             )
             if (fuelType != FuelType.ELECTRICITY) GasPriceSourceLine(line, onRetry)
-            Spacer(modifier = Modifier.height(16.dp))
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                    .padding(16.dp)
-            ) {
-                Slider(
-                    value = price,
-                    onValueChange = onPriceChange,
-                    // UPDATED: Start at 10 cents for EVs, otherwise keep $1 minimum for gas.
-                    valueRange = if (fuelType == FuelType.ELECTRICITY) 0.10f..8.0f else 1.0f..8.0f,
-                    modifier = Modifier.fillMaxWidth()
-                )
+            // A failed lookup offers the input under its line; typing there turns auto off (#1478). One call site for
+            // both modes, so the slider keeps its drag when the first value flips auto off.
+            if (!displayAuto || lookupFailed) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .padding(16.dp)
+                ) {
+                    Slider(
+                        value = price,
+                        onValueChange = onPriceChange,
+                        // UPDATED: Start at 10 cents for EVs, otherwise keep $1 minimum for gas.
+                        valueRange = if (fuelType == FuelType.ELECTRICITY) 0.10f..8.0f else 1.0f..8.0f,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         }
     }
