@@ -44,10 +44,12 @@ data class OfferReceivedPayload(
     val presentedAt: Long,
     val platform: String,
     val returnFlow: Flow,
+    /** #1119 S2: the presentation's identity (`PendingOffer.instanceKey`); its one outcome event carries the same. */
+    val offerInstanceId: String? = null,
 ) : AppEventPayload
 
 /**
- * Payload for `OFFER_ACCEPTED` / `OFFER_DECLINED` / `OFFER_TIMEOUT`.
+ * Payload for `OFFER_ACCEPTED` / `OFFER_DECLINED` / `OFFER_TIMEOUT` / `OFFER_NOT_TAKEN`.
  *
  * Carries the full offer context and evaluation. The closing event alone is
  * sufficient to render the Offer card — no need to read OFFER_RECEIVED.
@@ -63,7 +65,22 @@ data class OfferPayload(
     val returnFlow: Flow,
     /** Optional context — e.g. "Replaced by new offer". */
     val description: String? = null,
+    /** #1119 S2: the presentation's identity (`PendingOffer.instanceKey`), one outcome per instance. */
+    val offerInstanceId: String? = null,
+    /** #1119 S2: the job an offer-pool link minted or joined (`OFFER_ACCEPTED` by store only). */
+    val linkedJobId: String? = null,
+    /** #1119 S2: the jobs this offer tied on at its store, nothing linked; set on its shift-end outcome. */
+    val ambiguousJobIds: List<String> = emptyList(),
+    /** #1119 S2: set when a decline was inferred rather than observed; null for an observed decline. */
+    val declineEvidence: DeclineEvidence? = null,
 ) : AppEventPayload
+
+/** #1119 S2: the evidence behind an inferred `OFFER_DECLINED`. */
+@Serializable
+enum class DeclineEvidence {
+    /** The confirm-decline sheet was seen shortly before the offer left, with time on its countdown and no card after. */
+    SHEET_WINDOW,
+}
 
 /**
  * Payload for `PICKUP_NAV_STARTED`, `PICKUP_ARRIVED`, `PICKUP_CONFIRMED`.

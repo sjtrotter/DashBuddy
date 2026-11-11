@@ -63,6 +63,8 @@ sealed interface ObservationPayload {
     @SerialName("offerExpiry")
     data class OfferExpiry(
         val offerHash: String,
+        /** #1119 S2: the presentation the timer was armed for; a fire resolves by it, by [offerHash] only when null. */
+        val instanceId: String? = null,
     ) : ObservationPayload
 
     /**

@@ -15,6 +15,8 @@ enum class OfferOutcome(val eventType: AppEventType) {
     ACCEPTED(AppEventType.OFFER_ACCEPTED),
     DECLINED(AppEventType.OFFER_DECLINED),
     TIMED_OUT(AppEventType.OFFER_TIMEOUT),
+    /** #1119 S2: in the offer pool at shift end — linked to no work and not declined. */
+    NOT_TAKEN(AppEventType.OFFER_NOT_TAKEN),
     ;
 
     /** The stored `offer_records.outcome` value for this outcome — the SQL predicate's parameter. */

@@ -17,8 +17,8 @@ import cloud.trotter.log.gig.domain.model.offer.joinDisplayStores
  * - A card with an offer is keyed by its first offer, so the key holds as the job gains a pickup and deliveries.
  * - Job cards sort by their first accepted offer, a card with no offer by its first delivery, and passed offers
  *   by their own decision; ties fall to the event sequence id, which is unique across the log.
- * - Consecutive declined and expired offers between two cards, before the first or after the last, are one
- *   [PassedRun]. An expired offer is counted as expired, never as declined.
+ * - Consecutive declined, expired and not-taken offers between two cards, before the first or after the last, are
+ *   one [PassedRun]. Each outcome is counted as itself: an expired or not-taken offer never counts as declined.
  */
 object ShiftTimeline {
 
@@ -70,7 +70,7 @@ object ShiftTimeline {
         }
         for (offer in sortedOffers) {
             val outcome = offer.outcome
-            if (outcome == OfferOutcome.DECLINED || outcome == OfferOutcome.TIMED_OUT) {
+            if (outcome == OfferOutcome.DECLINED || outcome == OfferOutcome.TIMED_OUT || outcome == OfferOutcome.NOT_TAKEN) {
                 placed += Placed(null, passed(offer, outcome), offer.decidedAt to offer.eventSequenceId)
             }
         }
@@ -190,6 +190,7 @@ object ShiftTimeline {
         pay = offer.payAmount,
         miles = offer.distanceMiles,
         outcome = outcome,
+        ambiguousJobIds = offer.ambiguousJobIds,
     )
 
     /** Placed rows, with every maximal stretch of [PassedOffer]s folded into one [PassedRun]. */
@@ -202,6 +203,7 @@ object ShiftTimeline {
                 key = "run:${run.first().eventSequenceId}",
                 declined = run.count { it.outcome == OfferOutcome.DECLINED },
                 expired = run.count { it.outcome == OfferOutcome.TIMED_OUT },
+                notTaken = run.count { it.outcome == OfferOutcome.NOT_TAKEN },
                 from = run.first().at,
                 to = run.last().at,
                 offers = run.toList(),

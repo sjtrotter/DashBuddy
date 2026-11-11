@@ -44,11 +44,13 @@ data class JobCard(
     val milestones: List<Milestone>,
 ) : TimelineItem
 
-/** A run of consecutive declined and expired offers; collapsed by default. [key] is `run:<firstSeq>`. */
+/** A run of consecutive declined, expired and not-taken offers; collapsed by default. [key] is `run:<firstSeq>`. */
 data class PassedRun(
     override val key: String,
     val declined: Int,
     val expired: Int,
+    /** #1119 S2: offers still in the pool at shift end ([OfferOutcome.NOT_TAKEN]). */
+    val notTaken: Int,
     val from: Long,
     val to: Long,
     val offers: List<PassedOffer>,
@@ -60,8 +62,10 @@ data class PassedOffer(
     val stores: String?,
     val pay: Double?,
     val miles: Double?,
-    /** [OfferOutcome.DECLINED] or [OfferOutcome.TIMED_OUT]. */
+    /** [OfferOutcome.DECLINED], [OfferOutcome.TIMED_OUT] or [OfferOutcome.NOT_TAKEN]. */
     val outcome: OfferOutcome,
+    /** #1119 S2: the jobs this offer tied on at its store; empty when none. */
+    val ambiguousJobIds: List<String> = emptyList(),
 )
 
 data class OfferLine(val pay: Double?, val miles: Double?)

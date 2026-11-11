@@ -86,11 +86,10 @@ data class PendingOffer(
     val acceptedAt: Long? = null,
     val firstEvalLandedAt: Long? = null,
     /**
-     * When the platform's confirm-decline sheet was first observed over this presentation
-     * (#1104/#1114) — transition evidence for the outcome resolver: an offer that leaves
-     * presentation without an accept AFTER its confirm sheet was seen resolves as a DECLINE, not a
-     * timeout. Set once (first sighting), preserved across enrich-as-variant, never a commit on its
-     * own (the dasher may still `View offer details` and accept — an accept always wins).
+     * When the platform's confirm-decline sheet was LAST observed over this presentation
+     * (#1104/#1114; every sighting overwrites it), preserved across enrich-as-variant. Never a
+     * commit: #1119 S2 reads it only at the leave, where a recent sighting with no later card frame
+     * ([lastCardFrameAt]) DEMOTES the pooled offer — it stays recorded but can never be linked.
      */
     val declineSheetSeenAt: Long? = null,
     /**
@@ -100,7 +99,21 @@ data class PendingOffer(
      * evidence that separates a real decline from a cancelled sheet whose offer then ran out.
      */
     val countdownExpiresAt: Long? = null,
+    /**
+     * #1119 S2: this presentation's identity, `"<platform wire>:<presentedAt>"`, minted with the presentation and kept by
+     * every enrich. Null only on a presentation built before S2 or by hand; [instanceKey] covers both.
+     */
+    val instanceId: String? = null,
+    /**
+     * #1119 S2: `obs.timestamp` of the last admitted card frame of this presentation (the fresh push, a same-hash
+     * enrich or an enrich-as-variant; never the confirm-decline sheet). A card frame after the last sheet sighting
+     * means the dasher came back from the sheet, so the sighting demotes nothing.
+     */
+    val lastCardFrameAt: Long? = null,
 ) {
+    /** #1119 S2: the one identity every pool, timer, outcome and effect key reads. */
+    val instanceKey: String get() = instanceId ?: "$offerHash@$presentedAt"
+
     /**
      * The offer's own platform (#438 item 7/8a), from its [sourceRuleId] via the [Platform]
      * registry — NOT the global `FlowRegion.activePlatform` mirror this pack removes. The single

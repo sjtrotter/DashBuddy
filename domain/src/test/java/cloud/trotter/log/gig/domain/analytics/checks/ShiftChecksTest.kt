@@ -131,4 +131,27 @@ class ShiftChecksTest {
         assertEquals(listOf("offer:1", "job:manual:9"), all.map { it.key })
         assertEquals(listOf(ShiftCheck.NoDelivery(1)), checks(listOf(offer(1)), listOf(manual)))
     }
+
+    // #1119 S2: a tie at a job's store raises one OfferNotMatched per job on an ended shift.
+    private fun passed(seq: Long, outcome: OfferOutcome, vararg tied: String) =
+        TimelineOffer(seq, "h$seq", outcome, seq * 100, 7.5, 3.0, "Sample Tacos", OfferScope.STANDALONE,
+            OfferQuoteBasis.TOTAL, null, ambiguousJobIds = tied.toList())
+
+    @Test fun `tied offers raise one check per job, grouped and sorted, a demoted decline included`() {
+        val offers = listOf(
+            passed(7, OfferOutcome.NOT_TAKEN, "J2"),
+            passed(3, OfferOutcome.NOT_TAKEN, "J1"),
+            passed(5, OfferOutcome.DECLINED, "J1"),
+            passed(4, OfferOutcome.NOT_TAKEN, "J2"),
+            passed(6, OfferOutcome.NOT_TAKEN),
+        )
+        assertEquals(
+            listOf(ShiftCheck.OfferNotMatched("J1", listOf(3L, 5L)), ShiftCheck.OfferNotMatched("J2", listOf(4L, 7L))),
+            checks(offers, emptyList()),
+        )
+    }
+
+    @Test fun `a running shift raises no tie check`() {
+        assertTrue(checks(listOf(passed(1, OfferOutcome.NOT_TAKEN, "J1"), passed(2, OfferOutcome.NOT_TAKEN, "J1")), emptyList(), ended = false).isEmpty())
+    }
 }

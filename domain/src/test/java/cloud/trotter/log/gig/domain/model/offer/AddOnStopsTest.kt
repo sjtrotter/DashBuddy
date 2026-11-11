@@ -14,14 +14,23 @@ class AddOnStopsTest {
     @Test fun `above the maximum is one`() {
         assertEquals(1, AddOnStops.addedDropoffs(AddOnStops.MAX_ADDON_STOPS + 1, 1))
     }
-    @Test fun `normalisation lowercases and does not trim`() {
-        assertEquals(" old ", storeKey(" OLD "))
+    // #1119 S2 (OQ9): the store key is the chain key — trimmed, lowercased, location qualifiers stripped.
+    @Test fun `the store key is the chain key`() {
+        assertEquals("old", storeKey(" OLD "))
         val owned = ownedStoreKeys(listOf(Task(
             "pickup", "job", TaskPhase.PICKUP,
             expectedStoreHint = " OLD ", storeName = " Old ", startedAt = 0)))
-        assertEquals(listOf(" old "), owned)
-        assertEquals(listOf("Old", "New"), newStores(owned, listOf("Old", "New")))
-        assertEquals(listOf(" New ", "New"), newStores(emptyList(), listOf(" New ", " NEW ", "New")))
+        assertEquals(listOf("old"), owned)
+        assertEquals(listOf("New"), newStores(owned, listOf("Old", "New")))
+        assertEquals(listOf(" New "), newStores(emptyList(), listOf(" New ", " NEW ", "New")))
+    }
+    @Test fun `qualifier variants are one store`() {
+        assertEquals(storeKey("Store A (Loop 410)"), storeKey("STORE A #55"))
+        val owned = ownedStoreKeys(listOf(Task(
+            "pickup", "job", TaskPhase.PICKUP,
+            expectedStoreHint = "Store A (Loop 410)", storeName = "Store A #55", startedAt = 0)))
+        assertEquals(listOf("store a"), owned)
+        assertEquals(listOf("Store C"), newStores(owned, listOf("Store A - Northside", "Store C")))
     }
     @Test fun `new stores key on lowercased names`() {
         val owned = ownedStoreKeys(listOf(Task(
@@ -31,7 +40,8 @@ class AddOnStopsTest {
             .mapIndexed { i, store -> ParsedOrder(
                 i, OrderType.PICKUP, store, 1, false, emptySet()) })
         assertEquals(listOf("New"), newStores(owned, offer))
-        assertEquals(listOf("New"), newStores(listOf("CHICK FIL A", "CHICK-FIL-A"), offer))
+        // Owned keys are keys (ownedStoreKeys), never raw names.
+        assertEquals(listOf("New"), newStores(listOf("chick fil a", "chick-fil-a"), offer))
     }
     @Test fun `offer hints are trimmed while owned keys keep their padding`() {
         val offer = ParsedOffer("addon", orders = listOf(" Old ", " New ", "NEW", " ")

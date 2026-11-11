@@ -65,6 +65,11 @@ data class AcceptedOfferEconomics(
     /** The pickup base this offer was priced with at accept time. */
     val pricedBasePickupMinutes: Double? = null,
     val quoteBasis: OfferQuoteBasis = OfferQuoteBasis.TOTAL,
+    /**
+     * #1119 S2: the accepted presentation (`PendingOffer.instanceKey`). Provenance only: the job-graph dedups in
+     * `JobAcceptFlow` stay on [offerHash], so a re-presented offer does not split a live job.
+     */
+    val offerInstanceId: String? = null,
 )
 
 /**

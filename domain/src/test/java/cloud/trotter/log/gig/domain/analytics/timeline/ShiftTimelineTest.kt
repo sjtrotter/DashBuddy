@@ -323,4 +323,16 @@ class ShiftTimelineTest {
         assertEquals(PaySource.YOU_ENTERED, PaySource.of(PayBasis.MANUAL, null, 1))
         assertTrue(PaySource.entries.single { it.estimated } == PaySource.OFFER_AMOUNT_EST)
     }
+
+    // #1119 S2: an offer still in the pool at shift end is its own kind in a passed run, never counted as declined.
+    @Test fun `a not-taken offer joins the passed run, counted as not taken, carrying its tied jobs`() {
+        val tied = offer(2, 200, OfferOutcome.NOT_TAKEN).copy(ambiguousJobIds = listOf("J9"))
+        val run = fold(listOf(offer(1, 100, OfferOutcome.DECLINED), tied, offer(3, 300, OfferOutcome.NOT_TAKEN))).single() as PassedRun
+        assertEquals(1, run.declined)
+        assertEquals(0, run.expired)
+        assertEquals(2, run.notTaken)
+        assertEquals(run.offers.size, run.declined + run.expired + run.notTaken)
+        assertEquals(listOf("J9"), run.offers.single { it.eventSequenceId == 2L }.ambiguousJobIds)
+        assertTrue(run.offers.single { it.eventSequenceId == 3L }.ambiguousJobIds.isEmpty())
+    }
 }
