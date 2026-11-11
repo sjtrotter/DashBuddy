@@ -145,7 +145,7 @@ android {
         // The base marketing version, hand-bumped. The `+<sha>` suffix is what makes each
         // build self-identifying; `.dirty` marks an uncommitted working tree. A release tag must
         // equal this value (.github/workflows/release.yml refuses one that does not).
-        val baseVersionName = "0.231.0"
+        val baseVersionName = "0.232.0"
         versionName = versionNameFor(baseVersionName)
 
         buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
