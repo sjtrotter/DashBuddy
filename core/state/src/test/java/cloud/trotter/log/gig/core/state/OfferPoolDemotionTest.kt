@@ -30,10 +30,10 @@ class OfferPoolDemotionTest {
             PF.card(8_000, "hB"),
             PF.pickup(20_000),
         )
-        assertFalse("no countdown parsed: the sighting cannot demote", demotedOf(d, "hA"))
-        assertFalse(demotedOf(d, "hB"))
         assertTrue("never a link to the phantom", d.outcomes().none { it.type == AppEventType.OFFER_ACCEPTED })
         assertTrue(d.region.activeJob!!.acceptedOffers.isEmpty())
+        assertFalse("no countdown parsed: the sighting cannot demote", demotedOf(d, "hA"))
+        assertFalse(demotedOf(d, "hB"))
         val jobId = d.region.activeJob!!.jobId
         assertEquals(listOf(listOf(jobId), listOf(jobId)), d.region.offerPool.map { it.ambiguousJobIds })
     }
@@ -54,9 +54,9 @@ class OfferPoolDemotionTest {
     @Test fun `work at the store of a demoted offer within 60 s is a tie over both, never a link to the older one`() {
         for (delay in listOf(0L, 60_000L)) {
             val d = substitution(delay)
+            assertTrue("no link (delay $delay)", d.outcomes().none { it.type == AppEventType.OFFER_ACCEPTED })
             assertTrue("B demoted (delay $delay)", demotedOf(d, "hB"))
             assertEquals(PoolEntryVia.EXPIRY_TIMER, d.region.offerPool.single { it.offer.offerHash == "hA" }.via)
-            assertTrue("no link (delay $delay)", d.outcomes().none { it.type == AppEventType.OFFER_ACCEPTED })
             val jobId = d.region.activeJob!!.jobId
             assertEquals(listOf(listOf(jobId), listOf(jobId)), d.region.offerPool.map { it.ambiguousJobIds })
         }

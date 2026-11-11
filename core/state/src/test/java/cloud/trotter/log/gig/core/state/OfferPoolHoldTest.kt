@@ -25,12 +25,14 @@ class OfferPoolHoldTest {
     private fun pooled(): PoolDriver = PoolDriver().step(PF.card(1_000, "hA"), PF.idle(5_000))
 
     @Test fun `a store-bearing frame 1 s after a store-less one links, the task starting at the held frame`() {
-        val d = pooled().step(PF.pickup(10_000, store = null))
-        assertNull(d.region.activeJob)
-        assertNotNull(d.region.heldWorkFrame)
-        d.step(PF.pickup(11_000))
+        val held = pooled().step(PF.pickup(10_000, store = null))
+        val heldJob = held.region.activeJob
+        val heldFrame = held.region.heldWorkFrame
+        val d = held.step(PF.pickup(11_000))
         val job = d.region.activeJob!!
         assertEquals(listOf("hA"), job.acceptedOffers.map { it.offerHash })
+        assertNull("held, not minted", heldJob)
+        assertNotNull(heldFrame)
         assertEquals(10_000L, job.startedAt)
         val task = d.region.activeTask!!
         assertEquals(TaskPhase.PICKUP, task.phase)
