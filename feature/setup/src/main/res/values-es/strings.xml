@@ -46,4 +46,5 @@
     <string name="wizard_gas_price_source_typed">Precio que introdujiste</string>
     <string name="wizard_gas_price_source_saved">Precio guardado</string>
     <string name="wizard_gas_price_retry">Reintentar</string>
+    <string name="wizard_bottom_bar_saving">Guardando</string>
 </resources>

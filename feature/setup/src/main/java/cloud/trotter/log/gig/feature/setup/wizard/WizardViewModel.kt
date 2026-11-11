@@ -18,6 +18,8 @@ import cloud.trotter.log.gig.domain.model.vehicle.FuelType
 import cloud.trotter.log.gig.domain.model.vehicle.*
 import cloud.trotter.log.gig.feature.setup.wizard.model.FetchedGasPrice
 import cloud.trotter.log.gig.feature.setup.wizard.model.GasPriceSource
+import cloud.trotter.log.gig.feature.setup.wizard.model.SaveFailure
+import cloud.trotter.log.gig.feature.setup.wizard.model.SaveStatus
 import cloud.trotter.log.gig.feature.setup.wizard.model.WizardState
 import cloud.trotter.log.gig.feature.setup.wizard.model.WizardStep
 import cloud.trotter.log.gig.feature.setup.wizard.model.toEconomyDraft
@@ -27,9 +29,6 @@ import cloud.trotter.log.gig.feature.setup.wizard.vehicle.VehicleDraft
 import cloud.trotter.log.gig.feature.setup.wizard.vehicle.VehicleDraftState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -84,11 +83,9 @@ class WizardViewModel @Inject constructor(
         }
     }
 
-    private val _vehicleSaveFailed = MutableSharedFlow<Unit>(replay = 1)
-    val vehicleSaveFailed = _vehicleSaveFailed.asSharedFlow()
-
-    @OptIn(ExperimentalCoroutinesApi::class)
-    fun vehicleSaveFailureHandled() = _vehicleSaveFailed.resetReplayCache()
+    private val _saveStatus = MutableStateFlow<SaveStatus>(SaveStatus.Idle)
+    /** The save's outcome (#1473): the completion sheet opens only on [SaveStatus.Saved] or [SaveStatus.Failed]. */
+    val saveStatus = _saveStatus.asStateFlow()
 
     private var garageDraftLoaded = false
 
@@ -406,7 +403,7 @@ class WizardViewModel @Inject constructor(
     /**
      * Skip = a true skip (#347): mark first-run complete and write NOTHING else.
      * A later re-run + Skip must never reset tuned strategy/economy settings —
-     * the old path funneled Skip through [saveAndFinish], silently restoring
+     * the old path funneled Skip through the save, silently restoring
      * hardcoded automation defaults.
      */
     fun skipAndFinish(onComplete: () -> Unit) {
@@ -416,85 +413,112 @@ class WizardViewModel @Inject constructor(
         }
     }
 
-    fun saveAndFinish(onComplete: () -> Unit) {
+    /**
+     * Runs the save and reports its outcome in [saveStatus] (#1473). A second call while one runs is ignored. A
+     * vehicle failure still writes the targets and costs and reports [SaveFailure.VEHICLE]; any other write that
+     * throws reports [SaveFailure.SETTINGS]. A failed save leaves [state] and the vehicle draft as they were, so a
+     * Retry runs the same save: a vehicle the failed try already added is the active vehicle by then, so the retry
+     * updates it instead of adding a second one.
+     */
+    fun save() {
+        if (!garageDraftLoaded || _saveStatus.value == SaveStatus.Saving) return
+        _saveStatus.value = SaveStatus.Saving
+        val finalState = _state.value
+        val vehicle = vehicleDraft.state.value
         viewModelScope.launch {
-            if (!garageDraftLoaded) return@launch
-            val finalState = _state.value
-            val vehicle = vehicleDraft.state.value
-
-            try {
-                // Capture the save target now; later switches do not redirect this draft.
-                val garage = garageRepository.garage.first()
-                if (!garage.readable) throw VehiclesUnreadableException()
-                val activeVehicle = garage.active
-                val profile = finalState.toVehicleProfile(vehicle).withGas(fuelType = finalState.fuelType)
-                val previous = activeVehicle?.profile
-                if (previous == null || previous.vehicleType != profile.vehicleType ||
-                    previous.year != profile.year || previous.make != profile.make || previous.model != profile.model) {
-                    garageRepository.addVehicle(null, System.currentTimeMillis(), profile, activateOn = cloud.trotter.log.gig.core.data.vehicle.ActivateOn.ALWAYS)
-                } else {
-                    check(garageRepository.updateProfile(activeVehicle.id, profile))
-                }
+            _saveStatus.value = try {
+                val vehicleSaved = saveVehicle(finalState, vehicle)
+                saveSettings(finalState, vehicle)
+                if (vehicleSaved) SaveStatus.Saved else SaveStatus.Failed(SaveFailure.VEHICLE)
             } catch (cancelled: CancellationException) {
+                _saveStatus.value = SaveStatus.Idle
                 throw cancelled
             } catch (error: Exception) {
-                Timber.tag("Wizard").w("%s", error.javaClass.simpleName)
-                _vehicleSaveFailed.emit(Unit)
+                Timber.tag("Wizard").w("Setup save failed: %s", error.javaClass.simpleName)
+                SaveStatus.Failed(SaveFailure.SETTINGS)
             }
-
-            appPreferencesRepository.mirrorFuelType(finalState.fuelType)
-            appPreferencesRepository.mirrorVehicleClass(vehicle.vehicleClass)
-            appPreferencesRepository.mirrorUserSetEconomy(finalState.toEconomyDraft(vehicle))
-
-            appPreferencesRepository.mirrorEconomySettings(
-                vehicle.year, vehicle.make,
-                vehicle.model, vehicle.trim,
-                vehicle.mpg, finalState.isGasPriceAuto, finalState.gasPrice,
-                gasPriceFetchedAt = (finalState.gasPriceSource as? GasPriceSource.Lookup)?.fetchedAtMillis,
-            )
-
-            val isProtectStatus = finalState.strategy == OfferStrategy.PROTECT_STATUS
-
-            strategyRepository.setProtectStatsMode(isProtectStatus)
-            // allowShopping is NOT collected by any wizard step (SHOPPING collects
-            // maxItems only) — settings own that toggle; the wizard must not touch it.
-
-            val currentRules = strategyRepository.scoringRules.first().toMutableList()
-            val updatedRules = currentRules.map { rule ->
-                if (rule is ScoringRule.MetricRule) {
-                    when (rule.metricType) {
-                        MetricType.PAYOUT -> rule.copy(
-                            isEnabled = true,
-                            targetValue = finalState.minPayout,
-                            autoDeclineOnFail = finalState.enforceMinPayout
-                        )
-
-                        MetricType.ACTIVE_HOURLY -> rule.copy(
-                            isEnabled = true,
-                            targetValue = finalState.targetHourly,
-                            autoDeclineOnFail = finalState.enforceTargetHourly
-                        )
-
-                        MetricType.MAX_DISTANCE -> rule.copy(
-                            isEnabled = true,
-                            targetValue = finalState.maxDistance,
-                            autoDeclineOnFail = finalState.enforceMaxDistance
-                        )
-
-                        MetricType.ITEM_COUNT -> rule.copy(
-                            isEnabled = true,
-                            targetValue = finalState.maxItems,
-                            autoDeclineOnFail = false
-                        )
-
-                        else -> rule
-                    }
-                } else rule
-            }
-
-            strategyRepository.updateRules(updatedRules)
-            appStateRepository.setFirstRunComplete()
-            onComplete()
         }
+    }
+
+    /** The dasher closed a failure to go back to setup; their answers are still in [state]. */
+    fun dismissSaveFailure() {
+        if (_saveStatus.value is SaveStatus.Failed) _saveStatus.value = SaveStatus.Idle
+    }
+
+    /** True when the wizard's vehicle was written; a failure is logged by class name only. */
+    private suspend fun saveVehicle(finalState: WizardState, vehicle: VehicleDraftState): Boolean = try {
+        // Capture the save target now; later switches do not redirect this draft.
+        val garage = garageRepository.garage.first()
+        if (!garage.readable) throw VehiclesUnreadableException()
+        val activeVehicle = garage.active
+        val profile = finalState.toVehicleProfile(vehicle).withGas(fuelType = finalState.fuelType)
+        val previous = activeVehicle?.profile
+        if (previous == null || previous.vehicleType != profile.vehicleType ||
+            previous.year != profile.year || previous.make != profile.make || previous.model != profile.model) {
+            garageRepository.addVehicle(null, System.currentTimeMillis(), profile, activateOn = cloud.trotter.log.gig.core.data.vehicle.ActivateOn.ALWAYS)
+        } else {
+            check(garageRepository.updateProfile(activeVehicle.id, profile))
+        }
+        true
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        Timber.tag("Wizard").w("%s", error.javaClass.simpleName)
+        false
+    }
+
+    private suspend fun saveSettings(finalState: WizardState, vehicle: VehicleDraftState) {
+        appPreferencesRepository.mirrorFuelType(finalState.fuelType)
+        appPreferencesRepository.mirrorVehicleClass(vehicle.vehicleClass)
+        appPreferencesRepository.mirrorUserSetEconomy(finalState.toEconomyDraft(vehicle))
+
+        appPreferencesRepository.mirrorEconomySettings(
+            vehicle.year, vehicle.make,
+            vehicle.model, vehicle.trim,
+            vehicle.mpg, finalState.isGasPriceAuto, finalState.gasPrice,
+            gasPriceFetchedAt = (finalState.gasPriceSource as? GasPriceSource.Lookup)?.fetchedAtMillis,
+        )
+
+        val isProtectStatus = finalState.strategy == OfferStrategy.PROTECT_STATUS
+
+        strategyRepository.setProtectStatsMode(isProtectStatus)
+        // allowShopping is NOT collected by any wizard step (SHOPPING collects
+        // maxItems only) — settings own that toggle; the wizard must not touch it.
+
+        val currentRules = strategyRepository.scoringRules.first().toMutableList()
+        val updatedRules = currentRules.map { rule ->
+            if (rule is ScoringRule.MetricRule) {
+                when (rule.metricType) {
+                    MetricType.PAYOUT -> rule.copy(
+                        isEnabled = true,
+                        targetValue = finalState.minPayout,
+                        autoDeclineOnFail = finalState.enforceMinPayout
+                    )
+
+                    MetricType.ACTIVE_HOURLY -> rule.copy(
+                        isEnabled = true,
+                        targetValue = finalState.targetHourly,
+                        autoDeclineOnFail = finalState.enforceTargetHourly
+                    )
+
+                    MetricType.MAX_DISTANCE -> rule.copy(
+                        isEnabled = true,
+                        targetValue = finalState.maxDistance,
+                        autoDeclineOnFail = finalState.enforceMaxDistance
+                    )
+
+                    MetricType.ITEM_COUNT -> rule.copy(
+                        isEnabled = true,
+                        targetValue = finalState.maxItems,
+                        autoDeclineOnFail = false
+                    )
+
+                    else -> rule
+                }
+            } else rule
+        }
+
+        strategyRepository.updateRules(updatedRules)
+        appStateRepository.setFirstRunComplete()
     }
 }

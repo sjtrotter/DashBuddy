@@ -263,9 +263,16 @@
     <string name="wizard_screen_hourly_footer_flag">Rates below this show in amber.</string>
     <string name="wizard_screen_distance_footer">Offers with more miles show a note.</string>
     <string name="wizard_screen_content_desc_success">Success</string>
-    <string name="wizard_screen_all_set_title">Setup done</string>
-    <string name="wizard_screen_skipped_desc">Setup skipped; nothing changed. Run it again from Settings.</string>
-    <string name="wizard_screen_completed_desc">Setup saved. Change targets, vehicle or offer rules in Settings.</string>
+    <string name="wizard_screen_saved_title">Setup saved</string>
+    <string name="wizard_screen_completed_desc">Change targets, vehicle or offer rules in Settings.</string>
+    <string name="wizard_screen_skipped_title">Setup skipped</string>
+    <string name="wizard_screen_skipped_desc">Nothing changed. Run it again from Settings.</string>
+    <string name="wizard_screen_vehicle_failed_title">Couldn\'t save your vehicle</string>
+    <string name="wizard_screen_vehicle_failed_desc">Your vehicle list can\'t be read.</string>
+    <string name="wizard_screen_save_failed_title">Couldn\'t save setup</string>
+    <string name="wizard_screen_save_failed_desc">Your answers are still in setup.</string>
+    <string name="wizard_screen_retry">Retry</string>
+    <string name="wizard_screen_back_to_setup">Back to setup</string>
     <string name="wizard_screen_lets_go">Done</string>
 
     <!-- main/dashboard/DashboardScreen.kt -->

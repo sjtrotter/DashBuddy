@@ -191,12 +191,12 @@ class WizardGasPriceSourceTest {
         lookupReturns(FuelType.REGULAR to 3.10f)
         looked.attemptAutoGasPriceFetch()
         testScheduler.advanceUntilIdle()
-        looked.saveAndFinish {}
+        looked.save()
         testScheduler.advanceUntilIdle()
         verify(appPreferencesRepository).mirrorEconomySettings(any(), any(), any(), any(), any(), eq(true), eq(3.10f), eq(NOW))
 
         looked.updateGasPrice(3.75f)
-        looked.saveAndFinish {}
+        looked.save()
         testScheduler.advanceUntilIdle()
         verify(appPreferencesRepository).mirrorEconomySettings(any(), any(), any(), any(), any(), eq(false), eq(3.75f), isNull())
         verify(appPreferencesRepository, times(2)).mirrorEconomySettings(any(), any(), any(), any(), any(), any(), any(), anyOrNull())
@@ -211,7 +211,7 @@ class WizardGasPriceSourceTest {
         assertEquals(true, vm.state.value.gasPriceLookupFailed)
         assertEquals(GasPriceSource.Typed, vm.state.value.gasPriceSource)
 
-        vm.saveAndFinish {}
+        vm.save()
         testScheduler.advanceUntilIdle()
 
         verify(appPreferencesRepository).mirrorEconomySettings(any(), any(), any(), any(), any(), eq(true), eq(3.75f), isNull())

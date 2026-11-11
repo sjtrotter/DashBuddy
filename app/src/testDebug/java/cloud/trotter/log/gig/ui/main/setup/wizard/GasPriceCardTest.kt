@@ -11,11 +11,11 @@ import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import cloud.trotter.log.gig.core.designsystem.time.LocalNowProvider
 import cloud.trotter.log.gig.feature.setup.wizard.WizardViewModel
 import cloud.trotter.log.gig.feature.setup.wizard.model.GasPriceSource
+import cloud.trotter.log.gig.feature.setup.wizard.model.SaveStatus
 import cloud.trotter.log.gig.feature.setup.wizard.model.WizardState
 import cloud.trotter.log.gig.feature.setup.wizard.model.WizardStep
 import cloud.trotter.log.gig.feature.setup.wizard.vehicle.VehicleDraft
 import cloud.trotter.log.gig.feature.setup.wizard.vehicle.VehicleDraftState
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Rule
 import org.junit.Test
@@ -51,7 +51,7 @@ class GasPriceCardTest {
         whenever(vm.vehicleDraft).thenReturn(draft)
         whenever(vm.state).thenReturn(state)
         whenever(vm.steps).thenReturn(MutableStateFlow(listOf(WizardStep.GAS_PRICE)))
-        whenever(vm.vehicleSaveFailed).thenReturn(MutableSharedFlow())
+        whenever(vm.saveStatus).thenReturn(MutableStateFlow(SaveStatus.Idle))
         whenever(vm.toggleAutoGasPrice(any())).thenAnswer {
             state.value = state.value.copy(isGasPriceAuto = it.getArgument(0))
         }

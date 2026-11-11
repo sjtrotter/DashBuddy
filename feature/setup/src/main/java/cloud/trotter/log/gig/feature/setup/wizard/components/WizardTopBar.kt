@@ -32,7 +32,9 @@ fun WizardTopBar(
     currentStep: Int,
     totalSteps: Int,
     onBack: () -> Unit,
-    onSkip: () -> Unit
+    onSkip: () -> Unit,
+    /** Off while a save runs (#1473), so Back and Skip cannot cut into it. */
+    enabled: Boolean = true,
 ) {
     // Animates the progress bar so it smoothly slides as they swipe
     val progress by animateFloatAsState(
@@ -44,7 +46,7 @@ fun WizardTopBar(
         TopAppBar(
             title = { Text(stringResource(R.string.wizard_title)) },
             navigationIcon = {
-                IconButton(onClick = onBack) {
+                IconButton(onClick = onBack, enabled = enabled) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = stringResource(R.string.common_content_desc_back),
@@ -52,7 +54,7 @@ fun WizardTopBar(
                 }
             },
             actions = {
-                TextButton(onClick = onSkip) {
+                TextButton(onClick = onSkip, enabled = enabled) {
                     Text(stringResource(R.string.wizard_top_bar_skip_setup))
                 }
             },
