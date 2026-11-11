@@ -675,7 +675,12 @@ frames). The first store-bearing task frame inside the hold runs the work edge f
 task, both started at the held frame). At either cap, on any non-task frame, or when the edge finds no candidate,
 the held frame is replayed into today's bare mint (`mintBareJob` + `updateTaskLifecycle` on the held frame), and
 the frame that ended the hold steps on that; a link instead replays the held frame's task lifecycle on the linked
-job, so its arrival, customer, deadline and shopping fields stay. The time cap is checked on every observation
+job, so its arrival, customer, deadline and shopping fields stay. Before that replay the held task takes the
+releasing frame's store (same phase only), so a releasing navigation frame updates the same pickup instead of
+reading as a stacked-pickup transition. A non-task acted flow (Offline, a dash summary) releases a standing hold
+into the bare mint at the top of `updateLifecycle` (`releaseInterruptedHold`), before those flows' early returns.
+A dropoff released from a hold announces its leg (`DELIVERY_NAV_STARTED`) with the task's preserved start time.
+The time cap is checked on every observation
 before the stepper's early returns (`lapseHeldWork`), and the hold arms its own `STORELESS_HOLD` wake (a
 `WakeBearing` installed by `heldWorkWindow`, a region timer), so it ends within the cap even when no later frame
 arrives. Offline-to-Online healing mints nothing while offers wait in the pool: the work edge decides. No adoption,
