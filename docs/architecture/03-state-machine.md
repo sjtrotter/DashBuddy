@@ -674,8 +674,14 @@ rule id, parsed fields) for at most `storelessHoldMs` (10 s of `obs.timestamp`) 
 frames). The first store-bearing task frame inside the hold runs the work edge from the held frame (one job, one
 task, both started at the held frame). At either cap, on any non-task frame, or when the edge finds no candidate,
 the held frame is replayed into today's bare mint (`mintBareJob` + `updateTaskLifecycle` on the held frame), and
-the frame that ended the hold steps on that. No adoption, no placeholder husk. Recovery replays the hold from the
-journal; `recoveryHygiene` drops one past its deadline; `endSession` clears it.
+the frame that ended the hold steps on that; a link instead replays the held frame's task lifecycle on the linked
+job, so its arrival, customer, deadline and shopping fields stay. The time cap is checked on every observation
+before the stepper's early returns (`lapseHeldWork`), and the hold arms its own `STORELESS_HOLD` wake (a
+`WakeBearing` installed by `heldWorkWindow`, a region timer), so it ends within the cap even when no later frame
+arrives. Offline-to-Online healing mints nothing while offers wait in the pool: the work edge decides. No adoption,
+no placeholder husk. Recovery replays the hold from the journal; `recoveryHygiene` drops one past its deadline and
+`pendingDeadlineTimers` re-arms a kept one; `endSession` clears it. A link keeps the entry's earlier
+`ambiguousJobIds`, and the tie guard measures to the edge's own observation.
 
 **The shift end.** `endSession` first runs `flushAtShiftEnd` at its committing frame: a still-presented card gets
 `OFFER_DECLINED` (committed decline), `OFFER_ACCEPTED` (latched) or `OFFER_NOT_TAKEN` ("On screen at shift end");
@@ -685,7 +691,8 @@ the inferred `OFFER_DECLINED`; the pool empties. INFO summary line per shift.
 **Recovery.** The pool survives a snapshot untouched (each entry's demotion was decided at its leave; the
 presented offer's sighting is still scrubbed). `AppState.stateSchema` names the reducer generation; a restore whose
 snapshot differs from `AppState.STATE_SCHEMA` starts fresh at `max(snapshot cv, latest journal cv)` and replays no
-tail, so no old-reducer observation runs through the pool. Cost: the step that installs S2 drops a live shift's
+tail, so no old-reducer observation runs through the pool; with no usable snapshot over a non-empty journal it starts
+fresh above the journal's latest version and checkpoints that too. Cost: the step that installs S2 drops a live shift's
 in-memory state; install between shifts.
 
 **History.** #1104/#1114/#1118 inferred the outcome at the leave: a click-less accept from the destination flow
