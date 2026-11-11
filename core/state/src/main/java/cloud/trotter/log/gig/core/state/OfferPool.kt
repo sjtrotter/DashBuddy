@@ -291,8 +291,13 @@ private fun PlatformRegionStepper.link(
     val pooled = region.copy(offerPool = region.offerPool - entry, lastAcceptResolvedAt = obs.timestamp)
     val linked = consumeAcceptIntoJob(sink, pooled, obs, acceptInputsFromPending(entry.offer, acceptedAt))
     // A held frame's task evidence (arrival, customer, deadline, shopping) lands on the linked job's task before the
-    // releasing frame steps on it, exactly as the held frame would have had the job existed (council round 6).
-    val next = held?.let { updateTaskLifecycle(sink, linked, it.prevFlow, it.flow, heldObservation(it), policy) } ?: linked
+    // releasing frame steps on it, exactly as the held frame would have had the job existed (council round 6). A held
+    // pickup takes the releasing pickup's store first, so the releasing frame updates that one task instead of
+    // reading as a stacked pickup to a different store.
+    val next = held?.let {
+        val replayed = heldObservation(it).let { h -> h.copy(parsed = h.parsed.withStoreOf(obs.parsed)) }
+        updateTaskLifecycle(sink, linked, it.prevFlow, it.flow, replayed, policy)
+    } ?: linked
     val jobId = next.activeJob?.jobId
     sink.offerOutcome(
         OfferOutcomeDecision(
@@ -354,6 +359,28 @@ private fun PlatformRegionStepper.releaseHeldBare(
     val heldObs = heldObservation(held)
     val minted = mintBareJob(region.copy(heldWorkFrame = null), heldObs)
     return updateTaskLifecycle(sink, minted, held.prevFlow, held.flow, heldObs, policy)
+}
+
+/** A store-less held pickup's fields with [release]'s store, when [release] is a pickup naming one; else unchanged. */
+private fun ParsedFields.withStoreOf(release: ParsedFields): ParsedFields {
+    val held = this as? ParsedFields.TaskFields ?: return this
+    val store = (release as? ParsedFields.TaskFields)?.takeIf { it.phase == held.phase }?.storeName ?: return this
+    return if (held.storeName == null) held.copy(storeName = store) else this
+}
+
+/**
+ * An interrupted hold: any non-task frame ends a standing hold in today's bare mint from the held frame, before the
+ * stepper's own early returns (the Offline arm, the dash summary) can skip the job lifecycle (council round 6).
+ */
+internal fun PlatformRegionStepper.releaseInterruptedHold(
+    sink: DecisionSink,
+    region: PlatformRegion,
+    nextFlow: Flow,
+    policy: TransitionPolicy,
+): PlatformRegion {
+    val held = region.heldWorkFrame ?: return region
+    if (nextFlow.isTaskFlow()) return region
+    return releaseHeldBare(sink, region, held, policy, "non-task frame")
 }
 
 /** The held frame as the observation it was, for a replay of its job and task lifecycle. */

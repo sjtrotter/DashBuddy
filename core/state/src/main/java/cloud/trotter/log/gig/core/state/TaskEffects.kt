@@ -247,12 +247,13 @@ internal fun EffectMap.diffTask(
         //    old startedAt, so a replay/re-sight can't re-fire the nav),
         //  - whose predecessor was NOT a pickup (the pickup→dropoff case is
         //    already handled above — this keeps the two branches disjoint).
+        //    #1119 S2: or a task released from a store-less hold, which keeps the HELD frame's start.
         if (nextTask?.phase == TaskPhase.DROPOFF &&
             nextTask.taskId != prevTask?.taskId &&
-            nextTask.startedAt == obs.timestamp &&
+            (nextTask.startedAt == obs.timestamp || nextTask.startedAt == prev.heldWorkFrame?.at) &&
             prevTask?.phase != TaskPhase.PICKUP
         ) {
-            addAll(deliveryNavStartedEffects(sessionId, nextTask, obs))
+            addAll(deliveryNavStartedEffects(sessionId, nextTask, obs, phaseStartedAt = nextTask.startedAt))
         }
 
         // Arrival detection — task subflow changed to ARRIVED
@@ -356,13 +357,14 @@ private fun EffectMap.deliveryNavStartedEffects(
     sessionId: String?,
     task: Task,
     obs: Observation,
+    phaseStartedAt: Long = obs.timestamp,
 ): List<AppEffect> = buildList {
     add(
         logEffect(
             sessionId,
             AppEventType.DELIVERY_NAV_STARTED,
             obs.timestamp,
-            deliveryPhasePayload(task = task, phaseStartedAt = obs.timestamp),
+            deliveryPhasePayload(task = task, phaseStartedAt = phaseStartedAt),
         ),
     )
     // #438 B5: ResumeOdometer arbitrated by the cross-platform stationary predicate

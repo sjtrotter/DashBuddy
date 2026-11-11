@@ -734,6 +734,7 @@ class PlatformRegionStepper @Inject constructor() {
         // #438 item 5 (D3): the lifecycle edges below diff THIS region's own acted flow, not the
         // shared global R0 flow — see [actedFlowEdge], the one owner of that derivation.
         val (prev, next) = actedFlowEdge(region, prevFlow, obs)
+        r = releaseInterruptedHold(sink, r, next, policy) // #1119 S2: before the summary and Offline returns
 
         // Authoritative session end: the dash-summary screen. It no longer ends
         // the session on the spot (#431) — one misrecognized frame used to split
