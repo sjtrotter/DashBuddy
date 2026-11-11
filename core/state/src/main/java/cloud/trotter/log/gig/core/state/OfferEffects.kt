@@ -3,9 +3,10 @@ package cloud.trotter.log.gig.core.state
 import cloud.trotter.log.gig.domain.evaluation.OfferEvaluation
 import cloud.trotter.log.gig.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.log.gig.domain.model.chat.ChatPersona
+import cloud.trotter.log.gig.core.state.model.RegionDecisions
 import cloud.trotter.log.gig.domain.model.event.AppEventType
+import cloud.trotter.log.gig.domain.model.event.payload.OfferPayload
 import cloud.trotter.log.gig.domain.model.event.payload.OfferReceivedPayload
-import cloud.trotter.log.gig.domain.model.offer.OfferKind
 import cloud.trotter.log.gig.domain.pipeline.Observation
 import cloud.trotter.log.gig.domain.pipeline.ObservationPayload
 import cloud.trotter.log.gig.domain.pipeline.TimeoutType
@@ -23,17 +24,49 @@ import timber.log.Timber
  *
  * **Event payload shapes AND emission edges are both contract** (vet H2): the projector and the
  * replay oracles must see identical OFFER_* streams for single-platform sessions, so this mirrors
- * the pre-B3 scalar logic verbatim on the single PRESENTED offer of the owned list. The
- * accept-latched offer's `OFFER_ACCEPTED` fires HERE at the leave-of-presentation edge (the offer
- * gone from the presented set), NOT at the later mint that consumes the survivor — an accepted
- * survivor is invisible to this presented-offer diff, so its removal-by-consumption emits nothing.
+ * the pre-B3 scalar logic verbatim on the single PRESENTED offer of the owned list.
+ *
+ * #1119 S2: the OUTCOME of an offer is no longer read off this diff. The stepper decides it (`OfferLifecycle`,
+ * `OfferPool.kt`) and records an `OfferOutcomeDecision`; this function emits each one first, in order, keyed
+ * `log:<type>:<instanceKey>` so an instance can log one outcome however its leave, link or shift end is replayed. A
+ * pooled offer posts no chat line; a link or a confirmed decline does.
  */
 internal fun EffectMap.diffOfferLifecycle(
     prev: PlatformRegion,
     next: PlatformRegion,
     obs: Observation,
     sessionId: String?,
+    decisions: RegionDecisions,
 ): List<AppEffect> = buildList {
+    for (d in decisions.offerOutcomes) {
+        val payload = OfferPayload(
+            offerHash = d.offer.offerHash,
+            parsedOffer = d.offer.offerFields.parsedOffer,
+            evaluation = d.offer.evaluation,
+            outcome = d.outcome,
+            presentedAt = d.offer.presentedAt,
+            decidedAt = d.decidedAt,
+            returnFlow = d.offer.returnFlow,
+            description = d.description,
+            offerInstanceId = d.instanceKey,
+            linkedJobId = d.linkedJobId,
+            ambiguousJobIds = d.ambiguousJobIds,
+            declineEvidence = d.declineEvidence,
+        )
+        add(logEffect(d.sessionId, d.outcome, d.occurredAt, payload, effectKeyOverride = "log:${d.outcome}:${d.instanceKey}"))
+        // #601: the chat states what actually happened, off the SAME logged outcome. #881: a direct offer taking a
+        // match display's slot is expected, so it posts no line.
+        if (d.announce && !d.supersededByDirect) {
+            add(
+                AppEffect.UpdateBubble(
+                    outcomeCardText(d.outcome) + (if (d.replaced) ", replaced by a new offer" else ""),
+                    persona = ChatPersona.Dispatcher,
+                    sessionId = d.sessionId,
+                ),
+            )
+        }
+    }
+
     // The single PRESENTED offer (accepted-pending-consumption survivors excluded), so this diff is
     // the exact scalar prevOffer/nextOffer of the pre-B3 R0 slot, per platform.
     val prevOffer = prev.pendingOffers.lastOrNull { it.acceptedAt == null }
@@ -52,6 +85,7 @@ internal fun EffectMap.diffOfferLifecycle(
             presentedAt = nextOffer.presentedAt,
             platform = platform.name,
             returnFlow = nextOffer.returnFlow,
+            offerInstanceId = nextOffer.instanceKey,
         )
         add(logEffect(sessionId, AppEventType.OFFER_RECEIVED, obs.timestamp, receivedPayload))
         add(AppEffect.EvaluateOffer(offer.parsedOffer, nextOffer.offerHash, nextOffer.platform))
@@ -59,9 +93,9 @@ internal fun EffectMap.diffOfferLifecycle(
     }
 
     // Offer's presented hash changed. TWO sub-cases (#830):
-    //   (a) REPLACE — a genuinely different presentation (different or null presentationKey): resolve
-    //       the OLD offer (OFFER_TIMEOUT "Replaced by new offer" + cancel its heads-up + bubble),
-    //       exactly as pre-#830 — AND, since #1069, log the NEW offer's own OFFER_RECEIVED: a replace
+    //   (a) REPLACE — a genuinely different presentation (different or null presentationKey): the OLD
+    //       offer left (#1119 S2: its outcome, if it has one yet, is a stepper decision emitted above;
+    //       a pooled one has none) — AND, since #1069, log the NEW offer's own OFFER_RECEIVED: a replace
     //       is a second offer (the DoorDash default path for consecutive same-store offers), and
     //       `AppEffect.LogEvent` is the ONLY `app_events` writer (a rule `log` effect is a DEBUG line),
     //       so without it the second offer had an outcome row but no received row.
@@ -87,22 +121,6 @@ internal fun EffectMap.diffOfferLifecycle(
     if (prevOffer != null && nextOffer != null && prevOffer.offerHash != nextOffer.offerHash) {
         val replaced = !samePresentation(prevOffer, nextOffer)
         if (replaced) {
-            val outcome = resolveOfferOutcome(obs, prevOffer, prev, next)
-            // #881: a DIRECT offer landing over a MATCH display is the platform doing exactly what
-            // it says it does — the match was never assigned to this dasher, and the direct offer
-            // takes the presentation slot. It is an EXPECTED supersession, not the anomalous
-            // clobber the generic replace copy describes, so it gets its own description and NO
-            // "(offer replaced)" chat card (the dasher is mid-read of a card that is being upgraded
-            // — narrating a resolution for it is noise). Same event type, same emission edge, same
-            // heads-up cancel / re-eval / timer re-arm below: only the narration changes.
-            // Kind-driven, not Platform-driven (P8): any ruleset that parses `offerKind` gets this,
-            // and a null kind on either side leaves the pre-#881 behaviour untouched.
-            val directOverMatch = prevOffer.offerKind == OfferKind.MATCH &&
-                nextOffer.offerKind == OfferKind.DIRECT
-            val note = inferredOutcomeNote(prevOffer, outcome, obs)
-            val description = (if (directOverMatch) "Superseded by direct offer" else "Replaced by new offer") +
-                (note?.let { "; $it" } ?: "")
-            add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, description)))
             // #1069 (fable review F1): the replacing offer is a NEW offer — its OFFER_RECEIVED row.
             add(
                 logEffect(
@@ -113,19 +131,10 @@ internal fun EffectMap.diffOfferLifecycle(
                         presentedAt = nextOffer.presentedAt,
                         platform = platform.name,
                         returnFlow = nextOffer.returnFlow,
+                        offerInstanceId = nextOffer.instanceKey,
                     ),
                 ),
             )
-            // #601: surface the replaced offer's disposition, suffixed so it reads as the OLD offer's.
-            if (!directOverMatch) {
-                add(
-                    AppEffect.UpdateBubble(
-                        "${outcomeCardText(outcome)}, replaced by a new offer",
-                        persona = ChatPersona.Dispatcher,
-                        sessionId = sessionId,
-                    )
-                )
-            }
         }
         // #457/#830: dismiss the OLD hash's heads-up (dead offer on replace, stale-hash banner on a
         // churn) so a tap can't resolve against a hash that is no longer presented.
@@ -185,29 +194,10 @@ internal fun EffectMap.diffOfferLifecycle(
         }
     }
 
-    // Offer resolved (accepted/declined/timeout) — the presented offer left presentation this step
-    // (consumed-into-a-mint accept, an accept becoming a survivor, a decline, or a timeout). The
-    // OFFER_ACCEPTED fires HERE off resolveOfferOutcome's accept-latch read; the later survivor
-    // consumption is invisible to this presented-offer diff.
+    // The presented offer left presentation this step (pooled, declined, an accept becoming a survivor). Its
+    // heads-up and its expiry timer go with it; its outcome, if it has one yet, was emitted above (#1119 S2).
     if (prevOffer != null && nextOffer == null) {
-        val outcome = resolveOfferOutcome(obs, prevOffer, prev, next)
-        // #594: latch forced DECLINED but the last literal click was ACCEPT → the "Review offer"→
-        // Accept race after the decline already committed. #1104/#1114: an outcome that rests on
-        // TRANSITION evidence (no click envelope) says so in the row — the ledger must be able to
-        // tell an observed tap from an inferred one.
-        val raceDescription = if (
-            outcome == AppEventType.OFFER_DECLINED &&
-            prevOffer.declineCommittedAt != null &&
-            prevOffer.lastClickIntent == OfferIntent.ACCEPT
-        ) {
-            "Accept clicked after decline was already committed — decline stands (#594)"
-        } else {
-            inferredOutcomeNote(prevOffer, outcome, obs)
-        }
         add(AppEffect.CancelOfferNotification(prevOffer.offerHash))
-        add(logEffect(sessionId, outcome, obs.timestamp, offerPayload(prevOffer, outcome, obs.timestamp, raceDescription)))
-        // #601: the single place the chat states what actually happened, off the SAME logged outcome.
-        add(AppEffect.UpdateBubble(outcomeCardText(outcome), persona = ChatPersona.Dispatcher, sessionId = sessionId))
         addAll(cancelOfferExpiry(platform))
     }
 
@@ -248,8 +238,8 @@ internal fun EffectMap.diffOfferLifecycle(
  * #1104), else `presentedAt + 120s` de-facto TTL. NEVER `presentedAt + countdown`: the countdown is
  * the REMAINING time at the frame that read it, so on a platform that re-renders the card (DoorDash
  * 8.97.8 every ~3 s) that formula fires the timer a millisecond after any refreshed frame and
- * times out a live offer (Astra #1104 r3). The payload carries the offerHash so the fire resolves
- * BY hash (vet M5).
+ * times out a live offer (Astra #1104 r3). The payload carries the presentation's instance key (#1119 S2) and its
+ * offerHash, so the fire resolves by instance (by hash only for a pre-S2 timer, vet M5).
  */
 private fun EffectMap.armOfferExpiry(
     offer: PendingOffer,
@@ -262,7 +252,7 @@ private fun EffectMap.armOfferExpiry(
             durationMs = (deadline - obs.timestamp).coerceAtLeast(1L),
             type = TimeoutType.OFFER_EXPIRY,
             platform = platform,
-            payload = ObservationPayload.OfferExpiry(offer.offerHash),
+            payload = ObservationPayload.OfferExpiry(offer.offerHash, offer.instanceKey),
         ),
     )
 }
@@ -292,7 +282,7 @@ private fun EffectMap.cancelOfferExpiry(platform: Platform): List<AppEffect> =
  * `isSamePresentation`: true iff both carry a non-null, matching
  * [cloud.trotter.log.gig.domain.model.offer.ParsedOffer.presentationKey]. Fail-CLOSED — a null key
  * on either side reads as NOT the same, so the effect diff falls back to the pre-#830 replace
- * treatment (OFFER_TIMEOUT "Replaced by new offer" + re-speak). Kept in lockstep with the stepper so
+ * treatment (the old offer leaves, the new one is received + re-spoken). Kept in lockstep with the stepper so
  * a hash change the stepper enriched-as-variant is diffed as an enrich here, and one it replaced is
  * diffed as a replace — the two must never disagree.
  */

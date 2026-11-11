@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.core.state
 
-import cloud.trotter.log.gig.domain.model.offer.OfferScope
+import cloud.trotter.log.gig.core.state.model.DecisionSink
+import cloud.trotter.log.gig.domain.model.offer.OfferKind
 import cloud.trotter.log.gig.domain.pipeline.Observation
 import cloud.trotter.log.gig.domain.pipeline.ObservationPayload
 import cloud.trotter.log.gig.domain.pipeline.TimeoutType
@@ -10,6 +11,7 @@ import cloud.trotter.log.gig.domain.state.ParsedFields
 import cloud.trotter.log.gig.domain.state.OfferSurface
 import cloud.trotter.log.gig.domain.state.PendingOffer
 import cloud.trotter.log.gig.domain.state.PlatformRegion
+import cloud.trotter.log.gig.domain.state.PoolEntryVia
 import timber.log.Timber
 
 /**
@@ -24,8 +26,14 @@ import timber.log.Timber
  * consumes it. Today the list holds at most one presented offer (the pre-B3 single-offer replace
  * semantics per platform); the N>1 correlation contract (#251/vet M5) is defined here so #251's
  * capture only adds ruleset data, not `:core:state` logic.
+ *
+ * #1119 S2: every offer outcome is decided here (or in `OfferPool.kt`, the work edge and the shift end) and recorded
+ * on [sink] as an `OfferOutcomeDecision`; `OfferEffects` only emits it. A presentation leaves through
+ * [leavePresentation], the one exit: a committed decline is declined, an accept click is accepted, and anything else
+ * waits in the offer pool for work at its store.
  */
 internal fun PlatformRegionStepper.stepOffers(
+    sink: DecisionSink,
     region: PlatformRegion,
     obs: Observation,
     policy: TransitionPolicy,
@@ -39,12 +47,13 @@ internal fun PlatformRegionStepper.stepOffers(
         is Observation.FlowObservation -> when (obs.flow) {
             // A flow-less click carries the accept/decline intent; other flow-less frames are inert.
             null -> if (obs is Observation.Click) latchOfferClick(pruned, obs) else pruned
-            Flow.OfferPresented -> pushOrReplaceOffer(pruned, obs)
-            else -> resolveOnLeave(pruned, obs)
+            Flow.OfferPresented -> pushOrReplaceOffer(sink, pruned, obs, policy)
+            // A click that carries its own flow latches first: an observed tap outranks the pool (Astra #1104 r1 F4).
+            else -> resolveOnLeave(sink, if (obs is Observation.Click) latchOfferClick(pruned, obs) else pruned, obs, policy)
         }
         is Observation.Loopback -> landOfferEval(pruned, obs)
         is Observation.Timeout ->
-            if (obs.type == TimeoutType.OFFER_EXPIRY) expireOffer(pruned, obs) else pruned
+            if (obs.type == TimeoutType.OFFER_EXPIRY) expireOffer(sink, pruned, obs, policy) else pruned
         else -> pruned
     }
 }
@@ -87,11 +96,14 @@ private fun PlatformRegionStepper.pruneExpiredSurvivors(
  * presentation-scoped identity that stops a live-re-quoting card's replace-storm. A genuine REPLACE
  * (different presentation) clears ALL accepted survivors: a different offer supersedes a stale
  * accept, and the same offer re-presenting revokes it (#526 FIX2b) — the pre-B3 `armAcceptStash`
- * supersession + revocation rules as lifecycle rules.
+ * supersession + revocation rules as lifecycle rules. #1119 S2: the replaced presentation leaves through
+ * [leavePresentation] (pooled unless declined or accepted); every card frame stamps [PendingOffer.lastCardFrameAt].
  */
 private fun PlatformRegionStepper.pushOrReplaceOffer(
+    sink: DecisionSink,
     region: PlatformRegion,
     obs: Observation.FlowObservation,
+    policy: TransitionPolicy,
 ): PlatformRegion {
     val offerFields = obs.parsed as? ParsedFields.OfferFields
     val newHash = offerFields?.parsedOffer?.offerHash
@@ -100,12 +112,11 @@ private fun PlatformRegionStepper.pushOrReplaceOffer(
     val newOffers = when {
         // #1104/#1114: the platform's confirm-decline sheet rendered over the presented offer. A
         // Compose control emits no click event for a human tap, so this FRAME is the only evidence
-        // a decline is under way. Record the first sighting on the presented offer; the outcome
-        // resolver reads it when the offer leaves presentation without an accept, within the
-        // platform's `declineSheetWindowMs` of the LAST sighting (a re-opened sheet re-arms the
-        // window). Not a commit — `View offer details` → Accept still wins (the accept latch /
-        // task-surface exit outrank it in EffectMap.resolveOfferOutcome). Rule-declared
-        // (`state.offerSurface`), P8-clean.
+        // a decline is under way. Record the LAST sighting on the presented offer. #1119 S2: the
+        // sighting decides no outcome. It is kept as evidence for the dasher's review, and at the
+        // leave a recent sighting with time on the countdown and no card frame after it DEMOTES the
+        // pooled offer (never linked, an inferred decline at the shift end; `OfferPool.kt`).
+        // Rule-declared (`state.offerSurface`), P8-clean.
         (obs as? Observation.Screen)?.offerSurface == OfferSurface.DECLINE_CONFIRM -> {
             if (presented == null) return region
             region.pendingOffers.map {
@@ -125,6 +136,7 @@ private fun PlatformRegionStepper.pushOrReplaceOffer(
                     targets = obs.targets.ifEmpty { presented.targets },
                     sourceRuleId = obs.ruleId ?: presented.sourceRuleId,
                     countdownExpiresAt = countdownExpiresAt(obs, offerFields) ?: presented.countdownExpiresAt,
+                    lastCardFrameAt = obs.timestamp,
                 ) else it
             }
 
@@ -149,6 +161,7 @@ private fun PlatformRegionStepper.pushOrReplaceOffer(
                     sourceRuleId = obs.ruleId ?: presented.sourceRuleId,
                     evaluation = null,
                     countdownExpiresAt = countdownExpiresAt(obs, offerFields) ?: presented.countdownExpiresAt,
+                    lastCardFrameAt = obs.timestamp,
                 ) else it
             }
 
@@ -173,56 +186,38 @@ private fun PlatformRegionStepper.pushOrReplaceOffer(
                 targets = obs.targets,
                 sourceRuleId = obs.ruleId,
                 countdownExpiresAt = countdownExpiresAt(obs, offerFields),
+                instanceId = "${region.platform.wire}:${obs.timestamp}",
+                lastCardFrameAt = obs.timestamp,
             )
+            // #1119 S2: the replaced presentation leaves first (pooled, declined or accepted); every accepted
+            // survivor still drops below (supersession / revocation).
+            val left = presented?.let {
+                val via = if (it.offerKind == OfferKind.MATCH && offerFields.parsedOffer.offerKind == OfferKind.DIRECT) {
+                    PoolEntryVia.SUPERSEDED_BY_DIRECT
+                } else PoolEntryVia.REPLACED
+                leavePresentation(sink, region, it, obs, via, policy)
+            } ?: region
             // #1598: a fresh presentation is possible new work — the late-receipt guard's counter.
-            return region.copy(pendingOffers = listOf(fresh), possibleWorkSeq = region.possibleWorkSeq + 1)
+            return left.copy(pendingOffers = listOf(fresh), possibleWorkSeq = region.possibleWorkSeq + 1)
         }
     }
     return region.copy(pendingOffers = newOffers)
 }
 
 /**
- * Own flow leaving offer-presentation (vet H2). Each PRESENTED offer resolves: an ACCEPTED one
- * SURVIVES as an accepted-pending-consumption entry (`acceptedAt` = the honest accept-click time) so
- * the task edge can still mint it (incl. the F3 fix); a declined / timed-out one is removed. The
- * `OFFER_ACCEPTED`/`DECLINED`/`TIMEOUT` event fires from [OfferEffects] at THIS edge (not at
- * consumption). Existing survivors pass through untouched — the mint consumes them.
- *
- * "Accepted" ⇔ the accept latch is set OR the destination flow implies acceptance
- * ([destinationImpliesAccept]) — reaching a PHASED task screen IS the acceptance (the platform only
- * advances to pickup/dropoff after an accept), so an offer→task edge mints the full offer-shaped job
- * even when no accept CLICK was captured (the pre-B3 `prevFlow.pendingOffer` accept-adjacent read
- * did this unconditionally). The coarse `task:active` destination is guarded (#762 D2 finding 1 —
- * see the helper). A committed decline (#594 FIX2b) NEVER survives — that revocation must not fold
- * phantom economics into a job.
+ * Own flow leaving offer-presentation (vet H2). Each PRESENTED offer leaves through [leavePresentation]: a committed
+ * decline (#594 FIX2b) is declined and removed, an accept-latched offer SURVIVES as an accepted-pending-consumption
+ * entry (`acceptedAt` = the honest accept-click time) for the task edge to mint, and anything else enters the offer
+ * pool (#1119 S2), where only work at its own store links it — the click-less inference from the destination flow is
+ * retired. Existing survivors pass through untouched — the mint consumes them.
  */
 private fun PlatformRegionStepper.resolveOnLeave(
+    sink: DecisionSink,
     region: PlatformRegion,
     obs: Observation.FlowObservation,
-): PlatformRegion {
-    if (region.pendingOffers.none { it.acceptedAt == null }) return region
-    val destination = obs.flow
-    // #1033 review round 6: did an acceptance resolve on THIS frame? Recorded on the region so the
-    // receipt re-price can ask the one ownership question it can actually answer ("has any accept
-    // resolved since this receipt appeared") — see [ClosedJobReceipt.receiptSeenAt]. Stamped with the
-    // RESOLUTION instant, not the click's, which is the conservative side of the comparison.
-    var resolvedAnAccept = false
-    val newOffers = region.pendingOffers.mapNotNull { offer ->
-        when {
-            offer.acceptedAt != null -> offer // existing survivor — consumption is the mint's job
-            offer.declineCommittedAt != null -> null // committed decline (#594 FIX2b) — never survives
-            offer.isAcceptLatched() || destinationImpliesAccept(destination, offer) -> {
-                resolvedAnAccept = true
-                offer.copy(acceptedAt = offer.acceptClickAt ?: obs.timestamp)
-            }
-            else -> null // declined / timed out → resolved away
-        }
-    }
-    return region.copy(
-        pendingOffers = newOffers,
-        lastAcceptResolvedAt = if (resolvedAnAccept) obs.timestamp else region.lastAcceptResolvedAt,
-    )
-}
+    policy: TransitionPolicy,
+): PlatformRegion = region.pendingOffers.filter { it.acceptedAt == null }
+    .fold(region) { acc, offer -> leavePresentation(sink, acc, offer, obs, PoolEntryVia.FRAME, policy) }
 
 /**
  * Is [incoming] a churned re-render of the [presented] offer's SAME physical presentation (#830)?
@@ -245,37 +240,6 @@ private fun isSamePresentation(
 /** #1104: when this frame's countdown reaches zero — null when the frame carries no countdown. */
 private fun countdownExpiresAt(obs: Observation, offerFields: ParsedFields.OfferFields): Long? =
     offerFields.parsedOffer.initialCountdownSeconds?.takeIf { it >= 0 }?.let { obs.timestamp + it * 1000L }
-
-/**
- * Does leaving offer-presentation TO [destination] imply this offer was click-lessly ACCEPTED?
- *
- * A **phased** task flow (pickup/dropoff navigation/arrived) does, unconditionally — the platform
- * only advances to those screens after an accept. The coarse [Flow.TaskActive] is different (#762
- * D2, adversarial finding 1): on a coarse platform it is the AMBIENT screen (Uber's `on_job_view`
- * is up for the whole trip), so mid-trip it is also exactly what re-renders when a stacked offer's
- * overlay vanishes after a **decline or timeout** — and Uber ships no decline click rule, so no
- * decline latch can flag that case. Returning to the surface you were already on is not an accept:
- * a `task:active` destination implies acceptance only when the offer's own
- * [PendingOffer.returnFlow] was NOT already a task flow (e.g. `Idle` — a job appearing where there
- * was none IS the legitimate click-less accept). Without this guard, a declined/timed-out mid-trip
- * offer would be stamped accepted the moment `on_job_view` re-renders — a phantom `OFFER_ACCEPTED`
- * plus phantom add-on economics and never-resolvable placeholders (the job-61 absorption class),
- * unrescuable by `OFFER_EXPIRY` once `acceptedAt` is set.
- */
-private fun destinationImpliesAccept(destination: Flow?, offer: PendingOffer): Boolean {
-    if (destination?.isTaskFlow() != true) return false
-    // #1119 slice 1: lifecycle scope blocks click-less add-on accepts even without return-flow context.
-    if (offer.offerFields.parsedOffer.effectiveScope == OfferScope.ADD_ON) return false
-    // #1104 (Astra r1 F2): the non-task-returnFlow guard now covers PHASED destinations too. A
-    // mid-job ADD-ON offer's returnFlow IS a task flow (pickup navigation for job A); when the dasher
-    // declines it — through the confirm sheet, with no click event on 8.97.8 — the very next frame
-    // is job A's pickup surface re-rendering, which an unconditional phased rule read as the add-on's
-    // acceptance: a phantom survivor, phantom economics on job A, and (since this PR promotes the
-    // transition into an event) a phantom OFFER_ACCEPTED. "A job appearing where there was none" is
-    // the only click-less accept the transition can prove; a click-less add-on accept is NOT
-    // inferable from screens alone and fails NULL (its pay still lands through the receipt).
-    return !offer.returnFlow.isTaskFlow()
-}
 
 /**
  * Record an accept/decline click on the current presented offer for outcome resolution. Mirrors the
@@ -323,6 +287,9 @@ private fun PlatformRegionStepper.latchOfferClick(
  * Also stamps the speak-once marker [PendingOffer.firstEvalLandedAt] on the FIRST landing per
  * physical presentation (#830) — set only when still null, so a variant re-eval landing later never
  * moves it; [OfferEffects] reads the PREVIOUS state's marker to fire `SpeakOffer` exactly once.
+ *
+ * #1119 S2: an evaluation that lands after its card was pooled lands on the newest pool entry with that hash and no
+ * evaluation yet, so a later link carries it. No effect follows (the card is gone) and no speak-once marker moves.
  */
 private fun PlatformRegionStepper.landOfferEval(
     region: PlatformRegion,
@@ -334,7 +301,7 @@ private fun PlatformRegionStepper.landOfferEval(
     val evalHash = result.offerHash
     val target = region.pendingOffers.lastOrNull {
         it.acceptedAt == null && (evalHash == null || it.offerHash == evalHash)
-    } ?: return region
+    } ?: return landOnPool(region, evalHash, evaluation)
     return region.copy(pendingOffers = region.pendingOffers.map {
         if (it === target) target.copy(
             evaluation = evaluation,
@@ -343,18 +310,37 @@ private fun PlatformRegionStepper.landOfferEval(
     })
 }
 
+private fun landOnPool(
+    region: PlatformRegion,
+    evalHash: String?,
+    evaluation: cloud.trotter.log.gig.domain.evaluation.OfferEvaluation,
+): PlatformRegion {
+    if (evalHash == null) return region
+    val entry = region.offerPool.lastOrNull { it.offer.offerHash == evalHash && it.offer.evaluation == null }
+        ?: return region
+    return region.copy(offerPool = region.offerPool.map {
+        if (it === entry) it.copy(offer = it.offer.copy(evaluation = evaluation)) else it
+    })
+}
+
 /**
- * OFFER_EXPIRY timer fire (vet H1/M5): resolve the presented offer named by the timer's `offerHash`
- * payload as a TIMEOUT (remove it → [OfferEffects] emits OFFER_TIMEOUT). NO-OP on an accept-latched
- * or accepted-pending-consumption offer — both TTLs land inside the accept grace, and timing-out an
- * accepted survivor would log a false OFFER_TIMEOUT and destroy the mint.
+ * OFFER_EXPIRY timer fire (vet H1/M5): the presented offer the timer was armed for — by the payload's instance id,
+ * by its `offerHash` only when that is null — leaves through [leavePresentation] (#1119 S2: pooled `via
+ * EXPIRY_TIMER`, or declined when its decline was committed). NO-OP on an accept-latched or
+ * accepted-pending-consumption offer — both TTLs land inside the accept grace, and expiring an accepted survivor
+ * would destroy the mint. A fire matching nothing is a no-op.
  */
 private fun PlatformRegionStepper.expireOffer(
+    sink: DecisionSink,
     region: PlatformRegion,
     obs: Observation.Timeout,
+    policy: TransitionPolicy,
 ): PlatformRegion {
-    val hash = (obs.payload as? ObservationPayload.OfferExpiry)?.offerHash ?: return region
-    val target = region.pendingOffers.firstOrNull { it.offerHash == hash } ?: return region
+    val payload = obs.payload as? ObservationPayload.OfferExpiry ?: return region
+    val hash = payload.offerHash
+    val target = region.pendingOffers.firstOrNull {
+        if (payload.instanceId != null) it.instanceKey == payload.instanceId else it.offerHash == hash
+    } ?: return region
     if (target.acceptedAt != null || target.isAcceptLatched()) {
         // Defended invariant (Principle 7 WARN; #692 review F1): a phantom timeout was suppressed
         // on an ACCEPTED offer — firing it would have logged a false OFFER_TIMEOUT and destroyed
@@ -365,7 +351,5 @@ private fun PlatformRegionStepper.expireOffer(
         )
         return region
     }
-    return region.copy(pendingOffers = region.pendingOffers.filterNot {
-        it.offerHash == hash && it.acceptedAt == null
-    })
+    return leavePresentation(sink, region, target, obs, PoolEntryVia.EXPIRY_TIMER, policy)
 }

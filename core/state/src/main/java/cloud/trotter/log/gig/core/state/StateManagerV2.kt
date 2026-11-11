@@ -261,6 +261,20 @@ class StateManagerV2 @Inject constructor(
             // Fail-null beats fail-wrong (#745).
             val base = restored.state
 
+            // #1119 S2: a snapshot written by another reducer generation is not replayed: its journal tail would run
+            // old observations through new offer rules (a card that already logged its outcome live could log a
+            // second). Start fresh ABOVE every journalled row, so the next restart neither re-detects nor replays them.
+            // Cost: a live shift's in-memory state (open job, pending graces) is dropped; install between shifts.
+            if (base.stateSchema != AppState.STATE_SCHEMA) {
+                val cv = maxOf(restored.correlationVersion, journal.latestVersion() ?: 0L)
+                Timber.tag("StateMachine").i(
+                    "Snapshot written by state schema %d (current %d) — starting fresh at cv=%d, tail not replayed (#1119)",
+                    base.stateSchema, AppState.STATE_SCHEMA, cv,
+                )
+                finishRestore(AppState(correlationVersion = cv, stateSchema = AppState.STATE_SCHEMA))
+                return
+            }
+
             // Tail-replay observations after the snapshot, in cv order (#352)
             val tail = journal.tailAfter(restored.correlationVersion)
             if (tail.isEmpty()) {

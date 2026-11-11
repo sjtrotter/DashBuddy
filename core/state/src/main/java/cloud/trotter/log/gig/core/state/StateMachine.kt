@@ -49,6 +49,8 @@ class StateMachine @Inject constructor(
             regions = Regions(nextFlow, nextCrossPlatform, nextPlatforms),
             timestamp = obs.timestamp,
             correlationVersion = prev.correlationVersion + 1,
+            // #1119 S2: every live state and snapshot names the reducer generation that wrote it.
+            stateSchema = AppState.STATE_SCHEMA,
         )
 
         return Transition(next, effectMap.diff(prev, next, obs, decisions), decisions)

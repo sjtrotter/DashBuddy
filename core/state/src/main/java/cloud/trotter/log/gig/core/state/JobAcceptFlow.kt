@@ -131,6 +131,7 @@ internal fun PlatformRegionStepper.acceptInputsFromPending(pending: PendingOffer
             cardDropoffCount = parsedOffer?.dropoffCount?.takeIf { basis == OfferQuoteBasis.TOTAL },
             // The honest accept moment (the accept-click time); falls back to the consume frame.
             acceptedAt = acceptedAt ?: pending?.acceptClickAt ?: pending?.presentedAt ?: 0L,
+            offerInstanceId = pending?.instanceKey,
         ),
         storeHints = storeHints,
         dropoffCount = storeHints.size.takeIf { it > 0 } ?: 1,
@@ -162,27 +163,10 @@ internal fun PlatformRegionStepper.consumeAcceptIntoJob(
     // (activeTask not yet retired); commit that retire inline first (honest completion = pend.since,
     // matching retireActiveTask) so the completeness check sees the finished drop. Skipped when the
     // retire was armed by deliberating on THIS add-on offer (armedFromFlow == OfferPresented).
-    run {
-        val pend = region.pendingDestructive?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }
-        if (pend?.armedFromFlow == Flow.OfferPresented) return@run
-        // ONE spelling of the inline-committed retire copy (#997 amendment) — see [completedInline].
-        val justRetired = if (pend != null) region.activeTask?.completedInline(pend.since) else null
-        val recentForCheck =
-            if (justRetired != null) region.recentTasks + justRetired else region.recentTasks
-        if (isJobPhysicallyComplete(existing, recentForCheck, justRetired)) {
-            val committed = if (justRetired != null) {
-                sink.retired(justRetired.taskId)
-                region.copy(
-                    activeTask = null,
-                    recentTasks = recentForCheck.takeLast(PlatformRegionStepper.MAX_RECENT_TASKS),
-                    pendingDestructive = null,
-                )
-            } else region
-            return mintFreshJobFromAccept(completeActiveJob(sink, committed, obs.timestamp), obs, inputs)
-        }
-    }
+    if (startsNewJob(region)) return mintFreshJobFromAccept(closeCompletedJob(sink, region, obs), obs, inputs)
 
     // #1119 slice 1: re-accepting an owned offer is a no-op only while the job is still physically open.
+    // #1119 S2 (OQ4): by hash, not instance — a re-presented same offer must not split a live job in two.
     if (inputs.offerHash != null && existing.acceptedOffers.any { it.offerHash == inputs.offerHash }) return region
 
     // #1119 slice 1: a parsed STANDALONE offer accepted over a live job means the live job is stale on our side
@@ -202,6 +186,60 @@ internal fun PlatformRegionStepper.consumeAcceptIntoJob(
     }
 
     return appendAddOn(region, existing, obs, inputs)
+}
+
+/**
+ * #596 T2, the predicate half: is [region]'s live job already physically complete, so new work starts a new job? A
+ * drop still inside its TASK_RETIRE grace counts as retired (the inline copy, [completedInline]); a retire armed by
+ * deliberating on an add-on offer ([Flow.OfferPresented]) does not. Pure; false with no live job.
+ */
+internal fun startsNewJob(region: PlatformRegion): Boolean {
+    val existing = region.activeJob ?: return false
+    val pend = region.pendingDestructive?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }
+    if (pend?.armedFromFlow == Flow.OfferPresented) return false
+    // ONE spelling of the inline-committed retire copy (#997 amendment) — see [completedInline].
+    val justRetired = if (pend != null) region.activeTask?.completedInline(pend.since) else null
+    val recentForCheck = if (justRetired != null) region.recentTasks + justRetired else region.recentTasks
+    return isJobPhysicallyComplete(existing, recentForCheck, justRetired)
+}
+
+/**
+ * #596 T2, the close half (only after [startsNewJob]): commit the drop's pending TASK_RETIRE inline (honest
+ * completion = `pend.since`, matching `retireActiveTask`) and close the finished job.
+ */
+internal fun PlatformRegionStepper.closeCompletedJob(
+    sink: DecisionSink,
+    region: PlatformRegion,
+    obs: Observation.FlowObservation,
+): PlatformRegion {
+    val pend = region.pendingDestructive?.takeIf { it.kind == DestructiveKind.TASK_RETIRE }
+    val justRetired = if (pend != null) region.activeTask?.completedInline(pend.since) else null
+    val committed = if (justRetired != null) {
+        sink.retired(justRetired.taskId)
+        region.copy(
+            activeTask = null,
+            recentTasks = (region.recentTasks + justRetired).takeLast(PlatformRegionStepper.MAX_RECENT_TASKS),
+            pendingDestructive = null,
+        )
+    } else region
+    return completeActiveJob(sink, committed, obs.timestamp)
+}
+
+/**
+ * The bare job: a task frame with no live job and no accepted offer to mint from (recovery, a mid-session restart, an
+ * accept never seen, a pool tie). No economics; the frame's store is the only hint.
+ */
+internal fun PlatformRegionStepper.mintBareJob(region: PlatformRegion, obs: Observation.FlowObservation): PlatformRegion {
+    val parsed = obs.parsed as? ParsedFields.TaskFields
+    return region.copy(
+        activeJob = Job(
+            jobId = mintId("job", region, obs),
+            offerStoreHint = listOfNotNull(parsed?.storeName),
+            parentOfferHash = null,
+            startedAt = obs.timestamp,
+        ),
+        mintCounter = region.mintCounter + 1,
+    )
 }
 
 /**
@@ -252,6 +290,7 @@ internal fun PlatformRegionStepper.appendAddOn(
     obs: Observation.FlowObservation,
     inputs: AcceptInputs,
 ): PlatformRegion {
+    // #1119 S2 (OQ4): by hash, not instance (see consumeAcceptIntoJob).
     val alreadyCounted = inputs.offerHash != null &&
         existing.acceptedOffers.any { it.offerHash == inputs.offerHash }
     if (alreadyCounted) return region
