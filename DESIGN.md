@@ -252,8 +252,7 @@ adds the gap below, and never leaves it worse.
 - **Missing semantics:** `AppSegmented` exposes no role or selected state.
 - **Goal amounts are chips** (`GoalSheet`) that commit the goal when tapped.
 - **Main-app screens reading brand text tokens directly,** such as `TodayCard`.
-- **Undesigned states:** loading on Ratings and the Garage; paused in the bubble (an empty panel); a
-  failed gas-price lookup.
+- **Undesigned states:** loading on Ratings and the Garage; paused in the bubble (an empty panel).
 
 ## Settled decisions
 

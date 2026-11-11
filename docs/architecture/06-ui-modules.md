@@ -33,7 +33,12 @@ in the heading and no Save button; Reset to estimates resets its costs, keeping 
 unfinished fields flush before leaving or retiring, and a failed write stops the transition (#1385);
 a snackbar offers Undo for the latest saved field, restoring its previous value or estimate; type and
 identity change only by adding a new vehicle; the shared number inputs save when an edited field is finished; retired vehicles sit in a Retired section and can be restored (#1383);
-the cost drafts stay in `WizardState` and land in the saved profile; the
+the cost drafts stay in `WizardState` and land in the saved profile;
+the gas price card's line renders from `WizardState.gasPriceSource` (`GasPriceSource`: a lookup with its fetch time,
+from the stored `gas_price_fetched_at` or a fresh lookup; typed, which auto off implies; or saved, auto on with no
+stamp) and the host's `rememberNow()`, passed in as `nowMillis` since the module carries no `:core:designsystem`; it
+never says "Regional average" of a figure no lookup returned, and a failed lookup keeps the figure, says so and offers
+Retry (#1478); the
 `WizardScreen` shell + `EconomyCostsCard` stay in `:app` with the shared `ui/components/economy/*`
 editor family, and the Dashboard-hosted `setup/consent/` #843 + `setup/permissions/` sheets stay in
 `:app`);
