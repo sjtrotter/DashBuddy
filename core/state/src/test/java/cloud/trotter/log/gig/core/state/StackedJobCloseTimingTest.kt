@@ -359,7 +359,7 @@ class StackedJobCloseTimingTest {
     // =====================================================================================
 
     @Test
-    fun `J4 a drop displaced by an add-on pickup waits for the receipt, which is split over both drops`() {
+    fun `J4 a drop displaced by an add-on pickup waits for the receipt, which two offers leave unproven`() {
         val dash = Dash()
         dash.acceptAndPickUp("offer-a", 8.0, listOf("Store A"), at = 10_000L)
         dash.step(dropNav(100_000L, "cust-1", store = "Store A"))
@@ -382,8 +382,10 @@ class StackedJobCloseTimingTest {
         val rows = dash.step(idle(1_104_000L))
         assertNull("the PostTask exit closed the job", dash.region.activeJob)
         assertEquals("D2's exit row and D1's close-out row, on one step", 2, rows.size)
-        assertEquals("the receipt, split over both drops", 1300L, rows.sumOf { cents(it.dropRealizedPay) })
-        assertHeadline("the whole job", 13.0, dash)
+        // #1598: the unproven oracle. Before #1598 the receipt was split over both drops ($13); a job holding two
+        // accepted offers never proves a receipt, so it places no money and both drops keep the offer estimate.
+        assertTrue("no receipt money on either drop", rows.all { it.dropRealizedPay == null && it.totalPay == null })
+        assertHeadline("the job's offer estimate", rows.priced(), dash)
     }
 
     // =====================================================================================

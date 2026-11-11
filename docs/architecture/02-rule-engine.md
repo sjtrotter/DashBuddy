@@ -88,7 +88,11 @@ merchant holder followed by an address-shaped sibling — parses pay (the figure
 from the route summary (a route ESTIMATE, never a deadline; the new `parseTotalMinutes` transform sums
 `N hr N min` into minutes, where `parseMinutes` would read only the trailing minutes), and `orders` per
 merchant holder (`storeName` from the holder, the item count from `sibling(2)`'s `Shop for N items`
-row). The helper binding `offerBody` (the body ScrollView, anchored on the disclaimer PREFIX through the new
+row). Since #1598 branch 1 also parses `dropoffCount` from the dropoff holder (`Customer dropoff` = 1,
+`Multiple dropoffs (N stops)` = N: drop STOPS, so a one-customer two-store card reads 1), a receipt-proof
+input that never feeds `offerHash` or the presentation key; branch 2 does not parse it, because the add-on
+card's holder describes the whole route, owned order included, and branch 0 (the legacy card) has no
+count. The helper binding `offerBody` (the body ScrollView, anchored on the disclaimer PREFIX through the new
 `hasAnyTextStartsWith` predicate — the subtree form of `hasAnyText` — because the dropoff holder reads
 `Customer dropoff` on a single drop but `Multiple dropoffs (2 stops)` on a stack, and the Accept footer is
 the ScrollView's SIBLING, not a child) is **mandatory** and every economic read is scoped to it

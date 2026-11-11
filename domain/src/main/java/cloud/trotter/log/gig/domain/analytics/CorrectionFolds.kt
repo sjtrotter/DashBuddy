@@ -14,6 +14,7 @@ import cloud.trotter.log.gig.domain.model.event.payload.PayAdjustmentPayload
 import cloud.trotter.log.gig.domain.model.event.payload.SessionMilesCorrectionPayload
 import cloud.trotter.log.gig.domain.model.event.payload.SessionMilesOperation
 import cloud.trotter.log.gig.domain.model.event.payload.SessionReportCorrectionPayload
+import cloud.trotter.log.gig.domain.state.ReceiptScope
 
 /**
  * The driver-correction folds, split out of [RecordFolds] (#761, the #237 file-ceiling residue;
@@ -243,6 +244,10 @@ internal object CorrectionFolds {
         val e = event.event
         val p = e.payload as? DeliveryReceiptRepricePayload
             ?: return FoldOutcome(context = context, skip = "DELIVERY_RECEIPT_REPRICE: missing/malformed payload")
+        // #1598: a re-price speaks only for a proven receipt; the emitter never writes an UNPROVEN one.
+        if (p.receiptScope == ReceiptScope.UNPROVEN) {
+            return FoldOutcome(context = context, skip = "DELIVERY_RECEIPT_REPRICE: unproven scope")
+        }
         val sole = soleDropOfReceipt(p.dropRealizedPay, p.parsedPay.total)
         return FoldOutcome(
             context = context,

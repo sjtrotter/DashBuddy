@@ -3,9 +3,11 @@ package cloud.trotter.log.gig.core.data.analytics
 import cloud.trotter.log.gig.core.database.analytics.DeliveryRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.OfferRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.PickupRecordEntity
+import cloud.trotter.log.gig.core.database.analytics.ReceiptRecordEntity
 import cloud.trotter.log.gig.domain.analytics.DeliveryFold
 import cloud.trotter.log.gig.domain.analytics.OfferFold
 import cloud.trotter.log.gig.domain.analytics.PickupFold
+import cloud.trotter.log.gig.domain.analytics.ReceiptFold
 
 internal fun DeliveryFold.toEntity() = DeliveryRecordEntity(
     eventSequenceId = eventSequenceId,
@@ -55,6 +57,25 @@ internal fun DeliveryFold.toEntity() = DeliveryRecordEntity(
     soleOfferHash = soleOfferHash,
     odometerAtArrival = odometerAtArrival,
     jobOfferHashes = StringListColumn.encode(jobOfferHashes),
+)
+
+/** #1598: one receipt evidence record, 1:1. */
+internal fun ReceiptFold.toEntity() = ReceiptRecordEntity(
+    evidenceId = evidenceId,
+    sessionId = sessionId,
+    platform = platform,
+    jobId = jobId,
+    subjectTaskId = subjectTaskId,
+    firstSeenAt = firstSeenAt,
+    lastSeenAt = lastSeenAt,
+    totalCents = totalCents,
+    basePayCents = basePayCents,
+    tipCents = tipCents,
+    isExpanded = isExpanded,
+    scope = scope,
+    proofGap = proofGap,
+    revision = revision,
+    lastEventSequenceId = lastEventSequenceId,
 )
 
 internal fun PickupFold.toEntity() = PickupRecordEntity(

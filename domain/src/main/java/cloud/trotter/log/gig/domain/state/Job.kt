@@ -48,6 +48,12 @@ data class AcceptedOfferEconomics(
      * leaves that offer unmatchable by store, degrading it to the stamp / job-pooled arms.
      */
     val storeHints: List<String> = emptyList(),
+    /**
+     * #1598: the accepted card's own drop count ([cloud.trotter.log.gig.domain.model.offer.ParsedOffer.dropoffCount]),
+     * TOTAL quotes only. The receipt proof reads it; distinct from the placeholder count, which is the merchant-row
+     * count. Default null ⇒ old snapshots decode.
+     */
+    val cardDropoffCount: Int? = null,
     val acceptedAt: Long,
     val handlingMinutes: Double? = null,
     val nonShopLegs: Int = 0,

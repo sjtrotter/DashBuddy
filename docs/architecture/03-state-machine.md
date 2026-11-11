@@ -334,6 +334,19 @@ unaffected (it fires on the PostTask frame, not the commit) and the #596 T2 next
 it. **Layer 1 is also the ONLY path that lands an expansion in the STACKED shape** (accept the next
 offer off the receipt, then expand it): layer 2's ownership rule refuses that case outright — see §5.
 
+**Every receipt read is evidence, and a late frame needs a quiet episode (#1598).** The PostTask arm
+computes the read's proof once (`receiptCoverageAt`, strict: §5 "Receipt evidence and strict coverage"),
+records it through `observeReceiptEvidence` and caches it beside the receipt. The evidence episode
+(`PlatformRegion.openReceiptEvidence`) shares the #1460 continuity rule (`receiptEpisodeContinues`, the one
+owner the settle gate's `receiptEpisodeKey` also reads): it survives the receipt and the offer overlay
+reached from it, and any other flow-bearing frame or `endSession` clears it; a flow-less timer does not,
+so a retire committed on its timer keeps the episode, and with it the proof, across the close. It is not
+dropped by recovery: replay re-derives it and the evidence keys dedup. `possibleWorkSeq` counts fresh
+offer presentations (the replace arm of `pushOrReplaceOffer`; never an enrich or a same-presentation
+variant), and a receipt FRAME read after its job closed re-prices only while it still equals the
+episode's `possibleWorkSeqAtOpen`. Cost: a proven single drop whose receipt expands after the close keeps
+the mint's receipt total, without the tip/base split, whenever any offer appeared in between.
+
 **A dash end ABSORBS a standing task retire (#1078) — it never discards it.** The destructive slot
 holds ONE pending, and both `SESSION_END` arm sites used to REPLACE whatever stood in it. Fielded
 2026-09-08 (build 8028691a, db seq 2007/2008): the dropoff screen gave way to `dash_along_the_way`,

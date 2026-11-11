@@ -131,9 +131,9 @@ class PlatformRegionStepper @Inject constructor() {
             ),
             obs,
         )
-        val region = SessionPaySettleGate.receiptEpisode(
-            stepped, actedFlowEdge(prev, prevFlow, obs).first, obs,
-        )
+        val actedPrev = actedFlowEdge(prev, prevFlow, obs).first
+        // #1598: the receipt evidence episode ends on the same frames as the #1460 key.
+        val region = receiptEvidenceEpisode(SessionPaySettleGate.receiptEpisode(stepped, actedPrev, obs), actedPrev, obs)
         return PlatformStep(region, sink.build())
     }
 
@@ -906,10 +906,17 @@ class PlatformRegionStepper @Inject constructor() {
                     // (#745); silent, because the absent announce is itself the observable (no
                     // "Saved: \$X" bubble fires) — unlike #1103's refusal below, which leaves no
                     // observable at all and therefore carries the one DEBUG line in this reducer.
-                } else if (!sameTaskCollapsedDowngrade) {
-                    // #1033 round 13: ONE owner writes the receipt, the drops it describes, and the
-                    // task it was announced for — see [cacheReceipt] / [ReceiptCoverage].
-                    r = cacheReceipt(r, parsed, postTaskTaskId)
+                } else {
+                    // #1598: every read is evidence, the collapsed downgrade included; the guard below
+                    // protects only the cache. The read's proof is computed once and shared.
+                    val coverage = receiptCoverageAt(r, postTaskTaskId)
+                    r = observeReceiptEvidence(sink, r, parsed, postTaskTaskId, coverage, obs)
+                    if (!sameTaskCollapsedDowngrade) {
+                        // #1033 round 13: ONE owner writes the receipt, the drops it describes, and the
+                        // task it was announced for — see [cacheReceipt] / [ReceiptCoverage].
+                        r = cacheReceipt(r, parsed, postTaskTaskId,
+                            coverage.copy(evidenceId = r.openReceiptEvidence?.takeIf { it.subjectTaskId == postTaskTaskId }?.evidenceId))
+                    }
                 }
                 // #1033 round 4: decide the late-receipt re-price HERE, where state can be written —
                 // the itemization has just landed in `lastPostTaskFields`, and the marker has to be
@@ -925,6 +932,7 @@ class PlatformRegionStepper @Inject constructor() {
                         coverage = r.lastPostTaskCoverage,
                         decidedAt = obs.timestamp,
                         captureId = obs.captureId,
+                        lateFrame = true,
                     )
                 }
                 r = SessionPaySettleGate.receiptRead(r, obs, parsed, flow, policy)
@@ -1237,6 +1245,7 @@ class PlatformRegionStepper @Inject constructor() {
             lastClosedJobReceipt = null,
             jobReceiptAnchors = null,
             lastAcceptResolvedAt = null,
+            openReceiptEvidence = null,
         ))
     }
 

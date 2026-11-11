@@ -291,6 +291,18 @@ data class PlatformRegion(
      * minutes later. Cleared only at `endSession`: an accept belongs to the dash it was taken in.
      */
     val lastAcceptResolvedAt: Long? = null,
+    /**
+     * #1598: bumped by one on every FRESH offer presentation (`OfferLifecycle.pushOrReplaceOffer`'s replace arm),
+     * never on an enrich or a same-presentation variant; monotonic, never cleared. A late receipt frame re-prices
+     * only if it has not moved since the receipt was first read.
+     */
+    val possibleWorkSeq: Long = 0,
+    /**
+     * #1598: the receipt evidence episode in progress. Kept while each flow-bearing frame is the receipt or the
+     * offer overlay reached from it (the #1460 continuity rule); any other flow-bearing frame and `endSession` clear
+     * it. Not dropped by recovery: the journal replay re-derives it and the evidence effect keys dedup.
+     */
+    val openReceiptEvidence: OpenReceiptEvidence? = null,
 ) {
     /**
      * This platform's current PRESENTED offer — the accepted-pending-consumption survivors
@@ -378,30 +390,36 @@ data class ClosedJobReceipt(
 )
 
 /**
- * The set of drops a post-delivery receipt actually describes, captured at the moment it was READ
- * (#1073 round 13) — the discriminator the mint's `apportion` denominator and the re-price's are
- * BOTH intersected with, so the two cannot disagree.
+ * The set of drops a post-delivery receipt pays, captured at the moment it was READ (#1073 round 13) — the
+ * discriminator the mint's `apportion` denominator and the re-price's are BOTH intersected with, so the two cannot
+ * disagree.
  *
- * The rule: a receipt speaks for the announced task plus every accountable dropoff of that task's
- * job which already had completion evidence (`completedAt != null && unassignedAt == null`) when the
- * receipt was on screen. A sibling delivered LATER is not in it — the receipt could not have priced
- * a delivery that had not happened.
+ * The rule (#1598, strict): a receipt pays a delivery on its own only on proof — the job holds exactly one accepted
+ * offer, that offer's card showed one drop, the receipt's subject is the job's only accountable drop, and its store
+ * matches the offer's (`ReceiptProof.receiptCoverageAt` states every clause). A proven read covers `{subject}`; any
+ * other read covers nothing, places no money and suppresses no estimate, and is kept as evidence
+ * (`RECEIPT_OBSERVED`). The pre-#1598 rule covered the subject plus every accountable completed drop of its job,
+ * which split one offer's receipt over another offer's drops on a multi-offer job.
  *
- * **A `completedAt` timestamp comparison was tried first and rejected in the same series.**
- * `Task.completedAt` carries the LATEST retire arm's `since` (`TaskLifecycle` clears and re-arms it
- * on every task-frame branch, an Online→Offline arm REPLACES it, and a displacement stamps
- * `retireSince ?: obs.timestamp`), so the receipt's OWN anchor could carry a stamp later than the
- * frame the receipt was read on and be excluded from its own receipt; and "no `completedAt` yet"
- * admitted any active drop under a `TASK_RETIRE` grace, not just the anchor. A SET captured at read
- * time has neither failure mode, and — unlike a timestamp — it can be handed to the mint too.
+ * **A `completedAt` timestamp comparison was tried first and rejected in the #1073 series.**
+ * `Task.completedAt` carries the LATEST retire arm's `since`, so the receipt's OWN anchor could carry a stamp later
+ * than the frame the receipt was read on. A SET captured at read time has no such failure mode, and it can be handed
+ * to the mint too.
  *
- * Assumes ONE receipt describes the whole job — see #1077 for add-on jobs, where a second accepted
- * offer can bring its own receipt and that premise stops holding.
+ * A new read always sets [scope]; `taskIds` is `{subject}` when [ReceiptScope.PROVEN_SINGLE] and empty when
+ * [ReceiptScope.UNPROVEN]. `scope == null` is a pre-#1598 snapshot's coverage, still honoured as written (one
+ * in-flight receipt at upgrade; alpha).
  */
 @Serializable
 data class ReceiptCoverage(
     /** The `taskId`s this receipt describes. Empty means it describes nothing. */
     val taskIds: Set<String> = emptySet(),
+    /** #1598: what this read may pay; null = a pre-#1598 snapshot's coverage. */
+    val scope: ReceiptScope? = null,
+    /** #1598: the first proof clause an UNPROVEN read failed; null when proven or pre-#1598. */
+    val gap: ReceiptProofGap? = null,
+    /** #1598: the evidence record this read belongs to (`RECEIPT_OBSERVED`), when one was opened. */
+    val evidenceId: String? = null,
 )
 
 /**

@@ -127,6 +127,8 @@ internal fun PlatformRegionStepper.acceptInputsFromPending(pending: PendingOffer
             // which quote — and the store is the authoritative offer↔drop correspondence at close
             // (the slot stamp is only a hint; placeholders activate blind first-open).
             storeHints = storeHints,
+            // #1598: the card's own drop count, a receipt-proof input. INCREMENTAL cards describe the whole route.
+            cardDropoffCount = parsedOffer?.dropoffCount?.takeIf { basis == OfferQuoteBasis.TOTAL },
             // The honest accept moment (the accept-click time); falls back to the consume frame.
             acceptedAt = acceptedAt ?: pending?.acceptClickAt ?: pending?.presentedAt ?: 0L,
         ),

@@ -238,6 +238,8 @@ class EffectMap @Inject constructor(
             // the `DELIVERY_COMPLETED` it corrects, and the projector applies adjustments after the
             // batch's own delivery upserts in sequence order.
             addAll(diffReceiptReprice(p, next, decisions))
+            // #1598: every receipt read is saved as evidence; it moves no money.
+            addAll(diffReceiptEvidence(p, next, decisions))
         }
     }
 

@@ -45,7 +45,7 @@ import timber.log.Timber
 class DoorDashFullDashE2ETest {
 
     @Test
-    fun `a stacked DoorDash dash records two receipt-priced deliveries, one session and executes its effects once`() {
+    fun `a stacked DoorDash dash records two offer-estimated deliveries, keeps its receipt as evidence, one session, effects once`() {
         val app = RuntimeEnvironment.getApplication() as ReplayApplication
         val tree = RecordingTree()
         Timber.plant(tree)
@@ -118,9 +118,10 @@ class DoorDashFullDashE2ETest {
                     deliveries.map { it.soleOfferHash!! }.distinct(), sessionId!!, "OFFER_ACCEPTED",
                 )
             }.single()
+            // #1598 (OQ1): the legacy View card shows no drop count, so this stack's receipt is unproven. It places
+            // no money; each drop keeps its share of the accepted offer (OFFER_PAY), and the receipt is evidence.
             deliveries.forEach { row ->
-                assertEquals("${row.storeName}: half of the anonymous \$16.70 receipt", 8.35, row.realizedPay!!, 0.005)
-                assertEquals("${row.storeName}: priced from the receipt", "DROP_SHARE", row.payBasis)
+                assertEquals("${row.storeName}: priced from the offer estimate", "OFFER_PAY", row.payBasis)
                 assertNull("${row.storeName}: a two-drop receipt itemizes no single row (tip)", row.tip)
                 assertNull("${row.storeName}: …nor its base pay", row.basePay)
                 assertEquals("${row.storeName}: economics frozen at the accepted offer", "OFFER_FROZEN", row.costBasis)
@@ -134,7 +135,14 @@ class DoorDashFullDashE2ETest {
                     row.realizedPay!! - row.realizedMiles!! * row.frozenCostPerMile!!, row.netProfit!!, 1e-6,
                 )
             }
-            assertEquals("the dash's pay is the receipt total", 16.70, deliveries.sumOf { it.realizedPay!! }, 0.005)
+            assertEquals("the dash's pay is the accepted offer's quote", offer.payAmount!!, deliveries.sumOf { it.realizedPay!! }, 0.005)
+            val receipts = replay.await { replay.db.receiptDao().receiptsInSession(sessionId!!) }
+            assertTrue("the receipt is saved as evidence\n$trace", receipts.isNotEmpty())
+            receipts.forEach {
+                assertEquals("UNPROVEN", it.scope)
+                assertEquals("the legacy card has no drop count", "CARD_COUNT_MISSING", it.proofGap)
+            }
+            assertEquals("the receipt's own total", 1_670L, receipts.maxBy { it.lastSeenAt }.totalCents)
             assertEquals("OFFER_ACCEPTED", offer.outcome)
 
             val session = replay.await { replay.db.analyticsDao().sessionRecord(sessionId!!) }!!

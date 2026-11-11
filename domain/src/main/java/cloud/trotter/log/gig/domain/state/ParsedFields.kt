@@ -215,6 +215,11 @@ sealed class ParsedFields {
             // no post_task-shaped rule dedupes an effect on `{parsedHash}`/`{presentationHash}`
             // (only the two offer rules do), so no effect key moves with this.
             h = 31 * h + sessionEarnings.hashCode()
+            // #1598: an itemization that changes while the totals hold, and a collapsed receipt that expands, are
+            // new evidence — without these two `FrameGate` dropped them before the evidence record or the cache saw
+            // them. The #1029 `{parsedHash}` check above still holds: no post_task rule dedupes an effect on it.
+            h = 31 * h + parsedPay.hashCode()
+            h = 31 * h + isExpanded.hashCode()
             return h
         }
     }

@@ -174,7 +174,8 @@ private fun PlatformRegionStepper.pushOrReplaceOffer(
                 sourceRuleId = obs.ruleId,
                 countdownExpiresAt = countdownExpiresAt(obs, offerFields),
             )
-            listOf(fresh)
+            // #1598: a fresh presentation is possible new work — the late-receipt guard's counter.
+            return region.copy(pendingOffers = listOf(fresh), possibleWorkSeq = region.possibleWorkSeq + 1)
         }
     }
     return region.copy(pendingOffers = newOffers)

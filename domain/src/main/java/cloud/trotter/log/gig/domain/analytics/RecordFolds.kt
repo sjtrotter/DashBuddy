@@ -281,6 +281,8 @@ data class FoldOutcome(
      * values; the orchestrator applies it by (jobId, taskId) inside the batch transaction.
      */
     val receiptReprice: ReceiptRepriceFold? = null,
+    /** A receipt evidence record (#1598), from `RECEIPT_OBSERVED`; the orchestrator upserts it by evidence id. */
+    val receipt: ReceiptFold? = null,
     /**
      * A driver DELIVERY_SESSION_ASSIGN decision (#660 piece 2): the pure fold decides WHICH row and
      * WHICH session (null ⇒ unassign), but cannot read/guard the target `delivery_record` here — the
@@ -445,6 +447,8 @@ object RecordFolds {
      */
     internal val BOOKKEEPING_EVENTS = setOf(
         AppEventType.DELIVERY_RECEIPT_REPRICE,
+        // #1598: receipt evidence moves no money and measures nothing.
+        AppEventType.RECEIPT_OBSERVED,
         AppEventType.PAY_ADJUSTMENT,
         AppEventType.DELIVERY_ADJUSTMENT,
         AppEventType.EXPENSE_LOGGED,
@@ -527,6 +531,7 @@ object RecordFolds {
             AppEventType.LEDGER_ENTRY_VOIDED -> CorrectionFolds.foldLedgerVoid(event, context)
             AppEventType.DELIVERY_ADJUSTMENT -> CorrectionFolds.foldDeliveryAdjustment(event, context)
             AppEventType.DELIVERY_RECEIPT_REPRICE -> CorrectionFolds.foldDeliveryReceiptReprice(event, context)
+            AppEventType.RECEIPT_OBSERVED -> ReceiptFolds.foldReceiptObserved(event, context)
             AppEventType.SESSION_REPORT_CORRECTION -> CorrectionFolds.foldSessionReportCorrection(event, context)
             AppEventType.SESSION_MILES_CORRECTION -> CorrectionFolds.foldSessionMilesCorrection(event, context)
             AppEventType.DELIVERY_SESSION_ASSIGN -> CorrectionFolds.foldDeliverySessionAssign(event, context)

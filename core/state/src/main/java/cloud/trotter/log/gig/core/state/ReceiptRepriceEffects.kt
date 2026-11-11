@@ -12,6 +12,7 @@ import cloud.trotter.log.gig.domain.state.FlowRegion
 import cloud.trotter.log.gig.domain.state.ParsedFields
 import cloud.trotter.log.gig.domain.state.PlatformRegion
 import cloud.trotter.log.gig.domain.state.ReceiptCoverage
+import cloud.trotter.log.gig.domain.state.ReceiptScope
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
 import cloud.trotter.log.gig.domain.state.isAccountableDropoff
@@ -139,34 +140,6 @@ private val Task.isReceiptSubject: Boolean
     get() = phase == TaskPhase.DROPOFF && unassignedAt == null
 
 /**
- * The drops a receipt read on THIS frame describes (#1073 round 13) — see [ReceiptCoverage].
- *
- * Every accountable dropoff of the subject's job that already carried completion evidence, plus the
- * subject itself — which is in its own receipt by definition, and whose `completedAt` is not stamped
- * until its retire grace commits. Nothing UNQUALIFIED can enter: the subject comes from
- * [receiptSubjectTaskId], which is a non-unassigned DROPOFF of this job or null — never a pickup.
- * It CAN be an un-arrived drop when one is active, which is the #1081 residual stated there: a false
- * `post:task` frame then covers a drop that has not been delivered.
- * The job is the live one, falling back to the subject's own `jobId` so a post-close re-render still
- * resolves (`completeActiveJob` has already nulled `activeJob` by then).
- *
- * Pure: region records only — no wall clock, no `Platform` literal.
- */
-internal fun receiptCoverageAt(region: PlatformRegion, subjectTaskId: String?): ReceiptCoverage {
-    val tasks = region.recentTasks + listOfNotNull(region.activeTask)
-    val jobId = region.activeJob?.jobId
-        ?: tasks.firstOrNull { it.taskId == subjectTaskId }?.jobId
-    val covered = tasks
-        .filter {
-            it.jobId == jobId && it.isAccountableDropoff &&
-                (it.taskId == subjectTaskId || it.completedAt != null)
-        }
-        .map { it.taskId }
-        .toSet()
-    return ReceiptCoverage(taskIds = covered)
-}
-
-/**
  * The ONE writer of the cached-receipt triple (#1073 round 13): the receipt, the drops it describes,
  * and the task it was announced for. Keeping them in one `copy` is what makes "the mint and the
  * re-price read the same denominator" structural rather than a convention.
@@ -175,9 +148,11 @@ internal fun cacheReceipt(
     region: PlatformRegion,
     parsed: ParsedFields.PostTaskFields,
     subjectTaskId: String?,
+    /** #1598: the read's proof, computed once by the caller so the evidence record and the cache agree. */
+    coverage: ReceiptCoverage = receiptCoverageAt(region, subjectTaskId),
 ): PlatformRegion = region.copy(
     lastPostTaskFields = parsed,
-    lastPostTaskCoverage = receiptCoverageAt(region, subjectTaskId),
+    lastPostTaskCoverage = coverage,
     lastAnnouncedPostTaskTaskId = subjectTaskId ?: region.lastAnnouncedPostTaskTaskId,
 )
 
@@ -257,6 +232,11 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
      * amdt-#5 qualification is the whole test.
      */
     mintRanForJob: Boolean = false,
+    /**
+     * #1598: true only for a receipt FRAME read after its job closed (the PostTask arm). The close-time and
+     * teardown asks keep false: their receipt was read while the job was live.
+     */
+    lateFrame: Boolean = false,
 ): PlatformRegion {
     // The caller decides WHEN this is asked (#1033 round 9): the PostTask arm asks on a receipt
     // FRAME, and `completeActiveJob` asks once more at the close, from the receipt it is about to
@@ -304,6 +284,24 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     val receiptSeenAt = mark.receiptSeenAt ?: return region
     val acceptResolvedAt = region.lastAcceptResolvedAt
     if (acceptResolvedAt != null && acceptResolvedAt >= receiptSeenAt) return region
+
+    // #1598 (OQ3): a late receipt FRAME re-prices only if no offer has been presented since this receipt was
+    // first read in its episode. The accept guard above misses an offer that was shown and then timed out or
+    // was declined (neither resolves an accept), yet that offer may own the frame now on screen. FIRST read,
+    // not the close, for the round-7 reason: a later reference admits more frames. There is no
+    // confirmed-decline exemption — on the Compose card a decline resolves as a timeout. Cost: a proven single
+    // drop whose receipt expands after the close keeps the mint's receipt total, without the tip/base split,
+    // whenever any offer appeared in between.
+    if (lateFrame) {
+        val open = region.openReceiptEvidence
+        if (open == null || region.possibleWorkSeq != open.possibleWorkSeqAtOpen) {
+            Timber.tag("StateMachine").d(
+                "#1598 late receipt frame kept as evidence only: job %s, offer presented since the receipt was read",
+                mark.jobId,
+            )
+            return region
+        }
+    }
 
     // The receipt on screen must belong to THIS job — the announce anchor names the task the receipt
     // was attributed to. Resolved BEFORE the denominator, because the teardown widening below is
@@ -383,6 +381,7 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
             decidedAt = decidedAt,
             revision = revision,
             sourceCaptureId = captureId,
+            evidenceId = coverage?.evidenceId,
         ),
     )
     return region.copy(
@@ -460,6 +459,9 @@ internal fun EffectMap.diffReceiptReprice(
                 parsedPay = decided.parsedPay,
                 dropRealizedPay = share,
                 sourceCaptureId = decided.sourceCaptureId,
+                // #1598: a re-price fires only for proven coverage — a fresh read covers `{subject}` or nothing.
+                receiptScope = ReceiptScope.PROVEN_SINGLE,
+                receiptEvidenceId = decided.evidenceId,
             ),
             // Keyed by DECISION REVISION, not by the receipt's content (#1033 review round 6): an
             // X → Y → X itemization sequence hashes back to the FIRST key, and the durable

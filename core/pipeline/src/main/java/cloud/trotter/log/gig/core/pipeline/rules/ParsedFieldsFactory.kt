@@ -335,6 +335,8 @@ object ParsedFieldsFactory {
         val deliveryTimeText = f.str("deliveryTimeText")
         val timeToCompleteMinutes = f.long("timeToCompleteMinutes")
         val stopCount = f.int("stopCount")
+        // #1598: the card's own drop count — a receipt-proof input only, never hashed below.
+        val dropoffCount = f.int("dropoffCount")?.takeIf { it >= 1 }
 
         // Compute offer hash from extracted fields (same as Kotlin parser)
         val storeNames = orders.joinToString(",") { it.storeName }
@@ -428,6 +430,7 @@ object ParsedFieldsFactory {
                 dueByTimeMillis = f.long("deliveryTime"),
                 timeToCompleteMinutes = timeToCompleteMinutes,
                 stopCount = stopCount,
+                dropoffCount = dropoffCount,
                 // #1104: the card's REMAINING countdown at this frame (seconds) — transition evidence
                 // for the outcome resolver (an exit at the countdown's end is an expiry, whatever
                 // else was seen). Never folded into offerHash/presentationKey: it ticks every frame.

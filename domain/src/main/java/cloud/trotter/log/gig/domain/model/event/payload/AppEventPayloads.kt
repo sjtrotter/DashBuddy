@@ -9,6 +9,8 @@ import cloud.trotter.log.gig.domain.model.event.AppEventType
 import cloud.trotter.log.gig.domain.model.offer.ParsedOffer
 import cloud.trotter.log.gig.domain.model.pay.ParsedPay
 import cloud.trotter.log.gig.domain.state.Flow
+import cloud.trotter.log.gig.domain.state.ReceiptProofGap
+import cloud.trotter.log.gig.domain.state.ReceiptScope
 
 /**
  * Rich payloads written into [cloud.trotter.log.gig.core.database.event.AppEventEntity.eventPayload]
@@ -201,6 +203,14 @@ data class DeliveryPayload(
      * no estimate was stamped. Same consumer-pending posture as [offerPayAttributedHash].
      */
     val offerPayAttribution: cloud.trotter.log.gig.domain.state.OfferPayAttribution? = null,
+    /**
+     * #1598: whether a receipt speaks for this drop. [ReceiptScope.PROVEN_SINGLE]: the receipt money on this
+     * payload is proven to be this drop's. [ReceiptScope.UNPROVEN]: no receipt speaks for it (receipt-less or
+     * unproven), and the fold reads no receipt money from it. Null = a pre-#1598 payload, folded as before.
+     */
+    val receiptScope: ReceiptScope? = null,
+    /** #1598: the receipt evidence record (`RECEIPT_OBSERVED`) that priced this drop, when proven. */
+    val receiptEvidenceId: String? = null,
 ) : AppEventPayload
 
 /**
@@ -383,6 +393,38 @@ data class DeliveryReceiptRepricePayload(
     /** This drop's apportioned share of [parsedPay] (`DropPayApportioner.apportion`). */
     val dropRealizedPay: Double,
     /** The capture the expanded receipt was read from, when the observation carried one (debug). */
+    val sourceCaptureId: String? = null,
+    /** #1598: as [DeliveryPayload.receiptScope]; an UNPROVEN re-price is a counted skip. Null = pre-#1598. */
+    val receiptScope: ReceiptScope? = null,
+    /** #1598: the receipt evidence record this re-price came from. */
+    val receiptEvidenceId: String? = null,
+) : AppEventPayload
+
+/**
+ * Payload for `RECEIPT_OBSERVED` (#1598): one read of a post-delivery receipt, saved as evidence. It moves no
+ * money; it folds into `receipt_records` only. A changed re-read of the same receipt in one episode is a new
+ * [revision] of the same [evidenceId] and carries the whole record.
+ *
+ * **PII (Principle 7):** the same posture as [DeliveryReceiptRepricePayload] — money and the app's own ids.
+ * [parsedPay]'s tip labels are the receipt's own merchant forms, already stored on [DeliveryPayload].
+ */
+@Serializable
+data class ReceiptObservedPayload(
+    val evidenceId: String,
+    val revision: Int,
+    /** The platform's wire id (`Platform.wire`). */
+    val platform: String,
+    val jobId: String,
+    /** The drop the receipt appeared after. */
+    val subjectTaskId: String,
+    val firstSeenAt: Long,
+    val observedAt: Long,
+    val totalPay: Double,
+    val parsedPay: ParsedPay? = null,
+    val isExpanded: Boolean,
+    val scope: ReceiptScope,
+    /** The first proof clause an UNPROVEN read failed. */
+    val proofGap: ReceiptProofGap? = null,
     val sourceCaptureId: String? = null,
 ) : AppEventPayload
 

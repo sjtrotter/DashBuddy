@@ -5,6 +5,7 @@ import cloud.trotter.log.gig.domain.model.event.SequencedAppEvent
 import cloud.trotter.log.gig.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.log.gig.domain.model.event.payload.PickupPayload
 import cloud.trotter.log.gig.domain.state.Platform
+import cloud.trotter.log.gig.domain.state.ReceiptScope
 import cloud.trotter.log.gig.domain.state.StoreKeys
 
 /**
@@ -25,8 +26,13 @@ internal object DeliveryFolds {
         currentCostPerMile: Double?,
     ): FoldOutcome {
         val e = event.event
-        val p = e.payload as? DeliveryPayload
+        val raw = e.payload as? DeliveryPayload
             ?: return FoldOutcome(context = context, skip = "DELIVERY_COMPLETED: missing/malformed payload")
+        // #1598: the emitter never writes receipt money on an UNPROVEN payload; the fold enforces it, so a stray
+        // total cannot reach RECEIPT_TOTAL. A null marker (every pre-#1598 event) takes today's path byte for byte.
+        val p = if (raw.receiptScope == ReceiptScope.UNPROVEN) {
+            raw.copy(totalPay = null, parsedPay = null, dropRealizedPay = null)
+        } else raw
         val sid = e.sessionId
         val ctx = sid?.let { resolveContext(context, it, e.occurredAt) }
         val platformWire = ctx?.platform?.wire ?: Platform.Unknown.wire

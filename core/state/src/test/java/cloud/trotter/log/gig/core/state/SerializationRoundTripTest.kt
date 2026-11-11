@@ -20,7 +20,11 @@ import cloud.trotter.log.gig.domain.state.PendingDestructive
 import cloud.trotter.log.gig.domain.state.PendingModeResume
 import cloud.trotter.log.gig.domain.state.PendingOffer
 import cloud.trotter.log.gig.domain.state.Platform
+import cloud.trotter.log.gig.domain.state.OpenReceiptEvidence
 import cloud.trotter.log.gig.domain.state.PlatformRegion
+import cloud.trotter.log.gig.domain.state.ReceiptCoverage
+import cloud.trotter.log.gig.domain.state.ReceiptProofGap
+import cloud.trotter.log.gig.domain.state.ReceiptScope
 import cloud.trotter.log.gig.domain.state.Regions
 import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
@@ -78,6 +82,38 @@ class SerializationRoundTripTest {
             StateJson.decodeFromString<Session>(
                 """{"sessionId":"s1","startedAt":100,"accumulatedDeliveryPay":8.5}""",
             ).receiptEpisodeKey,
+        )
+    }
+
+    @Test
+    fun `#1598 receipt state round-trips, and an old region blob decodes the new keys to their defaults`() {
+        val region = PlatformRegion(
+            platform = Platform.DoorDash,
+            possibleWorkSeq = 3L,
+            openReceiptEvidence = OpenReceiptEvidence(
+                evidenceId = "receipt:t1:9000", subjectTaskId = "t1", jobId = "J1", firstSeenAt = 9_000L, revision = 2,
+                lastTotalCents = 1_670L, lastScope = ReceiptScope.UNPROVEN, possibleWorkSeqAtOpen = 1L,
+            ),
+            lastPostTaskCoverage = ReceiptCoverage(
+                scope = ReceiptScope.UNPROVEN, gap = ReceiptProofGap.STORE_MISSING, evidenceId = "receipt:t1:9000",
+            ),
+        )
+        assertEquals(region, StateJson.decodeFromString<PlatformRegion>(StateJson.encodeToString(region)))
+
+        val old = StateJson.decodeFromString<PlatformRegion>(
+            """{"platform":"DoorDash","lastPostTaskCoverage":{"taskIds":["t1","t2"]}}""",
+        )
+        assertEquals(0L, old.possibleWorkSeq)
+        assertNull(old.openReceiptEvidence)
+        assertEquals(setOf("t1", "t2"), old.lastPostTaskCoverage!!.taskIds)
+        assertNull("a pre-#1598 coverage carries no scope", old.lastPostTaskCoverage!!.scope)
+        assertNull(old.lastPostTaskCoverage!!.gap)
+        assertNull(old.lastPostTaskCoverage!!.evidenceId)
+        assertNull(
+            "an old accepted offer has no card count",
+            StateJson.decodeFromString<cloud.trotter.log.gig.domain.state.AcceptedOfferEconomics>(
+                """{"offerHash":"o1","acceptedAt":1}""",
+            ).cardDropoffCount,
         )
     }
 
