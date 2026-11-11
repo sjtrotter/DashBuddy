@@ -89,6 +89,12 @@ data class ParsedOffer(
      */
     val stopCount: Int? = null,
 
+    /**
+     * #1598: the card's own drop count (`Customer dropoff` = 1, `Multiple dropoffs (N stops)` = N); null on the
+     * legacy View card and the INCREMENTAL card. Never an `offerHash` input.
+     */
+    val dropoffCount: Int? = null,
+
     /** Offer-level badges found in the offer. */
     val badges: Set<OfferBadge> = emptySet(),
 

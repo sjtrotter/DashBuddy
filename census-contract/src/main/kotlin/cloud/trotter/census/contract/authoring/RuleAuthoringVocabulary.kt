@@ -132,6 +132,8 @@ object RuleAuthoringVocabulary {
             FieldSpec("deliveryTimeText", FieldType.STRING),
             FieldSpec("timeToCompleteMinutes", FieldType.LONG, defaultTransform = listOf("parseTotalMinutes")),
             FieldSpec("stopCount", FieldType.INT, defaultTransform = listOf("parseLeadingInt")),
+            // #1598: the card's own drop count (`Customer dropoff` = 1, `Multiple dropoffs (N stops)` = N). Optional.
+            FieldSpec("dropoffCount", FieldType.INT),
             FieldSpec("deliveryTime", FieldType.LONG, defaultTransform = listOf("parseDeadline")),
             FieldSpec("initialCountdownSeconds", FieldType.INT, defaultTransform = listOf("parseClockSeconds")),
             FieldSpec("offerKind", FieldType.STRING),

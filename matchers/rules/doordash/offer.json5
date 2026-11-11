@@ -569,6 +569,48 @@
                 "read": "text",
                 "transform": "parseTotalMinutes"
               },
+              "dropoffCount": {
+                // #1598: the card's own drop count — `Customer dropoff` = 1, `Multiple dropoffs (N stops)` = N (drop
+                // STOPS: a one-customer two-store card reads `Customer dropoff`). Branch 1 only: the add-on card's holder
+                // describes the whole route, owned order included. Proof input for receipt coverage; never hashed.
+                "coalesce": [
+                  {
+                    "from": "offerBody",
+                    "find": {
+                      "hasTextMatchesRegex": "^Multiple dropoffs \\(\\d{1,2} stops?\\)$"
+                    },
+                    "read": "text",
+                    "transform": {
+                      "regex": {
+                        "pattern": "^Multiple dropoffs \\((\\d{1,2}) stops?\\)$",
+                        "group": 1,
+                        "then": "toInt"
+                      }
+                    }
+                  },
+                  {
+                    "from": "offerBody",
+                    "find": {
+                      "hasText": "Customer dropoff"
+                    },
+                    "read": "text",
+                    "transform": [
+                      {
+                        "regex": {
+                          "pattern": "^(Customer dropoff)$",
+                          "group": 1
+                        }
+                      },
+                      {
+                        "replace": {
+                          "pattern": "Customer dropoff",
+                          "replacement": "1"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
               "initialCountdownSeconds": {
                 // #1104: the `0:16` clock beside Accept — the remaining countdown at this frame.
                 // Scoped to the Accept footer's subtree.
