@@ -218,8 +218,9 @@ Before changing a stepper, a grace, a timer, recovery or the offer lifecycle, re
   `GRACE_COMMIT`.
 - Offers are platform-owned (`PlatformRegion.pendingOffers`) and their identity is ruleset-declared
   (`presentationKey`). A null key replaces on any hash change, so a false merge is impossible.
-- Outcomes come from transition evidence, because Compose taps emit no click event. A click-less accept is inferred
-  only over a non-task `returnFlow`.
+- An offer that leaves without a committed decline or an accept click waits in the shift-long `offerPool`; new work at
+  one store links its sole candidate, a tie links nothing, the rest end `OFFER_NOT_TAKEN`. One outcome per instance
+  (`PendingOffer.instanceKey`).
 - An accepted offer pre-creates placeholder tasks. Store lineage joins on the customer hash and fails null rather
   than wrong.
 - Stateless notification pushes with no effect intent never change the lifecycle (`NotificationNeutralityTest`);

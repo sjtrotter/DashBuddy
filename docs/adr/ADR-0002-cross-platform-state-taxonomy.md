@@ -514,6 +514,13 @@ flow (a job appearing where there was none — e.g. from `Idle` — is the legit
 accept; returning to the surface you were already on is not). Phased task-flow destinations remain
 unconditional acceptance evidence.
 
+**Amendment 2026-11-11 (#1119 S2): the click-less inference is retired.** A card that leaves with no committed
+decline and no accept click waits in the offer pool, and only a task frame naming one of its stores links it (see
+`docs/architecture/03-state-machine.md`, "Offer outcomes and the offer pool"). The guard above therefore guards
+nothing any more: `task:active` names no store, so a coarse platform's click-less accept no longer links (the
+stated Uber regression). The per-platform accept grace survives for the click path only. The 2026-09-20
+amendment's sheet-decline resolver is retired the same way: the sighting now only demotes a pool entry.
+
 **Accepted residual (adversarial finding 2): the coarse post-trip walk can suppress the
 PostTask-exit job close.** On a coarse-only trip a marker-less `on_job_view` frame between
 post-trip and idle walks the region's acted flow `PostTask → TaskActive → Idle`; the PostTask-exit

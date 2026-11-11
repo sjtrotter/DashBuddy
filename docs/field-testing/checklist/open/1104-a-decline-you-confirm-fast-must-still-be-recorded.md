@@ -1,4 +1,4 @@
-status: active
+status: superseded?
 issues: #1104, #1110, #1118, #1119
 
 - **🆕 NEW — a decline you confirm fast must still be recorded as a decline, not a timeout.** Five of
@@ -33,3 +33,4 @@ issues: #1104, #1110, #1118, #1119
       other two: 10-18 08:36:11 (the `OFFER_EXPIRY` timer, 3 s after a sheet sighting) and 10-17 18:37:03, a real accept
       (#1119 class).
   Triage source: first-line blame 2026-09-13 (`bd4c8a71b`, original README L527).
+  - 2026-11-11 (#1119 S2, proposal only; closures are the developer's): the confirm sheet no longer records a decline when the offer leaves. A recent sighting with time left on the countdown and no card frame after it demotes the offer in the offer pool, and the demoted offer is recorded as an inferred `OFFER_DECLINED` (`declineEvidence` `SHEET_WINDOW`) at the shift end. The check moves to the #1119 offer pool item, desk (7).
