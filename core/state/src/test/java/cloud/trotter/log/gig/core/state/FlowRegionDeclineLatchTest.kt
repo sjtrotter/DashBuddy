@@ -25,7 +25,7 @@ import org.junit.Test
  * screen-scoped to `offer_popup_confirm_decline`), i.e. the server-side commit. Once observed, the
  * offer's outcome is DECLINED for good — a later "Review offer"→Accept race must not un-decline it.
  * `lastClickIntent` keeps recording the literal last click (forensics); `declineCommittedAt` is the
- * latch that decides the outcome (resolved in [EffectMap.resolveOfferOutcome]).
+ * latch that decides the outcome (decided at the leave in `OfferPool.leavePresentation`, #1119 S2).
  */
 class FlowRegionDeclineLatchTest {
 

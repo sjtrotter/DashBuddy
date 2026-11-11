@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.core.state.model.StepDecisions
 import cloud.trotter.log.gig.domain.capture.ReplayMetadata
 import cloud.trotter.log.gig.domain.evaluation.OfferAction
 import cloud.trotter.log.gig.domain.evaluation.OfferEvaluation
@@ -146,6 +147,29 @@ class EffectMapPayloadTest {
         .filterIsInstance<AppEffect.LogEvent>()
         .filter { it.event.type == type }
 
+    /**
+     * #1119 S2: an offer outcome is a stepper decision, so the outcome payloads are read off a real step: [obs] fold
+     * through the stepper from [start] (R0 on the offer), and each step's decisions reach the diff.
+     */
+    private fun stepLogs(start: PlatformRegion, type: AppEventType, vararg obs: Observation): List<AppEffect.LogEvent> {
+        val stepper = PlatformRegionStepper()
+        var region = start
+        var flow = FlowRegion(flow = Flow.OfferPresented, activePlatform = Platform.DoorDash)
+        val out = mutableListOf<AppEffect.LogEvent>()
+        for (o in obs) {
+            val f = (o as? Observation.FlowObservation)?.flow
+            val nextFlow = if (f != null) flow.copy(flow = f) else flow
+            val step = stepper.stepWithDecisions(region, flow, nextFlow, o, TransitionPolicy())
+            out += effectMap.diff(
+                appState(flow, mapOf(Platform.DoorDash to region)), appState(nextFlow, mapOf(Platform.DoorDash to step.region)),
+                o, StepDecisions(mapOf(Platform.DoorDash to step.decisions)),
+            ).filterIsInstance<AppEffect.LogEvent>().filter { it.event.type == type }
+            region = step.region
+            flow = nextFlow
+        }
+        return out
+    }
+
     // =========================================================================
     // Tests — Offer payloads
     // =========================================================================
@@ -192,16 +216,8 @@ class EffectMapPayloadTest {
             mode = Mode.Online,
             session = Session("dash-42", startedAt = 500L),
         )
-        val prev = appState(
-            flow = FlowRegion(flow = Flow.OfferPresented, activePlatform = Platform.DoorDash),
-            platforms = mapOf(Platform.DoorDash to region.copy(pendingOffers = listOf(offer))),
-        )
-        val next = appState(
-            flow = FlowRegion(flow = Flow.Idle, activePlatform = Platform.DoorDash),
-            platforms = mapOf(Platform.DoorDash to region),
-        )
         val click = Observation.Click(
-            timestamp = 1500L,
+            timestamp = 1400L,
             captureId = null,
             ruleId = "test.click",
             metadata = ReplayMetadata.EMPTY,
@@ -210,7 +226,9 @@ class EffectMapPayloadTest {
             parsed = ParsedFields.ClickFields(intent = "accept_offer"),
         )
 
-        val logs = logEvents(prev, next, click, AppEventType.OFFER_ACCEPTED)
+        // #1119 S2: the accept click latches; the outcome is decided at the leave.
+        val logs = stepLogs(region.copy(pendingOffers = listOf(offer)), AppEventType.OFFER_ACCEPTED,
+            click, screenObs(flow = Flow.Idle, timestamp = 1500L))
         assertEquals(1, logs.size)
 
         // Regression: AppEventDao.getEventsForSession(dashId) filters by
@@ -233,14 +251,6 @@ class EffectMapPayloadTest {
     fun `OFFER_DECLINED carries rich payload`() {
         val offer = pendingOffer(hash = "xyz")
         val region = PlatformRegion(platform = Platform.DoorDash, mode = Mode.Online, session = Session("s-decl", startedAt = 500L))
-        val prev = appState(
-            flow = FlowRegion(flow = Flow.OfferPresented, activePlatform = Platform.DoorDash),
-            platforms = mapOf(Platform.DoorDash to region.copy(pendingOffers = listOf(offer))),
-        )
-        val next = appState(
-            flow = FlowRegion(flow = Flow.Idle, activePlatform = Platform.DoorDash),
-            platforms = mapOf(Platform.DoorDash to region),
-        )
         val click = Observation.Click(
             timestamp = 1600L,
             captureId = null,
@@ -251,7 +261,8 @@ class EffectMapPayloadTest {
             parsed = ParsedFields.ClickFields(intent = "decline_offer"),
         )
 
-        val logs = logEvents(prev, next, click, AppEventType.OFFER_DECLINED)
+        val logs = stepLogs(region.copy(pendingOffers = listOf(offer)), AppEventType.OFFER_DECLINED,
+            click, screenObs(flow = Flow.Idle, timestamp = 1650L))
         assertEquals(1, logs.size)
 
         val payload = (logs[0].event.payload as OfferPayload)
@@ -260,26 +271,22 @@ class EffectMapPayloadTest {
     }
 
     @Test
-    fun `OFFER_TIMEOUT carries rich payload`() {
+    fun `OFFER_NOT_TAKEN carries rich payload at the shift end (#1119 S2 - was OFFER_TIMEOUT at the leave)`() {
         val offer = pendingOffer(hash = "to1")
         val region = PlatformRegion(platform = Platform.DoorDash, mode = Mode.Online, session = Session("s-to", startedAt = 500L))
-        val prev = appState(
-            flow = FlowRegion(flow = Flow.OfferPresented, activePlatform = Platform.DoorDash),
-            platforms = mapOf(Platform.DoorDash to region.copy(pendingOffers = listOf(offer))),
-        )
-        val next = appState(
-            flow = FlowRegion(flow = Flow.Idle, activePlatform = Platform.DoorDash),
-            platforms = mapOf(Platform.DoorDash to region),
-        )
-        // No click — falls through to TIMEOUT
-        val obs = screenObs(flow = Flow.Idle, timestamp = 1700L)
-
-        val logs = logEvents(prev, next, obs, AppEventType.OFFER_TIMEOUT)
+        // No click — the offer waits in the pool; the shift end records it.
+        val end = Observation.UiInput(timestamp = 1800L, action = Observation.UiInput.ACTION_END_SHIFT,
+            targetPlatform = Platform.DoorDash, sessionId = "s-to")
+        val logs = stepLogs(region.copy(pendingOffers = listOf(offer)), AppEventType.OFFER_NOT_TAKEN,
+            screenObs(flow = Flow.Idle, timestamp = 1700L), end)
         assertEquals(1, logs.size)
 
         val payload = (logs[0].event.payload as OfferPayload)
         assertEquals("to1", payload.offerHash)
-        assertEquals(AppEventType.OFFER_TIMEOUT, payload.outcome)
+        assertEquals(AppEventType.OFFER_NOT_TAKEN, payload.outcome)
+        assertEquals(1700L, payload.decidedAt)
+        assertNotNull(payload.evaluation)
+        assertEquals("s-to", logs[0].event.sessionId)
     }
 
     // =========================================================================

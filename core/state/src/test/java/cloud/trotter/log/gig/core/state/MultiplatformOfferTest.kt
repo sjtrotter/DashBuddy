@@ -157,13 +157,16 @@ class MultiplatformOfferTest {
     }
 
     @Test
-    fun `an unresolved offer's expiry fire times it out (TIMEOUT event + notification cancel)`() {
+    fun `an unresolved offer's expiry fire pools it (no outcome yet + notification cancel)`() {
         val (afterOffer, _) = drive(AppState(), idle(1_000L, "doordash"), offerScreen(1_100L, "doordash", "dd-1", "HEB"))
         val fire = machine.step(afterOffer, offerExpiry(1_100L + 130_000L, Platform.DoorDash, "dd-1"))
 
-        assertNull("the offer is gone after expiry", fire.newState.regions.platforms.getValue(Platform.DoorDash).presentedOffer())
+        val region = fire.newState.regions.platforms.getValue(Platform.DoorDash)
+        assertNull("the offer is gone after expiry", region.presentedOffer())
+        // #1119 S2: it waits in the pool for work at its store; its outcome comes on a link or at the shift end.
+        assertEquals(cloud.trotter.log.gig.domain.state.PoolEntryVia.EXPIRY_TIMER, region.offerPool.single().via)
         val types = listOf(fire).flatMap { it.effects }.filterIsInstance<AppEffect.LogEvent>().map { it.event.type }
-        assertTrue("expiry logs OFFER_TIMEOUT", types.contains(AppEventType.OFFER_TIMEOUT))
+        assertFalse("no outcome at the expiry", types.any { it == AppEventType.OFFER_TIMEOUT || it == AppEventType.OFFER_NOT_TAKEN })
         assertTrue("expiry cancels the offer notification",
             fire.effects.filterIsInstance<AppEffect.CancelOfferNotification>().any { it.offerHash == "dd-1" })
     }
@@ -231,8 +234,8 @@ class MultiplatformOfferTest {
     }
 
     @Test
-    fun `single-platform timeout stream — RECEIVED then TIMEOUT on an un-acted offer leaving to idle`() {
-        val (_, trace) = drive(
+    fun `single-platform un-acted stream — RECEIVED only, the offer pooled on leaving to idle (#1119 S2)`() {
+        val (state, trace) = drive(
             AppState(),
             idle(1_000L, "doordash"),
             offerScreen(1_100L, "doordash", "dd-1", "HEB"),
@@ -240,6 +243,7 @@ class MultiplatformOfferTest {
         )
         val offerEvents = trace.eventTypes()
             .filter { it in setOf(AppEventType.OFFER_RECEIVED, AppEventType.OFFER_ACCEPTED, AppEventType.OFFER_DECLINED, AppEventType.OFFER_TIMEOUT) }
-        assertEquals(listOf(AppEventType.OFFER_RECEIVED, AppEventType.OFFER_TIMEOUT), offerEvents)
+        assertEquals(listOf(AppEventType.OFFER_RECEIVED), offerEvents)
+        assertEquals(listOf("dd-1"), state.regions.platforms.getValue(Platform.DoorDash).offerPool.map { it.offer.offerHash })
     }
 }

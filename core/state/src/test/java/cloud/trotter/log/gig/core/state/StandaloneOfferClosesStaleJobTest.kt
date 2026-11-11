@@ -338,8 +338,13 @@ class StandaloneOfferClosesStaleJobTest {
         assertEquals(1, unassignedEffects(result.effects).size)
     }
 
+    /**
+     * #1119 S2 (category A): the click-less inference is retired. A card that leaves straight to a task frame now
+     * links only when that frame names one of its stores; this card names none, so for every scope the frame mints a
+     * bare job and the offer waits in the pool.
+     */
     @Test
-    fun `click-less acceptance follows scope independently of quote basis`() {
+    fun `a card naming no store is linked by no work, whatever its scope or quote basis`() {
         val reachablePairs = listOf(
             OfferScope.STANDALONE to OfferQuoteBasis.TOTAL,
             OfferScope.ADD_ON to OfferQuoteBasis.TOTAL,
@@ -353,7 +358,8 @@ class StandaloneOfferClosesStaleJobTest {
             ))
             val result = machine.step(presented.newState, frame)
             val accepted = requireNotNull(region(result.newState).activeJob).acceptedOffers
-            assertEquals("$scope / $basis", if (parsed.effectiveScope == OfferScope.STANDALONE) 1 else 0, accepted.size)
+            assertEquals("$scope / $basis", 0, accepted.size)
+            assertEquals("$scope / $basis", listOf(parsed.offerHash), region(result.newState).offerPool.map { it.offer.offerHash })
         }
     }
 

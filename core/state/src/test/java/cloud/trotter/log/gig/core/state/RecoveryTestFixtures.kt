@@ -75,12 +75,15 @@ internal class FakeSnapshotDao(seed: AppStateSnapshotEntity? = null) : AppStateS
     override suspend fun pruneOlderThan(cutoff: Long) {}
 }
 
-/** Encode [state] as the snapshot row a restore would read back. */
-internal fun snapshotOf(state: AppState, sessionId: String = "s1") = AppStateSnapshotEntity(
+/**
+ * Encode [state] as the snapshot row a restore would read back. #1119 S2: stamped with the current reducer generation
+ * ([AppState.STATE_SCHEMA]) as every live step stamps it, unless [stampSchema] is false (a pre-S2 snapshot).
+ */
+internal fun snapshotOf(state: AppState, sessionId: String = "s1", stampSchema: Boolean = true) = AppStateSnapshotEntity(
     correlationVersion = state.correlationVersion,
     capturedAt = 1L,
     sessionId = sessionId,
-    stateJson = StateJson.encodeToString(state),
+    stateJson = StateJson.encodeToString(if (stampSchema) state.copy(stateSchema = AppState.STATE_SCHEMA) else state),
 )
 
 /**

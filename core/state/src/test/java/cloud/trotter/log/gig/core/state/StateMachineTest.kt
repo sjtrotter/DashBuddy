@@ -949,7 +949,8 @@ class StateMachineTest {
             flow = Flow.OfferPresented,
             parsed = multiOrderOfferFields(listOf("Chili's Grill & Bar", "Jim's Restaurant")),
         )).newState
-        state = machine.step(state, screenObs(flow = Flow.TaskPickupNavigation, parsed = taskFields())).newState
+        // #1119 S2: the click-less accept links by store, so the pickup names one of the card's stores.
+        state = machine.step(state, screenObs(flow = Flow.TaskPickupNavigation, parsed = taskFields(storeName = "Chili's Grill & Bar"))).newState
 
         val job = state.regions.platforms[Platform.DoorDash]!!.activeJob!!
         val dropoffs = job.tasks.filter { it.phase == TaskPhase.DROPOFF }
