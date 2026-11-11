@@ -33,7 +33,7 @@ data class OfferRecordEntity(
     /** Platform.wire, resolved from session context. */
     val platform: String,
     val offerHash: String,
-    /** "OFFER_ACCEPTED" | "OFFER_DECLINED" | "OFFER_TIMEOUT" (AppEventType.name). */
+    /** "OFFER_ACCEPTED" | "OFFER_DECLINED" | "OFFER_TIMEOUT" | "OFFER_NOT_TAKEN" (AppEventType.name; #1119 S2 adds the last). */
     val outcome: String,
     val presentedAt: Long,
     val decidedAt: Long,
@@ -108,4 +108,12 @@ data class OfferRecordEntity(
      * `unassignedAt`. Null otherwise and on rows folded before projector 19. The [outcome] column is never rewritten.
      */
     val unassignedAt: Long? = null,
+
+    // ── Offer pool (#1119 S2, v26) ──────────────────────────────────────────
+    /**
+     * The jobs this offer tied on at its store (the pool linked nothing): a JSON string array via `StringListColumn`,
+     * null when none. Set on an `OFFER_NOT_TAKEN` (or a demoted, inferred `OFFER_DECLINED`); null on every other row
+     * and on all history, which cannot hold a tie.
+     */
+    val ambiguousJobIds: String? = null,
 )

@@ -123,4 +123,5 @@ internal fun OfferFold.toEntity() = OfferRecordEntity(
     isShop = isShop,
     offerScope = offerScope,
     quoteBasis = quoteBasis,
+    ambiguousJobIds = StringListColumn.encode(ambiguousJobIds),
 )
