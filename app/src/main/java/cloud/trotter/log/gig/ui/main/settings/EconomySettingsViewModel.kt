@@ -101,7 +101,7 @@ class EconomySettingsViewModel @Inject constructor(
         { repo.updateElectricityPrice(value, it) }, { old, current -> repo.restoreElectricityPrice(old, StoredPreference(value, true), current) })
     fun setGasPrice(value: Double) = sharedWrite("GAS_PRICE", R.string.economy_shared_gas_price,
         { repo.updateGasPriceManual(value.toFloat(), it) },
-        { old, current -> repo.restoreGasPriceManual(old, StoredGasPrice(StoredPreference(value.toFloat(), old.price.userSet), StoredPreference(false, false)), current) })
+        { old, current -> repo.restoreGasPriceManual(old, StoredGasPrice(StoredPreference(value.toFloat(), old.price.userSet), StoredPreference(false, false), old.fetchedAt), current) })
     fun setGasAuto(value: Boolean) = sharedWrite("GAS_AUTO", R.string.economy_shared_auto_gas_price,
         { repo.setGasPriceAuto(value, it) }, { old, current -> repo.restoreGasPriceAuto(old, StoredPreference(value, false), current) })
     fun setPhoneTotal(value: Double) = sharedWrite("PHONE_PLAN_TOTAL", R.string.economy_editor_phone_plan_total_label,

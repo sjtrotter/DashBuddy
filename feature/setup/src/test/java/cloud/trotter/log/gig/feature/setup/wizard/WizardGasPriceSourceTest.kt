@@ -202,6 +202,23 @@ class WizardGasPriceSourceTest {
         verify(appPreferencesRepository, times(2)).mirrorEconomySettings(any(), any(), any(), any(), any(), any(), any(), anyOrNull())
     }
 
+    @Test
+    fun `a price typed then auto on again with a failed lookup saves with no stamp and reloads as saved`() = runTest {
+        val vm = wizard(auto = true, price = 3.29f, stamp = EARLIER)
+        vm.updateGasPrice(3.75f)
+        vm.toggleAutoGasPrice(true)
+        testScheduler.advanceUntilIdle()
+        assertEquals(true, vm.state.value.gasPriceLookupFailed)
+        assertEquals(GasPriceSource.Typed, vm.state.value.gasPriceSource)
+
+        vm.saveAndFinish {}
+        testScheduler.advanceUntilIdle()
+
+        verify(appPreferencesRepository).mirrorEconomySettings(any(), any(), any(), any(), any(), eq(true), eq(3.75f), isNull())
+        // The data source removes the stamp on a null save, so a reload reads auto on with no stamp.
+        assertEquals(GasPriceSource.Saved, GasPriceSource.stored(isAuto = true, fetchedAtMillis = null))
+    }
+
     private companion object {
         const val NOW = 1_762_850_000_000L
         const val EARLIER = NOW - 22L * 24 * 60 * 60 * 1000

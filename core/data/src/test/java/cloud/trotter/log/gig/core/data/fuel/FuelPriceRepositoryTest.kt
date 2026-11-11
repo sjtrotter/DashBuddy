@@ -31,10 +31,20 @@ class FuelPriceRepositoryTest {
     fun `a daily save stamps the price with the injected clock`() = runTest {
         whenever(location.getUserLocation()).thenReturn(here)
         whenever(gas.getFuelPrice(here, FuelType.REGULAR)).thenReturn(Result.success(3.29f))
+        whenever(prefs.updateGasPrice(3.29f, NOW)).thenReturn(true)
 
         assertEquals(3.29f, repository.fetchAndSaveCurrentGasPrice(FuelType.REGULAR).getOrNull())
 
         verify(prefs).updateGasPrice(3.29f, NOW)
+    }
+
+    @Test
+    fun `a save skipped because auto turned off is still a success, so the worker does not retry`() = runTest {
+        whenever(location.getUserLocation()).thenReturn(here)
+        whenever(gas.getFuelPrice(here, FuelType.REGULAR)).thenReturn(Result.success(3.29f))
+        whenever(prefs.updateGasPrice(3.29f, NOW)).thenReturn(false)
+
+        assertEquals(3.29f, repository.fetchAndSaveCurrentGasPrice(FuelType.REGULAR).getOrNull())
     }
 
     @Test

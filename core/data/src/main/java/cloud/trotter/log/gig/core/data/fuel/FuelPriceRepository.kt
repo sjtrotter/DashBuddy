@@ -17,7 +17,10 @@ class FuelPriceRepository @Inject constructor(
     private val clock: Clock,
 ) {
     suspend fun fetchAndSaveCurrentGasPrice(fuelType: FuelType): Result<Float> =
-        fetchAndPersist(fuelType) { price, at -> appPreferencesRepository.updateGasPrice(price, at) }
+        fetchAndPersist(fuelType) { price, at ->
+            // Auto turned off while the lookup ran: the typed price stands. Not a failure, so no retry.
+            if (!appPreferencesRepository.updateGasPrice(price, at)) Timber.tag(TAG).d("Fetched gas price not saved: auto is off")
+        }
 
     /**
      * "Resume auto" (#722) — the bubble's MANUAL-mode chip. Routes through the SAME fetch as

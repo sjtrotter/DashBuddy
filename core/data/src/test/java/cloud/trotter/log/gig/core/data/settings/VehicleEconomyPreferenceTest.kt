@@ -91,7 +91,7 @@ class VehicleEconomyPreferenceTest {
         repo.mirrorFuelType(FuelType.PREMIUM)
         repo.mirrorVehicleClass(VehicleClass.SUV)
         repo.mirrorUserSetEconomy(economy)
-        repo.mirrorEconomySettings("2021", "Honda", "Civic", "EX", 28f, false, 3.75f)
+        repo.mirrorEconomySettings("2021", "Honda", "Civic", "EX", 28f, false, 3.75f, null)
 
         assertEquals(before, garage.garage.first())
         assertEquals(FuelType.PREMIUM.name, source.fuelType.first())
@@ -213,7 +213,7 @@ class VehicleEconomyPreferenceTest {
         source.updateGasPriceAuto(3.25f, 1_000L)
         val gas = source.updateGasPriceManual(4.0f)
         assertFalse(source.isGasPriceAuto.first())
-        val expected = StoredGasPrice(StoredPreference(4.0f, false), StoredPreference(false, false))
+        val expected = StoredGasPrice(StoredPreference(4.0f, false), StoredPreference(false, false), StoredPreference(1_000L, false))
         assertTrue(source.restoreGasPriceManual(gas, expected))
         assertEquals(3.25f, source.gasPrice.first())
         assertTrue(source.isGasPriceAuto.first())

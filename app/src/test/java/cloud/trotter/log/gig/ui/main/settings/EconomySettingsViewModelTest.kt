@@ -215,8 +215,8 @@ class EconomySettingsViewModelTest {
     }
 
     @Test fun `manual gas undo restores both price and auto and reports changed state`() = runTest {
-        val prior = cloud.trotter.log.gig.core.datastore.settings.StoredGasPrice(StoredPreference(3.50f, false), StoredPreference(true, false))
-        val expected = cloud.trotter.log.gig.core.datastore.settings.StoredGasPrice(StoredPreference(3.75f, false), StoredPreference(false, false))
+        val prior = cloud.trotter.log.gig.core.datastore.settings.StoredGasPrice(StoredPreference(3.50f, false), StoredPreference(true, false), StoredPreference(1_000L, false))
+        val expected = cloud.trotter.log.gig.core.datastore.settings.StoredGasPrice(StoredPreference(3.75f, false), StoredPreference(false, false), StoredPreference(1_000L, false))
         whenever(preferences.updateGasPriceManual(eq(3.75f), any())).thenReturn(prior)
         whenever(preferences.restoreGasPriceManual(eq(prior), eq(expected), any())).thenReturn(true)
         val vm = model()

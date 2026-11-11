@@ -138,7 +138,7 @@ class WizardViewModelTest {
         testScheduler.advanceUntilIdle()
 
         verify(appPreferencesRepository).mirrorEconomySettings(
-            "2020", "Toyota", "Corolla", "Automatic", 32f, false, 3.50f,
+            "2020", "Toyota", "Corolla", "Automatic", 32f, false, 3.50f, null,
         )
         verify(appStateRepository).setFirstRunComplete()
         verifyNoInteractions(vehicleRepository)
@@ -557,7 +557,7 @@ class WizardViewModelTest {
         testScheduler.advanceUntilIdle()
 
         verify(appPreferencesRepository).mirrorEconomySettings(
-            "", "", "", "", VehicleClass.SEDAN.defaultMpg.toFloat(), false, 3.50f,
+            "", "", "", "", VehicleClass.SEDAN.defaultMpg.toFloat(), false, 3.50f, null,
         )
         verify(appStateRepository).setFirstRunComplete()
         verifyNoInteractions(gasPriceRepository)

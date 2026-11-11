@@ -35,7 +35,12 @@ class SaveCapture<T> {
     }
 }
 
-data class StoredGasPrice(val price: StoredPreference<Float>, val auto: StoredPreference<Boolean>)
+/** The manual price's undo snapshot; the fetch stamp travels with the price it describes (#1478). */
+data class StoredGasPrice(
+    val price: StoredPreference<Float>,
+    val auto: StoredPreference<Boolean>,
+    val fetchedAt: StoredPreference<Long>,
+)
 
 /** The legacy count_real_expenses_in_kept key is no longer read; DataStore ignores it. */
 @Singleton
@@ -288,12 +293,20 @@ class AppPreferencesDataSource @Inject constructor(
         this[Keys.IS_GAS_PRICE_AUTO] = auto
     }
 
-    /** A looked-up price, stamped with when the lookup returned it, in one edit. */
-    suspend fun updateGasPrice(price: Float, fetchedAtMillis: Long) {
+    /**
+     * A looked-up price, stamped with when the lookup returned it, in one edit, and only while auto is still on: a
+     * lookup that returns after the dasher typed a price never overwrites it. Returns whether it wrote.
+     */
+    suspend fun updateGasPrice(price: Float, fetchedAtMillis: Long): Boolean {
+        var written = false
         ds.edit {
-            it[Keys.GAS_PRICE] = price
-            it[Keys.GAS_PRICE_FETCHED_AT] = fetchedAtMillis
+            if (it[Keys.IS_GAS_PRICE_AUTO] == true) {
+                it[Keys.GAS_PRICE] = price
+                it[Keys.GAS_PRICE_FETCHED_AT] = fetchedAtMillis
+                written = true
+            }
         }
+        return written
     }
 
     /**
@@ -304,7 +317,8 @@ class AppPreferencesDataSource @Inject constructor(
     suspend fun updateGasPriceManual(price: Float, capture: SaveCapture<StoredGasPrice>? = null): StoredGasPrice {
         lateinit var previous: StoredGasPrice
         ds.edit {
-            fun prior() = StoredGasPrice(it.capture(Keys.GAS_PRICE, EconomyField.GAS_PRICE), it.capture(Keys.IS_GAS_PRICE_AUTO))
+            fun prior() = StoredGasPrice(it.capture(Keys.GAS_PRICE, EconomyField.GAS_PRICE), it.capture(Keys.IS_GAS_PRICE_AUTO),
+                it.capture(Keys.GAS_PRICE_FETCHED_AT))
             previous = capture?.capture { prior() } ?: prior()
             it[Keys.GAS_PRICE] = price
             it[Keys.IS_GAS_PRICE_AUTO] = false
@@ -315,9 +329,10 @@ class AppPreferencesDataSource @Inject constructor(
         var restored = false
         ds.edit {
             if (current() && it.capture(Keys.GAS_PRICE, EconomyField.GAS_PRICE) == expected.price &&
-                it.capture(Keys.IS_GAS_PRICE_AUTO) == expected.auto) {
+                it.capture(Keys.IS_GAS_PRICE_AUTO) == expected.auto && it.capture(Keys.GAS_PRICE_FETCHED_AT) == expected.fetchedAt) {
                 it.restore(Keys.GAS_PRICE, EconomyField.GAS_PRICE, previous.price)
                 it.restore(Keys.IS_GAS_PRICE_AUTO, null, previous.auto)
+                it.restore(Keys.GAS_PRICE_FETCHED_AT, null, previous.fetchedAt)
                 restored = true
             }
         }
@@ -362,10 +377,13 @@ class AppPreferencesDataSource @Inject constructor(
         }
     }
 
-    /** [gasPriceFetchedAt] is set when a lookup returned [price]; null leaves the stored stamp alone. */
+    /**
+     * The wizard's save is authoritative about [price]'s provenance: [gasPriceFetchedAt] is when a lookup returned it,
+     * and null (a typed or saved price) removes the stored stamp.
+     */
     suspend fun updateEconomySettings(
         year: String, make: String, model: String, trim: String,
-        mpg: Float, isGasAuto: Boolean, price: Float, gasPriceFetchedAt: Long? = null,
+        mpg: Float, isGasAuto: Boolean, price: Float, gasPriceFetchedAt: Long?,
     ) {
         ds.edit { prefs ->
             prefs[Keys.VEHICLE_YEAR] = year
@@ -373,9 +391,10 @@ class AppPreferencesDataSource @Inject constructor(
             prefs[Keys.VEHICLE_MODEL] = model
             prefs[Keys.VEHICLE_TRIM] = trim
             prefs[Keys.ESTIMATED_MPG] = mpg
-            prefs.setGasAuto(isGasAuto)
+            prefs[Keys.IS_GAS_PRICE_AUTO] = isGasAuto
             prefs[Keys.GAS_PRICE] = price
-            gasPriceFetchedAt?.let { prefs[Keys.GAS_PRICE_FETCHED_AT] = it }
+            if (gasPriceFetchedAt != null) prefs[Keys.GAS_PRICE_FETCHED_AT] = gasPriceFetchedAt
+            else prefs.remove(Keys.GAS_PRICE_FETCHED_AT)
         }
     }
 

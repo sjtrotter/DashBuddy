@@ -249,7 +249,8 @@ class AppPreferencesRepository @Inject constructor(
     // ============================================================================================
     // WRITE ACTIONS
     // ============================================================================================
-    suspend fun updateGasPrice(price: Float, fetchedAtMillis: Long) = dataSource.updateGasPrice(price, fetchedAtMillis)
+    /** A looked-up price; written only while auto is still on (false when skipped). */
+    suspend fun updateGasPrice(price: Float, fetchedAtMillis: Long): Boolean = dataSource.updateGasPrice(price, fetchedAtMillis)
 
     /**
      * Manual pump-price override that also disables auto (EIA) fetching (#693) — the bubble's
@@ -295,7 +296,7 @@ class AppPreferencesRepository @Inject constructor(
 
     suspend fun mirrorEconomySettings(
         year: String, make: String, model: String, trim: String,
-        mpg: Float, isGasAuto: Boolean, price: Float, gasPriceFetchedAt: Long? = null,
+        mpg: Float, isGasAuto: Boolean, price: Float, gasPriceFetchedAt: Long?,
     ) = dataSource.updateEconomySettings(year, make, model, trim, mpg, isGasAuto, price, gasPriceFetchedAt)
 
     suspend fun updatePhoneTotal(value: Double) = updatePhoneTotal(value, null)
