@@ -906,14 +906,17 @@ class PlatformRegionStepper @Inject constructor() {
                     // (#745); silent, because the absent announce is itself the observable (no
                     // "Saved: \$X" bubble fires) — unlike #1103's refusal below, which leaves no
                     // observable at all and therefore carries the one DEBUG line in this reducer.
-                } else if (!sameTaskCollapsedDowngrade) {
-                    // #1033 round 13: ONE owner writes the receipt, the drops it describes, and the
-                    // task it was announced for — see [cacheReceipt] / [ReceiptCoverage].
-                    // #1598: the read's proof is computed once; the evidence record and the cache share it.
+                } else {
+                    // #1598: every read is evidence, the collapsed downgrade included; the guard below
+                    // protects only the cache. The read's proof is computed once and shared.
                     val coverage = receiptCoverageAt(r, postTaskTaskId)
                     r = observeReceiptEvidence(sink, r, parsed, postTaskTaskId, coverage, obs)
-                    r = cacheReceipt(r, parsed, postTaskTaskId,
-                        coverage.copy(evidenceId = r.openReceiptEvidence?.takeIf { it.subjectTaskId == postTaskTaskId }?.evidenceId))
+                    if (!sameTaskCollapsedDowngrade) {
+                        // #1033 round 13: ONE owner writes the receipt, the drops it describes, and the
+                        // task it was announced for — see [cacheReceipt] / [ReceiptCoverage].
+                        r = cacheReceipt(r, parsed, postTaskTaskId,
+                            coverage.copy(evidenceId = r.openReceiptEvidence?.takeIf { it.subjectTaskId == postTaskTaskId }?.evidenceId))
+                    }
                 }
                 // #1033 round 4: decide the late-receipt re-price HERE, where state can be written —
                 // the itemization has just landed in `lastPostTaskFields`, and the marker has to be

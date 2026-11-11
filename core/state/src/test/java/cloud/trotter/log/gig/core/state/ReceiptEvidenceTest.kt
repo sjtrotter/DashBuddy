@@ -69,6 +69,30 @@ class ReceiptEvidenceTest {
     }
 
     @Test
+    fun `a collapsed return to an expanded receipt's subject is still a new record`() {
+        val f = fold()
+            .step(RS.postTask(RS.expanded(receipt), 10_000L))
+            .step(RS.screen(Flow.TaskDropoffNavigation, 11_000L))
+            .step(RS.postTask(RS.collapsed(receipt.total), 12_000L))
+        val ev = f.evidence()
+        assertEquals(2, ev.size)
+        assertNotEquals(ev[0].evidenceId, ev[1].evidenceId)
+        assertEquals(listOf(true, false), ev.map { it.isExpanded })
+        assertTrue("the cache keeps the itemized receipt", f.region.lastPostTaskFields?.parsedPay != null)
+    }
+
+    @Test
+    fun `a collapsed re-read with a changed total revises the expanded record`() {
+        val f = fold()
+            .step(RS.postTask(RS.expanded(receipt), 10_000L))
+            .step(RS.postTask(RS.collapsed(18.70), 11_000L))
+        val ev = f.evidence()
+        assertEquals(listOf(1, 2), ev.map { it.revision })
+        assertEquals(1, ev.map { it.evidenceId }.toSet().size)
+        assertEquals(18.70, ev[1].totalPay, 0.0)
+    }
+
+    @Test
     fun `two subjects with equal totals are two records`() {
         val first = fold().step(RS.postTask(RS.collapsed(10.0), 10_000L))
         // The next drop of the job is now the active one, on the same receipt flow.
