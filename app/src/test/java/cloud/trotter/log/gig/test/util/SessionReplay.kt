@@ -138,11 +138,11 @@ object SessionReplay {
      * it emitted (the same events that land in the db `app_events` log). This is the shared spine of
      * the automated tests, the JVM trace, and the on-device review screen.
      *
-     * Screen-only: a [ReplayFrame] list drives only Screen observations. The Job + its pre-created
-     * dropoff subtasks form from the screen-flow transitions (OfferPresented→task flow), but the
-     * offer logs `OFFER_TIMEOUT` (the `OFFER_ACCEPTED`/`OFFER_DECLINED` outcome needs a CLICK that
-     * records the intent), and a session that goes quiet after the receipt never commits the retire
-     * grace (it needs a `GRACE_COMMIT` timer). To drive a full accept→pickup→dropoff→complete chain,
+     * Screen-only: a [ReplayFrame] list drives only Screen observations. #1119 S2: a card that leaves
+     * with no click waits in the offer pool and links only to a task frame that names its store (a
+     * committed pickup fixture's store is redacted: see [withPickupStore]); a committed decline needs a
+     * CLICK, and a session that goes quiet after the receipt never commits the retire grace (it needs a
+     * `GRACE_COMMIT` timer). To drive a full accept→pickup→dropoff→complete chain,
      * use [reduceMixed] with injected [ClickInput]/[TimeoutInput].
      */
     fun reduce(frames: List<ReplayFrame>): List<ReplayStep> = reduceMixed(frames.map { ScreenInput(it) })
@@ -231,8 +231,8 @@ object SessionReplay {
     /**
      * A fully synthetic offer-accept/decline click as a [RawInput] — when no real click capture
      * exists. Must be injected while flow is OfferPresented and strictly BEFORE the screen frame
-     * that pops the offer, so `FlowRegionStepper.handleOfferClick` records the intent and the later
-     * pop logs `OFFER_ACCEPTED`/`OFFER_DECLINED` (not `OFFER_TIMEOUT`). [intent] is an
+     * that pops the offer, so the offer lifecycle latches the intent and the later pop logs
+     * `OFFER_ACCEPTED`/`OFFER_DECLINED` (#1119 S2: not a pool entry). [intent] is an
      * `OfferIntent.ACCEPT`/`DECLINE` constant.
      */
     fun syntheticOfferClick(intent: String, atMs: Long, wire: String = Platform.DoorDash.wire): RawInput =
@@ -268,7 +268,7 @@ object SessionReplay {
      * [ReplayInput.atMs] (the classifier stamps wall-clock `eventNow`), keeping the fold
      * deterministic.
      */
-    fun reduceMixed(inputs: List<ReplayInput>): List<ReplayStep> {
+    fun reduceMixed(inputs: List<ReplayInput>, keepInputOrder: Boolean = false): List<ReplayStep> {
         val machine = StateMachine(
             flowStepper = FlowRegionStepper(),
             platformStepper = PlatformRegionStepper(),
@@ -278,7 +278,9 @@ object SessionReplay {
         )
         val classifier = mixedClassifier()
         var state = AppState()
-        return inputs.sortedBy { it.atMs }.map { input ->
+        // #1119 S2: [keepInputOrder] folds the inputs as given, so a test can feed a frame stamped EARLIER than a
+        // timer processed before it (the fielded 10-25 inversion).
+        return (if (keepInputOrder) inputs else inputs.sortedBy { it.atMs }).map { input ->
             val frame = (input as? ScreenInput)?.frame
             val obs: Observation = when (input) {
                 is ScreenInput -> {
@@ -303,11 +305,16 @@ object SessionReplay {
                     timestamp = input.atMs,
                     type = input.type,
                     targetPlatform = input.platform,
-                    payload = if (input.type == TimeoutType.GRACE_COMMIT) {
-                        state.regions.platforms[input.platform]?.pendingDestructive?.let {
+                    payload = when (input.type) {
+                        TimeoutType.GRACE_COMMIT -> state.regions.platforms[input.platform]?.pendingDestructive?.let {
                             ObservationPayload.GraceWake(it.wakeId.value)
                         }
-                    } else null,
+                        // #1119 S2: the expiry timer carries the presentation it was armed for.
+                        TimeoutType.OFFER_EXPIRY -> state.regions.platforms[input.platform]?.presentedOffer()?.let {
+                            ObservationPayload.OfferExpiry(it.offerHash, it.instanceKey)
+                        }
+                        else -> null
+                    },
                 )
                 is RawInput -> input.observation
             }
@@ -323,6 +330,67 @@ object SessionReplay {
             )
         }
     }
+
+    // =====================================================================================
+    // #1119 S2: store write-back for the offer pool's store match.
+    // =====================================================================================
+
+    /** The `Pickup from` label the pickup rule reads its store after (`pickup.json5`, `hasPrecedingSiblingText`). */
+    private const val PICKUP_FROM = "Pickup from"
+
+    /**
+     * [frame] with the store slot of its pickup sheet — the `user_name` node whose preceding sibling reads
+     * `Pickup from` — set to [store]. Committed pickup fixtures carry that store REDACTED (the pickup rule's
+     * `user_name` redact masks the node in every capture), so a store match against them needs the store written
+     * back. Merchant names are not personal data.
+     */
+    fun withPickupStore(frame: ReplayFrame, store: String): ReplayFrame =
+        frame.copy(node = frame.node.rewritePickupStore(store).restoreParents())
+
+    /** The current text of [frame]'s pickup store slot (a mask token in a committed fixture); null when it has none. */
+    fun pickupStoreToken(frame: ReplayFrame): String? = frame.node.pickupStoreSlot()
+
+    /**
+     * Category D of #1119 S2's test rules, as one owner: for each recognized offer card in [frames] (capture order),
+     * the first later frame with a pickup store slot is the frame that links it, and every frame whose slot holds
+     * that frame's mask token gets the card's first store written back ([withPickupStore]). One token is one original
+     * store, so the job's later pickup frames keep agreeing with the first and no stacked-pickup transition appears.
+     */
+    fun restorePickupStores(frames: List<ReplayFrame>): List<ReplayFrame> {
+        val stores = mutableMapOf<String, String>()
+        val recognized = replayRecognition(frames)
+        frames.forEachIndexed { i, frame ->
+            val card = recognized[i].parsed as? ParsedFields.OfferFields ?: return@forEachIndexed
+            val store = card.parsedOffer.orders.firstOrNull()?.storeName?.takeIf { it.isNotBlank() } ?: return@forEachIndexed
+            val token = frames.drop(i + 1).firstNotNullOfOrNull { pickupStoreToken(it) } ?: return@forEachIndexed
+            stores.putIfAbsent(token, store)
+        }
+        return frames.map { frame -> pickupStoreToken(frame)?.let(stores::get)?.let { withPickupStore(frame, it) } ?: frame }
+    }
+
+    /** [frame] with every node whose text is exactly [from] rewritten to [to] (an offer card's store node). */
+    fun withText(frame: ReplayFrame, from: String, to: String): ReplayFrame =
+        frame.copy(node = frame.node.rewriteText(from, to).restoreParents())
+
+    private fun UiNode.rewriteText(from: String, to: String): UiNode = copy(
+        text = if (text == from) to else text,
+        children = children.map { it.rewriteText(from, to) },
+    )
+
+    private fun UiNode.isPickupStoreSlotAfter(previous: UiNode?): Boolean =
+        viewIdResourceName?.endsWith("user_name") == true && previous?.text == PICKUP_FROM
+
+    private fun UiNode.rewritePickupStore(store: String): UiNode = copy(
+        children = children.mapIndexed { i, child ->
+            val rewritten = child.rewritePickupStore(store)
+            if (child.isPickupStoreSlotAfter(children.getOrNull(i - 1))) rewritten.copy(text = store) else rewritten
+        },
+    )
+
+    private fun UiNode.pickupStoreSlot(): String? =
+        children.withIndex().firstNotNullOfOrNull { (i, child) ->
+            if (child.isPickupStoreSlotAfter(children.getOrNull(i - 1))) child.text else child.pickupStoreSlot()
+        }
 
     /** A readable per-step trace (JVM): `frame → recognized obs → emitted events`. */
     fun trace(steps: List<ReplayStep>): String = buildString {

@@ -62,7 +62,8 @@ class TwoOrderUnassignReplayTest {
         step.stateAfter.regions.platforms.getValue(Platform.DoorDash)
 
     private fun run(): List<SessionReplay.ReplayStep> {
-        val screens = SessionReplay.loadSession(session).map { SessionReplay.ScreenInput(it) }
+        // #1119 S2 (category D): the pickup frames get each card's store back so the offer pool can link them.
+        val screens = SessionReplay.restorePickupStores(SessionReplay.loadSession(session)).map { SessionReplay.ScreenInput(it) }
         val clicks = File("src/test/resources/$session").listFiles()!!
             .filter { it.name.contains("_cli_") }.sortedBy { it.name }
             .map { SessionReplay.loadClickFrame("$session/${it.name}") }

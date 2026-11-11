@@ -108,9 +108,12 @@ class DoorDashAddonStateTest {
             assertEquals(OfferQuoteBasis.INCREMENTAL, spoken.single().pending.evaluation!!.quoteBasis)
             assertFalse(spoken.single().pending.evaluation!!.hasDistanceMetrics)
             assertFalse(events.contains(AppEventType.OFFER_ACCEPTED))
-            assertEquals(1, events.count { it == if (sheet) AppEventType.OFFER_DECLINED else AppEventType.OFFER_TIMEOUT })
+            // #1119 S2 (categories B and C): the add-on leaves into the offer pool with no outcome yet — demoted when
+            // the decline sheet was the last thing seen over it, plain otherwise. Its outcome comes at the shift end.
+            assertTrue(events.none { it == AppEventType.OFFER_DECLINED || it == AppEventType.OFFER_TIMEOUT })
             val region = state.regions.platforms.getValue(Platform.DoorDash)
             assertTrue(region.pendingOffers.isEmpty())
+            assertEquals(sheet, region.offerPool.single().demoted)
             assertEquals(original.acceptedOffers, region.activeJob!!.acceptedOffers)
             val notifications = effects.filterIsInstance<AppEffect.PostOfferNotification>()
             assertEquals(2, notifications.size)
@@ -276,13 +279,19 @@ class DoorDashAddonStateTest {
         assertEquals(before.tasks.count { it.phase == TaskPhase.PICKUP }, job.tasks.count { it.phase == TaskPhase.PICKUP })
     }
 
+    /**
+     * #1119 S2 (category A): the click-less inference, and its rule that an add-on is never inferred, are retired.
+     * With no live job an add-on card's candidate stores are all of its stores (the spec's § C2), so work at one of
+     * them links it like any card — the pool has no scope preference.
+     */
     @Test
-    fun `incremental quote cannot infer acceptance even with no live return task`() {
+    fun `an incremental quote with no live job links by its store like any card`() {
         val offer = AddonCardTree.parse()
         val presented = machine.step(initial(), screen(10_000L, offer)).newState
         val transition = machine.step(presented, pickup(12_000L))
-        assertFalse(transition.effects.filterIsInstance<AppEffect.LogEvent>().any { it.event.type == AppEventType.OFFER_ACCEPTED })
-        assertTrue(transition.newState.regions.platforms.getValue(Platform.DoorDash).activeJob?.acceptedOffers.isNullOrEmpty())
+        assertTrue(transition.effects.filterIsInstance<AppEffect.LogEvent>().any { it.event.type == AppEventType.OFFER_ACCEPTED })
+        assertEquals(listOf(offer.offerHash),
+            transition.newState.regions.platforms.getValue(Platform.DoorDash).activeJob?.acceptedOffers?.map { it.offerHash })
     }
 
     @Test

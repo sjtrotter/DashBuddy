@@ -196,9 +196,11 @@ class InterleavedPlatformsE2ETest {
                 listOf("offersReceived", "offersAccepted", "offersTimeout", "deliveries", "jobsCompleted", "endSource", "reportedEarnings").map { ddRow[it] },
             )
             assertNotNull("DoorDash's session ended", ddRow["endedAt"])
+            // #1119 S2 (category B): Uber's expired offer waits in the offer pool while its shift is open, so it has
+            // no outcome row yet; it gets one (OFFER_NOT_TAKEN) when the Uber shift ends.
             assertEquals(
-                "Uber: its one offer (expired), nothing delivered, still open, no reported total",
-                listOf("1", "0", "1", "0", "0", null, null),
+                "Uber: its one offer still pooled, nothing delivered, still open, no reported total",
+                listOf("0", "0", "0", "0", "0", null, null),
                 listOf("offersReceived", "offersAccepted", "offersTimeout", "deliveries", "jobsCompleted", "endedAt", "reportedEarnings").map { uberRow[it] },
             )
 
@@ -213,24 +215,23 @@ class InterleavedPlatformsE2ETest {
             assertTrue("…and unproven", receipts.all { it["scope"] == "UNPROVEN" && it["sessionId"] == ddSession })
 
             val offers = rows(replay, "offer_records")
-            assertEquals("four offer rows", 4, offers.size)
+            assertEquals("three offer rows (DoorDash's; Uber's offer is still pooled)", 3, offers.size)
             offers.forEach { o ->
                 assertEquals(
                     "offer ${o["offerHash"]} sits in a session of its own platform",
                     o["platform"], sessions.getValue(o.getValue("sessionId"))["platform"],
                 )
             }
-            val uberOffer = offers.single { it["platform"] == "uber" }
-            assertEquals(cp.uberHashes[0], uberOffer["offerHash"])
-            assertEquals("Uber's offer timed out", "OFFER_TIMEOUT", uberOffer["outcome"])
-            assertEquals("…decided at its own expiry", ub.atMs.toString(), uberOffer["decidedAt"])
+            val uberPool = replay.states.last().regions.platforms.getValue(Platform.Uber).offerPool
+            assertEquals(listOf(cp.uberHashes[0]), uberPool.map { it.offer.offerHash })
+            assertEquals("…pooled at its own expiry", ub.atMs, uberPool.single().leftAt)
             assertEquals(
                 "Peter Piper was decided at ITS expiry — not replaced later by the journey offer",
                 pp.atMs.toString(), offers.single { it["offerHash"] == cp.peterPiperHash }["decidedAt"],
             )
             assertEquals(
-                "DoorDash's three outcomes — the stale tap accepted nothing",
-                mapOf(cp.cvsHash to "OFFER_TIMEOUT", cp.peterPiperHash to "OFFER_TIMEOUT", cp.journeyOfferHash to "OFFER_ACCEPTED"),
+                "DoorDash's three outcomes — the stale tap accepted nothing; the two un-acted offers end the shift not taken",
+                mapOf(cp.cvsHash to "OFFER_NOT_TAKEN", cp.peterPiperHash to "OFFER_NOT_TAKEN", cp.journeyOfferHash to "OFFER_ACCEPTED"),
                 offers.filter { it["platform"] == "doordash" }.associate { it["offerHash"] to it["outcome"] },
             )
 
