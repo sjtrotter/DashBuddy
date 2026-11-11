@@ -37,6 +37,7 @@ import org.junit.Assert.assertEquals
 import org.junit.After
 import org.junit.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.isNull
@@ -78,6 +79,7 @@ class WizardViewModelTest {
         whenever(appPreferencesRepository.fuelType).thenReturn(flowOf(FuelType.REGULAR))
         whenever(appPreferencesRepository.isGasPriceAuto).thenReturn(flowOf(false))
         whenever(appPreferencesRepository.gasPrice).thenReturn(flowOf(null))
+        whenever(appPreferencesRepository.gasPriceFetchedAt).thenReturn(flowOf(null))
         whenever(appPreferencesRepository.userEconomy).thenReturn(flowOf(UserEconomy()))
         whenever(strategyRepository.protectStatsMode).thenReturn(flowOf(false))
         whenever(strategyRepository.scoringRules).thenReturn(flowOf(emptyList()))
@@ -917,7 +919,7 @@ class WizardViewModelTest {
         verify(garageRepository, org.mockito.kotlin.never()).addVehicle(isNull(), any(), any(), any())
         verify(garageRepository, org.mockito.kotlin.never()).updateProfile(any(), any<VehicleProfile>())
         verify(appPreferencesRepository).mirrorUserSetEconomy(any())
-        verify(appPreferencesRepository).mirrorEconomySettings(any(), any(), any(), any(), any(), any(), any())
+        verify(appPreferencesRepository).mirrorEconomySettings(any(), any(), any(), any(), any(), any(), any(), anyOrNull())
         verify(appStateRepository).setFirstRunComplete()
         assertEquals(listOf(Unit), viewModel.vehicleSaveFailed.replayCache)
         viewModel.vehicleSaveFailureHandled()

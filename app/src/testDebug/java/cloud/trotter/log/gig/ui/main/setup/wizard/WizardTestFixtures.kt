@@ -60,6 +60,7 @@ private fun stubWizardRepositories(
         whenever(appPreferencesRepository.fuelType).thenReturn(flowOf(FuelType.REGULAR))
         whenever(appPreferencesRepository.isGasPriceAuto).thenReturn(flowOf(false))
         whenever(appPreferencesRepository.gasPrice).thenReturn(flowOf(null))
+        whenever(appPreferencesRepository.gasPriceFetchedAt).thenReturn(flowOf(null))
         whenever(appPreferencesRepository.userEconomy).thenReturn(flowOf(UserEconomy()))
         whenever(strategyRepository.protectStatsMode).thenReturn(flowOf(false))
         whenever(strategyRepository.scoringRules).thenReturn(flowOf(emptyList()))

@@ -16,6 +16,8 @@ import cloud.trotter.log.gig.domain.evaluation.ScoringRule
 import cloud.trotter.log.gig.domain.evaluation.EconomyFieldGroups
 import cloud.trotter.log.gig.domain.model.vehicle.FuelType
 import cloud.trotter.log.gig.domain.model.vehicle.*
+import cloud.trotter.log.gig.feature.setup.wizard.model.FetchedGasPrice
+import cloud.trotter.log.gig.feature.setup.wizard.model.GasPriceSource
 import cloud.trotter.log.gig.feature.setup.wizard.model.WizardState
 import cloud.trotter.log.gig.feature.setup.wizard.model.WizardStep
 import cloud.trotter.log.gig.feature.setup.wizard.model.toEconomyDraft
@@ -40,6 +42,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.time.Clock
 import javax.inject.Inject
 
 /** Wizard-layer sentinel for vehicle pickers (#364) — moved out of the data layer. */
@@ -53,6 +56,8 @@ class WizardViewModel @Inject constructor(
     private val vehicleRepository: VehicleRepository,
     private val gasPriceRepository: FuelPriceRepository,
     private val garageRepository: GarageRepository,
+    /** Stamps a lookup's figure (#1478); the app binds the system clock. */
+    private val clock: Clock = Clock.systemUTC(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(WizardState())
@@ -112,6 +117,7 @@ class WizardViewModel @Inject constructor(
                 activeProfile?.gasFuel ?: appPreferencesRepository.fuelType.first()
             val currentGasAuto = appPreferencesRepository.isGasPriceAuto.first()
             val currentGasPrice = appPreferencesRepository.gasPrice.first() ?: WizardState().gasPrice
+            val currentGasFetchedAt = appPreferencesRepository.gasPriceFetchedAt.first()
 
             val currentProtectMode = strategyRepository.protectStatsMode.first()
             val currentStrategy =
@@ -139,6 +145,7 @@ class WizardViewModel @Inject constructor(
                     fuelType = currentFuelType,
                     isGasPriceAuto = currentGasAuto,
                     gasPrice = currentGasPrice,
+                    gasPriceSource = GasPriceSource.stored(currentGasAuto, currentGasFetchedAt),
                     strategy = currentStrategy,
 
                     enforceMinPayout = minPayoutRule?.autoDeclineOnFail ?: false,
@@ -283,27 +290,23 @@ class WizardViewModel @Inject constructor(
         it.copy(basePickupMinutes = value, userSetEconomyFields = it.userSetEconomyFields + EconomyField.BASE_PICKUP_MIN)
     }
 
-    private fun applyTrimDetails(details: VehicleDetails) {
-        _state.update { currentState ->
-            val cachedPrice = currentState.fetchedGasPrices[details.fuelType]
-            val newPrice =
-                if (currentState.isGasPriceAuto && cachedPrice != null) cachedPrice else currentState.gasPrice
-            currentState.copy(fuelType = details.fuelType, gasPrice = newPrice)
+    /** With auto on, a fuel whose price a lookup already returned shows that price and its fetch time. */
+    private fun WizardState.withFuel(type: FuelType): WizardState {
+        val cached = fetchedGasPrices[type]
+        return if (isGasPriceAuto && cached != null) {
+            copy(fuelType = type, gasPrice = cached.price,
+                gasPriceSource = GasPriceSource.Lookup(cached.fetchedAtMillis), gasPriceLookupFailed = false)
+        } else {
+            copy(fuelType = type)
         }
     }
 
-    fun updateFuelType(type: FuelType) {
-        _state.update { currentState ->
-            val cachedPrice = currentState.fetchedGasPrices[type]
+    private fun applyTrimDetails(details: VehicleDetails) {
+        _state.update { it.withFuel(details.fuelType) }
+    }
 
-            // If we have the price, swap instantly!
-            if (currentState.isGasPriceAuto && cachedPrice != null) {
-                currentState.copy(fuelType = type, gasPrice = cachedPrice)
-            } else {
-                // If we DON'T have the price, just update the fuel type for now.
-                currentState.copy(fuelType = type)
-            }
-        }
+    fun updateFuelType(type: FuelType) {
+        _state.update { it.withFuel(type) }
 
         // If auto is ON, but we didn't have the price cached, fetch it right now!
         if (_state.value.isGasPriceAuto && _state.value.fetchedGasPrices[type] == null) {
@@ -311,34 +314,36 @@ class WizardViewModel @Inject constructor(
                 _state.update { it.copy(isFetchingGasPrice = true) }
                 val result = gasPriceRepository.fetchGasPriceOnly(type)
 
-                val fetched = result.getOrNull()
-                if (fetched != null) {
-                    val newPrice = fetched
-                    _state.update { currentState ->
-                        // Update the map AND the current price
-                        val newMap = currentState.fetchedGasPrices.toMutableMap()
-                        newMap[type] = newPrice
-
-                        currentState.copy(
-                            fetchedGasPrices = newMap,
-                            gasPrice = newPrice,
-                            isFetchingGasPrice = false
-                        )
-                    }
-                } else {
-                    _state.update { it.copy(isFetchingGasPrice = false) }
+                val fetched = result.getOrNull()?.let { FetchedGasPrice(it, clock.millis()) }
+                _state.update { currentState ->
+                    val cache = if (fetched != null) currentState.fetchedGasPrices + (type to fetched) else currentState.fetchedGasPrices
+                    currentState.copy(fetchedGasPrices = cache, isFetchingGasPrice = false).withLookup(type, fetched)
                 }
             }
         }
     }
 
+    /**
+     * Applies a lookup's answer for [type] to the shown figure: a price is shown as a lookup; nothing keeps the
+     * figure and its source and marks the lookup failed. Ignored once auto is off or the fuel changed.
+     */
+    private fun WizardState.withLookup(type: FuelType, fetched: FetchedGasPrice?): WizardState = when {
+        !isGasPriceAuto || fuelType != type -> this
+        fetched != null -> copy(gasPrice = fetched.price,
+            gasPriceSource = GasPriceSource.Lookup(fetched.fetchedAtMillis), gasPriceLookupFailed = false)
+        else -> copy(gasPriceLookupFailed = true)
+    }
+
     fun toggleAutoGasPrice(isAuto: Boolean) {
-        _state.update { it.copy(isGasPriceAuto = isAuto) }
+        _state.update {
+            if (isAuto) it.copy(isGasPriceAuto = true, gasPriceLookupFailed = false)
+            else it.copy(isGasPriceAuto = false, gasPriceSource = GasPriceSource.Typed, gasPriceLookupFailed = false)
+        }
         if (isAuto) attemptAutoGasPriceFetch()
     }
 
     fun updateGasPrice(price: Float) {
-        _state.update { it.copy(gasPrice = price) }
+        _state.update { it.copy(gasPrice = price, gasPriceSource = GasPriceSource.Typed, gasPriceLookupFailed = false) }
     }
 
     fun attemptAutoGasPriceFetch() {
@@ -354,13 +359,12 @@ class WizardViewModel @Inject constructor(
                 }.awaitAll()
             }.mapNotNull { (fuel, price) -> price?.let { fuel to it } }.toMap()
             Timber.tag("WizardViewModel").i("Fetched gas prices: %s", pricesMap)
+            val fetchedAt = clock.millis()
+            val fetched = pricesMap.mapValues { (_, price) -> FetchedGasPrice(price, fetchedAt) }
 
             _state.update { currentState ->
-                currentState.copy(
-                    fetchedGasPrices = pricesMap,
-                    gasPrice = pricesMap[currentState.fuelType] ?: currentState.gasPrice,
-                    isFetchingGasPrice = false
-                )
+                currentState.copy(fetchedGasPrices = fetched, isFetchingGasPrice = false)
+                    .withLookup(currentState.fuelType, fetched[currentState.fuelType])
             }
         }
     }
@@ -442,7 +446,8 @@ class WizardViewModel @Inject constructor(
             appPreferencesRepository.mirrorEconomySettings(
                 vehicle.year, vehicle.make,
                 vehicle.model, vehicle.trim,
-                vehicle.mpg, finalState.isGasPriceAuto, finalState.gasPrice
+                vehicle.mpg, finalState.isGasPriceAuto, finalState.gasPrice,
+                gasPriceFetchedAt = (finalState.gasPriceSource as? GasPriceSource.Lookup)?.fetchedAtMillis,
             )
 
             val isProtectStatus = finalState.strategy == OfferStrategy.PROTECT_STATUS

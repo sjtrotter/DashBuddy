@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #1478: the gas price card's source line. Order mirrors values/strings.xml. -->
+<resources>
+    <string name="wizard_gas_price_source_today">Moyenne régionale, aujourd\'hui</string>
+    <string name="wizard_gas_price_source_on_date">Moyenne régionale du %1$s</string>
+    <string name="wizard_gas_price_lookup_failed_using">Impossible d\'obtenir le prix du jour. Prix utilisé : %1$s du %2$s.</string>
+    <string name="wizard_gas_price_lookup_failed_enter">Impossible d\'obtenir le prix du jour. Saisissez votre prix.</string>
+    <string name="wizard_gas_price_source_typed">Prix saisi</string>
+    <string name="wizard_gas_price_source_saved">Prix enregistré</string>
+    <string name="wizard_gas_price_retry">Réessayer</string>
+</resources>

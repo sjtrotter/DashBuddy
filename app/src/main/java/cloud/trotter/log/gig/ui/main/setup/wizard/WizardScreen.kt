@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.log.gig.R
+import cloud.trotter.log.gig.core.designsystem.time.rememberNow
 import cloud.trotter.log.gig.domain.config.OfferStrategy
 import cloud.trotter.log.gig.feature.setup.wizard.WizardViewModel
 import cloud.trotter.log.gig.feature.setup.wizard.cards.GasPriceCard
@@ -154,13 +155,18 @@ fun WizardScreen(
                     }
 
                     WizardStep.GAS_PRICE -> {
+                        val now by rememberNow()
                         GasPriceCard(
                             step = currentStep, fuelType = state.fuelType,
                             isAuto = state.isGasPriceAuto, price = state.gasPrice,
                             isFetching = state.isFetchingGasPrice,
+                            source = state.gasPriceSource,
+                            lookupFailed = state.gasPriceLookupFailed,
+                            nowMillis = now,
                             onFuelTypeSelected = viewModel::updateFuelType,
                             onAutoToggle = viewModel::toggleAutoGasPrice,
-                            onPriceChange = viewModel::updateGasPrice
+                            onPriceChange = viewModel::updateGasPrice,
+                            onRetry = viewModel::attemptAutoGasPriceFetch,
                         )
                     }
 

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
@@ -20,19 +21,24 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cloud.trotter.log.gig.feature.setup.R
 import cloud.trotter.log.gig.domain.format.Formats
+import cloud.trotter.log.gig.domain.format.formatMonthDay
 import cloud.trotter.log.gig.domain.model.vehicle.FuelType
 import cloud.trotter.log.gig.feature.setup.wizard.components.WizardCardHeader
+import cloud.trotter.log.gig.feature.setup.wizard.model.GasPriceSource
 import cloud.trotter.log.gig.feature.setup.wizard.model.WizardStep
+import java.time.ZoneId
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -42,10 +48,16 @@ fun GasPriceCard(
     isAuto: Boolean,
     price: Float,
     isFetching: Boolean,
+    source: GasPriceSource,
+    lookupFailed: Boolean,
+    /** The host's composition clock reading (`rememberNow()`); decides "today" at render time. */
+    nowMillis: Long,
     onFuelTypeSelected: (FuelType) -> Unit,
     onAutoToggle: (Boolean) -> Unit,
-    onPriceChange: (Float) -> Unit
+    onPriceChange: (Float) -> Unit,
+    onRetry: () -> Unit,
 ) {
+    val line = GasPriceLine.of(source, lookupFailed, price, nowMillis, ZoneId.systemDefault())
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -90,8 +102,11 @@ fun GasPriceCard(
                 )
             }
         } else {
+            // One toggle: the whole row, text included, flips the switch and TalkBack reads the label with its state.
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .toggleable(value = isAuto, role = Role.Switch, onValueChange = onAutoToggle),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -105,7 +120,7 @@ fun GasPriceCard(
                 }
                 Switch(
                     checked = isAuto,
-                    onCheckedChange = onAutoToggle
+                    onCheckedChange = null
                 )
             }
         }
@@ -124,11 +139,7 @@ fun GasPriceCard(
                     fontWeight = FontWeight.Black,
                     color = MaterialTheme.colorScheme.primary
                 )
-                Text(
-                    text = stringResource(R.string.wizard_gas_price_current_regional_average),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                GasPriceSourceLine(line, onRetry)
             }
         } else {
             Text(
@@ -137,6 +148,7 @@ fun GasPriceCard(
                 fontWeight = FontWeight.Black,
                 color = MaterialTheme.colorScheme.primary
             )
+            if (fuelType != FuelType.ELECTRICITY) GasPriceSourceLine(line, onRetry)
             Spacer(modifier = Modifier.height(16.dp))
             Column(
                 modifier = Modifier
@@ -154,5 +166,26 @@ fun GasPriceCard(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun GasPriceSourceLine(line: GasPriceLine, onRetry: () -> Unit) {
+    val text = when (line) {
+        GasPriceLine.Today -> stringResource(R.string.wizard_gas_price_source_today)
+        is GasPriceLine.FetchedOn -> stringResource(R.string.wizard_gas_price_source_on_date, formatMonthDay(line.date))
+        is GasPriceLine.FailedUsing -> stringResource(R.string.wizard_gas_price_lookup_failed_using,
+            Formats.money(line.price.toDouble()), formatMonthDay(line.date))
+        GasPriceLine.FailedNoLookup -> stringResource(R.string.wizard_gas_price_lookup_failed_enter)
+        GasPriceLine.Typed -> stringResource(R.string.wizard_gas_price_source_typed)
+        GasPriceLine.Saved -> stringResource(R.string.wizard_gas_price_source_saved)
+    }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = if (line.offersRetry) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    if (line.offersRetry) {
+        TextButton(onClick = onRetry) { Text(stringResource(R.string.wizard_gas_price_retry)) }
     }
 }
