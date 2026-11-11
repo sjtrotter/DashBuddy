@@ -151,6 +151,14 @@ class ShiftChecksTest {
         )
     }
 
+    // #1119 review round 1 (S4): a tie candidate that later linked elsewhere still counts in its tie's check.
+    @Test fun `a tie check names a candidate that later linked to other work`() {
+        val linkedLater = offer(3, linkedJobId = "J5").copy(ambiguousJobIds = listOf("J1"))
+        val checks = checks(listOf(linkedLater, passed(4, OfferOutcome.DECLINED, "J1")),
+            listOf(drop(10, "J5", listOf("h3"))))
+        assertEquals(listOf(ShiftCheck.OfferNotMatched("J1", listOf(3L, 4L))), checks.filterIsInstance<ShiftCheck.OfferNotMatched>())
+    }
+
     @Test fun `a running shift raises no tie check`() {
         assertTrue(checks(listOf(passed(1, OfferOutcome.NOT_TAKEN, "J1"), passed(2, OfferOutcome.NOT_TAKEN, "J1")), emptyList(), ended = false).isEmpty())
     }
