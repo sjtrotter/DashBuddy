@@ -5,7 +5,7 @@ import cloud.trotter.log.gig.domain.capture.schema.UiNodeSchema
 import cloud.trotter.log.gig.domain.model.accessibility.UiNode
 import cloud.trotter.log.gig.domain.model.notification.RawNotificationData
 import cloud.trotter.log.gig.test.util.CorpusDecoys
-import cloud.trotter.log.gig.test.util.DropoffRuleSource
+import cloud.trotter.log.gig.test.util.DoorDashRuleSource
 import cloud.trotter.log.gig.test.util.SnapshotRedactor
 import cloud.trotter.log.gig.test.util.TestResourceLoader
 import cloud.trotter.log.gig.test.util.TestRulesetFactory
@@ -1762,7 +1762,7 @@ class CaptureRedactionCorpusTest {
      * block, which is why #886 and #993 already declare entries on it for the same reason.
      */
     private fun subpremiseParityRuleIds(): List<String> =
-        DropoffRuleSource.screenRuleIds() + "doordash.screen.navigation_generic"
+        DoorDashRuleSource.screenRuleIds("dropoff") + "doordash.screen.navigation_generic"
 
     /**
      * True when [entry] names its node by TEXT SHAPE rather than by id or label — the entries that

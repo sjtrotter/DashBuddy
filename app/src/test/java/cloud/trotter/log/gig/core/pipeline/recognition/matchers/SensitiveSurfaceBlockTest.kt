@@ -73,8 +73,8 @@ class SensitiveSurfaceBlockTest {
         return TestResourceLoader.loadNode(file)
     }
 
-    private fun classify(tree: UiNode): Observation.Screen {
-        val pkg = requireNotNull(Platform.DoorDash.packageName)
+    private fun classify(tree: UiNode, platform: Platform = Platform.DoorDash): Observation.Screen {
+        val pkg = requireNotNull(platform.packageName)
         return classifier.classify(
             PipelineEvent.Screen(
                 timestamp = 1_000L,
@@ -162,9 +162,48 @@ class SensitiveSurfaceBlockTest {
         assertTrue("scanned no corpus files — the folder filter is wrong", scanned > 0)
     }
 
+    /**
+     * #1402 — Uber's account Driver's License pages had no sensitive rule, so they reached the capture path
+     * as UNKNOWN with only the marker backstop behind them. The fixture is hand-built (invented chrome, no
+     * number, no name); the rule anchors on the same text as the `Driver's License` marker, case-insensitive.
+     */
+    @Test
+    fun `Uber's Driver's License page is claimed by Uber's priority-0 sensitive rule (#1402)`() {
+        val tree = fixture(UBER_DRIVERS_LICENSE)
+        val match = screenRuleset.matchFirst(tree, platformWire = Platform.Uber.wire)
+        assertEquals(UBER_SENSITIVE_RULE_ID, match?.ruleId)
+        assertEquals("sensitive.identity", match?.intent)
+        assertTrue(classify(tree, Platform.Uber).parsed is ParsedFields.SensitiveFields)
+        assertNotNull("the marker backstop trips too", SensitiveTextMarkers.findMarker(tree))
+
+        val lowerCase = UiNode(
+            className = "android.widget.FrameLayout",
+            children = listOf(UiNode(className = "android.widget.TextView", text = "Driver's license")),
+        ).restoreParents()
+        assertEquals(UBER_SENSITIVE_RULE_ID, screenRuleset.matchFirst(lowerCase, platformWire = Platform.Uber.wire)?.ruleId)
+    }
+
+    @Test
+    fun `the Uber license anchor appears in no committed non-sensitive fixture (#1402)`() {
+        val base = File("src/test/resources/snapshots")
+        val files = base.walkTopDown()
+            .filter { it.isFile && it.extension == "json" }
+            .filterNot { f ->
+                val rel = f.relativeTo(base).invariantSeparatorsPath
+                rel.startsWith("SENSITIVE/") || rel.startsWith("INBOX/") ||
+                    (rel.startsWith("UNKNOWN/") && !rel.startsWith("UNKNOWN/negative/"))
+            }
+            .toList()
+        assertTrue("scanned no corpus files", files.isNotEmpty())
+        val hits = files.filter { it.readText().lowercase(Locale.ROOT).contains("driver's license") }
+        assertTrue("a delivery surface carries the #1402 anchor and would be blocked: $hits", hits.isEmpty())
+    }
+
     private companion object {
         const val FOLDER = "snapshots/SENSITIVE"
         const val SENSITIVE_RULE_ID = "doordash.screen.sensitive.known"
+        const val UBER_SENSITIVE_RULE_ID = "uber.screen.sensitive.known"
+        const val UBER_DRIVERS_LICENSE = "2026-11-10__uber__drivers_license__0c47a0.json"
 
         val SKIP_FOLDERS = setOf("SENSITIVE", "INBOX", "UNKNOWN")
 

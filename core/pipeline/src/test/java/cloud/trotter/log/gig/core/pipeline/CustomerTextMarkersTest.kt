@@ -342,6 +342,30 @@ class CustomerTextMarkersTest {
     }
 
     @Test
+    fun `the id scan owns the merchant's pickup instruction body, both states (#1397)`() {
+        // A merchant's pickup instruction is free text and can name the customer. The pickup-section
+        // rules mask it on a recognized frame; this is the half that covers an UNKNOWN one.
+        val body = "Look for Jane D. on the Pizza Portal, use code 123"
+        val tree = UiNode(
+            children = listOf(
+                dd("instructions_title", "Sample Pizza Co"),
+                UiNode(
+                    viewIdResourceName = "com.doordash.driverapp:id/instructions_expanded_container",
+                    children = listOf(dd("instructions_line_2_expanded", body)),
+                ),
+                dd("instructions_line_2_collapsed", body),
+            ),
+        )
+        assertEquals("instructions_line_2_expanded", CustomerTextMarkers.firstUnredactedIdMarker(tree))
+
+        val scrubbed = CustomerTextMarkers.scrubUnknown(tree)
+        assertEquals("the merchant name is not an instruction body", "Sample Pizza Co", scrubbed.children[0].text)
+        assertEquals("[redacted]", scrubbed.children[1].children[0].text)
+        assertEquals("[redacted]", scrubbed.children[2].text)
+        assertNull(CustomerTextMarkers.firstUnredactedIdMarker(scrubbed))
+    }
+
+    @Test
     fun `the id scan over-scrubs a chrome description_text_view - the accepted UNKNOWN-only cost (#1107)`() {
         // `description_text_view` is GENERIC DoorDash id vocabulary: it carries app copy on the
         // Dasher Rewards board and the GoPuff pickup-steps blurb. On an UNKNOWN frame the scan
@@ -390,6 +414,8 @@ class CustomerTextMarkersTest {
                 "tvLastMessage",
                 // #919 — deliberately ADDED: the chat compose box holds user-authored draft text.
                 "message_input",
+                // #1397 — deliberately ADDED: the merchant's free-text pickup instructions.
+                "instructions_line_2_expanded", "instructions_line_2_collapsed",
             ),
             CustomerTextMarkers.ID_MARKERS,
         )
@@ -410,6 +436,8 @@ class CustomerTextMarkersTest {
                 "tvTitle" to CustomerTextMarkers.IdentityKind.EXACT,
                 "tvLastMessage" to CustomerTextMarkers.IdentityKind.EXACT,
                 "message_input" to CustomerTextMarkers.IdentityKind.CONTENT,
+                "instructions_line_2_expanded" to CustomerTextMarkers.IdentityKind.CONTENT,
+                "instructions_line_2_collapsed" to CustomerTextMarkers.IdentityKind.CONTENT,
             ),
             CustomerTextMarkers.ID_MARKER_TABLE.filter { it.runtimeScrub == CustomerTextMarkers.RuntimeScrub.ALWAYS }
                 .associate { it.suffix to it.kind },

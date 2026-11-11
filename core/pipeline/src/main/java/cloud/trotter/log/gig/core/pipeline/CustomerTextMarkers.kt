@@ -242,6 +242,11 @@ object CustomerTextMarkers {
         // id even when the widget stops reporting editable semantics. The CLASS half is [unredactedInputNode].
         // CONTENT: seeds nothing for the census (free text, not an identity).
         IdMarker("message_input", IdentityKind.CONTENT),
+        // #1397: the merchant's free-text pickup instructions on the pickup sheet (expanded and collapsed
+        // states of one field). Usually store directions, but a fielded one named the customer, so the whole
+        // node goes on an UNKNOWN frame; every pickup-section rule's `redact` masks it on a recognized one.
+        IdMarker("instructions_line_2_expanded", IdentityKind.CONTENT),
+        IdMarker("instructions_line_2_collapsed", IdentityKind.CONTENT),
         // #1160 review AL3: the INTAKE-ONLY ids (formerly `PiiShapes.PII_ID_SUFFIXES`, a second hand list with
         // exact-last-segment semantics) are rows here now — ONE list, ONE match semantics (`endsWith`,
         // ignoring case: a widening toward privacy on the commit path). `runtimeScrub = NEVER`: the runtime

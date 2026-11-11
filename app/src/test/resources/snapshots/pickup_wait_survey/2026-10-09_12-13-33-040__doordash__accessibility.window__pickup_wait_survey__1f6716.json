@@ -451,7 +451,7 @@
                                                                                                                                 },
                                                                                                                                 "children": [
                                                                                                                                     {
-                                                                                                                                        "text": "The order can be found on a pick-up shelf inside the café. We ask that you do not use the drive-thru.",
+                                                                                                                                        "text": "[redacted]",
                                                                                                                                         "id": "com.doordash.driverapp:id/instructions_line_2_expanded",
                                                                                                                                         "class": "android.widget.TextView",
                                                                                                                                         "isEnabled": true,
@@ -546,7 +546,7 @@
                                                                                                                                 },
                                                                                                                                 "children": [
                                                                                                                                     {
-                                                                                                                                        "text": "Remember to check the receipt on the bag for any drinks!",
+                                                                                                                                        "text": "[redacted]",
                                                                                                                                         "id": "com.doordash.driverapp:id/instructions_line_2_expanded",
                                                                                                                                         "class": "android.widget.TextView",
                                                                                                                                         "isEnabled": true,

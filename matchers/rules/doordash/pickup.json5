@@ -7,6 +7,20 @@
       "priority": 60,
       "redact": [
         {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
           "comment": "#1079 (decision pass 2026-10-05, fable + Astra aligned): plainMask the MERCHANT's suite on the pickup surfaces. Exposure is nil — on a pickup surface this line is the STORE's `Apt/Suite` — but the id is classified customer-PII-bearing in `CustomerTextMarkers.ID_MARKERS` (it carries the CUSTOMER's unit on every dropoff surface), and 6 recognized 2026-09-05 pickup envelopes rendered it raw beside masked address lines. Masked for consistency with that classification, so the #986/#934 structural scan sees one posture for the id everywhere. Entry is `pickup_order_picker`'s verbatim (keep the label, plain-mask the bounded ~10^4 unit number). This rule had NO redact block before #1079. A customer node was checked for and not found: none of the 15 committed `pickup_navigation/` fixtures (nor the fielded 2026-09-05 envelope) renders a customer-bearing id or a customer name line — the sheet carries only the store title, the store's `bottom_sheet_address_line_1/_2`, the deadline and the Google-Nav cluster (#886: the MERCHANT address stays raw by design) — so only the subpremise entries are declared; `address_subpremise_line` is listed beside the fielded `bottom_sheet_` twin because it is the id the decision names and costs nothing where absent.",
           "find": {
             "hasIdSuffix": "address_subpremise_line"
@@ -119,6 +133,20 @@
       "id": "doordash.screen.pickup_arrival",
       "priority": 70,
       "redact": [
+        {
+          "comment": "#1397: the merchant's pickup instructions (`instructions_line_2_expanded` and its `_collapsed` twin, inside the pickup sheet's `instructions_view`) are free text the merchant writes, and a fielded one named the customer and a locker code. Mask the whole node plain (`[redacted]`, no hash): free text has no token to key a hex to. No rule reads these nodes, so recognition and parse are unchanged; `instructions_title` (the merchant name this rule parses) is a different id and stays raw. First in the block so no shape entry claims the node first. A redact protects only the frames its own rule wins, so every pickup-section screen rule carries this entry, as do `waiting_for_offer` (it can win a frame under the pickup sheet) and the recognize-only belt rules; `PickupInstructionBodyRedactTest` pins it, and `CustomerTextMarkers.ID_MARKERS` covers UNKNOWN frames.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
         {
           "find": {
             "hasIdSuffix": "customer_name"
@@ -244,6 +272,20 @@
       "priority": 71,
       "redact": [
         {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
           "comment": "#1079 (fable review of PR #1245): `normalize: customerName` so this node masks to the SAME hex as the going-to-store sheet's `user_name` entry on the consecutive frame of one surface, and equals the persisted `customerNameHash` (#623/#733). Pre-#1079 the entry hashed the raw token, so one customer carried two hexes across two frames of the same pickup.",
           "find": {
             "hasIdSuffix": "user_name"
@@ -332,8 +374,16 @@
           "phase": "PICKUP",
           "subFlow": "NAVIGATION",
           "storeName": {
+            "comment": "#1396: the sheet renders two `user_name` cards, the merchant's (`Pickup from`) and the customer's (`Delivery for`). A mid-render frame put the customer card first with an empty label, and a first-`user_name` read stored the customer's name as the store. Read only the `user_name` whose immediately preceding sibling is the `Pickup from` label; with no such pair the field is null, never another card's value. Not an optional bind + `from`: an absent bind falls back to the whole tree.",
             "find": {
-              "hasIdSuffix": "user_name"
+              "all": [
+                {
+                  "hasIdSuffix": "user_name"
+                },
+                {
+                  "hasPrecedingSiblingText": "Pickup from"
+                }
+              ]
             },
             "read": "text",
             "transform": {
@@ -390,6 +440,20 @@
       "id": "doordash.screen.pickup_shopping",
       "priority": 72,
       "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
         {
           "find": {
             "hasIdSuffix": "customer_name"
@@ -471,6 +535,20 @@
       "priority": 76,
       "redact": [
         {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
           "find": {
             "hasIdSuffix": "order_verification_checklist_title"
           },
@@ -523,6 +601,20 @@
       "priority": 88,
       "comment": "#1141: recognize-only EXCEPT its first TWO branches — the 8.99.20 arrival render (#1141, branch 0) and the 8.101.8 at-store render (#1306, branch 1) — both declare `task:pickup:arrived` and parse the pickup task shape; every other branch stays flowless. #992 — this rule shipped with NO redact block at all, while the fielded frames (2026-08-07 19:46:17 / 19:47:10) carry the at-store contact card's bare `customer_name` node verbatim on a RECOGNIZED surface. `CustomerTextMarkers.ID_MARKERS` already lists `customer_name`, but that scan is UNKNOWN-envelope-only BY DESIGN (#910), so a recognized rule that forgets to redact has no backstop — the exact 'mechanism 1' class the ruleset must own. The node has no in-node lead-in either ('Order for' is a separate `customer_name_label` sibling), so the TEXT-marker backstop is structurally blind to it too: the same split-node shape #526 D6a documents for `pickup_arrival`. Entry mirrors `pickup_arrival`/`pickup_post_arrival_multi`/`pickup_pre_arrival_multi` byte-for-byte (`normalize: customerName`) so one customer masks to ONE hex across every pickup surface and that hex stays equal to the persisted `customerNameHash`. Recognize-only rule: a redact without a parse is legal (the `pickup_select_issue`/`pickup_post_arrival_multi` precedent) and the parse goldens are untouched. `instructions_title` (the MERCHANT) and the survey/item chrome stay raw — merchant + item text is driver-owned, not customer PII.",
       "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
         {
           "find": {
             "hasIdSuffix": "customer_name"
@@ -815,6 +907,20 @@
       "priority": 141,
       "redact": [
         {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
           "comment": "The id-less instruction line 'Focus on <FirstName L>'. Ordered FIRST because the bare-name shape entry below would also match this string ('Focus on Jeremy S' satisfies the first-last-initial shape), and this entry keeps the 'Focus on ' lead-in so a replayed envelope still reads as the scan instruction. `normalize: customerName` keeps the mask hex equal to the customer's persisted `customerNameHash` (#623/#733) — customerNameKey strips to first-token + second-token-initial, so 'Focus on ' + name masks to the same 4hex this customer gets on every pickup/dropoff surface.",
           "find": {
             "hasTextStartsWith": "Focus on "
@@ -859,6 +965,20 @@
       "priority": 87,
       "redact": [
         {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
           "comment": "#1031: this rule shipped with NO redact block while all four of its own sub-flow siblings (pickup_select_issue / pickup_resolution_options / pickup_unassigned_confirmation / pickup_unassign_survey) already masked this exact node — so the fused 'For <customer> • <store>' header reached a RECOGNIZED envelope raw (fielded 2026-08-18 18:52, 1 of 6 pickup_issue_menu frames). Entry is verbatim the sibling's, so a customer's mask hex matches across the whole issue sub-flow and the persisted `customerNameHash` (#623/#733). As on `pickup_select_issue`, the whole post-'For ' remainder — customer name AND the ' • <store>' tail — masks to ONE '[redacted:<4hex>]', so the store tail does NOT survive: that is fine here because no anchor or parse rides this header line (the rule's only require is the 'what pickup issues can we help with' chrome) and no other rule reads this surface's store from it. Recognize-only rule, so redact-without-parse is legal (the pickup_select_issue precedent) and the parse goldens are untouched.",
           "find": {
             "hasTextStartsWith": "For "
@@ -880,6 +1000,20 @@
       "id": "doordash.screen.pickup_picked_up",
       "priority": 98,
       "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
         {
           "find": {
             "hasIdSuffix": "customer_name"
@@ -908,6 +1042,20 @@
       "id": "doordash.screen.pickup_post_arrival_multi",
       "priority": 99,
       "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
         {
           "comment": "#910 V2 — the multi-order pickup list renders ONE row per order, each carrying a bare `customer_name` node (the fielded 07-28 frames carry three), and this rule shipped with no redact block, so every one reached the recognized envelope raw. The node has no in-node lead-in ('Order for' is a separate sibling on the single-order card), so `CustomerTextMarkers` is structurally blind to it — the same split-node shape #526 D6a documents for `pickup_arrival`, whose identical `customer_name` + `normalize: customerName` entry this mirrors so a customer's mask hex matches across surfaces and the persisted `customerNameHash`. Recognize-only rule: redact without parse is legal (the `pickup_select_issue` precedent) and the parse goldens are untouched. `merchant_name` stays raw (the merchant is driver-owned data, not PII); so do `num_items`/`header_text`/`description_text`, which are app chrome.",
           "find": {
@@ -949,6 +1097,20 @@
       "priority": 100,
       "redact": [
         {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
           "comment": "#910 V3 — the pre-arrival twin of `pickup_post_arrival_multi` (same list, before 'Confirm at store'); the fielded 07-28 frame carries the same bare `customer_name` node. Same entry, same reasoning, same `normalize: customerName` so the mask hex is one-customer-one-hex across both surfaces.",
           "find": {
             "hasIdSuffix": "customer_name"
@@ -975,6 +1137,20 @@
       "id": "doordash.screen.pickup_verify",
       "priority": 101,
       "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
         {
           "find": {
             "hasIdSuffix": "customer_name"
@@ -1011,6 +1187,20 @@
       "id": "doordash.screen.pickup_select_issue",
       "priority": 102,
       "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
         {
           "find": {
             "hasTextStartsWith": "For "
@@ -1071,6 +1261,20 @@
       "priority": 103,
       "redact": [
         {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
           "find": {
             "hasTextStartsWith": "For "
           },
@@ -1120,6 +1324,20 @@
       "id": "doordash.screen.pickup_order_picker",
       "priority": 145,
       "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
         {
           "comment": "#1122-class belt, COMPLETE (Astra r2 of PR #1216): a RECOGNIZED frame keeps only its rule's deliberate decisions and loses the UNKNOWN-path `ID_MARKERS` backstop, so a recognize-only privacy rule carries EVERY `CustomerTextMarkers.ID_MARKERS` suffix with the family posture (names normalize to the customer key; address_line_1 / arriving_at_title hash; the bounded slots — city/ST/ZIP, subpremise, instruction bodies, the generic `tvTitle` / `tvLastMessage` — plain-mask). `CaptureRedactionCorpusTest` pins the belt ⊇ `ID_MARKERS`, so a table row added later fails here instead of leaking. Inert on the committed fixtures, which render none of these ids.",
           "find": {
@@ -1270,6 +1488,20 @@
       "priority": 163,
       "redact": [
         {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
           "comment": "#1122-class belt, COMPLETE (Astra r2 of PR #1216): a RECOGNIZED frame keeps only its rule's deliberate decisions and loses the UNKNOWN-path `ID_MARKERS` backstop, so a recognize-only privacy rule carries EVERY `CustomerTextMarkers.ID_MARKERS` suffix with the family posture (names normalize to the customer key; address_line_1 / arriving_at_title hash; the bounded slots — city/ST/ZIP, subpremise, instruction bodies, the generic `tvTitle` / `tvLastMessage` — plain-mask). `CaptureRedactionCorpusTest` pins the belt ⊇ `ID_MARKERS`, so a table row added later fails here instead of leaking. Copied VERBATIM from `pickup_order_picker` by #1079 (same bytes, same mask hex); unlike the picker, this sheet DOES render `user_name` (the customer, under `customer_contact_view`, and the merchant slot under `mx_contact_view` — both normalize, fail-toward-privacy) and the `address_line_1/_2` / `address_subpremise_line` trio.",
           "find": {
             "hasIdSuffix": "customer_name"
@@ -1417,6 +1649,20 @@
       "priority": 107,
       "redact": [
         {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
           "find": {
             "hasTextStartsWith": "For "
           },
@@ -1450,6 +1696,20 @@
       "id": "doordash.screen.pickup_unassign_survey",
       "priority": 108,
       "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
         {
           "find": {
             "hasTextStartsWith": "For "
@@ -1487,6 +1747,20 @@
       "id": "doordash.screen.pickup_steps",
       "priority": 104,
       "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
         {
           "find": {
             "hasIdSuffix": "customer_name"
@@ -1557,6 +1831,22 @@
       "comment": "#501 GoPuff (Drive) barcode-scan failure sub-screen of the bin-scan workflow ('Enter last 4 characters of barcode'). A bare Compose tree (no doordash widget ids), so keyed on stable text only. Recognize-only (no state) — it's a mid-pickup sub-screen and must not change phase; keeps the bin-scan stretch out of UNKNOWN.",
       "id": "doordash.screen.pickup_barcode_scan_issue",
       "priority": 105,
+      "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        }
+      ],
       "require": {
         "all": [
           {
@@ -1576,6 +1866,22 @@
       "comment": "#501 item 3 — GoPuff (Drive) zone-arrival screen (the CTA card between pickup-nav and the bin-scan steps; its button label reads 'Navigate to zone' before entry and 'Arrived at store' once in range). Dev decision 2026-07-07: RECOGNIZE-ONLY, no parse, no state.flow — nav is already established before this frame appears, and 'Arrived at store' here is an affordance, not the arrival anchor (pickup_steps' bin-scan branch owns the one PICKUP_ARRIVED). This rule's only job is pulling the recurring zone-arrival UNKNOWN captures into a named intent. CAUTION — the anchors are NOT GoPuff-unique: `go_to_store_action_view` (+ a descendant 'Arrived at store' label) is on EVERY regular pickup_pre_arrival tree in the corpus, so a full regular pre-arrival frame is kept out of this rule only by priority order (71 evaluates first). The rejects are therefore load-bearing: a degraded/partial regular pickup frame that fails 71's 'Pickup from' conjunct must NOT fall through to this redact-less rule (its customer card — user_name_label/customer_name_label with a raw-name sibling — is exactly the split-node shape the CustomerTextMarkers backstop documents as rule-redact-only), and a mid-pickup expanded map must stay with on_dash_map (110, modeHint online) rather than be stolen by 106. The two require clauses are deliberately independent tree-wide exists — on the real tree the id node is a text-less ViewGroup and the label lives two levels down (primary_action_button > textView_prism_button_title), so a same-node compound would never match a device frame. The idle dash_along_the_way card shares 'Navigate to zone' text but never this id (corpus-verified).",
       "id": "doordash.screen.pickup_zone_arrival",
       "priority": 106,
+      "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        }
+      ],
       "reject": [
         {
           "exists": {
@@ -1618,6 +1924,22 @@
     {
       "id": "doordash.screen.pickup_qr_confirm",
       "priority": 53,
+      "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        }
+      ],
       "require": {
         "all": [
           {
@@ -1638,6 +1960,20 @@
       "priority": 75,
       "comment": "#920 — the item-details card renders the customer's own free-text note TWICE: a fused `contentDescription` on the container ('Customer Notes: <note>') and the value in the `body_text_view` child, with a `label_text_view` sibling reading exactly 'Customer Notes'. It is customer-AUTHORED free text (the fielded 07-29 note was benign — 'Yellow bunch:' — but the field is the #803 class: it can carry a gate code, an apartment, a name), and this rule declared no `redact` at all, so it shipped verbatim on a RECOGNIZED surface. Both entries take `plainMask` (#795) rather than the `<4hex>` distinctness suffix: a note has an UNBOUNDED alphabet but no lower bound on LENGTH, so a short note that IS the secret ('4821', 'Gate 12') sits above #889's 4-char floor while its plaintext space stays far below the suffix's 65 536 buckets — exactly the small-space case plainMask exists for. Distinctness buys nothing here either: unlike a customer name, a note is not a join key and feeds no lineage. `label_text_view` ('Customer Notes') is app chrome and stays raw so the masked card still reads as a note on replay; the item name, price, PLU, aisle and store-instruction nodes are merchant/driver-owned and are untouched. Scope check: 'Customer Notes' appears on no other doordash surface across the committed corpus or the 07-30/08-09 pulls — the sibling shopping rules (`shopping_checkout`/`shopping_item_status`/`shopping_wrong_item`, verify-items) never field it — so this is the one owner today; a later sibling that starts rendering it needs its own entry. #1309: carries the arrived-family NAME-id entries (a no-op where the card is absent). #1309: the Customer-Notes plain entry ahead of it could claim a `customer_name` node that also carried that description; accepted — it still masks, no such render exists.",
       "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
         {
           "comment": "The container's fused contentDescription ('Customer Notes: <note>'). Matched by desc (the node has no id and no text), keepPrefix keeps the label half.",
           "find": {
@@ -1697,6 +2033,20 @@
       "priority": 78,
       "redact": [
         {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
           "find": {
             "hasIdSuffix": "customer_name"
           },
@@ -1735,6 +2085,22 @@
     {
       "id": "doordash.screen.shopping_intro_message",
       "priority": 79,
+      "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        }
+      ],
       "require": {
         "all": [
           {
@@ -1753,6 +2119,22 @@
     {
       "id": "doordash.screen.shopping_item_status",
       "priority": 83,
+      "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        }
+      ],
       "require": {
         "all": [
           {
@@ -1771,6 +2153,22 @@
     {
       "id": "doordash.screen.shopping_wrong_item",
       "priority": 66,
+      "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        }
+      ],
       "require": {
         "all": [
           {
@@ -1790,6 +2188,22 @@
       "comment": "#796 — the pickup RECEIPT-PHOTO instruction screen ('Receipt photo' title over 'We'll share this photo with the customer to confirm you picked up the correct order.', with either the two example cards + Continue/No receipt, or the Retake/Confirm pickup post-capture variant). RECOGNIZE-ONLY (dev decision 2026-07-17, batch #796): no state.flow, no parse — the task:pickup flow is already established; this is a confirmation affordance, not a lifecycle anchor. Anchors 'Receipt photo' + 'share this photo with the customer' are corpus-unique (0 other snapshots), so priority is behaviorally inert. PRIVACY: the frames carry no customer PII (the copy names 'the customer' / 'merchant name' generically; no receipt image text is in the tree). NOTE — this is the RECEIPT-photo instruction/confirmation surface, distinct from the dasher's document-image capture surfaces (license scan / signature pad) that are blocked as sensitive; a receipt photo is a merchant artifact, not an identity document.",
       "id": "doordash.screen.pickup_receipt_photo",
       "priority": 119,
+      "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        }
+      ],
       "require": {
         "all": [
           {
@@ -1809,6 +2223,22 @@
       "comment": "#796 (#550-class) — the barcode-scan FAILURE screen of the shopping sub-flow. Two shapes share one body: the full-screen 'Item barcode not recognized' + 'Scan again' variant AND the 'Scan Failed' prism bottom-sheet (prism_sheet_title/prism_sheet_message + 'Enter PLU instead'/'Scan Again'); both carry the body 'You can't buy items with barcodes that are not recognized in our database…'. RECOGNIZE-ONLY (dev decision 2026-07-17, batch #796): no state.flow, no parse. Anchored on the body substring 'not recognized in our database' (corpus-unique, 0 other snapshots) so ONE rule covers both title shapes; per the #796 no-merchant-anchor constraint the anchor is generic DoorDash copy, not a store literal. PRIVACY: no customer PII (scan-error copy only).",
       "id": "doordash.screen.pickup_barcode_scan_failed",
       "priority": 123,
+      "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        }
+      ],
       "require": {
         "exists": {
           "hasTextContaining": "not recognized in our database"
@@ -1819,6 +2249,22 @@
       "comment": "#796 (#550-class) — the 'Confirm barcode scanned' confirmation of the shopping sub-flow (a '<merchant> requires scanning of the barcode' sub-line over Confirm / Scan again). RECOGNIZE-ONLY (dev decision 2026-07-17, batch #796): no state.flow, no parse. Anchored on the GENERIC 'Confirm barcode scanned' title (corpus-unique, 0 other snapshots) — the only merchant-literal on this screen is the '<merchant> requires scanning…' sub-line, which is DELIBERATELY NOT used as an anchor per the #796 no-store-anchor constraint (store names are kept in the capture but never matched on). Distinct from doordash.screen.pickup_qr_confirm ('Confirm that the code was scanned' / 'Scan code again'). PRIVACY: no customer PII (store name kept, driver-owned).",
       "id": "doordash.screen.pickup_barcode_confirm",
       "priority": 124,
+      "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        }
+      ],
       "require": {
         "exists": {
           "hasTextContaining": "Confirm barcode scanned"
@@ -1829,6 +2275,22 @@
       "comment": "#888 — the mid-shop PAY-ADJUSTMENT sheet: while shopping, the customer adds items and DoorDash raises the offer pay, announcing it as a prism sheet ('<N> items have been added' / 'We have adjusted your pay for this order. You can see your pay when the order is delivered.' / Got it). RECOGNIZE-ONLY (dev decision 2026-07-27, recognition-gap batch #888): no state.flow, no parse — same posture as every other transient shopping sheet here. It IS economics-bearing (a mid-job pay change the read-model cannot see today, since the offer's frozen pay was set at accept), but the sheet states no NUMBER — only that pay changed — so there is nothing to parse; capturing the realized delta is a separate follow-up on the delivery receipt, noted on #888. Anchors are generic DoorDash chrome: the item count is variable, so 'items have been added' is matched as a SUBSTRING on the prism_sheet_title node, paired with the 'adjusted your pay' body. Corpus-unique (0 other snapshots or pull frames carry either). PRIVACY: no customer PII — the sheet names no customer, address, or store.",
       "id": "doordash.screen.shopping_pay_adjustment",
       "priority": 128,
+      "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        }
+      ],
       "require": {
         "all": [
           {
@@ -1855,6 +2317,22 @@
       "comment": "#888 — the PIZZA-BAG verification sub-flow at pickup (a DoorDash pizza-order requirement): three consecutive screens, one intent. RECOGNIZE-ONLY (dev decision 2026-07-27, batch #888): no state.flow, no parse — the task:pickup flow is already established and these are instruction/progress/result screens, not lifecycle anchors. Anchors are generic DoorDash chrome + the literal 'pizza bag' product vocabulary (NOT a merchant name — no store literal appears in any anchor here, per the standing no-store-anchor constraint). PRIVACY: no customer PII on any of the three frames (equipment-photo instructions and a generic thank-you). NOTE — this is an EQUIPMENT photo (the dasher's own insulated bag), not a document-image capture surface: it is neither an identity document nor a signature, so the sensitive block does not apply.",
       "id": "doordash.screen.pickup_pizza_bag",
       "priority": 129,
+      "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        }
+      ],
       "branches": [
         {
           "comment": "Shape A — the education/instruction screen ('Take a photo of your pizza bag' + good/bad examples + Take photo / I don't have one).",
@@ -1911,6 +2389,22 @@
       "comment": "#888 — the SHELF-PHOTO substitution sheet of the shopping sub-flow ('Take a photo of the shelf to provide more substitution options to the customer' over Take shelf photo / No options available), shown when a shopped item is out of stock. RECOGNIZE-ONLY (dev decision 2026-07-27, batch #888): no state.flow, no parse. Anchors are generic DoorDash copy on the prism_sheet_title node plus the 'substitution options' body phrase; corpus-unique (0 other snapshots or pull frames). PRIVACY: no customer PII — the copy says 'the customer', names nobody, and the shelf photo itself is a store artifact, not a document image.",
       "id": "doordash.screen.shopping_shelf_photo",
       "priority": 131,
+      "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        }
+      ],
       "require": {
         "all": [
           {
@@ -1937,6 +2431,22 @@
       "comment": "#888 — the 'Confirm order was picked up' bottom-sheet dialog (Confirm / Go back), the last gate before a pickup is committed. RECOGNIZE-ONLY (dev decision 2026-07-27, batch #888) — DELIBERATELY not mirroring the `task:pickup:arrived` flow its neighbours pickup_picked_up (98) / pickup_verify (101) declare: this is a transient CONFIRMATION modal over an already-established pickup flow, and the repo's standing posture for exactly that shape is recognize-only (dropoff_multi_order_confirm, dropoff_completed_confirm's sibling overlays, pickup_wait_survey, the whole #796 batch). Claiming a phase from a modal is how a mis-anchored dialog perturbs task lineage; recognizing it costs nothing and graduates the frame. Anchored on the confirm_title_text id + its exact copy, paired with the dialog's go_back_button id; corpus-unique (0 other snapshots). Distinct from dropoff_completed_confirm's 'Confirm order was completed'. PRIVACY: no customer PII (title + two button labels).",
       "id": "doordash.screen.pickup_confirm_picked_up",
       "priority": 132,
+      "redact": [
+        {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        }
+      ],
       "require": {
         "all": [
           {

@@ -689,6 +689,20 @@
       "priority": 120,
       "redact": [
         {
+          "comment": "#1397: the merchant's free-text pickup instruction body, masked whole and plain; reasoning on `doordash.screen.pickup_arrival`.",
+          "find": {
+            "any": [
+              {
+                "hasIdSuffix": "instructions_line_2_expanded"
+              },
+              {
+                "hasIdSuffix": "instructions_line_2_collapsed"
+              }
+            ]
+          },
+          "plainMask": true
+        },
+        {
           "find": {
             "hasIdSuffix": "user_name"
           }

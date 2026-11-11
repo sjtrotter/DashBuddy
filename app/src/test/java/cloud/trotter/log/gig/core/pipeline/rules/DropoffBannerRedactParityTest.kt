@@ -2,7 +2,7 @@ package cloud.trotter.log.gig.core.pipeline.rules
 
 import cloud.trotter.log.gig.core.pipeline.CustomerTextMarkers
 import cloud.trotter.log.gig.domain.model.accessibility.UiNode
-import cloud.trotter.log.gig.test.util.DropoffRuleSource
+import cloud.trotter.log.gig.test.util.DoorDashRuleSource
 import cloud.trotter.log.gig.test.util.TestRulesetFactory
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -40,7 +40,7 @@ class DropoffBannerRedactParityTest {
     private val bannerId = "arriving_at_title"
 
     /** Every `doordash.screen.*` id declared in the dropoff surface source file. */
-    private fun dropoffSectionRuleIds(): List<String> = DropoffRuleSource.screenRuleIds()
+    private fun dropoffSectionRuleIds(): List<String> = DoorDashRuleSource.screenRuleIds("dropoff")
 
     /** The `hasIdSuffix` values inside [ruleId]'s compiled `redact` block (generated asset). */
     private fun redactIdSuffixes(ruleId: String): List<String> {

@@ -78,6 +78,9 @@ class PiiShapesParityTest {
             "description_text_view",
             "dasher_instruction_content_expanded",
             "gift_recipient_name", // #1314
+            // #1397 — the merchant's free-text pickup instruction body, both states.
+            "instructions_line_2_expanded",
+            "instructions_line_2_collapsed",
         )
 
         val ORIGINAL_NAME_PREFIXES: List<String> = listOf(
