@@ -28,7 +28,10 @@ import cloud.trotter.log.gig.domain.state.JobReceiptAnchors
 import cloud.trotter.log.gig.domain.state.Mode
 import cloud.trotter.log.gig.domain.state.ParsedFields
 import cloud.trotter.log.gig.domain.state.PendingDestructive
+import cloud.trotter.log.gig.domain.state.OpenReceiptEvidence
 import cloud.trotter.log.gig.domain.state.ReceiptCoverage
+import cloud.trotter.log.gig.domain.state.ReceiptProofGap
+import cloud.trotter.log.gig.domain.state.ReceiptScope
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.PlatformRegion
 import cloud.trotter.log.gig.domain.state.Regions
@@ -139,6 +142,12 @@ class ReceiptRepriceTest {
             offerStoreHint = emptyList(),
             parentOfferHash = null,
             startedAt = 200L,
+            // #1598: the proven single offer — one accepted offer whose card showed one drop, at this store.
+            acceptedOffers = listOf(
+                AcceptedOfferEconomics(
+                    offerHash = "o1", storeHints = listOf("Bill Millers"), cardDropoffCount = 1, acceptedAt = 100L,
+                ),
+            ),
             tasks = listOf(dropoff("t1", "Bill Millers", completedAt = null)),
         ),
         activeTask = dropoff("t1", "Bill Millers", completedAt = null).copy(arrivedAt = 3_500L),
@@ -216,12 +225,23 @@ class ReceiptRepriceTest {
     // Layer 2 — the post-commit expansion
     // =====================================================================================
 
+    /**
+     * #1598: the receipt episode a post-close frame continues. Proven while the job was live (the proven single
+     * offer of [liveDropoffRegion]), so a frame of the SAME episode is still proven after the close.
+     */
+    private fun provenEpisode(subject: String = "t1") = OpenReceiptEvidence(
+        evidenceId = "receipt:$subject:9000", subjectTaskId = subject, jobId = "J1", firstSeenAt = 9_000L,
+        revision = 1, lastTotalCents = 1_670L, lastScope = ReceiptScope.PROVEN_SINGLE, possibleWorkSeqAtOpen = 0L,
+    )
+
     /** The region as it stands AFTER the collapsed receipt's grace committed and closed the job. */
     private fun closedJobRegion(
         drops: List<Task> = listOf(dropoff("t1", "Bill Millers")),
         mark: ClosedJobReceipt? = ClosedJobReceipt(jobId = "J1", receiptSeenAt = 9_000L),
         announceId: String? = "t1",
         acceptResolvedAt: Long? = null,
+        // #1598: the receipt was read, and proven, while the single-drop job was live; the frame continues it.
+        episode: OpenReceiptEvidence? = provenEpisode(),
     ) = PlatformRegion(
         platform = Platform.DoorDash,
         mode = Mode.Online,
@@ -236,6 +256,7 @@ class ReceiptRepriceTest {
             JobReceiptAnchors(jobId = mark.jobId, firstEnteredAt = it)
         },
         lastAcceptResolvedAt = acceptResolvedAt,
+        openReceiptEvidence = episode,
     )
 
     /** One receipt FRAME over [prevRegion], as the re-price payloads it emitted. */
@@ -262,19 +283,16 @@ class ReceiptRepriceTest {
     }
 
     @Test
-    fun `a stacked receipt re-prices every delivered sibling and the shares sum to the total`() {
+    fun `#1598 a stacked receipt read after the close is unproven and re-prices no sibling`() {
+        // #1598: the unproven oracle. Before #1598 this re-priced every delivered sibling with shares summing to
+        // the total; a two-drop job can never prove which drop a receipt paid. Split mechanics stay pinned in
+        // EffectMapDropPayTest through an explicit legacy coverage.
         val region = closedJobRegion(
             drops = listOf(dropoff("t1", "Bill Millers"), dropoff("t2", "Maple Street")),
             mark = ClosedJobReceipt(jobId = "J1", receiptSeenAt = 9_000L),
+            episode = null,
         )
-        val events = repriceEvents(region, parsed = expanded(stackedReceipt))
-        assertEquals("one event per delivered drop", 2, events.size)
-        assertEquals(setOf("t1", "t2"), events.map { it.taskId }.toSet())
-        assertEquals(
-            "Σ shares == the receipt total, to the cent",
-            Math.round(stackedReceipt.total * 100.0),
-            events.sumOf { Math.round(it.dropRealizedPay * 100.0) },
-        )
+        assertTrue(repriceEvents(region, parsed = expanded(stackedReceipt)).isEmpty())
     }
 
     @Test
@@ -414,11 +432,12 @@ class ReceiptRepriceTest {
         assertNull("with no completedAt yet", afterExit.activeTask?.completedAt)
         assertEquals(DestructiveKind.TASK_RETIRE, afterExit.pendingDestructive?.kind)
 
-        // 14_000: the expansion lands. The denominator has to include the still-active task.
-        val events = repriceEvents(afterExit, at = 14_000L)
-        assertEquals(1, events.size)
-        assertEquals("t1", events.single().taskId)
-        assertEquals(16.70, events.single().dropRealizedPay, 0.0001)
+        // 14_000: the expansion lands. #1598: the unproven oracle — the Idle frame ended the receipt episode, so
+        // this is a NEW read after the close, which proves nothing (NO_LIVE_JOB) and re-prices nothing. The
+        // still-active-task denominator itself is exercised by R3, whose expansion stays inside the episode.
+        val fold = Fold(afterExit).step(postTaskObs(expanded(), 14_000L))
+        assertTrue(fold.reprices().isEmpty())
+        assertEquals(ReceiptProofGap.NO_LIVE_JOB, fold.region.lastPostTaskCoverage!!.gap)
     }
 
     /**
@@ -581,7 +600,10 @@ class ReceiptRepriceTest {
     private fun machineWithClosedJobA() =
         MachineFold(liveDropoffRegion(), Flow.TaskDropoffArrived)
             .step(postTaskObs(collapsed(), 10_000L)) // the receipt appears → receiptSeenAt
-            .step(idleObs(18_001L)) // past the 8 s window → A retires and closes
+            // #1598: the retire grace commits on its TIMER while the receipt stays up (the 2026-08-23 field
+            // shape), so the receipt episode survives the close; an Idle frame here would end it, and a later
+            // read would be a new, unproven post-close episode.
+            .step(graceCommit(18_001L)) // past the 8 s window → A retires and closes
             .also {
                 assertNull("A closed", it.region.activeJob)
                 assertEquals(
@@ -780,7 +802,9 @@ class ReceiptRepriceTest {
         // must not decide again — `lastDecidedPay` is the stepper's own-decision suppression.
         val fold = Fold(liveDropoffRegion())
             .step(postTaskObs(collapsed(), 10_000L))
-            .step(idleObs(18_001L)) // A retires and closes; the receipt on file is COLLAPSED → no decision
+            // #1598: the close rides the retire TIMER with the receipt still up, so the episode (and its proof)
+            // survives; an Idle frame would end it and make the later expansion a new, unproven read.
+            .step(graceCommit(18_001L)) // A retires and closes; the receipt on file is COLLAPSED → no decision
         assertEquals(0, fold.reprices().size)
         assertNull(fold.region.lastClosedJobReceipt!!.lastDecidedPay)
 
@@ -792,10 +816,11 @@ class ReceiptRepriceTest {
     }
 
     @Test
-    fun `round 8 — a two-drop job's late receipt apportions across BOTH rows`() {
-        // One task's completion cannot describe a multi-drop job — which is why the marker stopped
-        // trying. The whole-job receipt re-prices every delivered drop, $10/$10, under distinct
-        // durable keys.
+    fun `round 8 — #1598 a two-drop job's late receipt is unproven and re-prices neither row`() {
+        // #1598: the unproven oracle. Before #1598 the whole-job receipt re-priced every delivered drop $10/$10.
+        // A two-drop job can never prove which drop a receipt paid (OTHER_DROPS), and a post-close read proves
+        // nothing on its own, so the receipt is evidence only. The split mechanics stay pinned in
+        // EffectMapDropPayTest, through an explicit legacy coverage.
         val stacked = ParsedPay(
             appPayComponents = listOf(ParsedPayItem("Base Pay", 4.00)),
             customerTips = listOf(
@@ -805,21 +830,11 @@ class ReceiptRepriceTest {
         )
         val region = closedJobRegion(
             drops = listOf(dropoff("t1", "Bill Millers"), dropoff("t2", "Maple Street")),
+            episode = null,
         )
         val fold = Fold(region).step(postTaskObs(expanded(stacked), 21_000L))
-
-        val payloads = fold.reprices().map { it.payload as DeliveryReceiptRepricePayload }
-        assertEquals("one event per delivered drop", 2, payloads.size)
-        assertEquals(setOf("t1", "t2"), payloads.map { it.taskId }.toSet())
-        payloads.forEach { assertEquals(10.00, it.dropRealizedPay, 0.0001) }
-        assertEquals(
-            "Σ shares == the receipt total",
-            Math.round(stacked.total * 100.0),
-            payloads.sumOf { Math.round(it.dropRealizedPay * 100.0) },
-        )
-        // The fake durable table: one key per drop, so both rows are written.
-        val fired = mutableSetOf<String?>()
-        assertEquals(2, fold.effectKeys.count { fired.add(it) })
+        assertTrue(fold.reprices().isEmpty())
+        assertEquals(ReceiptScope.UNPROVEN, fold.region.lastPostTaskCoverage!!.scope)
     }
 
     // ---- round 10: the terminal session end, and structural decision equality --------------
@@ -1115,17 +1130,14 @@ class ReceiptRepriceTest {
     )
 
     @Test
-    fun `round 13 — a genuinely stacked receipt covers both drops and re-prices both`() {
-        // The doctrine's other direction: coverage must not narrow a real stacked receipt. Driven
-        // through a real frame, so `cacheReceipt` computes the set the way the field would.
-        val events = repriceEvents(twoDropClosedJob(), parsed = expanded(stackedReceipt), at = 21_000L)
-        assertEquals("both drops were delivered before the frame", 2, events.size)
-        assertEquals(setOf("t1", "t2"), events.map { it.taskId }.toSet())
-        assertEquals(
-            "Σ shares == the receipt total, to the cent",
-            Math.round(stackedReceipt.total * 100.0),
-            events.sumOf { Math.round(it.dropRealizedPay * 100.0) },
-        )
+    fun `round 13 — #1598 a genuinely stacked receipt read after the close covers nothing`() {
+        // #1598: the unproven oracle. Before #1598 a real stacked receipt covered both drops and re-priced both;
+        // under the strict rule a two-drop job never proves a receipt, and a post-close read proves nothing on
+        // its own. Driven through a real frame, so `cacheReceipt` computes the coverage the way the field would.
+        val fold = Fold(twoDropClosedJob()).step(postTaskObs(expanded(stackedReceipt), 21_000L))
+        assertTrue(fold.reprices().isEmpty())
+        assertEquals(ReceiptScope.UNPROVEN, fold.region.lastPostTaskCoverage!!.scope)
+        assertTrue(fold.region.lastPostTaskCoverage!!.taskIds.isEmpty())
     }
 
     @Test
@@ -1138,12 +1150,14 @@ class ReceiptRepriceTest {
             lastPostTaskCoverage = ReceiptCoverage(setOf("t1")),
         )
         val fold = Fold(region).step(postTaskObs(expanded(stackedReceipt), 21_000L))
+        // #1598: the unproven oracle — the refreshed coverage is the strict rule's, which proves nothing here.
         assertEquals(
             "the frame refreshed the cache",
-            setOf("t1", "t2"),
-            fold.region.lastPostTaskCoverage!!.taskIds,
+            ReceiptScope.UNPROVEN,
+            fold.region.lastPostTaskCoverage!!.scope,
         )
-        assertEquals(2, fold.reprices().size)
+        assertTrue("the stale {t1} is gone", fold.region.lastPostTaskCoverage!!.taskIds.isEmpty())
+        assertEquals(0, fold.reprices().size)
     }
 
     @Test
@@ -1345,8 +1359,10 @@ class ReceiptRepriceTest {
             exitMinted.values.mapNotNull { it.dropRealizedPay }.sumOf { Math.round(it * 100.0) },
         )
 
-        // …and once the retire commits and the COMBINED $30 receipt is finally read, both rows exist
-        // to receive it: $15/$15, Σ == the receipt.
+        // #1598: the unproven oracle for the tail. Before #1598 the COMBINED $30 receipt read after the close
+        // re-priced both rows $15/$15. Now the close decides only from T1's cached receipt under the coverage
+        // this fixture pins ({t1}, a pre-#1598 coverage honoured as written), and the combined post-close read
+        // proves nothing: no receipt money is placed by it.
         val combined = ParsedPay(
             appPayComponents = listOf(ParsedPayItem("Base Pay", 14.00)),
             customerTips = listOf(
@@ -1358,12 +1374,8 @@ class ReceiptRepriceTest {
         val shares = fold.reprices()
             .map { it.payload as DeliveryReceiptRepricePayload }
             .associate { it.taskId to it.dropRealizedPay }
-        assertEquals(setOf("t1", "t2"), shares.keys)
-        assertEquals(
-            "Σ re-priced == the combined receipt, over rows that both exist",
-            Math.round(combined.total * 100.0),
-            shares.values.sumOf { Math.round(it * 100.0) },
-        )
+        assertEquals(mapOf("t1" to twoTenReceipt.total), shares)
+        assertEquals(ReceiptScope.UNPROVEN, fold.region.lastPostTaskCoverage!!.scope)
     }
 
     @Test
@@ -1455,6 +1467,12 @@ class ReceiptRepriceTest {
         session = Session("S1", startedAt = 100L),
         activeJob = Job(
             "J2", offerStoreHint = emptyList(), parentOfferHash = null, startedAt = 12_000L,
+            // #1598: the proven single offer, so B's own receipt pays B.
+            acceptedOffers = listOf(
+                AcceptedOfferEconomics(
+                    offerHash = "oB", storeHints = listOf("Rio Grande"), cardDropoffCount = 1, acceptedAt = 11_000L,
+                ),
+            ),
             tasks = listOf(dropoff("b1", "Rio Grande", completedAt = null).copy(jobId = "J2")),
         ),
         activeTask = dropoff("b1", "Rio Grande", completedAt = null)
@@ -1514,11 +1532,8 @@ class ReceiptRepriceTest {
 
         val fold = Fold(region).step(postTaskObs(expanded(stackedReceipt), 15_000L))
         assertEquals("the ACTIVE drop is the subject, arrival or not", "t2", fold.region.lastAnnouncedPostTaskTaskId)
-        assertEquals(
-            "…and its receipt covers the whole job",
-            setOf("t1", "t2"),
-            fold.region.lastPostTaskCoverage!!.taskIds,
-        )
+        // #1598: the unproven oracle — a two-drop job's receipt proves no drop (before #1598 it covered both).
+        assertEquals(ReceiptScope.UNPROVEN, fold.region.lastPostTaskCoverage!!.scope)
 
         fold.step(idleObs(16_000L))
         assertNotNull("T2's completion exists — a re-price has a row to land on", fold.completions()["t2"])

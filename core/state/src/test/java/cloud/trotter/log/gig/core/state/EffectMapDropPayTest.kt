@@ -6,6 +6,7 @@ import cloud.trotter.log.gig.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.log.gig.domain.model.pay.ParsedPay
 import cloud.trotter.log.gig.domain.model.pay.ParsedPayItem
 import cloud.trotter.log.gig.domain.pipeline.Observation
+import cloud.trotter.log.gig.domain.state.AcceptedOfferEconomics
 import cloud.trotter.log.gig.domain.state.AppState
 import cloud.trotter.log.gig.domain.state.CrossPlatformRegion
 import cloud.trotter.log.gig.domain.state.Flow
@@ -15,6 +16,9 @@ import cloud.trotter.log.gig.domain.state.Mode
 import cloud.trotter.log.gig.domain.state.ParsedFields
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.PlatformRegion
+import cloud.trotter.log.gig.domain.state.ReceiptCoverage
+import cloud.trotter.log.gig.domain.state.ReceiptScope
+import cloud.trotter.log.gig.domain.state.isAccountableDropoff
 import cloud.trotter.log.gig.domain.state.Regions
 import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
@@ -77,13 +81,22 @@ class EffectMapDropPayTest {
     private fun cents(v: Double): Long = Math.round(v * 100.0)
 
     /**
-     * #1073 round 13: these fixtures build a region directly, so they have never seen a receipt
-     * FRAME and carry no [PlatformRegion.lastPostTaskCoverage] — and a coverage-less receipt prices
-     * nobody (fail-null). Stamp the set the frame WOULD have computed, through the production owner
-     * [receiptCoverageAt] rather than a second copy of the rule.
+     * #1598: pins split MECHANICS. These fixtures build a region directly and test how the mint splits a
+     * receipt that covers several drops, so they stamp the pre-#1598 wide rule (the subject plus every
+     * accountable completed drop of its job) as a `scope = null` coverage — the legacy meaning the mint still
+     * honours. A test-local copy of the deleted production body, on purpose: production's strict
+     * [receiptCoverageAt] proves none of these stacks (see the UNPROVEN case below).
      */
-    private fun PlatformRegion.withReceiptCoverage(): PlatformRegion =
-        copy(lastPostTaskCoverage = receiptCoverageAt(this, lastAnnouncedPostTaskTaskId))
+    private fun PlatformRegion.withReceiptCoverage(): PlatformRegion {
+        val subject = lastAnnouncedPostTaskTaskId
+        val tasks = recentTasks + listOfNotNull(activeTask)
+        val jobId = activeJob?.jobId ?: tasks.firstOrNull { it.taskId == subject }?.jobId
+        val covered = tasks
+            .filter { it.jobId == jobId && it.isAccountableDropoff && (it.taskId == subject || it.completedAt != null) }
+            .map { it.taskId }
+            .toSet()
+        return copy(lastPostTaskCoverage = ReceiptCoverage(taskIds = covered))
+    }
 
     @Test
     fun `stacked close-out — per-drop shares sum to the receipt total`() {
@@ -501,5 +514,95 @@ class EffectMapDropPayTest {
         assertEquals(1, rows.size)
         assertNotNull(rows.single().parsedPay)
         assertEquals(7.5, rows.single().dropRealizedPay!!, 0.001)
+    }
+
+    // ---- #1598: production coverage is strict ------------------------------------------------------------------
+
+    private fun stackedRegion(postFields: ParsedFields.PostTaskFields): PlatformRegion {
+        val dropA = dropoff("dA", "Target", "cA", completedAt = 350L)
+        val dropB = dropoff("dB", "Maple", "cB", completedAt = null)
+        val dropC = dropoff("dC", "Chili's", "cC", completedAt = null)
+        return PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("s1", startedAt = 100L, runningEarnings = 30.0),
+            activeJob = jobWithTasks(listOf(dropA, dropB, dropC)),
+            activeTask = dropB,
+            recentTasks = listOf(dropA),
+            lastPostTaskFields = postFields,
+            lastAnnouncedPostTaskTaskId = "dB",
+        )
+    }
+
+    @Test
+    fun `#1598 production coverage proves no stacked fixture`() {
+        val region = stackedRegion(ParsedFields.PostTaskFields(totalPay = 10.0))
+        val coverage = receiptCoverageAt(region, "dB")
+        assertEquals(ReceiptScope.UNPROVEN, coverage.scope)
+        assertTrue(coverage.taskIds.isEmpty())
+    }
+
+    @Test
+    fun `#1598 an unproven mid-stack exit carries no receipt money, the UNPROVEN marker, and no #630 WARN`() {
+        val receiptAB = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 6.0)),
+            customerTips = listOf(ParsedPayItem("Target", 4.0)),
+        )
+        val logged = mutableListOf<Pair<Int, String>>()
+        val tree = object : timber.log.Timber.Tree() {
+            override fun log(priority: Int, tag: String?, message: String, t: Throwable?) { logged += priority to message }
+        }
+        timber.log.Timber.plant(tree)
+        try {
+            val base = stackedRegion(ParsedFields.PostTaskFields(totalPay = 10.0, parsedPay = receiptAB))
+            val regionPrev = base.copy(lastPostTaskCoverage = receiptCoverageAt(base, "dB"))
+            val prev = appState(FlowRegion(flow = Flow.PostTask), mapOf(Platform.DoorDash to regionPrev))
+            val next = appState(FlowRegion(flow = Flow.TaskDropoffNavigation), mapOf(Platform.DoorDash to regionPrev.copy()))
+            val b = completedRows(prev, next, screenObs(Flow.TaskDropoffNavigation, timestamp = 3000L)).single()
+            assertEquals("dB", b.taskId)
+            assertNull(b.dropRealizedPay)
+            assertNull(b.totalPay)
+            assertNull(b.parsedPay)
+            assertEquals(ReceiptScope.UNPROVEN, b.receiptScope)
+            assertNull(b.receiptEvidenceId)
+            assertTrue("no #630 WARN on an unproven exit", logged.none { it.second.contains("#630 mid-stack") })
+            assertTrue("no #1073 WARN either", logged.none { it.first == 5 /* Log.WARN */ && it.second.contains("#1073") })
+            assertTrue(logged.any { it.first == 3 /* Log.DEBUG */ && it.second.contains("#1598 receipt") })
+        } finally {
+            timber.log.Timber.uproot(tree)
+        }
+    }
+
+    @Test
+    fun `#1598 a proven single drop's completion carries PROVEN_SINGLE and its evidence id`() {
+        val receipt = ParsedPay(
+            appPayComponents = listOf(ParsedPayItem("Base Pay", 4.5)),
+            customerTips = listOf(ParsedPayItem("Wendy's", 3.0)),
+        )
+        val drop = dropoff("T6", "Wendy's", "cW")
+        val base = PlatformRegion(
+            platform = Platform.DoorDash,
+            mode = Mode.Online,
+            session = Session("s1", startedAt = 100L, runningEarnings = 47.5),
+            activeJob = Job(
+                "J", offerStoreHint = listOf("Wendy's"), parentOfferHash = "o1", startedAt = 50L,
+                acceptedOffers = listOf(
+                    AcceptedOfferEconomics(offerHash = "o1", storeHints = listOf("Wendy's"), cardDropoffCount = 1, acceptedAt = 50L),
+                ),
+                tasks = listOf(drop),
+            ),
+            recentTasks = listOf(drop),
+            lastPostTaskFields = ParsedFields.PostTaskFields(totalPay = 7.5, parsedPay = receipt),
+            lastAnnouncedPostTaskTaskId = "T6",
+        )
+        val coverage = receiptCoverageAt(base, "T6")
+        assertEquals(ReceiptScope.PROVEN_SINGLE, coverage.scope)
+        val regionPrev = base.copy(lastPostTaskCoverage = coverage.copy(evidenceId = "receipt:T6:1"))
+        val prev = appState(FlowRegion(flow = Flow.PostTask), mapOf(Platform.DoorDash to regionPrev))
+        val next = appState(FlowRegion(flow = Flow.Idle), mapOf(Platform.DoorDash to regionPrev.copy()))
+        val row = completedRows(prev, next, screenObs(Flow.Idle, timestamp = 3000L)).single()
+        assertEquals(7.5, row.dropRealizedPay!!, 0.001)
+        assertEquals(ReceiptScope.PROVEN_SINGLE, row.receiptScope)
+        assertEquals("receipt:T6:1", row.receiptEvidenceId)
     }
 }

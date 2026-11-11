@@ -145,9 +145,8 @@ internal object SessionPaySettleGate {
         val next = (obs as? Observation.FlowObservation)?.flow ?: return region
         val session = region.session ?: return region
         if (session.receiptEpisodeKey == null) return region
-        val continues = next == Flow.PostTask ||
-            (next == Flow.OfferPresented && (prevFlow == Flow.PostTask || prevFlow == Flow.OfferPresented))
-        return if (continues) region else region.copy(session = session.copy(receiptEpisodeKey = null))
+        // #1598: the continuity test has one owner, shared with the receipt evidence episode.
+        return if (receiptEpisodeContinues(prevFlow, next)) region else region.copy(session = session.copy(receiptEpisodeKey = null))
     }
 
     /** The receipt's job (open, or closed on it), its subject drop, and its total in cents. */
@@ -476,38 +475,6 @@ internal object SessionPaySettleGate {
             else -> null
         }
 
-    /**
-     * Does this region own the job a post-delivery receipt on screen would be describing (#1103)?
-     *
-     * Fielded 2026-09-10 (session 483): a dash ended on the `delivery_summary_collapsed` receipt of
-     * its last delivery, the dasher started a NEW dash 8 s later, and the PREVIOUS dash's receipt
-     * was still the frame on screen 14 ms after `DASH_START`. Its "This dash so far" wheel — $40.14
-     * — parked under the settle gate (a park is owned by (flow, platform), which that frame
-     * satisfies: PostTask on DoorDash), stood its 3 s unchallenged, and committed into the NEW
-     * session's [Session.runningEarnings]; the `early_offline` stop then reported $40.14 of earnings
-     * for a 2-minute dash with zero deliveries. Nothing in the job/task lifecycle ever moved — the
-     * frame was pure carry-over.
-     *
-     * So the rule: **a receipt's running-total read is evidence only while this session owns the job
-     * the receipt describes.** Two owning shapes, and no third:
-     *  - [PlatformRegion.activeJob] non-null — the job is still open (its `TASK_RETIRE` grace is
-     *    running), which is the ordinary receipt frame; or
-     *  - [PlatformRegion.lastClosedJobReceipt] non-null — the job closed ON this receipt and the
-     *    receipt is still on screen (`completeActiveJob` stamps that marker), which is the
-     *    late-expansion / re-render window (#1033).
-     *
-     * Both are cleared by `endSession`, which is what makes the test a SESSION-ownership test rather
-     * than a "was there ever a receipt" test: a fresh dash starts with neither, so the previous
-     * dash's frame carries nothing this region can attribute to itself. The on-dash earnings pill
-     * ([ParsedFields.IdleFields.sessionPay]) is deliberately NOT gated — it renders the live dash's
-     * own total by construction and has no job to own.
-     *
-     * Fail-null (#745): a refused read is DROPPED, never parked and never committed. The cost is a
-     * receipt frame whose job the region somehow lost, which leaves the committed figure standing
-     * until the pill states it again — against inventing a previous dash's earnings into this one.
-     */
-    private fun PlatformRegion.ownsReceiptJob(): Boolean =
-        activeJob != null || lastClosedJobReceipt != null
 
     /**
      * Drop a parked running-total read that is OLDER than a direct write of
@@ -536,3 +503,38 @@ internal object SessionPaySettleGate {
     }
 
 }
+
+/**
+ * Does this region own the job a post-delivery receipt on screen would be describing (#1103)?
+ *
+ * Fielded 2026-09-10 (session 483): a dash ended on the `delivery_summary_collapsed` receipt of
+ * its last delivery, the dasher started a NEW dash 8 s later, and the PREVIOUS dash's receipt
+ * was still the frame on screen 14 ms after `DASH_START`. Its "This dash so far" wheel — $40.14
+ * — parked under the settle gate (a park is owned by (flow, platform), which that frame
+ * satisfies: PostTask on DoorDash), stood its 3 s unchallenged, and committed into the NEW
+ * session's [Session.runningEarnings]; the `early_offline` stop then reported $40.14 of earnings
+ * for a 2-minute dash with zero deliveries. Nothing in the job/task lifecycle ever moved — the
+ * frame was pure carry-over.
+ *
+ * So the rule: **a receipt's running-total read is evidence only while this session owns the job
+ * the receipt describes.** Two owning shapes, and no third:
+ *  - [PlatformRegion.activeJob] non-null — the job is still open (its `TASK_RETIRE` grace is
+ *    running), which is the ordinary receipt frame; or
+ *  - [PlatformRegion.lastClosedJobReceipt] non-null — the job closed ON this receipt and the
+ *    receipt is still on screen (`completeActiveJob` stamps that marker), which is the
+ *    late-expansion / re-render window (#1033).
+ *
+ * Both are cleared by `endSession`, which is what makes the test a SESSION-ownership test rather
+ * than a "was there ever a receipt" test: a fresh dash starts with neither, so the previous
+ * dash's frame carries nothing this region can attribute to itself. The on-dash earnings pill
+ * ([ParsedFields.IdleFields.sessionPay]) is deliberately NOT gated — it renders the live dash's
+ * own total by construction and has no job to own.
+ *
+ * Fail-null (#745): a refused read is DROPPED, never parked and never committed. The cost is a
+ * receipt frame whose job the region somehow lost, which leaves the committed figure standing
+ * until the pill states it again — against inventing a previous dash's earnings into this one.
+ *
+ * `internal` and top-level since #1598: the receipt evidence record asks the same ownership question.
+ */
+internal fun PlatformRegion.ownsReceiptJob(): Boolean =
+    activeJob != null || lastClosedJobReceipt != null

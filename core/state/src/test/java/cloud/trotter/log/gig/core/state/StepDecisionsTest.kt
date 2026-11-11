@@ -27,7 +27,9 @@ import cloud.trotter.log.gig.domain.state.PendingDestructive
 import cloud.trotter.log.gig.domain.state.PendingOffer
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.PlatformRegion
+import cloud.trotter.log.gig.domain.state.OpenReceiptEvidence
 import cloud.trotter.log.gig.domain.state.ReceiptCoverage
+import cloud.trotter.log.gig.domain.state.ReceiptScope
 import cloud.trotter.log.gig.domain.state.Regions
 import cloud.trotter.log.gig.domain.state.Session
 import cloud.trotter.log.gig.domain.state.Task
@@ -65,6 +67,12 @@ class StepDecisionsTest {
         activeJob = Job("J1", offerStoreHint = listOf("Store"), parentOfferHash = null,
             startedAt = 100L, tasks = listOf(drop)),
         activeTask = drop, lastActedFlow = Flow.Idle, pendingDestructive = retire, wakeSeq = 1L,
+    )
+
+    /** #1598: the receipt episode, read and proven while the job was live, that a post-close frame continues. */
+    private val provenEpisode = OpenReceiptEvidence(
+        evidenceId = "receipt:d1:1000", subjectTaskId = "d1", jobId = "J1", firstSeenAt = 1_000L, revision = 1,
+        lastTotalCents = 1_200L, lastParsedPay = receipt, lastScope = ReceiptScope.PROVEN_SINGLE, possibleWorkSeqAtOpen = 0L,
     )
 
     private fun state(region: PlatformRegion) = AppState(regions = Regions(
@@ -113,6 +121,8 @@ class StepDecisionsTest {
             lastAnnouncedPostTaskTaskId = drop.taskId,
             lastClosedJobReceipt = ClosedJobReceipt(jobId = drop.jobId, receiptSeenAt = 1_000L),
             jobReceiptAnchors = JobReceiptAnchors(jobId = drop.jobId, firstEnteredAt = 1_000L),
+            // #1598: the frame continues a receipt episode proven while the job was live.
+            openReceiptEvidence = provenEpisode.copy(lastParsedPay = null),
         )
         val before = state(closed)
         val obs = screen(Flow.PostTask, 2_000L,
@@ -154,6 +164,8 @@ class StepDecisionsTest {
             lastActedFlow = Flow.PostTask, lastAnnouncedPostTaskTaskId = drop.taskId,
             jobReceiptAnchors = JobReceiptAnchors(jobId = drop.jobId, firstEnteredAt = 1_000L),
             lastPostTaskFields = cached, lastPostTaskCoverage = ReceiptCoverage(setOf(drop.taskId)),
+            // #1598: the cached receipt was read, and proven, in this episode; the expansion continues it.
+            openReceiptEvidence = provenEpisode,
         )
         val fresher = ParsedPay(appPayComponents = listOf(ParsedPayItem("Base Pay", 15.0)), customerTips = emptyList())
         val result = machine.step(state(before), screen(Flow.PostTask, retire.deadline + 1,

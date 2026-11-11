@@ -131,9 +131,9 @@ class PlatformRegionStepper @Inject constructor() {
             ),
             obs,
         )
-        val region = SessionPaySettleGate.receiptEpisode(
-            stepped, actedFlowEdge(prev, prevFlow, obs).first, obs,
-        )
+        val actedPrev = actedFlowEdge(prev, prevFlow, obs).first
+        // #1598: the receipt evidence episode ends on the same frames as the #1460 key.
+        val region = receiptEvidenceEpisode(SessionPaySettleGate.receiptEpisode(stepped, actedPrev, obs), actedPrev, obs)
         return PlatformStep(region, sink.build())
     }
 
@@ -909,7 +909,11 @@ class PlatformRegionStepper @Inject constructor() {
                 } else if (!sameTaskCollapsedDowngrade) {
                     // #1033 round 13: ONE owner writes the receipt, the drops it describes, and the
                     // task it was announced for — see [cacheReceipt] / [ReceiptCoverage].
-                    r = cacheReceipt(r, parsed, postTaskTaskId)
+                    // #1598: the read's proof is computed once; the evidence record and the cache share it.
+                    val coverage = receiptCoverageAt(r, postTaskTaskId)
+                    r = observeReceiptEvidence(sink, r, parsed, postTaskTaskId, coverage, obs)
+                    r = cacheReceipt(r, parsed, postTaskTaskId,
+                        coverage.copy(evidenceId = r.openReceiptEvidence?.takeIf { it.subjectTaskId == postTaskTaskId }?.evidenceId))
                 }
                 // #1033 round 4: decide the late-receipt re-price HERE, where state can be written —
                 // the itemization has just landed in `lastPostTaskFields`, and the marker has to be
@@ -925,6 +929,7 @@ class PlatformRegionStepper @Inject constructor() {
                         coverage = r.lastPostTaskCoverage,
                         decidedAt = obs.timestamp,
                         captureId = obs.captureId,
+                        lateFrame = true,
                     )
                 }
                 r = SessionPaySettleGate.receiptRead(r, obs, parsed, flow, policy)
@@ -1237,6 +1242,7 @@ class PlatformRegionStepper @Inject constructor() {
             lastClosedJobReceipt = null,
             jobReceiptAnchors = null,
             lastAcceptResolvedAt = null,
+            openReceiptEvidence = null,
         ))
     }
 

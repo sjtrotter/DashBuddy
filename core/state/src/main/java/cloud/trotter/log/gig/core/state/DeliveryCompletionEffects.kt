@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.core.state
 
 import cloud.trotter.log.gig.core.state.model.RegionDecisions
+import cloud.trotter.log.gig.domain.format.Formats
 import cloud.trotter.log.gig.domain.model.event.AppEventType
 import cloud.trotter.log.gig.domain.model.event.payload.DeliveryPayload
 import cloud.trotter.log.gig.domain.pipeline.Observation
@@ -12,6 +13,8 @@ import cloud.trotter.log.gig.domain.state.Job
 import cloud.trotter.log.gig.domain.state.OfferPayFallback
 import cloud.trotter.log.gig.domain.state.ParsedFields
 import cloud.trotter.log.gig.domain.state.PlatformRegion
+import cloud.trotter.log.gig.domain.state.ReceiptCoverage
+import cloud.trotter.log.gig.domain.state.ReceiptScope
 import cloud.trotter.log.gig.domain.state.Task
 import cloud.trotter.log.gig.domain.state.TaskPhase
 import cloud.trotter.log.gig.domain.state.isAccountableDropoff
@@ -131,7 +134,9 @@ internal fun EffectMap.diffDeliveryCompletion(
                 // parsedPay) is not silently skipped by the WARN.
                 val payBearingReceipt = p.lastPostTaskFields
                     ?.let { it.parsedPay != null || it.totalPay > 0.0 } == true
-                if (!finalShape && payBearingReceipt) {
+                // #1598: gated on coverage too — a proven receipt's subject is its job's only accountable drop,
+                // so this is now an invariant tripwire, not a line on every unproven mid-stack exit.
+                if (!finalShape && payBearingReceipt && describedByReceipt) {
                     Timber.tag("StateMachine").w(
                         "#630 mid-stack non-final receipt exit: job %s, %d owed dropoffs — " +
                             "dropRealizedPay withheld (partial receipt not split; rides unattributed)",
@@ -145,12 +150,22 @@ internal fun EffectMap.diffDeliveryCompletion(
                 // it — folds `PayBasis.NONE` unless the #691 estimate rescues it, and nothing else
                 // here says so. Ids + counts only (P7); silent on a receipt-less job, which has no
                 // coverage at all and takes the estimate below.
-                if (coveredTaskIds != null && !describedByReceipt) {
-                    Timber.tag("StateMachine").w(
-                        "#1073 PostTask exit: job %s, drop %s not described by the cached receipt — " +
-                            "no share, no receipt (rides the offer estimate or the review flag)",
-                        p.activeJob?.jobId, completedTask.taskId,
-                    )
+                // #1598: an UNPROVEN receipt describing no drop is the designed answer (DEBUG); a PROVEN one
+                // that misses the drop it exits on is a defended invariant (WARN), as is a pre-#1598 coverage.
+                val coverage = p.lastPostTaskCoverage
+                if (coverage != null && !describedByReceipt) {
+                    if (coverage.scope == ReceiptScope.UNPROVEN) {
+                        Timber.tag("StateMachine").d(
+                            "#1598 receipt %s unproven (%s): drop %s takes no receipt money (job %s)",
+                            coverage.evidenceId, coverage.gap?.name, completedTask.taskId, p.activeJob?.jobId,
+                        )
+                    } else {
+                        Timber.tag("StateMachine").w(
+                            "#1073 PostTask exit: job %s, drop %s not described by the cached receipt — " +
+                                "no share, no receipt (rides the offer estimate or the review flag)",
+                            p.activeJob?.jobId, completedTask.taskId,
+                        )
+                    }
                 }
                 // #691: when the whole job was receipt-less, stamp this drop's equal-split
                 // share of the accepted-offer pay so it folds a real net row (not $0-unattr).
@@ -182,7 +197,9 @@ internal fun EffectMap.diffDeliveryCompletion(
                     dropRealizedPay = dropShare,
                     offerPay = offerResult,
                     jobOfferHashes = p.activeJob?.parentOfferHashes ?: emptyList(),
+                    coverage = p.lastPostTaskCoverage,
                 )
+                logReceiptPlacement(receiptForPayload, p.lastPostTaskCoverage, dropShare, completedTask.taskId, p.activeJob?.jobId)
                 // #518: scope idempotency to the completed task, not obs.timestamp, so a
                 // re-entered PostTask receipt can't re-fire (and double-count) the same
                 // delivery. taskId is replay-stable; the cross-job leak is handled above.
@@ -373,7 +390,9 @@ internal fun EffectMap.diffDeliveryCompletion(
                 dropRealizedPay = dropShares[task.taskId],
                 offerPay = offerResult,
                 jobOfferHashes = closedJob.parentOfferHashes,
+                coverage = p.lastPostTaskCoverage,
             )
+            logReceiptPlacement(postTaskFields, p.lastPostTaskCoverage, dropShares[task.taskId], task.taskId, closedJob.jobId)
             add(
                 logEffect(
                     sessionId, AppEventType.DELIVERY_COMPLETED, obs.timestamp, payload,
@@ -395,30 +414,56 @@ private fun EffectMap.deliveryCompletedPayload(
     /** The whole offer-pay decision — its share AND its resolved provenance ride the payload. */
     offerPay: OfferPayFallback.Result? = null,
     jobOfferHashes: List<String> = emptyList(),
-): DeliveryPayload = DeliveryPayload(
-    jobId = jobId ?: task?.jobId ?: "unknown",
-    taskId = task?.taskId ?: "unknown",
-    storeName = task?.storeName,
-    customerHash = task?.customerNameHash,
-    addressHash = task?.customerAddressHash,
-    phaseStartedAt = task?.startedAt ?: completedAt,
-    arrivedAt = task?.arrivedAt,
-    completedAt = completedAt,
-    odometerAtEntry = task?.odometerAtEntry,
-    odometerAtArrival = task?.odometerAtArrival,
-    deadlineMillis = task?.deadlineMillis,
-    totalPay = postTaskFields?.totalPay,
-    parsedPay = postTaskFields?.parsedPay,
-    dropRealizedPay = dropRealizedPay,
-    offerPayShare = offerPay?.share,
-    sessionEarningsAtCompletion = sessionEarnings,
-    jobOfferHashes = jobOfferHashes,
-    // #997: the RESOLVED attribution — the offer this share was actually paid from (null when the
-    // ladder pooled) and which rung resolved it. NOT the mint-time slot stamp, which is only a hint
-    // (placeholders activate blind first-open). Provenance only — no fold consumer today.
-    offerPayAttributedHash = offerPay?.attributedOfferHash,
-    offerPayAttribution = offerPay?.arm,
-)
+    /** The cached receipt's coverage, for the #1598 marker's evidence id. */
+    coverage: ReceiptCoverage? = null,
+): DeliveryPayload {
+    // #1598: every new completion carries the marker. UNPROVEN means no receipt speaks for this drop
+    // (receipt-less or unproven); the fold then reads no receipt money from it.
+    val receiptScope =
+        if (postTaskFields != null || dropRealizedPay != null) ReceiptScope.PROVEN_SINGLE else ReceiptScope.UNPROVEN
+    return DeliveryPayload(
+        jobId = jobId ?: task?.jobId ?: "unknown",
+        taskId = task?.taskId ?: "unknown",
+        storeName = task?.storeName,
+        customerHash = task?.customerNameHash,
+        addressHash = task?.customerAddressHash,
+        phaseStartedAt = task?.startedAt ?: completedAt,
+        arrivedAt = task?.arrivedAt,
+        completedAt = completedAt,
+        odometerAtEntry = task?.odometerAtEntry,
+        odometerAtArrival = task?.odometerAtArrival,
+        deadlineMillis = task?.deadlineMillis,
+        totalPay = postTaskFields?.totalPay,
+        parsedPay = postTaskFields?.parsedPay,
+        dropRealizedPay = dropRealizedPay,
+        offerPayShare = offerPay?.share,
+        sessionEarningsAtCompletion = sessionEarnings,
+        jobOfferHashes = jobOfferHashes,
+        // #997: the RESOLVED attribution — the offer this share was actually paid from (null when the
+        // ladder pooled) and which rung resolved it. NOT the mint-time slot stamp, which is only a hint
+        // (placeholders activate blind first-open). Provenance only — no fold consumer today.
+        offerPayAttributedHash = offerPay?.attributedOfferHash,
+        offerPayAttribution = offerPay?.arm,
+        receiptScope = receiptScope,
+        receiptEvidenceId = coverage?.evidenceId?.takeIf { receiptScope == ReceiptScope.PROVEN_SINGLE },
+    )
+}
+
+/** #1598: where a receipt was attached to a drop, say how much of it landed there. Ids and cents only (P7). */
+private fun logReceiptPlacement(
+    receipt: ParsedFields.PostTaskFields?,
+    coverage: ReceiptCoverage?,
+    dropShare: Double?,
+    taskId: String,
+    jobId: String?,
+) {
+    if (receipt == null) return
+    Timber.tag("StateMachine").d(
+        "#1598 receipt %s placed %d¢ of %d¢ on drop %s (job %s)",
+        coverage?.evidenceId, Formats.cents(dropShare ?: receipt.totalPay), Formats.cents(receipt.totalPay),
+        taskId, jobId,
+    )
+}
 
 /**
  * The #691 FIX-6 observability edge: a drop that was estimate-ELIGIBLE (receipt-less, final shape)
@@ -604,6 +649,7 @@ private fun EffectMap.receiptSuppressesEstimate(region: PlatformRegion, job: Job
     // delivery unpriced (share and attach are coverage-gated, the estimate was suppressed, the row
     // folded `PayBasis.NONE`). Reachable from a pre-round-13 snapshot, or from any receipt frame
     // whose subject could not be named. The receipt must name at least ONE drop of THIS job.
+    // #1598: an UNPROVEN receipt covers nothing, so it lands here and suppresses no estimate.
     val covered = region.lastPostTaskCoverage?.taskIds.orEmpty()
     val jobDrops = (region.recentTasks + listOfNotNull(region.activeTask))
         .filter { it.jobId == job.jobId }
