@@ -29,25 +29,25 @@ class PickupPreArrivalStoreNameTest {
         File("src/test/resources/snapshots/pickup_pre_arrival/20260128_173614_959_PICKUP_DETAILS_PRE_ARRIVAL.json"),
     )
 
-    private fun UiNode.hasId(suffix: String) = viewIdResourceName?.endsWith(suffix) == true
+    private fun UiNode.idEndsWith(suffix: String) = viewIdResourceName?.endsWith(suffix) == true
 
     /** Rewrite every node; [edit] sees a node whose children were already rewritten. */
     private fun UiNode.rewrite(edit: (UiNode) -> UiNode): UiNode = edit(copy(children = children.map { it.rewrite(edit) }))
 
     /** The mid-render shape: the customer card moved ahead of the merchant card, its label blank. */
     private fun customerCardFirst(tree: UiNode, customerName: String): UiNode = tree.rewrite { n ->
-        val mx = n.children.indexOfFirst { it.hasId("mx_contact_view") }
-        val cx = n.children.indexOfFirst { it.hasId("customer_contact_view") }
+        val mx = n.children.indexOfFirst { it.idEndsWith("mx_contact_view") }
+        val cx = n.children.indexOfFirst { it.idEndsWith("customer_contact_view") }
         val card = if (cx >= 0) n.children[cx].rewrite { c ->
             when {
-                c.hasId("user_name_label") -> c.copy(text = "")
-                c.hasId("user_name") -> c.copy(text = customerName)
+                c.idEndsWith("user_name_label") -> c.copy(text = "")
+                c.idEndsWith("user_name") -> c.copy(text = customerName)
                 else -> c
             }
         } else null
         if (mx >= 0 && card != null) {
             val rest = n.children.filterIndexed { i, _ -> i != cx }.toMutableList()
-            rest.add(rest.indexOfFirst { it.hasId("mx_contact_view") }, card)
+            rest.add(rest.indexOfFirst { it.idEndsWith("mx_contact_view") }, card)
             n.copy(children = rest)
         } else {
             n
@@ -55,10 +55,10 @@ class PickupPreArrivalStoreNameTest {
     }.restoreParents()
 
     private fun withMerchantName(tree: UiNode, name: String): UiNode = tree.rewrite { n ->
-        if (!n.hasId("mx_contact_view")) {
+        if (!n.idEndsWith("mx_contact_view")) {
             n
         } else {
-            n.rewrite { c -> if (c.hasId("user_name")) c.copy(text = name) else c }
+            n.rewrite { c -> if (c.idEndsWith("user_name")) c.copy(text = name) else c }
         }
     }.restoreParents()
 
@@ -108,7 +108,7 @@ class PickupPreArrivalStoreNameTest {
     fun `a merchant row with no name yet parses a null store, never the customer (#1396)`() {
         val reordered = customerCardFirst(fixture, "Jane D.")
         val nameless = reordered.rewrite { n ->
-            if (n.hasId("mx_contact_view")) n.copy(children = n.children.filterNot { it.hasId("user_name") }) else n
+            if (n.idEndsWith("mx_contact_view")) n.copy(children = n.children.filterNot { it.idEndsWith("user_name") }) else n
         }.restoreParents()
         val r = rules.matchFirst(nameless)
         assertEquals("doordash.screen.pickup_pre_arrival", r?.ruleId)
@@ -118,7 +118,7 @@ class PickupPreArrivalStoreNameTest {
 
     @Test
     fun `with the merchant card gone, no rule parses the customer's name (#1396)`() {
-        val noMerchant = without(customerCardFirst(fixture, "Jane D.")) { it.hasId("mx_contact_view") }
+        val noMerchant = without(customerCardFirst(fixture, "Jane D.")) { it.idEndsWith("mx_contact_view") }
         val r = rules.matchFirst(noMerchant)
         assertTrue(
             "whichever rule claims the frame must not parse the customer's name: ${r?.ruleId} ${r?.fields}",

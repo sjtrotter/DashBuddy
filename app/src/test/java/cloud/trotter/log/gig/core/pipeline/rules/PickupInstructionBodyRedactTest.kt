@@ -69,15 +69,15 @@ class PickupInstructionBodyRedactTest {
         ): String? { envelopes += envelopeJson; return captureId }
     }
 
-    private fun UiNode.hasId(suffix: String) = viewIdResourceName?.endsWith(suffix) == true
+    private fun UiNode.idEndsWith(suffix: String) = viewIdResourceName?.endsWith(suffix) == true
 
     private fun UiNode.rewrite(edit: (UiNode) -> UiNode): UiNode = edit(copy(children = children.map { it.rewrite(edit) }))
 
     /** Every instruction body set to [text], and a collapsed twin added beside each expanded container. */
     private fun withInjectedBody(tree: UiNode, text: String): UiNode = tree.rewrite { n ->
         when {
-            n.hasId("instructions_line_2_expanded") || n.hasId("instructions_line_2_collapsed") -> n.copy(text = text)
-            n.children.any { it.hasId("instructions_expanded_container") } -> n.copy(
+            n.idEndsWith("instructions_line_2_expanded") || n.idEndsWith("instructions_line_2_collapsed") -> n.copy(text = text)
+            n.children.any { it.idEndsWith("instructions_expanded_container") } -> n.copy(
                 children = n.children + UiNode(
                     className = "android.widget.TextView",
                     viewIdResourceName = "com.doordash.driverapp:id/instructions_line_2_collapsed",
