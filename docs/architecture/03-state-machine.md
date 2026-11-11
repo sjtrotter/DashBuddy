@@ -661,7 +661,7 @@ no card frame of the same instance arrived after that sighting (`PendingOffer.la
 fresh push and every enrich: the card coming back is the dasher cancelling the sheet). A demoted entry stays in the
 pool, is never a candidate, and ends the shift `OFFER_DECLINED` with `declineEvidence = SHEET_WINDOW`. **Tie
 guard:** a sole candidate at a store shared with a demoted entry that left at most `demotionTieGuardMs` (60 s)
-before the edge is a TIE over both, never a link. The desk measurement (`decline-sheet-measurement.md`, 402
+before the edge is a TIE over both, never a link. The 2026-11-11 desk measurement (402
 DoorDash presentations, 09-20 → 11-05) found the card back after the sheet in 0 of the 261 sighted offers without
 accept evidence and in 9 of the 10 sheet-then-accepts, all of which reached the pickup within seconds; the
 retired #1104 claim that "the card re-renders after every decline" was wrong. Residuals: a sheet-then-accept with
