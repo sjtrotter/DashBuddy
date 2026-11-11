@@ -1,7 +1,7 @@
 package cloud.trotter.log.gig.ui.main.setup.wizard
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
@@ -11,6 +11,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.rememberModalBottomSheetState
 import cloud.trotter.log.gig.ui.components.economy.EditSession
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -131,7 +135,7 @@ fun WizardScreen(
             )
         }
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
@@ -266,6 +270,9 @@ fun WizardScreen(
                     }
                 }
             }
+            // #1473: save() works from a snapshot of the answers, so no step input may change them while it runs;
+            // otherwise the screen would show a value the save did not write, and "Setup saved" would confirm it.
+            if (saving) SaveInputShield(Modifier.matchParentSize())
         }
     }
 
@@ -297,4 +304,18 @@ fun WizardScreen(
             },
         )
     }
+}
+
+/** Swallows every touch on the steps below it and drops keyboard focus, so no answer changes during a save (#1473). */
+@Composable
+private fun SaveInputShield(modifier: Modifier) {
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(Unit) { focusManager.clearFocus(force = true) }
+    Box(
+        modifier.pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+            }
+        }
+    )
 }

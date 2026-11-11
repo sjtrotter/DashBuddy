@@ -1,9 +1,11 @@
 package cloud.trotter.log.gig.ui.main.setup.wizard
 
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import cloud.trotter.log.gig.domain.evaluation.EconomyField
+import cloud.trotter.log.gig.domain.format.Formats
 import cloud.trotter.log.gig.feature.setup.wizard.WizardViewModel
 import cloud.trotter.log.gig.feature.setup.wizard.model.SaveFailure
 import cloud.trotter.log.gig.feature.setup.wizard.model.SaveStatus
@@ -27,6 +29,7 @@ class WizardScreenTest {
     private val state = MutableStateFlow(WizardState())
     private val vm: WizardViewModel = mock()
     private var savedCost: Double? = null
+    private var savedPayout: Float? = null
     private val saveStatus = MutableStateFlow<SaveStatus>(SaveStatus.Idle)
     /** What the mocked save reports once it starts; null leaves it running. */
     private var saveOutcome: SaveStatus? = SaveStatus.Saved
@@ -47,6 +50,7 @@ class WizardScreenTest {
         }
         whenever(vm.save()).thenAnswer {
             savedCost = state.value.wear.oilCost
+            savedPayout = state.value.minPayout
             saveStatus.value = saveOutcome ?: SaveStatus.Saving
         }
         whenever(vm.dismissSaveFailure()).thenAnswer { saveStatus.value = SaveStatus.Idle }
@@ -150,5 +154,35 @@ class WizardScreenTest {
         compose.onNodeWithText("Step 2 of 2").assertIsDisplayed()
         compose.onNodeWithText("$7.00").assertIsDisplayed()
         compose.onNodeWithText("Save setup").assertIsEnabled()
+    }
+
+    /** #1473: the save writes a snapshot of the answers, so a slider moved while it runs changes nothing. */
+    @Config(qualifiers = "w411dp-h1600dp") // the default screen clips the slider under the bottom bar
+    @Test fun `an answer cannot change while the save runs`() {
+        saveOutcome = null
+        whenever(vm.updateMinPayout(any())).thenAnswer {
+            state.value = state.value.copy(minPayout = it.getArgument(0))
+        }
+        show(steps = listOf(WizardStep.MIN_PAYOUT))
+        val slider = compose.onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.SetProgress))
+        slider.performTouchInput { click(percentOffset(0.9f, 0.5f)) } // a tap on the track moves the thumb
+        compose.waitForIdle()
+        val moved = state.value.minPayout
+        assertNotEquals(5f, moved) // the slider takes a tap when no save runs
+        val shown = Formats.money(moved.toDouble())
+        compose.onNodeWithText(shown).assertIsDisplayed()
+
+        compose.onNodeWithText("Save setup").performClick()
+        compose.onNodeWithText("Saving").assertIsDisplayed()
+        clearInvocations(vm)
+        slider.performTouchInput { click(percentOffset(0.1f, 0.5f)) }
+        compose.waitForIdle()
+        verify(vm, never()).updateMinPayout(any())
+        compose.onNodeWithText(shown).assertIsDisplayed()
+
+        saveStatus.value = SaveStatus.Saved
+        compose.onNodeWithText("Setup saved").assertIsDisplayed()
+        assertEquals(moved, savedPayout)
+        compose.onNodeWithText(shown).assertExists()
     }
 }
