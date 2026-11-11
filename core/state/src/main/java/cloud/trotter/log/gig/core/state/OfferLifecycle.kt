@@ -342,9 +342,9 @@ private fun PlatformRegionStepper.expireOffer(
         if (payload.instanceId != null) it.instanceKey == payload.instanceId else it.offerHash == hash
     } ?: return region
     if (target.acceptedAt != null || target.isAcceptLatched()) {
-        // Defended invariant (Principle 7 WARN; #692 review F1): a phantom timeout was suppressed
-        // on an ACCEPTED offer — firing it would have logged a false OFFER_TIMEOUT and destroyed
-        // the mint (the #526 regression class). Hash only, no PII.
+        // Defended invariant (Principle 7 WARN; #692 review F1): a phantom timeout was suppressed on an
+        // ACCEPTED offer — firing it would have pooled a live accept (#1119 S2; a false OFFER_TIMEOUT
+        // before) and destroyed the mint (the #526 regression class). Hash only, no PII.
         Timber.tag("StateMachine").w(
             "OFFER_EXPIRY no-op (#438 B3): offer %s is accept-latched/accepted — phantom timeout suppressed",
             hash,

@@ -289,7 +289,8 @@ internal fun PlatformRegionStepper.decideReceiptReprice(
     // first read in its episode. The accept guard above misses an offer that was shown and then timed out or
     // was declined (neither resolves an accept), yet that offer may own the frame now on screen. FIRST read,
     // not the close, for the round-7 reason: a later reference admits more frames. There is no
-    // confirmed-decline exemption — on the Compose card a decline resolves as a timeout. Cost: a proven single
+    // confirmed-decline exemption — on the Compose card a decline is never confirmed (it waits in the offer pool,
+    // #1119 S2). Cost: a proven single
     // drop whose receipt expands after the close keeps the mint's receipt total, without the tip/base split,
     // whenever any offer appeared in between.
     if (lateFrame) {
