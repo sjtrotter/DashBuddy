@@ -13,6 +13,8 @@ import cloud.trotter.log.gig.domain.model.vehicle.Vehicle
 import cloud.trotter.log.gig.domain.model.vehicle.*
 import cloud.trotter.log.gig.core.data.fuel.FuelPriceRepository
 import cloud.trotter.log.gig.domain.evaluation.EconomyField
+import cloud.trotter.log.gig.feature.setup.wizard.model.SaveFailure
+import cloud.trotter.log.gig.feature.setup.wizard.model.SaveStatus
 import cloud.trotter.log.gig.feature.setup.wizard.model.WizardStep
 import cloud.trotter.log.gig.domain.evaluation.VehicleEconomyInputs
 import cloud.trotter.log.gig.domain.evaluation.UserEconomy
@@ -134,7 +136,7 @@ class WizardViewModelTest {
         assertEquals("Automatic", viewModel.vehicleDraft.state.value.trim)
         assertEquals(32f, viewModel.vehicleDraft.state.value.mpg, 0.0f)
 
-        viewModel.saveAndFinish { }
+        viewModel.save()
         testScheduler.advanceUntilIdle()
 
         verify(appPreferencesRepository).mirrorEconomySettings(
@@ -457,7 +459,7 @@ class WizardViewModelTest {
         assertEquals(900.0, state.toVehicleProfile(vehicle).wear.tireSetCost)
         assertEquals(25.0, state.toVehicleProfile(vehicle).fixed.insuranceDeltaPerMonth)
         assertNull(vehicle.profile.gasFuel)
-        vm.saveAndFinish { }
+        vm.save()
         testScheduler.advanceUntilIdle()
         val saved = argumentCaptor<VehicleProfile>()
         verify(garageRepository).addVehicle(isNull(), any(), saved.capture(), any())
@@ -530,11 +532,10 @@ class WizardViewModelTest {
         )
         testScheduler.advanceUntilIdle()
 
-        var completed = false
-        viewModel.saveAndFinish { completed = true }
+        viewModel.save()
         testScheduler.advanceUntilIdle()
 
-        assert(completed)
+        assertEquals(SaveStatus.Saved, viewModel.saveStatus.value)
         verify(strategyRepository).setProtectStatsMode(false)
         verify(strategyRepository).updateRules(emptyList())
         verify(strategyRepository, org.mockito.kotlin.never()).setAllowShopping(any())
@@ -553,7 +554,7 @@ class WizardViewModelTest {
 
         assertEquals(false, viewModel.state.value.isGasPriceAuto)
         assertEquals(3.50f, viewModel.state.value.gasPrice, 0.0f)
-        viewModel.saveAndFinish { }
+        viewModel.save()
         testScheduler.advanceUntilIdle()
 
         verify(appPreferencesRepository).mirrorEconomySettings(
@@ -677,7 +678,7 @@ class WizardViewModelTest {
         vm.vehicleDraft.updateVehicleType(VehicleType.CAR)
         assertEquals(before, vm.state.value)
         assertEquals(vehicleBefore, vm.vehicleDraft.state.value)
-        vm.saveAndFinish { }
+        vm.save()
         testScheduler.advanceUntilIdle()
         val saved = argumentCaptor<VehicleProfile>()
         verify(garageRepository).updateProfile(eq(active.id), saved.capture())
@@ -722,7 +723,7 @@ class WizardViewModelTest {
         vm.vehicleDraft.updatePowertrain(Powertrain.ELECTRIC)
         vm.vehicleDraft.updateConsumption(2.5)
         vm.vehicleDraft.updateElectricityPrice(.22)
-        vm.saveAndFinish { }
+        vm.save()
         testScheduler.advanceUntilIdle()
         val scooter = argumentCaptor<VehicleProfile>()
         verify(garageRepository).addVehicle(isNull(), any(), scooter.capture(), any())
@@ -732,7 +733,7 @@ class WizardViewModelTest {
         assertEquals(.0055, vm.state.value.toUserEconomy(vm.vehicleDraft.state.value).fuelCostPerMile, 1e-12)
         clearInvocations(garageRepository)
         vm.vehicleDraft.updateVehicleType(VehicleType.BICYCLE)
-        vm.saveAndFinish { }
+        vm.save()
         testScheduler.advanceUntilIdle()
         val bicycle = argumentCaptor<VehicleProfile>()
         verify(garageRepository).addVehicle(isNull(), any(), bicycle.capture(), any())
@@ -764,7 +765,7 @@ class WizardViewModelTest {
         viewModel.vehicleDraft.updateVehicleClass(VehicleClass.SUV)
         viewModel.vehicleDraft.updateEstimatedMpg(28f)
         viewModel.updateFuelType(FuelType.PREMIUM)
-        viewModel.saveAndFinish { }
+        viewModel.save()
         testScheduler.advanceUntilIdle()
 
         val profile = argumentCaptor<VehicleProfile>()
@@ -808,14 +809,13 @@ class WizardViewModelTest {
         viewModel.vehicleDraft.updateEstimatedMpg(28f)
         viewModel.updateFuelType(FuelType.PREMIUM)
         viewModel.updateTireCost(720.0); viewModel.updateTireLifetime(48_000.0)
-        var completed = false
-        viewModel.saveAndFinish { completed = true }
+        viewModel.save()
         saving.await()
         garage.value = garage.value.copy(activeId = second.id)
         resume.complete(Unit)
         testScheduler.advanceUntilIdle()
 
-        assertEquals(true, completed)
+        assertEquals(SaveStatus.Saved, viewModel.saveStatus.value)
         val saved = garage.value.vehicles.first { it.id == first.id }.profile
         assertEquals("Honda", saved.make)
         assertEquals(VehicleClass.SUV, saved.legacyClass)
@@ -843,7 +843,7 @@ class WizardViewModelTest {
         )
         testScheduler.advanceUntilIdle()
 
-        viewModel.saveAndFinish { }
+        viewModel.save()
         testScheduler.advanceUntilIdle()
 
         verify(garageRepository).addVehicle(isNull(), any(), any(), any())
@@ -865,7 +865,7 @@ class WizardViewModelTest {
         viewModel.vehicleDraft.updateVehicleClass(VehicleClass.SUV)
         viewModel.vehicleDraft.updateEstimatedMpg(28f)
         viewModel.updateTireCost(720.0); viewModel.updateTireLifetime(48_000.0)
-        viewModel.saveAndFinish { }
+        viewModel.save()
         testScheduler.advanceUntilIdle()
 
         val profile = argumentCaptor<VehicleProfile>()
@@ -892,7 +892,7 @@ class WizardViewModelTest {
         testScheduler.advanceUntilIdle()
         whenever(garageRepository.garage).thenReturn(flowOf(Garage(listOf(first, second), second.id, true)))
 
-        viewModel.saveAndFinish { }
+        viewModel.save()
         testScheduler.advanceUntilIdle()
 
         verify(garageRepository).updateProfile(eq(second.id), any<VehicleProfile>())
@@ -902,7 +902,7 @@ class WizardViewModelTest {
     }
 
     @Test
-    fun `an unreadable garage does not stop the wizard from finishing`() = runTest {
+    fun `an unreadable garage still writes the settings but reports the vehicle failure`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         stubRepositories()
         whenever(garageRepository.garage).thenReturn(flowOf(Garage(emptyList(), null, false)))
@@ -911,23 +911,21 @@ class WizardViewModelTest {
             vehicleRepository, gasPriceRepository, garageRepository,
         )
         testScheduler.advanceUntilIdle()
-        var completed = false
-        viewModel.saveAndFinish { completed = true }
+        viewModel.save()
         testScheduler.advanceUntilIdle()
 
-        assertEquals(true, completed)
         verify(garageRepository, org.mockito.kotlin.never()).addVehicle(isNull(), any(), any(), any())
         verify(garageRepository, org.mockito.kotlin.never()).updateProfile(any(), any<VehicleProfile>())
         verify(appPreferencesRepository).mirrorUserSetEconomy(any())
         verify(appPreferencesRepository).mirrorEconomySettings(any(), any(), any(), any(), any(), any(), any(), anyOrNull())
         verify(appStateRepository).setFirstRunComplete()
-        assertEquals(listOf(Unit), viewModel.vehicleSaveFailed.replayCache)
-        viewModel.vehicleSaveFailureHandled()
-        assertEquals(emptyList<Unit>(), viewModel.vehicleSaveFailed.replayCache)
+        assertEquals(SaveStatus.Failed(SaveFailure.VEHICLE), viewModel.saveStatus.value)
+        viewModel.dismissSaveFailure()
+        assertEquals(SaveStatus.Idle, viewModel.saveStatus.value)
     }
 
     @Test
-    fun `a failed garage write still mirrors and finishes`() = runTest {
+    fun `a failed garage write still mirrors and reports the vehicle failure`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         stubRepositories()
         val active = Vehicle("active", null, 1L)
@@ -939,17 +937,15 @@ class WizardViewModelTest {
             vehicleRepository, gasPriceRepository, garageRepository,
         )
         testScheduler.advanceUntilIdle()
-        var completed = false
-        viewModel.saveAndFinish { completed = true }
+        viewModel.save()
         testScheduler.advanceUntilIdle()
-        assertEquals(true, completed)
         verify(appPreferencesRepository).mirrorUserSetEconomy(any())
         verify(appStateRepository).setFirstRunComplete()
-        assertEquals(listOf(Unit), viewModel.vehicleSaveFailed.replayCache)
+        assertEquals(SaveStatus.Failed(SaveFailure.VEHICLE), viewModel.saveStatus.value)
     }
 
     @Test
-    fun `a failed vehicle creation still finishes but cancellation propagates`() = runTest {
+    fun `a failed vehicle creation reports the failure but cancellation propagates`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         stubRepositories()
         whenever(garageRepository.addVehicle(isNull(), any(), any(), any()))
@@ -959,20 +955,19 @@ class WizardViewModelTest {
             vehicleRepository, gasPriceRepository, garageRepository,
         )
         testScheduler.advanceUntilIdle()
-        var completions = 0
-        viewModel.saveAndFinish { completions++ }
+        viewModel.save()
         testScheduler.advanceUntilIdle()
-        assertEquals(1, completions)
+        assertEquals(SaveStatus.Failed(SaveFailure.VEHICLE), viewModel.saveStatus.value)
         verify(appStateRepository).setFirstRunComplete()
-        viewModel.vehicleSaveFailureHandled()
+        viewModel.dismissSaveFailure()
         clearInvocations(appPreferencesRepository, appStateRepository)
         whenever(garageRepository.addVehicle(isNull(), any(), any(), any()))
             .thenThrow(CancellationException("cancelled"))
-        viewModel.saveAndFinish { completions++ }
+        viewModel.save()
         testScheduler.advanceUntilIdle()
-        assertEquals(1, completions)
         verifyNoInteractions(appPreferencesRepository, appStateRepository)
-        assertEquals(emptyList<Unit>(), viewModel.vehicleSaveFailed.replayCache)
+        // A cancelled save leaves no outcome behind, so the save button comes back.
+        assertEquals(SaveStatus.Idle, viewModel.saveStatus.value)
     }
 
     @Test
@@ -998,7 +993,7 @@ class WizardViewModelTest {
             vehicleRepository, gasPriceRepository, garageRepository)
         testScheduler.advanceUntilIdle()
         vm.vehicleDraft.updateVehicleType(VehicleType.BICYCLE)
-        vm.saveAndFinish {}
+        vm.save()
         testScheduler.advanceUntilIdle()
         verify(garageRepository).addVehicle(isNull(), any(), eq(Bicycle()),
             eq(cloud.trotter.log.gig.core.data.vehicle.ActivateOn.ALWAYS))
@@ -1018,7 +1013,7 @@ class WizardViewModelTest {
         testScheduler.advanceUntilIdle()
         // The draft can select a different identity after opting into lookup.
         vm.vehicleDraft.load(vm.vehicleDraft.state.value.copy(year = "2021", make = "Toyota", model = "Corolla"))
-        vm.saveAndFinish {}
+        vm.save()
         testScheduler.advanceUntilIdle()
         val profile = argumentCaptor<VehicleProfile>()
         verify(garageRepository).addVehicle(isNull(), any(), profile.capture(),

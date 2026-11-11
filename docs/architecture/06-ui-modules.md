@@ -38,7 +38,10 @@ the gas price card's line renders from `WizardState.gasPriceSource` (`GasPriceSo
 from the stored `gas_price_fetched_at` or a fresh lookup; typed, which auto off implies; or saved, auto on with no
 stamp) and the host's `rememberNow()`, passed in as `nowMillis` since the module carries no `:core:designsystem`; it
 never says "Regional average" of a figure no lookup returned, and a failed lookup keeps the figure, says so and offers
-Retry and the price input; typing a price turns auto off, as the Costs screen's manual price does (#1478); the
+Retry and the price input; typing a price turns auto off, as the Costs screen's manual price does (#1478);
+the completion sheet renders the save's outcome from `WizardViewModel.saveStatus` (`SaveStatus`), so nothing says
+saved before the write finishes; the save writes a snapshot of the answers, so the steps take no touch or accessibility input while it runs (TalkBack reads "Saving"); a failure names what failed and offers Retry, closing it returns to the last step with
+the answers intact, and Skip has its own sheet that writes nothing until Done (#1473); the
 `WizardScreen` shell + `EconomyCostsCard` stay in `:app` with the shared `ui/components/economy/*`
 editor family, and the Dashboard-hosted `setup/consent/` #843 + `setup/permissions/` sheets stay in
 `:app`);

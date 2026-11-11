@@ -21,6 +21,7 @@
     <string name="wizard_desc_distance">Most miles you will drive for one offer.</string>
     <string name="wizard_bottom_bar_back">Back</string>
     <string name="wizard_bottom_bar_finish_and_save">Save setup</string>
+    <string name="wizard_bottom_bar_saving">Saving</string>
     <string name="wizard_bottom_bar_next">Next</string>
     <!-- #1447: the wizard's title bar. -->
     <string name="wizard_title">Setup</string>

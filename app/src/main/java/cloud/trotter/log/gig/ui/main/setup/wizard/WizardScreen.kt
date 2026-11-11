@@ -1,44 +1,33 @@
 package cloud.trotter.log.gig.ui.main.setup.wizard
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import cloud.trotter.log.gig.ui.components.economy.EditSession
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.log.gig.R
+import cloud.trotter.log.gig.feature.setup.R as SetupR
 import cloud.trotter.log.gig.core.designsystem.time.rememberNow
 import cloud.trotter.log.gig.domain.config.OfferStrategy
 import cloud.trotter.log.gig.feature.setup.wizard.WizardViewModel
@@ -48,6 +37,7 @@ import cloud.trotter.log.gig.feature.setup.wizard.cards.SelectionCard
 import cloud.trotter.log.gig.feature.setup.wizard.cards.VehicleCard
 import cloud.trotter.log.gig.feature.setup.wizard.components.WizardBottomBar
 import cloud.trotter.log.gig.feature.setup.wizard.components.WizardTopBar
+import cloud.trotter.log.gig.feature.setup.wizard.model.SaveStatus
 import cloud.trotter.log.gig.feature.setup.wizard.model.WizardStep
 import cloud.trotter.log.gig.ui.main.setup.wizard.cards.EconomyCostsCard
 import kotlinx.coroutines.launch
@@ -64,6 +54,8 @@ fun WizardScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     val vehicle by viewModel.vehicleDraft.state.collectAsStateWithLifecycle()
+    val saveStatus by viewModel.saveStatus.collectAsStateWithLifecycle()
+    val saving = saveStatus == SaveStatus.Saving
 
     val pagerState = rememberPagerState(pageCount = { steps.size })
     val coroutineScope = rememberCoroutineScope()
@@ -71,7 +63,9 @@ fun WizardScreen(
     // One Back (#1447 N5): the title bar's arrow runs exactly what system Back runs. On a later step
     // it finishes the open cost fields, then goes to the previous page; on step 1 the BackHandler is
     // off, system Back pops the wizard, and the arrow calls [onExit] — nothing is written.
-    val back: () -> Unit = {
+    // While a save runs (#1473) Back does nothing: leaving would cancel the save mid-write.
+    val back: () -> Unit = back@{
+        if (saving) return@back
         if (pagerState.currentPage > 0) {
             coroutineScope.launch {
                 if (costsSession.finishAll()) pagerState.animateScrollToPage(pagerState.currentPage - 1)
@@ -80,16 +74,26 @@ fun WizardScreen(
             onExit()
         }
     }
-    androidx.activity.compose.BackHandler(enabled = pagerState.currentPage > 0) { back() }
+    androidx.activity.compose.BackHandler(enabled = pagerState.currentPage > 0 || saving) { back() }
 
     val isCherryPicker = state.strategy == OfferStrategy.CHERRY_PICKER
 
-    var showCompletionSheet by remember { mutableStateOf(false) }
-    // Skip and Finish share the completion sheet but must NOT share a save path:
-    // Skip writes nothing (#347).
-    var skippedSetup by remember { mutableStateOf(false) }
-    var vehicleSaveFailed by remember { mutableStateOf(false) }
-    var saving by remember { mutableStateOf(false) }
+    // Skip and Save share the completion sheet but must NOT share a save path: Skip writes nothing (#347).
+    var skipRequested by remember { mutableStateOf(false) }
+    // The sheet renders the save's outcome (#1473); it never opens while the save runs.
+    val outcome = when (val status = saveStatus) {
+        SaveStatus.Saved -> CompletionOutcome.Saved
+        is SaveStatus.Failed -> CompletionOutcome.Failed(status.reason)
+        SaveStatus.Idle -> if (skipRequested) CompletionOutcome.Skipped else null
+        SaveStatus.Saving -> null
+    }
+    var finished by remember { mutableStateOf(false) }
+    val finish: () -> Unit = {
+        if (!finished) {
+            finished = true
+            onComplete()
+        }
+    }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Pre-fetch string resources OUTSIDE the pager's plain (non-@Composable) formatter lambdas.
@@ -107,9 +111,9 @@ fun WizardScreen(
                 onBack = back,
                 onSkip = {
                     costsSession.discardAll()
-                    skippedSetup = true
-                    showCompletionSheet = true
-                }
+                    skipRequested = true
+                },
+                enabled = !saving,
             )
         },
         bottomBar = {
@@ -125,19 +129,25 @@ fun WizardScreen(
                             if (pagerState.currentPage < steps.size - 1) {
                                 pagerState.animateScrollToPage(pagerState.currentPage + 1)
                             } else {
-                                skippedSetup = false
-                                showCompletionSheet = true
+                                viewModel.save()
                             }
                         }
                     }
-                }
+                },
+                saving = saving,
             )
         }
     ) { paddingValues ->
-        Column(
+        // #1473: save() works from a snapshot of the answers, so no step input may change them while it runs;
+        // otherwise the screen would show a value the save did not write, and "Setup saved" would confirm it.
+        // While saving, the steps drop their accessibility nodes (so no action such as a slider's set-progress can
+        // reach them; TalkBack reads "Saving") and the shield below takes every touch.
+        val savingLabel = stringResource(SetupR.string.wizard_bottom_bar_saving)
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .then(if (saving) Modifier.clearAndSetSemantics { contentDescription = savingLabel } else Modifier)
         ) {
             HorizontalPager(
                 state = pagerState,
@@ -269,95 +279,50 @@ fun WizardScreen(
                     }
                 }
             }
+            if (saving) SaveInputShield(Modifier.matchParentSize())
         }
     }
 
-    if (showCompletionSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showCompletionSheet = false },
+    if (outcome != null) {
+        WizardCompletionSheet(
+            outcome = outcome,
             sheetState = sheetState,
-            dragHandle = null
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(96.dp)
-                        .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.Check,
-                        contentDescription = stringResource(R.string.wizard_screen_content_desc_success),
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+            onDone = {
+                if (outcome == CompletionOutcome.Skipped) {
+                    coroutineScope.launch {
+                        sheetState.hide()
+                        skipRequested = false
+                        viewModel.skipAndFinish(onComplete)
+                    }
+                } else {
+                    finish()
                 }
-                Spacer(modifier = Modifier.height(24.dp))
-                Text(
-                    stringResource(R.string.wizard_screen_all_set_title),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    if (skippedSetup) {
-                        stringResource(R.string.wizard_screen_skipped_desc)
-                    } else {
-                        stringResource(R.string.wizard_screen_completed_desc)
-                    },
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-                if (vehicleSaveFailed) {
-                    Text(
-                        WizardCopy.VEHICLE_SAVE_FAILED,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            },
+            onRetry = viewModel::save,
+            onBackToSetup = viewModel::dismissSaveFailure,
+            // Saved: everything is written, so closing the sheet finishes. Failed: back to the last step with the
+            // answers intact. Skipped: the skip has not happened yet, so back to the wizard.
+            onDismiss = {
+                when (outcome) {
+                    CompletionOutcome.Saved -> finish()
+                    is CompletionOutcome.Failed -> viewModel.dismissSaveFailure()
+                    CompletionOutcome.Skipped -> skipRequested = false
                 }
-                Spacer(modifier = Modifier.height(32.dp))
-                Button(
-                    onClick = {
-                        if (vehicleSaveFailed) {
-                            onComplete()
-                        } else if (skippedSetup) {
-                            coroutineScope.launch {
-                                sheetState.hide()
-                                showCompletionSheet = false
-                                viewModel.skipAndFinish(onComplete)
-                            }
-                        } else {
-                            coroutineScope.launch {
-                                if (!costsSession.finishAll()) return@launch
-                                saving = true
-                                viewModel.saveAndFinish {
-                                    saving = false
-                                    if (viewModel.vehicleSaveFailed.replayCache.isNotEmpty()) {
-                                        vehicleSaveFailed = true
-                                        viewModel.vehicleSaveFailureHandled()
-                                    } else {
-                                        onComplete()
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    enabled = !saving,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                ) {
-                    Text(stringResource(R.string.wizard_screen_lets_go), style = MaterialTheme.typography.titleMedium)
-                }
-                Spacer(modifier = Modifier.height(16.dp))
+            },
+        )
+    }
+}
+
+/** Swallows every touch on the steps below it and drops keyboard focus, so no answer changes during a save (#1473). */
+@Composable
+private fun SaveInputShield(modifier: Modifier) {
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(Unit) { focusManager.clearFocus(force = true) }
+    Box(
+        modifier.pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
             }
         }
-    }
+    )
 }

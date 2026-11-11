@@ -91,7 +91,7 @@ private fun WizardState.sharedDraft(vehicle: VehicleDraftState): SharedEconomy =
 /**
  * Projects the wizard's in-memory economy edits onto an [EconomyDraft] — the single
  * owner of this conversion (#357). The ECONOMY_COSTS card uses it to drive live
- * $/mi summaries and "(default)" badges; [cloud.trotter.log.gig.feature.setup.wizard.WizardViewModel.saveAndFinish]
+ * $/mi summaries and "(default)" badges; [cloud.trotter.log.gig.feature.setup.wizard.WizardViewModel.save]
  * commits its vehicle overrides in one targeted profile write and mirrors the
  * user-set fields to legacy preferences. Carries
  * [userSetEconomyFields] together with the vehicle draft's fields so the repository

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #1473: the setup wizard's completion sheet. Order mirrors values/strings.xml. -->
+<resources>
+    <string name="wizard_screen_content_desc_success">Terminé</string>
+    <string name="wizard_screen_saved_title">Configuration enregistrée</string>
+    <string name="wizard_screen_completed_desc">Modifiez les objectifs, le véhicule ou les règles d\'offres dans Paramètres.</string>
+    <string name="wizard_screen_skipped_title">Configuration ignorée</string>
+    <string name="wizard_screen_skipped_desc">Rien n\'a changé. Relancez-la depuis Paramètres.</string>
+    <string name="wizard_screen_vehicle_failed_title">Impossible d\'enregistrer votre véhicule</string>
+    <string name="wizard_screen_vehicle_failed_desc">Votre liste de véhicules est illisible.</string>
+    <string name="wizard_screen_save_failed_title">Impossible d\'enregistrer la configuration</string>
+    <string name="wizard_screen_save_failed_desc">Vos réponses sont toujours dans la configuration.</string>
+    <string name="wizard_screen_retry">Réessayer</string>
+    <string name="wizard_screen_back_to_setup">Retour à la configuration</string>
+    <string name="wizard_screen_lets_go">Terminé</string>
+</resources>
