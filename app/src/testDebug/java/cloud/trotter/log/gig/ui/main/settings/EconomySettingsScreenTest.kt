@@ -4,6 +4,9 @@ import cloud.trotter.log.gig.core.datastore.settings.StoredPreference
 import kotlinx.coroutines.runBlocking
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.state.ToggleableState
 import cloud.trotter.log.gig.core.data.settings.AppPreferencesRepository
 import cloud.trotter.log.gig.core.data.strategy.StrategyRepository
 import cloud.trotter.log.gig.core.data.vehicle.*
@@ -52,8 +55,35 @@ class EconomySettingsScreenTest {
         assertEquals("car-id", opened)
         assertFalse(garageOpened)
         // The same host can be revisited after navigating forward to vehicle details.
-        compose.onNodeWithText("Reset to defaults").assertIsEnabled()
+        compose.onNodeWithText("Reset to estimates").assertIsEnabled()
     }
+    /** #1478: the Auto gas price row is one toggle; the label flips it and is read with the switch's state. */
+    @Test fun `the auto gas price row is one switch named by its label`() {
+        val auto = MutableStateFlow(true)
+        val preferences: AppPreferencesRepository = mock {
+            on { userEconomy } doReturn flowOf(UserEconomy())
+            on { isGasPriceAuto } doReturn auto
+        }
+        runBlocking {
+            whenever(preferences.setGasPriceAuto(any(), anyOrNull())).doAnswer {
+                val previous = auto.value
+                auto.value = it.getArgument(0)
+                StoredPreference(previous, false)
+            }
+        }
+        show(null, preferences)
+        val row = compose.onNode(isToggleable() and hasText("Auto gas price"))
+        row.assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Switch))
+        row.assert(SemanticsMatcher.expectValue(SemanticsProperties.ToggleableState, ToggleableState.On))
+        // The switch inside is not a second control.
+        compose.onNode(isToggleable() and hasAnyDescendant(hasText("Auto gas price")), useUnmergedTree = true)
+            .onChildren().filter(isToggleable()).assertCountEquals(0)
+
+        compose.onNodeWithText("Auto gas price", useUnmergedTree = true).performClick()
+        compose.waitUntil { !auto.value }
+        row.assert(SemanticsMatcher.expectValue(SemanticsProperties.ToggleableState, ToggleableState.Off))
+    }
+
     @Test fun `no vehicle row opens Garage`() {
         show(null)
         compose.onNodeWithText("No vehicle").performClick()

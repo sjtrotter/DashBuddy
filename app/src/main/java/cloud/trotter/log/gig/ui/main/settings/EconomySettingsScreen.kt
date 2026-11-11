@@ -4,14 +4,17 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import cloud.trotter.log.gig.R
@@ -82,7 +85,7 @@ fun EconomySettingsScreen(
                         scope.launch(start = CoroutineStart.UNDISPATCHED) {
                             if (viewModel.resetDefaults() != GarageWriteFailure.NONE) unsaved = true
                         }
-                    }) { Text(stringResource(R.string.economy_settings_reset_defaults)) }
+                    }) { Text(stringResource(R.string.vehicle_details_reset)) }
                 })
         }) { padding ->
             Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -95,9 +98,11 @@ fun EconomySettingsScreen(
                         leave { if (id == null) onOpenGarage() else onOpenVehicle(id) }
                     },
                 )
-                Row {
+                // One toggle: the row flips the switch and TalkBack reads the label with its state.
+                Row(Modifier.fillMaxWidth().toggleable(value = gasAuto, enabled = enabled, role = Role.Switch,
+                    onValueChange = { viewModel.setGasAuto(it) }), verticalAlignment = Alignment.CenterVertically) {
                     Text(stringResource(R.string.economy_shared_auto_gas_price), Modifier.weight(1f))
-                    Switch(checked = gasAuto, onCheckedChange = { viewModel.setGasAuto(it) }, enabled = enabled)
+                    Switch(checked = gasAuto, onCheckedChange = null, enabled = enabled)
                 }
                 DecimalInput(stringResource(R.string.economy_shared_gas_price), eco.gasPricePerGallon, viewModel::setGasPrice,
                     enabled = enabled, fieldKey = "GAS_PRICE")
