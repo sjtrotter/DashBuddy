@@ -238,6 +238,14 @@ class StateManagerV2 @Inject constructor(
         try {
             val restored = snapshots.restoreLatest()
             if (restored == null) {
+                // #1119 S2: an old journal with no usable snapshot (none written, or one that no longer decodes)
+                // must not be replayed by a later restart either: start fresh ABOVE it and make that durable.
+                val journalled = journal.latestVersion()
+                if (journalled != null) {
+                    Timber.tag("StateMachine").i("No usable snapshot — starting fresh above the journal at cv=%d", journalled)
+                    finishRestore(AppState(correlationVersion = journalled, stateSchema = AppState.STATE_SCHEMA))
+                    return
+                }
                 Timber.tag("StateMachine").i("No usable snapshot — starting fresh")
                 _state.value = AppState()
                 return

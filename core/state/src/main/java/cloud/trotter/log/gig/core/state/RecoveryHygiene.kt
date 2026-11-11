@@ -231,5 +231,9 @@ internal fun AppState.pendingDeadlineTimers(): List<PendingDeadline> =
             region.pauseSafety?.let {
                 add(PendingDeadline(TimeoutType.SESSION_PAUSED_SAFETY, region.platform, it))
             }
+            // #1119 S2: a store-less hold the hygiene kept (inside its cap) re-arms at its own deadline.
+            region.heldWorkFrame?.let {
+                add(PendingDeadline(TimeoutType.STORELESS_HOLD, region.platform, it.wake))
+            }
         }
     }

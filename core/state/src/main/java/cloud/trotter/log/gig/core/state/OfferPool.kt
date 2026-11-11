@@ -9,6 +9,7 @@ import cloud.trotter.log.gig.domain.model.offer.OfferScope
 import cloud.trotter.log.gig.domain.model.offer.newStores
 import cloud.trotter.log.gig.domain.model.offer.ownedStoreKeys
 import cloud.trotter.log.gig.domain.pipeline.Observation
+import cloud.trotter.log.gig.domain.pipeline.TimeoutType
 import cloud.trotter.log.gig.domain.state.Flow
 import cloud.trotter.log.gig.domain.state.HeldWorkFrame
 import cloud.trotter.log.gig.domain.state.Job
@@ -189,10 +190,8 @@ internal fun PlatformRegionStepper.poolWorkEdge(
     val held = region.heldWorkFrame
     val store = storeOf(obs)
     if (held != null) {
+        // The time cap is `lapseHeldWork`'s, run by the stepper before any early return.
         if (!nextFlow.isTaskFlow()) return releaseHeldBare(sink, region, held, policy, "non-task frame")
-        if (obs.timestamp - held.at > policy.storelessHoldMs(region.platform)) {
-            return releaseHeldBare(sink, region, held, policy, "time cap")
-        }
         if (store == null) {
             val frames = held.frames + 1
             if (frames >= policy.storelessHoldFrames(region.platform)) {
@@ -210,16 +209,18 @@ internal fun PlatformRegionStepper.poolWorkEdge(
         val holds = region.offerPool.any { !it.demoted } && policy.storelessHoldFrames(region.platform) > 1
         if (!holds) return null
         Timber.tag(TAG).d("#1119 store-less work frame held for the store")
-        return region.copy(
-            heldWorkFrame = HeldWorkFrame(
+        val (withWake, hold) = region.heldWorkWindow { wakeId ->
+            HeldWorkFrame(
                 at = obs.timestamp,
                 flow = nextFlow,
                 prevFlow = prevFlow,
                 ruleId = obs.ruleId,
                 parsed = obs.parsed,
                 deadline = obs.timestamp + policy.storelessHoldMs(region.platform),
-            ),
-        )
+                wakeId = wakeId,
+            )
+        }
+        return withWake.copy(heldWorkFrame = hold)
     }
     return linkAtWorkEdge(sink, region, obs, store, policy, held = null)
 }
@@ -247,20 +248,22 @@ private fun PlatformRegionStepper.linkAtWorkEdge(
         Timber.tag(TAG).d("#1119 no pooled offer at this store (pool=%d)", region.offerPool.size)
         return null
     }
+    // The tie guard measures to the edge's own observation; a held frame only moves where the work started.
     val edgeAt = held?.at ?: obs.timestamp
     val guards = region.offerPool.filter {
-        it.demoted && key in it.candidateStoreKeys && edgeAt - it.leftAt in 0..policy.demotionTieGuardMs(region.platform)
+        it.demoted && key in it.candidateStoreKeys &&
+            obs.timestamp - it.leftAt in 0..policy.demotionTieGuardMs(region.platform)
     }
     val job = region.activeJob
     if (job == null || startsNewJob(region)) {
         return if (candidates.size == 1 && guards.isEmpty()) {
-            link(sink, region, obs, candidates.single(), edgeAt, if (held != null) "FRESH_AFTER_HOLD" else "FRESH")
+            link(sink, region, obs, candidates.single(), edgeAt, if (held != null) "FRESH_AFTER_HOLD" else "FRESH", held, policy)
         } else {
             tie(sink, region, obs, if (candidates.size == 1) candidates + guards else candidates, held, policy)
         }
     }
     val sole = candidates.singleOrNull()?.takeIf { guards.isEmpty() && isStaleJobEdge(it, job) } ?: return null
-    return link(sink, region, obs, sole, edgeAt, "STALE")
+    return link(sink, region, obs, sole, edgeAt, "STALE", held, policy)
 }
 
 /** OQ2: a sole STANDALONE candidate presented over a non-task flow after [job] started, at a store new to the job. */
@@ -280,11 +283,16 @@ private fun PlatformRegionStepper.link(
     entry: PooledOffer,
     edgeAt: Long,
     edge: String,
+    held: HeldWorkFrame?,
+    policy: TransitionPolicy,
 ): PlatformRegion {
     val acceptedAt = minOf(entry.leftAt, edgeAt)
     // Stamped before any T2 close, so the close-time re-price ask refuses an accept resolved over the receipt.
     val pooled = region.copy(offerPool = region.offerPool - entry, lastAcceptResolvedAt = obs.timestamp)
-    val next = consumeAcceptIntoJob(sink, pooled, obs, acceptInputsFromPending(entry.offer, acceptedAt))
+    val linked = consumeAcceptIntoJob(sink, pooled, obs, acceptInputsFromPending(entry.offer, acceptedAt))
+    // A held frame's task evidence (arrival, customer, deadline, shopping) lands on the linked job's task before the
+    // releasing frame steps on it, exactly as the held frame would have had the job existed (council round 6).
+    val next = held?.let { updateTaskLifecycle(sink, linked, it.prevFlow, it.flow, heldObservation(it), policy) } ?: linked
     val jobId = next.activeJob?.jobId
     sink.offerOutcome(
         OfferOutcomeDecision(
@@ -296,6 +304,8 @@ private fun PlatformRegionStepper.link(
             sessionId = region.session?.sessionId ?: entry.sessionId,
             description = "Linked to work at its store (#1119)",
             linkedJobId = jobId,
+            // A tie this entry was part of stays on its record, so the ended shift's check still names it.
+            ambiguousJobIds = entry.ambiguousJobIds,
             announce = true,
         ),
     )
@@ -341,17 +351,36 @@ private fun PlatformRegionStepper.releaseHeldBare(
     reason: String,
 ): PlatformRegion {
     Timber.tag(TAG).d("#1119 store-less hold ends in a bare job (%s, %d frame(s))", reason, held.frames)
-    val heldObs = Observation.Screen(
-        timestamp = held.at,
-        captureId = null,
-        ruleId = held.ruleId,
-        metadata = ReplayMetadata.EMPTY,
-        flow = held.flow,
-        modeHint = null,
-        parsed = held.parsed,
-    )
+    val heldObs = heldObservation(held)
     val minted = mintBareJob(region.copy(heldWorkFrame = null), heldObs)
     return updateTaskLifecycle(sink, minted, held.prevFlow, held.flow, heldObs, policy)
+}
+
+/** The held frame as the observation it was, for a replay of its job and task lifecycle. */
+private fun heldObservation(held: HeldWorkFrame) = Observation.Screen(
+    timestamp = held.at,
+    captureId = null,
+    ruleId = held.ruleId,
+    metadata = ReplayMetadata.EMPTY,
+    flow = held.flow,
+    modeHint = null,
+    parsed = held.parsed,
+)
+
+/**
+ * The hold's time cap (council round 6, "at most 10 s"), checked by the stepper on EVERY observation before any
+ * observation-type early return: a frame strictly past the deadline, or the hold's own `STORELESS_HOLD` wake, ends
+ * the hold in today's bare mint from the held frame.
+ */
+internal fun PlatformRegionStepper.lapseHeldWork(
+    sink: DecisionSink,
+    region: PlatformRegion,
+    obs: Observation,
+    policy: TransitionPolicy,
+): PlatformRegion {
+    val held = region.heldWorkFrame ?: return region
+    if (!graceLapsed(held.deadline, held.wakeId, obs, TimeoutType.STORELESS_HOLD)) return region
+    return releaseHeldBare(sink, region, held, policy, "time cap")
 }
 
 /**

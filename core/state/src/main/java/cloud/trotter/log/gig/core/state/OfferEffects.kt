@@ -14,6 +14,7 @@ import cloud.trotter.log.gig.domain.state.OfferIntent
 import cloud.trotter.log.gig.domain.state.PendingOffer
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.PlatformRegion
+import cloud.trotter.log.gig.domain.state.wake
 import timber.log.Timber
 
 /**
@@ -230,6 +231,16 @@ internal fun EffectMap.diffOfferLifecycle(
         }
     }
 }
+
+/** #1119 S2: schedule/cancel the store-less hold's cap wake — the [PlatformRegion.heldWorkFrame] mirror of the graces. */
+internal fun EffectMap.diffHeldWorkTimer(prev: PlatformRegion, next: PlatformRegion, obs: Observation): List<AppEffect> =
+    diffDeadlineTimer(
+        prev = prev.heldWorkFrame?.wake,
+        next = next.heldWorkFrame?.wake,
+        type = TimeoutType.STORELESS_HOLD,
+        platform = next.platform,
+        obs = obs,
+    )
 
 /**
  * Arm the [TimeoutType.OFFER_EXPIRY] safety timer for a presented offer (vet H1) — the

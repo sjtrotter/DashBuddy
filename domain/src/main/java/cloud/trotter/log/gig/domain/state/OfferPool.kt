@@ -54,6 +54,8 @@ data class HeldWorkFrame(
     val parsed: ParsedFields,
     /** Task-flow frames seen in the hold, the held frame included. */
     val frames: Int = 1,
-    /** `at` plus the platform's hold cap; recovery drops a hold past it. */
-    val deadline: Long,
-)
+    /** `at` plus the platform's hold cap: the hold's `STORELESS_HOLD` wake fires here; recovery drops a hold past it. */
+    override val deadline: Long,
+    /** The generation of this hold's wake ([PlatformRegion.mintWakeId], installed by `heldWorkWindow`). */
+    override val wakeId: WakeId,
+) : WakeBearing

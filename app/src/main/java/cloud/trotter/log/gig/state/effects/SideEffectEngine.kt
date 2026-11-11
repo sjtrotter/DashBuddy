@@ -809,6 +809,8 @@ class SideEffectEngine @Inject constructor(
                 TimeoutType.SETTLE_UI,
                 TimeoutType.OFFER_EXPIRY,
                 TimeoutType.SESSION_PAY_SETTLE,
+                // #1119 S2: a store-less hold's cap is a routine end, not a defended invariant.
+                TimeoutType.STORELESS_HOLD,
                 -> Timber.tag("Effects").d("Timer Expired: %s", type)
             }
             _events.emit(

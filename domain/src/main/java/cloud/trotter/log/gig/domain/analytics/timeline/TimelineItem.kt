@@ -40,6 +40,8 @@ data class JobCard(
     val unassignedAt: Long? = null,
     /** The accepted offers the dasher marked unassigned, the targets of the card's Undo. */
     val markedOfferSeqs: List<Long> = emptyList(),
+    /** #1119 S2: the card's accepted offers that tied on a job before linking, by event sequence id. */
+    val tiedOffers: Map<Long, List<String>> = emptyMap(),
     /** The recorded milestones for the job's sheet, in time order; a milestone not recorded is absent. */
     val milestones: List<Milestone>,
 ) : TimelineItem

@@ -134,6 +134,7 @@ object ShiftTimeline {
             unassignedAt = unassignedAt,
             markedOfferSeqs = offers.filter { it.outcomeResolved == OfferOutcomeResolution.UNASSIGNED_ATTESTED }
                 .map { it.eventSequenceId },
+            tiedOffers = offers.filter { it.ambiguousJobIds.isNotEmpty() }.associate { it.eventSequenceId to it.ambiguousJobIds },
             milestones = milestones(offers, base, offerLine, addOns, pickups, drops, lines),
         )
     }

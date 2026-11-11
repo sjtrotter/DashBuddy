@@ -49,10 +49,15 @@ object ShiftChecks {
                     checks += ShiftCheck.MoreAcceptsThanDeliveries(card.jobId, open, delivered)
             }
         }
+        // Every offer a tie named: the passed ones and (a tie candidate that later linked elsewhere) the accepted ones.
         val tiedByJob = LinkedHashMap<String, MutableList<Long>>()
-        for (offer in timeline.filterIsInstance<PassedRun>().flatMap { it.offers }) {
-            offer.ambiguousJobIds.forEach { tiedByJob.getOrPut(it) { mutableListOf() } += offer.eventSequenceId }
+        val tied = timeline.flatMap { item ->
+            when (item) {
+                is PassedRun -> item.offers.map { it.eventSequenceId to it.ambiguousJobIds }
+                is JobCard -> item.tiedOffers.toList()
+            }
         }
+        for ((seq, jobs) in tied) jobs.forEach { tiedByJob.getOrPut(it) { mutableListOf() } += seq }
         tiedByJob.forEach { (jobId, seqs) -> checks += ShiftCheck.OfferNotMatched(jobId, seqs.distinct().sorted()) }
         money?.higher?.let { checks += ShiftCheck.MoneyDiffers(it, money.difference) }
         return checks

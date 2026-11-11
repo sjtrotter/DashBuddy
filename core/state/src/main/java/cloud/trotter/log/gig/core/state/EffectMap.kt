@@ -209,6 +209,7 @@ class EffectMap @Inject constructor(
             addAll(diffModeResumeTimer(p, next, obs))
             addAll(diffSessionPaySettleTimer(p, next, obs))
             addAll(diffPauseSafetyTimer(p, next, obs))
+            addAll(diffHeldWorkTimer(p, next, obs))
             addAll(diffTask(p, next, obs))
             addAll(diffPostTask(p, next, actedNextFlow, obs))
             addAll(diffNotification(obs))

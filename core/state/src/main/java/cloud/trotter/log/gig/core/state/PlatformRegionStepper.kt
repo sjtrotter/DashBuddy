@@ -321,6 +321,7 @@ class PlatformRegionStepper @Inject constructor() {
         }
 
         current = SessionPaySettleGate.lapse(current, prevFlow, nextFlow, obs)
+        current = lapseHeldWork(sink, current, obs, policy) // #1119 S2: the hold's cap, before any early return
 
         // Handle timeout-driven transitions
         if (obs is Observation.Timeout) return handleTimeout(current, obs, policy)
@@ -582,7 +583,8 @@ class PlatformRegionStepper @Inject constructor() {
 
         // If we're healing into an active task flow but have no active job/task,
         // synthesize them with recovered=true
-        if (flow.isTaskFlow() && region.activeJob == null) {
+        // #1119 S2: with offers waiting in the pool, the job lifecycle's work edge decides (link, tie, hold, bare).
+        if (flow.isTaskFlow() && region.activeJob == null && region.offerPool.isEmpty()) {
             val taskPhase = flow.toTaskPhase() ?: return region
             val parsed = flowObs.parsed
             val storeName = (parsed as? ParsedFields.TaskFields)?.storeName
