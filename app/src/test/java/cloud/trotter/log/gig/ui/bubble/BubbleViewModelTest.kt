@@ -980,7 +980,7 @@ class BubbleViewModelTest {
         // The AUTO-mode refresh never calls the manual OR resume-auto write paths — staying auto
         // is a side effect of NOT touching the auto flag, not an explicit write.
         verify(appPreferencesRepository, never()).updateGasPriceManual(any())
-        verify(appPreferencesRepository, never()).updateGasPriceAuto(any())
+        verify(appPreferencesRepository, never()).updateGasPriceAuto(any(), any())
     }
 
     @Test
