@@ -29,7 +29,7 @@ class GarageSeederTest {
             produceFile = { tmp.newFile("state.preferences_pb") }))
         val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
             produceFile = { tmp.newFile("garage.preferences_pb") })))
-        prefs.updateEconomySettings("2021", "Honda", "Civic", "EX", 31f, false, 3.80f)
+        prefs.updateEconomySettings("2021", "Honda", "Civic", "EX", 31f, false, 3.80f, null)
         prefs.updateVehicleClass("COMPACT")
         prefs.updateTireCost(650.0, 40_000.0)
         val seeder = GarageSeeder(garage, prefs, state)
@@ -41,7 +41,7 @@ class GarageSeederTest {
         assertEquals(VehicleClass.COMPACT, car.profile.legacyClass)
         assertEquals(31.0, car.profile.gasMpg)
         assertEquals(650.0, car.profile.wear.tireSetCost)
-        prefs.updateEconomySettings("2025", "Toyota", "Prius", "LE", 55f, false, 3.80f)
+        prefs.updateEconomySettings("2025", "Toyota", "Prius", "LE", 55f, false, 3.80f, null)
         seeder.seed()
         assertEquals(listOf(car.id), garage.garage.first().vehicles.map { it.id })
         assertEquals("Honda", garage.garage.first().active!!.profile.make)
@@ -57,7 +57,7 @@ class GarageSeederTest {
             produceFile = { tmp.newFile("named-garage.preferences_pb") })))
         val car = garage.addVehicle("My Civic", 1,
             LegacyProfile(tireSetCost = 900.0).toTyped())
-        prefs.updateEconomySettings("2018", "Honda", "Civic", "LX", 29f, false, 3.50f)
+        prefs.updateEconomySettings("2018", "Honda", "Civic", "LX", 29f, false, 3.50f, null)
         prefs.updateTireCost(600.0, 35_000.0)
         GarageSeeder(garage, prefs, state).seed()
         val result = garage.garage.first().active!!
@@ -114,7 +114,7 @@ class GarageSeederTest {
                 produceFile = { tmp.newFile("${outcome}-prefs.preferences_pb") }))
             val state = AppStateDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
                 produceFile = { tmp.newFile("${outcome}-state.preferences_pb") }))
-            prefs.updateEconomySettings("2021", "Honda", "Civic", "EX", 31f, false, 3.50f)
+            prefs.updateEconomySettings("2021", "Honda", "Civic", "EX", 31f, false, 3.50f, null)
             val identity = prefs.legacyVehicleProfile.first()!!
             val garage: GarageRepository = mock()
             whenever(garage.seedFrom(any(), any())).thenReturn(outcome)
@@ -140,7 +140,7 @@ class GarageSeederTest {
         val retired = garage.addVehicle("Retired", 2L, activateOn = ActivateOn.NEVER)
         garage.retire(retired.id, 3L)
         val before = garage.garage.first()
-        prefs.updateEconomySettings("2021", "Honda", "Civic", "EX", 31f, false, 3.50f)
+        prefs.updateEconomySettings("2021", "Honda", "Civic", "EX", 31f, false, 3.50f, null)
 
         GarageSeeder(garage, prefs, state).seed()
 
@@ -157,7 +157,7 @@ class GarageSeederTest {
             produceFile = { tmp.newFile("bad-garage.preferences_pb") }))
         val raw = "not json"
         source.save(raw, "old")
-        prefs.updateEconomySettings("2020", "Honda", "Civic", "LX", 30f, false, 3.50f)
+        prefs.updateEconomySettings("2020", "Honda", "Civic", "LX", 30f, false, 3.50f, null)
         GarageSeeder(GarageRepository(source), prefs, state).seed()
         assertFalse(state.garageSeeded.first())
         assertEquals(raw, source.stored.first().json)
@@ -171,11 +171,11 @@ class GarageSeederTest {
             produceFile = { tmp.newFile("zero-state.preferences_pb") }))
         val garage = GarageRepository(VehicleDataSource(PreferenceDataStoreFactory.create(scope = backgroundScope,
             produceFile = { tmp.newFile("zero-garage.preferences_pb") })))
-        prefs.updateEconomySettings("2021", "Honda", "Civic", "", 0f, false, 3.80f)
+        prefs.updateEconomySettings("2021", "Honda", "Civic", "", 0f, false, 3.80f, null)
         GarageSeeder(garage, prefs, state).seed()
         assertNull(garage.garage.first().active!!.profile.gasMpg)
         assertTrue(state.garageSeeded.first())
-        prefs.updateEconomySettings("", "", "", "", 0f, false, 3.80f)
+        prefs.updateEconomySettings("", "", "", "", 0f, false, 3.80f, null)
         assertNull(prefs.legacyVehicleProfile.first())
     }
 }

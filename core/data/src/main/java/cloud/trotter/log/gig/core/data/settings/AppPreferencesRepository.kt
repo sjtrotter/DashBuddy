@@ -43,6 +43,8 @@ class AppPreferencesRepository @Inject constructor(
     val estimatedMpg = dataSource.estimatedMpg.combine(garageRepository.garage) { old, garage -> garage.active?.profile?.gasMpg?.toFloat() ?: if (garage.active == null) old else null }
     val isGasPriceAuto = dataSource.isGasPriceAuto
     val gasPrice = dataSource.gasPrice
+    /** When a lookup returned the stored [gasPrice] (epoch ms); null when none has. */
+    val gasPriceFetchedAt: Flow<Long?> = dataSource.gasPriceFetchedAt
     val odometerPrompts = dataSource.read(SimplePrefs.odometerPrompts)
     val dailyGoalDollars = dataSource.read(SimplePrefs.dailyGoalDollars)
     val analyticsShowMore = dataSource.read(SimplePrefs.analyticsShowMore)
@@ -247,7 +249,8 @@ class AppPreferencesRepository @Inject constructor(
     // ============================================================================================
     // WRITE ACTIONS
     // ============================================================================================
-    suspend fun updateGasPrice(price: Float) = dataSource.updateGasPrice(price)
+    /** A looked-up price; written only while auto is still on (false when skipped). */
+    suspend fun updateGasPrice(price: Float, fetchedAtMillis: Long): Boolean = dataSource.updateGasPrice(price, fetchedAtMillis)
 
     /**
      * Manual pump-price override that also disables auto (EIA) fetching (#693) — the bubble's
@@ -263,7 +266,7 @@ class AppPreferencesRepository @Inject constructor(
      * one atomic write; the bubble's MANUAL-mode "Resume auto" chip routes here. The inverse of
      * [updateGasPriceManual]. Frozen-economics invariant (#314): affects only FUTURE evaluations.
      */
-    suspend fun updateGasPriceAuto(price: Float) = dataSource.updateGasPriceAuto(price)
+    suspend fun updateGasPriceAuto(price: Float, fetchedAtMillis: Long) = dataSource.updateGasPriceAuto(price, fetchedAtMillis)
     // Deferred saves commit their captured garage profile once, then mirror legacy preferences.
     suspend fun mirrorFuelType(type: FuelType) = dataSource.updateFuelType(type.name)
     suspend fun mirrorVehicleClass(type: VehicleClass) = dataSource.updateVehicleClass(type.name)
@@ -293,8 +296,8 @@ class AppPreferencesRepository @Inject constructor(
 
     suspend fun mirrorEconomySettings(
         year: String, make: String, model: String, trim: String,
-        mpg: Float, isGasAuto: Boolean, price: Float,
-    ) = dataSource.updateEconomySettings(year, make, model, trim, mpg, isGasAuto, price)
+        mpg: Float, isGasAuto: Boolean, price: Float, gasPriceFetchedAt: Long?,
+    ) = dataSource.updateEconomySettings(year, make, model, trim, mpg, isGasAuto, price, gasPriceFetchedAt)
 
     suspend fun updatePhoneTotal(value: Double) = updatePhoneTotal(value, null)
     suspend fun updatePhoneTotal(value: Double, capture: SaveCapture<StoredPreference<Double>>?) = dataSource.updatePhoneTotal(value, capture)

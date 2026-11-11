@@ -37,7 +37,13 @@
     <string name="wizard_gas_price_ev_desc">Charging prices vary, so enter your cost per gallon-equivalent.</string>
     <string name="wizard_gas_price_auto_update_title">Update gas price daily</string>
     <string name="wizard_gas_price_auto_update_desc">Off on a new install; an update keeps your setting. Daily, even off shift, gig.log gets your region\'s average price for your fuel type. To find your region, Android may send your location, rounded to about 11 km, to its address lookup. The U.S. Energy Information Administration gets the price request, with no account or install ID. To stop, turn this off and save setup.</string>
-    <string name="wizard_gas_price_current_regional_average">Regional average</string>
+    <string name="wizard_gas_price_source_today">Regional average, today</string>
+    <string name="wizard_gas_price_source_on_date">Regional average from %1$s</string>
+    <string name="wizard_gas_price_lookup_failed_using">Couldn\'t get today\'s price. Using %1$s from %2$s.</string>
+    <string name="wizard_gas_price_lookup_failed_enter">Couldn\'t get today\'s price. Enter your price.</string>
+    <string name="wizard_gas_price_source_typed">Price you entered</string>
+    <string name="wizard_gas_price_source_saved">Saved price</string>
+    <string name="wizard_gas_price_retry">Retry</string>
     <string name="wizard_vehicle_card_type_car">Car</string>
     <string name="wizard_vehicle_card_type_ebike">E-bike</string>
     <string name="wizard_vehicle_card_year_label">Year</string>

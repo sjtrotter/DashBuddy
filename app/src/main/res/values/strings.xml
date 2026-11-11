@@ -116,7 +116,6 @@
 
     <!-- settings/EconomySettingsScreen.kt -->
     <string name="economy_settings_title">Costs</string>
-    <string name="economy_settings_reset_defaults">Reset to defaults</string>
     <string name="economy_settings_intro">Defaults are estimates for your vehicle class. Tap a section to enter your own.</string>
 
     <!-- settings/AboutScreen.kt -->

@@ -17,7 +17,10 @@ data class WizardState(
     val isGasPriceAuto: Boolean = false,
     val gasPrice: Float = 3.50f,
     val isFetchingGasPrice: Boolean = false,
-    val fetchedGasPrices: Map<FuelType, Float> = emptyMap(),
+    val fetchedGasPrices: Map<FuelType, FetchedGasPrice> = emptyMap(),
+    val gasPriceSource: GasPriceSource = GasPriceSource.Typed,
+    /** The latest lookup returned nothing for the selected fuel; [gasPrice] and [gasPriceSource] are kept. */
+    val gasPriceLookupFailed: Boolean = false,
 
     // Personal Economy v2 — operating cost components (#145)
     val wear: WearProfile = WearProfile(

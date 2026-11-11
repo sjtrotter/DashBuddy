@@ -39,4 +39,11 @@
     <string name="wizard_vehicle_lookup_prompt">Consulta tus MPG en fueleconomy.gov, el sitio de la EPA. gig.log envía el año, la marca, el modelo y el ID de vehículo de la EPA que elijas.</string>
     <string name="wizard_vehicle_lookup_allow">Consultar mi vehículo</string>
     <string name="wizard_vehicle_manual_entry">Introducir MPG manualmente</string>
+    <string name="wizard_gas_price_source_today">Promedio regional, hoy</string>
+    <string name="wizard_gas_price_source_on_date">Promedio regional del %1$s</string>
+    <string name="wizard_gas_price_lookup_failed_using">No se pudo obtener el precio de hoy. Se usa %1$s del %2$s.</string>
+    <string name="wizard_gas_price_lookup_failed_enter">No se pudo obtener el precio de hoy. Introduce tu precio.</string>
+    <string name="wizard_gas_price_source_typed">Precio que introdujiste</string>
+    <string name="wizard_gas_price_source_saved">Precio guardado</string>
+    <string name="wizard_gas_price_retry">Reintentar</string>
 </resources>

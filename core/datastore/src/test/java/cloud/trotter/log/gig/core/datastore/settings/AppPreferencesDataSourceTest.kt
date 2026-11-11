@@ -71,11 +71,120 @@ class AppPreferencesDataSourceTest {
         source.updateGasPriceManual(3.29f)
         advanceUntilIdle()
 
-        source.updateGasPriceAuto(3.61f)
+        source.updateGasPriceAuto(3.61f, 1_000L)
         advanceUntilIdle()
 
         assertEquals(3.61f, source.gasPrice.first())
         assertEquals(true, source.isGasPriceAuto.first())
+    }
+
+    // #1478: the fetch stamp travels with a looked-up price and is left alone by a typed one.
+
+    @Test
+    fun `updateGasPrice writes the fetch stamp with the price`() = runTest {
+        val source = newSource(StandardTestDispatcher(testScheduler), "gas-stamp.preferences_pb")
+        assertNull(source.gasPriceFetchedAt.first())
+        source.setGasPriceAuto(true)
+
+        source.updateGasPrice(3.29f, 1_700_000_000_000L)
+
+        assertEquals(3.29f, source.gasPrice.first())
+        assertEquals(1_700_000_000_000L, source.gasPriceFetchedAt.first())
+    }
+
+    @Test
+    fun `updateGasPriceAuto writes the fetch stamp with the price and auto`() = runTest {
+        val source = newSource(StandardTestDispatcher(testScheduler), "gas-auto-stamp.preferences_pb")
+        source.updateGasPriceManual(4.00f)
+
+        source.updateGasPriceAuto(3.61f, 1_700_000_000_000L)
+
+        assertEquals(3.61f, source.gasPrice.first())
+        assertEquals(true, source.isGasPriceAuto.first())
+        assertEquals(1_700_000_000_000L, source.gasPriceFetchedAt.first())
+    }
+
+    @Test
+    fun `updateGasPriceManual leaves the fetch stamp alone`() = runTest {
+        val source = newSource(StandardTestDispatcher(testScheduler), "gas-manual-stamp.preferences_pb")
+        source.updateGasPriceAuto(3.61f, 1_700_000_000_000L)
+
+        source.updateGasPriceManual(4.00f)
+
+        assertEquals(4.00f, source.gasPrice.first())
+        assertEquals(false, source.isGasPriceAuto.first())
+        assertEquals(1_700_000_000_000L, source.gasPriceFetchedAt.first())
+    }
+
+    @Test
+    fun `turning auto back on over a typed price drops the stamp, and the wizard save sets or removes it`() = runTest {
+        val source = newSource(StandardTestDispatcher(testScheduler), "gas-auto-on-stamp.preferences_pb")
+        source.updateGasPriceAuto(3.61f, 1_000L)
+        source.setGasPriceAuto(true)
+        assertEquals(1_000L, source.gasPriceFetchedAt.first())
+
+        source.updateGasPriceManual(4.00f)
+        source.setGasPriceAuto(true)
+        assertNull(source.gasPriceFetchedAt.first())
+
+        source.updateEconomySettings("", "", "", "", 30f, true, 3.40f, gasPriceFetchedAt = 2_000L)
+        assertEquals(2_000L, source.gasPriceFetchedAt.first())
+        source.updateEconomySettings("", "", "", "", 30f, true, 3.90f, gasPriceFetchedAt = null)
+        assertNull(source.gasPriceFetchedAt.first())
+
+        source.updateGasPrice(3.50f, 3_000L)
+        source.resetSharedEconomyDefaults()
+        assertNull(source.gasPriceFetchedAt.first())
+    }
+
+    @Test
+    fun `a wizard save of a price typed over an old lookup removes the stamp even with auto on throughout`() = runTest {
+        // Stored auto on + stamp; in the wizard the dasher typed (auto off in the VM), turned auto back on, the
+        // lookup failed, and saved: storage never saw auto off, so only the save itself can drop the stamp.
+        val source = newSource(StandardTestDispatcher(testScheduler), "gas-wizard-typed.preferences_pb")
+        source.updateGasPriceAuto(3.29f, 1_000L)
+
+        source.updateEconomySettings("", "", "", "", 30f, true, 3.75f, gasPriceFetchedAt = null)
+
+        assertEquals(3.75f, source.gasPrice.first())
+        assertEquals(true, source.isGasPriceAuto.first())
+        assertNull(source.gasPriceFetchedAt.first())
+    }
+
+    @Test
+    fun `a lookup that returns after a typed price leaves the typed price and no new stamp`() = runTest {
+        val source = newSource(StandardTestDispatcher(testScheduler), "gas-late-lookup.preferences_pb")
+        source.updateGasPriceAuto(3.29f, 1_000L)
+        source.updateGasPriceManual(4.00f)
+
+        assertEquals(false, source.updateGasPrice(3.31f, 2_000L))
+
+        assertEquals(4.00f, source.gasPrice.first())
+        assertEquals(false, source.isGasPriceAuto.first())
+        assertEquals(1_000L, source.gasPriceFetchedAt.first())
+    }
+
+    @Test
+    fun `a manual price undo restores the price's stamp and refuses when the stamp changed`() = runTest {
+        val source = newSource(StandardTestDispatcher(testScheduler), "gas-undo-stamp.preferences_pb")
+        source.updateGasPriceAuto(3.10f, 500L)
+        source.updateGasPrice(3.29f, 1_000L)
+        val previous = source.updateGasPriceManual(4.00f)
+        assertEquals(StoredPreference(1_000L, false), previous.fetchedAt)
+        val expected = StoredGasPrice(StoredPreference(4.00f, false), StoredPreference(false, false), StoredPreference(1_000L, false))
+        source.updateGasPrice(3.31f, 2_000L) // a late lookup: skipped, auto is off
+
+        assertTrue(source.restoreGasPriceManual(previous, expected))
+        assertEquals(3.29f, source.gasPrice.first())
+        assertEquals(true, source.isGasPriceAuto.first())
+        assertEquals(1_000L, source.gasPriceFetchedAt.first())
+
+        val next = source.updateGasPriceManual(4.00f)
+        // Same price and auto, different stamp: the wizard saved this typed price, dropping the stamp.
+        source.updateEconomySettings("", "", "", "", 30f, false, 4.00f, gasPriceFetchedAt = null)
+        assertEquals(false, source.restoreGasPriceManual(next, expected))
+        assertEquals(4.00f, source.gasPrice.first())
+        assertNull(source.gasPriceFetchedAt.first())
     }
 
     @Test fun `time overrides set and clear independently and reject invalid inputs`() = runTest {
@@ -99,11 +208,11 @@ class AppPreferencesDataSourceTest {
 
     @Test fun `manual price undo restores 350 and auto on together`() = runTest {
         val source = newSource(StandardTestDispatcher(testScheduler), "gas-undo.preferences_pb")
-        source.updateGasPriceAuto(3.50f)
+        source.updateGasPriceAuto(3.50f, 1_000L)
         val previous = source.updateGasPriceManual(3.75f)
         assertEquals(false, source.isGasPriceAuto.first())
         assertTrue(source.restoreGasPriceManual(previous,
-            StoredGasPrice(StoredPreference(3.75f, false), StoredPreference(false, false))))
+            StoredGasPrice(StoredPreference(3.75f, false), StoredPreference(false, false), StoredPreference(1_000L, false))))
         assertEquals(3.50f, source.gasPrice.first())
         assertEquals(true, source.isGasPriceAuto.first())
     }
