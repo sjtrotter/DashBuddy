@@ -128,6 +128,9 @@ The delta-route holder is excluded from merchants. Repeated stores remain separa
 from the Accept footer. Missing/blank merchants and incomplete cards never mint offers; the drawer
 rejects the paired delta signature even before Accept/disclaimer/merchant inflation completes.
 `side_nav_drawer`'s give-up is ComposeView + `Decline` + ANY of the four card signatures (two total, two delta); the delta pair is byte-pinned to branch 1's reject by `DrawerOfferSignaturePinTest`.
+A `+$N.NN` whose immediately preceding sibling is a "Very busy" label is a boost badge, not an add-on delta (#1343):
+the `+$` arm of both rejects carries `not hasPrecedingSiblingText "Very busy"`, so a boosted TOTAL card parses its
+own pay and never the badge (`DoorDashBoostBadgeOfferTest`).
 Branch 2 also parses `stopCount` from the delta route (optional, not a hash input, #1304).
 `quoteBasis: incremental` is a load-validated declaration, mirrored in census authoring.
 It requires `offerScope: add_on` in the same resolved parse block; a violation isolates the rule at compile time.

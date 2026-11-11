@@ -66,6 +66,7 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 ## §2 Active
 
+- [A boosted offer card is recognized and its offer recorded (#1343)](checklist/open/1343-boosted-offer-card-recorded.md)
 - [The going-to-store sheet's store name is the store (#1396)](checklist/open/1396-going-to-store-sheet-store-name.md)
 - [The Play build's screen reading card (#170, #1413)](checklist/open/170-play-build-screen-reading-card.md)
 - [The Play build does not read an Uber offer pop-up (#1413)](checklist/open/1413-play-build-uber-offer-not-read.md)
