@@ -98,7 +98,10 @@ economics (Astra round 1, PR #1115). `orderType` is PER STORE: the merchant hold
 shop row for a shop merchant (`holder → address → Shop for N items …`) and the NEXT holder for a pickup
 merchant, so a regex on that node's `allText` yields `SHOP_FOR_ITEMS` or falls to the `literal`
 `PICKUP` — verified on the fielded mixed stack (Smoothie King PICKUP + Target SHOP_FOR_ITEMS, fixture
-`…073fcb`); only the badges (Red Card / alcohol / large order) resolve at offer level. Merchant legs are identified by
+`…073fcb`). The shop row reads both `Shop for N items (…)` and, for a multi-order shop,
+`Shop for N orders (M items, …)` (#1528): both forms give `SHOP_FOR_ITEMS` and the items figure as the item count;
+the order count N is not read. Only the badges (Red Card / alcohol / large order) resolve at offer level. Merchant
+legs are identified by
 EXCLUSION (every holder in the body that is not the route-summary holder — a SIBLING of the store rows,
 excluded by its text shape through the new `hasAnyTextMatchesRegex` predicate — the dropoff/handoff holder, or
 the disclaimer; the address is never a key, so a no-ZIP
