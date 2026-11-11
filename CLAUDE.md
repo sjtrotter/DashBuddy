@@ -260,8 +260,9 @@ Before changing a fold, a DAO read, a correction event, the ledger or a Recap or
 - Corrections are append-only events, folded non-destructively; a machine re-price never overwrites a driver-owned
   row. A hand-added delivery is removed by its own event (`MANUAL_DELIVERY_REMOVED`); its `MANUAL_DELIVERY` stays
   in the log.
-- Pay comes from the receipt, else an `OFFER_PAY` estimate. A receipt speaks only for the drops it described
-  (`ReceiptCoverage`).
+- Pay comes from a receipt only on proof (`ReceiptCoverage`: one accepted offer whose card shows one drop, and that
+  drop alone), else an `OFFER_PAY` estimate. Every receipt read is evidence (`receipt_records`); an unproven one
+  places and suppresses nothing.
 - `ShiftEarnings` is the one owner of the bubble's headline. Expenses and fuel are a separate ledger that never
   enters earnings or the daily goal.
 - Recap's reads are window-anchored (`AnalyticsWindow`, Monday weeks); Plan's heatmap, leaderboard and plan are

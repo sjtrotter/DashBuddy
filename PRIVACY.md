@@ -254,6 +254,9 @@ identity export. Vehicle/default resets preserve these learned preferences.
   existing expense note, and its fill-up GPS stamp is the existing `odometerMiles`. Recent-label
   chips are derived from non-voided expense notes, with no second label store. Expense actions
   keep labels out of diagnostic logs entirely; a failed write logs only the exception class at WARN.
+- Each delivery receipt the app reads is also an event in that log and a row in `receipt_records`: the pay total, base
+  pay and tips, the time, and the app's own job and delivery ids. It holds no customer data, is not in the CSV export,
+  and is sent nowhere.
 - Miles you correct for a shift stay on the device (#1535): a `SESSION_MILES_CORRECTION` event in the local
   database and its value on the shift's read-model row. The tracked GPS figure is kept beside it, and the CSV export
   marks each shift's miles as tracked or corrected.

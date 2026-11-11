@@ -96,12 +96,16 @@ FROM session_records s WHERE sessionId = :sid;
 -- (undershoot expected; exceed = the mixed-basis double-count, a #688 Fix-1 regression).
 -- one-time refold on first post-install launch: grep 'projector version' shareable.log
 
--- #630  stacked receipts split exactly
-SELECT jobId, SUM(realizedPay) FROM delivery_records
-WHERE payBasis IN ('DROP_SHARE','RECEIPT_TOTAL') GROUP BY jobId;
--- expect: = the receipt total per job; no $0/NONE row where a receipt existed.
--- tripwire (also the #756 promotion trigger):
---   grep '#630 mid-stack non-final receipt exit' shareable.log   → a hit = grab that capture session
+-- #1598 per-receipt reconciliation (each saved receipt vs the pay it placed)
+SELECT r.evidenceId, r.jobId, r.scope, r.proofGap, r.totalCents,
+       ROUND(COALESCE(SUM(d.realizedPay), 0) * 100) AS placedCents
+FROM receipt_records r
+LEFT JOIN delivery_records d ON d.jobId = r.jobId AND d.taskId = r.subjectTaskId
+     AND d.payBasis IN ('DROP_SHARE','RECEIPT_TOTAL')
+WHERE r.sessionId = :sid GROUP BY r.evidenceId ORDER BY r.firstSeenAt;
+-- expect: PROVEN_SINGLE → placedCents = totalCents; UNPROVEN → placedCents = 0 and no row of that job is
+-- DROP_SHARE/RECEIPT_TOTAL (its drops show OFFER_PAY or NONE). Gap counts: GROUP BY proofGap.
+-- grep '#1598 receipt' app.log → evidence, placement and late-frame lines (DEBUG).
 
 -- #736 / #752  unassign produces NO paid/confirmed artifacts (either phase)
 SELECT eventType, json_extract(eventPayload,'$.phase') AS phase,
@@ -149,7 +153,7 @@ SELECT taskId, realizedMiles FROM delivery_records;
 | Item | Grep | Expect |
 |---|---|---|
 | #749 | `grep '#749 coverage arm closed' app.log` | the coverage-arm close (DEBUG, jobId+counts) |
-| #630/#756 | `grep '#630 mid-stack non-final receipt exit'` | ideally none; a hit = pull that capture session (and it's the #756 promotion trigger) |
+| #630/#756 | `grep '#630 mid-stack non-final receipt exit'` | never (a hit is an invariant break) |
 | #733 | `grep -c 'D6 join miss'` | ≤1 per drop, ideally 0 |
 | #688B | `grep 'projector version'` | the one-time 5→6 refold line on first post-install launch |
 | #588 | `grep 'ShopRate'` | every line tagged `[<platform.wire>]`; the trailing `→ learned …/min (n=…)` shows the relearn trajectory (seed-reset visible as n resetting). `learned ?/min (n=0)` = nothing learned yet (an out-of-band sample folds nothing) — NOT a zeroed mean |

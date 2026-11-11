@@ -663,7 +663,7 @@ shape, the itemization is real evidence that arrived late, and the drop is re-pr
 of being left on the estimate forever. A machine **Tier-1** correction with the same append-only
 posture as the driver ones: the original `DELIVERY_COMPLETED` is never rewritten.
 `EffectMap.diffReceiptReprice` emits ONE `DELIVERY_RECEIPT_REPRICE` per delivered drop of the job
-(a stacked receipt re-prices every sibling), with shares from LITERALLY the same expression the mint
+(since #1598 that is the one proven drop; before, a stacked receipt re-priced every sibling), with shares from LITERALLY the same expression the mint
 apportions over — `DropPayApportioner.apportion` across `mintingDropoffTasks(…).describedBy(coverage)`
 (the `Task.isAccountableDropoff` denominator, intersected with the receipt's own `ReceiptCoverage`) —
 so `Σ dropRealizedPay == parsedPay.total` to the cent holds by construction rather than by two copies
@@ -703,8 +703,8 @@ is not identity, and it let a stacked job's $20 receipt redistribute the closed 
 over a real $10/$10). **Stated cost (fail-null, #745): the STACKED shape — accept the next offer while
 this receipt is up, then expand it LATE — is refused and keeps the `OFFER_PAY` estimate; layer 1's 8 s
 window is the path that lands it in time.** **A receipt speaks only for the drops it described when it
-was read (#1073, rounds 13–14):** `ReceiptCoverage` (the receipt's SUBJECT + every accountable drop of
-its job with completion evidence at that frame) is captured beside the cached receipt, and the mint's
+was read (#1073, rounds 13–14):** `ReceiptCoverage` (since #1598 the strict rule in the next section: the subject alone, and only on
+proof; before, the subject + every accountable drop of its job with completion evidence at that frame) is captured beside the cached receipt, and the mint's
 `apportion` denominator, the mint's receipt ATTACH and the re-price's denominator are all intersected
 with it — one owner, so they cannot disagree and Σ `dropRealizedPay` == the receipt total holds by
 construction; an uncovered sibling folds unpriced (fail-null, one WARN at the close) instead of taking
@@ -732,9 +732,8 @@ never re-price its genuinely delivered siblings DOWN (fail-null, #745).
 A cached receipt that names no drop of the job is not evidence about it, so it does not suppress the
 #691 estimate either. A `completedAt` timestamp was tried first as the coverage discriminator and
 rejected in the same series: it is the LATEST retire arm, so the receipt's own anchor could fall
-outside its own receipt. Stated
-cost: after a multi-drop job closes, a re-render of ONE drop's own receipt would be split across every
-covered drop (DoorDash fields one combined end receipt, so the shape is not known to occur). Effect keys are
+outside its own receipt. (Before #1598 a post-close re-render of ONE drop's own receipt was split
+across every covered drop; the strict rule leaves no multi-drop coverage to split over.) Effect keys are
 `…:<taskId>:<jobId>:r<revision>` off `repriceRevision`, NOT the receipt's content hash: an X→Y→X
 itemization sequence hashed back onto its own first key and the durable `effects_fired` idempotency
 dropped the third emission, freezing the row at Y. `CorrectionFolds.foldDeliveryReceiptReprice` → a `ReceiptRepriceFold` the projector applies
@@ -753,6 +752,68 @@ survives; an EARLIER one is never superseded. Read side: `receiptRepricedAt` sta
 "re-priced from the receipt" line went with it in #1516; the shift page names the pay's source word only). Named residual:
 `payoutStoreForms` is NOT back-stamped by a re-price, so a job whose only receipt arrived late keeps
 its pre-existing #159 store keys.
+
+### Receipt evidence and strict coverage (#1598, Room v25)
+
+A receipt carries no job identity, and the wide #1073 rule split one offer's receipt over another
+offer's drops on a multi-offer job (2026-09-20: $49.01 recorded as $20.50; 2026-10-11: a $10.40 receipt
+split five ways). Since #1598 **a receipt places money only on proof**, and every receipt read is
+evidence.
+
+**The proof** (`ReceiptProof.receiptCoverageAt`, clauses in order, the first failure is the
+`ReceiptProofGap`): a subject drop was named (`NO_SUBJECT`); a job is live (`NO_LIVE_JOB` — after the
+close only the SAME receipt episode, already proven while its job was live, stays proven: the collapsed →
+commit → late-expand shape); the job holds exactly one accepted offer (`OFFER_COUNT`); that offer's card
+showed one drop (`AcceptedOfferEconomics.cardDropoffCount`, parsed from the Compose card's `Customer
+dropoff` / `Multiple dropoffs (N stops)` holder: `CARD_COUNT_MISSING`, `CARD_COUNT_NOT_ONE`); the subject is
+an accountable drop and no other drop of the job is (`SUBJECT_NOT_ACCOUNTABLE`, `OTHER_DROPS` — a
+never-activated placeholder is not accountable, so the one-customer two-store card, which mints one
+placeholder per merchant row, still proves); its store matches the offer's through
+`StoreKeys.normalizedChain` (`STORE_MISSING`, `STORE_MISMATCH`). Proven covers `{subject}`
+(`ReceiptScope.PROVEN_SINGLE`); anything else covers nothing (`UNPROVEN`): no share, no attach, no
+re-price, and it suppresses no estimate (`receiptSuppressesEstimate` needs a covered drop). Residual: a
+hidden offer whose single drop stands in for this offer's drop after its order vanished unseen. Narrow,
+and visible through the per-receipt check. The dasher's matching sheet (#1599) and whole-job settlement
+(#1601) cover everything unproven.
+
+**The marker and its fold gate.** Every new `DELIVERY_COMPLETED` carries `receiptScope`: `PROVEN_SINGLE`
+when receipt money rides it, else `UNPROVEN` (receipt-less or unproven), plus `receiptEvidenceId`.
+`DeliveryFolds` reads an `UNPROVEN` payload's `totalPay`/`parsedPay`/`dropRealizedPay` as null, so a stray
+total can never reach `RECEIPT_TOTAL`; a null marker (every pre-#1598 event) folds byte for byte as
+before. A re-price carries the same marker, and an `UNPROVEN` one is a counted skip. **No
+`PROJECTOR_VERSION` bump:** history keeps its meaning, so a rebuild reproduces today's rows; the three
+known wrong amounts are corrected by events (#1602), not by refolding.
+
+**Evidence: `RECEIPT_OBSERVED` → `receipt_records`.** Each pay-bearing receipt read in a session that owns
+its job is one `RECEIPT_OBSERVED` (money, the app's job and drop ids, the scope and the first failed
+clause). Identity is one record per (receipt episode, subject): the episode
+(`PlatformRegion.openReceiptEvidence`) lives while the flow stays on the receipt or the offer overlay
+reached from it (the #1460 continuity rule, `receiptEpisodeContinues`), and a changed read inside it — a
+new total, a new itemization or a new scope — is a new revision of the same `evidenceId`
+(`receipt:<subject>:<firstSeenAt>`); an unchanged re-render records nothing. Equal totals are never
+identity: another subject or a broken episode is a new record, which #1599's "Same receipt as…" links.
+The effect key is `log:RECEIPT_OBSERVED:<evidenceId>:r<revision>`. The fold is bookkeeping
+(`RecordFolds.BOOKKEEPING_EVENTS`: no liveness advance, no odometer measurement), so every other row is
+byte-identical with or without these events. `receipt_records` (Room v25, new table, `AutoMigration`
+24→25, no refold): `evidenceId` (PK), `sessionId`, `platform`, `jobId`, `subjectTaskId`, `firstSeenAt`,
+`lastSeenAt`, `totalCents`, `basePayCents`, `tipCents`, `isExpanded`, `scope`, `proofGap`, `revision`,
+`lastEventSequenceId`; upserted by `evidenceId`, so the latest revision wins; wiped and refolded by a
+version rebuild. `PostTaskFields.dedupeHash` includes the itemization and `isExpanded`, so an expansion
+at an equal total reaches the machine.
+
+**The late-frame guard.** A receipt FRAME read after its job closed re-prices only if no offer has been
+presented since the receipt was first read in its episode (`PlatformRegion.possibleWorkSeq`, bumped on
+every fresh presentation, against `OpenReceiptEvidence.possibleWorkSeqAtOpen`). The #1033 accept guard
+misses an offer shown and then timed out or declined (on the Compose card a decline resolves as a
+timeout), yet that offer may own the frame on screen. The close-time and teardown asks are not late
+frames: their receipt was read while the job was live.
+
+**Stated costs.** A one-offer, two-drop stack no longer gets receipt-backed shares: its drops keep the
+inline or close estimate, and a first drop whose sibling had already activated when it exited stays
+unpriced (`NONE`), as receipt-less stacks do today (#1599 is the repair). A proven single drop whose
+receipt expands after its job closed is not re-priced if any offer appeared since the receipt was first
+read; the row keeps the mint's receipt total, without the tip/base split. Legacy View card receipts (none
+fielded since 2026-09-17) are all unproven: that card shows no drop count.
 
 ### Session report correction (#1134, Room v17)
 
