@@ -16,6 +16,8 @@ import cloud.trotter.log.gig.core.database.analytics.StoreSearchDao
 import cloud.trotter.log.gig.core.database.analytics.LedgerDao
 import cloud.trotter.log.gig.core.database.analytics.OfferRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.PickupRecordEntity
+import cloud.trotter.log.gig.core.database.analytics.ReceiptDao
+import cloud.trotter.log.gig.core.database.analytics.ReceiptRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.SessionRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.StoreEntity
 import cloud.trotter.log.gig.core.database.chat.ChatDao
@@ -46,6 +48,8 @@ import cloud.trotter.log.gig.core.database.snapshot.AppStateSnapshotEntity
         // Store entity resolution (#159) — additive: identity table + per-pickup visits table.
         StoreEntity::class,
         PickupRecordEntity::class,
+        // #1598: receipt evidence, one row per receipt record.
+        ReceiptRecordEntity::class,
     ],
     version = GigLogDatabase.VERSION,
     exportSchema = true,
@@ -110,6 +114,8 @@ import cloud.trotter.log.gig.core.database.snapshot.AppStateSnapshotEntity
     // NULL on existing rows; the `PROJECTOR_VERSION` 17→18 refold fills them from the logged offer and delivery payloads.
     // v23→v24 (#1517): nullable offer_records.unassignedAt and delivery_records.sourceOfferSeq, NULL on existing rows;
     // the `PROJECTOR_VERSION` 18→19 refold stamps them from the logged TASK_UNASSIGNED and MANUAL_DELIVERY events.
+    // v24→v25 (#1598): one new table, receipt_records. No `PROJECTOR_VERSION` bump: RECEIPT_OBSERVED is a new event
+    // type that cannot exist in folded history, so the table starts empty and fills from new events.
     autoMigrations = [
         AutoMigration(from = 8, to = 9),
         AutoMigration(from = 9, to = 10),
@@ -127,6 +133,7 @@ import cloud.trotter.log.gig.core.database.snapshot.AppStateSnapshotEntity
         AutoMigration(from = 21, to = 22), // #1535 nullable session_records.milesOverride; no refold
         AutoMigration(from = 22, to = 23), // #1516 offer scope/basis + delivery job offer hashes; refold 18
         AutoMigration(from = 23, to = 24), // #1517 offer unassignedAt + delivery sourceOfferSeq; refold 19
+        AutoMigration(from = 24, to = 25), // #1598 receipt_records (new table); no refold
     ],
 )
 @TypeConverters(DataTypeConverters::class)
@@ -144,6 +151,7 @@ abstract class GigLogDatabase : RoomDatabase() {
     abstract fun hudShiftDao(): HudShiftDao
     abstract fun recapDao(): RecapDao
     abstract fun storeSearchDao(): StoreSearchDao
+    abstract fun receiptDao(): ReceiptDao
 
     companion object {
         /**
@@ -159,7 +167,7 @@ abstract class GigLogDatabase : RoomDatabase() {
          * this in lockstep with a new `schemas/**/<N>.json`, an `AutoMigration(N-1 → N)`, and its
          * `MigrationTestHelper` case — see the release checklist in CLAUDE.md.
          */
-        const val VERSION = 24
+        const val VERSION = 25
     }
 
 }

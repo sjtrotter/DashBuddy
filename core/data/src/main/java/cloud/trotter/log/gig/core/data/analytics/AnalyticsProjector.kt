@@ -25,6 +25,7 @@ import cloud.trotter.log.gig.domain.analytics.OfferReconcileFold
 import cloud.trotter.log.gig.domain.analytics.PayAdjustmentFold
 import cloud.trotter.log.gig.domain.analytics.PayBasis
 import cloud.trotter.log.gig.domain.analytics.PickupFold
+import cloud.trotter.log.gig.domain.analytics.ReceiptFold
 import cloud.trotter.log.gig.domain.analytics.RecordFolds
 import cloud.trotter.log.gig.domain.analytics.SessionAssignFold
 import cloud.trotter.log.gig.domain.analytics.SessionFoldContext
@@ -86,6 +87,7 @@ class AnalyticsProjector @Inject constructor(
 ) {
 
     private val ledgerDao = db.ledgerDao()
+    private val receiptDao = db.receiptDao()
 
     /** #159 store-resolution runner (row adapter over the pure `StoreResolver` core), run inside the
      *  batch transaction against the job's committed rows. */
@@ -232,6 +234,7 @@ class AnalyticsProjector @Inject constructor(
         val deliveries = ArrayList<DeliveryFold>()
         val offers = ArrayList<OfferFold>()
         val pickups = ArrayList<PickupFold>()          // #159 visits rows
+        val receipts = ArrayList<ReceiptFold>()        // #1598 receipt evidence rows
         val resolutions = ArrayList<ResolutionTask>()  // #159 store-resolution triggers (seq-ordered)
         // FIX 1: one event-sequence-ordered stream of adjustment decisions (PAY_ADJUSTMENT +
         // DELIVERY_ADJUSTMENT interleaved), NOT two type-partitioned lists. Type-order apply mis-ordered
@@ -248,6 +251,7 @@ class AnalyticsProjector @Inject constructor(
             outcome.delivery?.let { deliveries += it }
             outcome.offer?.let { offers += it }
             outcome.pickup?.let { pickups += it }
+            outcome.receipt?.let { receipts += it }
             outcome.resolution?.let { resolutions += ResolutionTask(ev.sequenceId, it) }
             outcome.payAdjustment?.let { adjustments += Adjustment.Pay(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.expenseLogged?.let { adjustments += Adjustment.ExpenseLogged(ev.sequenceId, ev.event.occurredAt, it) }
@@ -286,6 +290,7 @@ class AnalyticsProjector @Inject constructor(
             deliveries.forEach { analyticsDao.upsertDelivery(it.toEntity()) }
             offers.forEach { analyticsDao.upsertOffer(it.toEntity()) }
             pickups.forEach { analyticsDao.upsertPickup(it.toEntity()) }
+            receipts.forEach { receiptDao.upsert(it.toEntity()) } // #1598: sequence order, the latest revision wins
             touched.forEach { sid -> contexts[sid]?.let { analyticsDao.upsertSession(it.toEntity()) } }
             // Apply the driver corrections AFTER the batch's own delivery upserts (so a same-batch
             // target is already written) and before the watermark, in ONE event-sequence order (FIX 1).
@@ -746,6 +751,7 @@ class AnalyticsProjector @Inject constructor(
             // posture exists to catch). The refold repopulates both from the immutable log.
             analyticsDao.deleteAllStores()
             analyticsDao.deleteAllPickupRecords()
+            receiptDao.deleteAll() // #1598: rebuilt from RECEIPT_OBSERVED like every other projection
             analyticsDao.setWatermark(
                 AnalyticsProjectionStateEntity(watermarkSequenceId = 0, projectorVersion = PROJECTOR_VERSION),
             )
