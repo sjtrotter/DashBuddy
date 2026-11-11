@@ -62,6 +62,8 @@ class AppPreferencesDataSource @Inject constructor(
         val ESTIMATED_MPG = floatPreferencesKey("estimated_mpg")
         val IS_GAS_PRICE_AUTO = booleanPreferencesKey("is_gas_price_auto")
         val GAS_PRICE = floatPreferencesKey("gas_price")
+        // When a lookup returned the stored GAS_PRICE (epoch ms). A typed price leaves it alone: auto off marks it.
+        val GAS_PRICE_FETCHED_AT = longPreferencesKey("gas_price_fetched_at")
         val VEHICLE_LOOKUP_ALLOWED = booleanPreferencesKey("vehicle_lookup_allowed")
         val FUEL_TYPE = stringPreferencesKey("fuel_type")
         // Legacy key (pre-v2 schema, "CAR"/"E_BIKE"). VEHICLE_CLASS supersedes it.
@@ -180,6 +182,7 @@ class AppPreferencesDataSource @Inject constructor(
     val isGasPriceAuto: Flow<Boolean> = ds.data.map { it[Keys.IS_GAS_PRICE_AUTO] ?: false }
     val electricityPricePerKwh: Flow<Double?> = ds.data.map { it[Keys.ELECTRICITY_PRICE_PER_KWH] }
     val gasPrice: Flow<Float?> = ds.data.map { it[Keys.GAS_PRICE] }
+    val gasPriceFetchedAt: Flow<Long?> = ds.data.map { it[Keys.GAS_PRICE_FETCHED_AT] }
 
     val vehicleLookupAllowed: Flow<Boolean> = ds.data.map { it[Keys.VEHICLE_LOOKUP_ALLOWED] ?: false }
     val fuelType: Flow<String?> = ds.data.map { it[Keys.FUEL_TYPE] }
@@ -276,8 +279,21 @@ class AppPreferencesDataSource @Inject constructor(
         return restored
     }
 
-    suspend fun updateGasPrice(price: Float) {
-        ds.edit { it[Keys.GAS_PRICE] = price }
+    /**
+     * Turning auto on over a price stored while it was off (a typed price) drops the fetch stamp: the stamp
+     * described an earlier looked-up price, not this one. Must be called from inside a [DataStore.edit] block.
+     */
+    private fun MutablePreferences.setGasAuto(auto: Boolean) {
+        if (auto && this[Keys.IS_GAS_PRICE_AUTO] != true) remove(Keys.GAS_PRICE_FETCHED_AT)
+        this[Keys.IS_GAS_PRICE_AUTO] = auto
+    }
+
+    /** A looked-up price, stamped with when the lookup returned it, in one edit. */
+    suspend fun updateGasPrice(price: Float, fetchedAtMillis: Long) {
+        ds.edit {
+            it[Keys.GAS_PRICE] = price
+            it[Keys.GAS_PRICE_FETCHED_AT] = fetchedAtMillis
+        }
     }
 
     /**
@@ -314,9 +330,10 @@ class AppPreferencesDataSource @Inject constructor(
      * can't leave auto=true paired with a stale/pre-fetch price. Same store/keys — no second
      * gas-price copy.
      */
-    suspend fun updateGasPriceAuto(price: Float) {
+    suspend fun updateGasPriceAuto(price: Float, fetchedAtMillis: Long) {
         ds.edit {
             it[Keys.GAS_PRICE] = price
+            it[Keys.GAS_PRICE_FETCHED_AT] = fetchedAtMillis
             it[Keys.IS_GAS_PRICE_AUTO] = true
         }
     }
@@ -345,9 +362,10 @@ class AppPreferencesDataSource @Inject constructor(
         }
     }
 
+    /** [gasPriceFetchedAt] is set when a lookup returned [price]; null leaves the stored stamp alone. */
     suspend fun updateEconomySettings(
         year: String, make: String, model: String, trim: String,
-        mpg: Float, isGasAuto: Boolean, price: Float
+        mpg: Float, isGasAuto: Boolean, price: Float, gasPriceFetchedAt: Long? = null,
     ) {
         ds.edit { prefs ->
             prefs[Keys.VEHICLE_YEAR] = year
@@ -355,8 +373,9 @@ class AppPreferencesDataSource @Inject constructor(
             prefs[Keys.VEHICLE_MODEL] = model
             prefs[Keys.VEHICLE_TRIM] = trim
             prefs[Keys.ESTIMATED_MPG] = mpg
-            prefs[Keys.IS_GAS_PRICE_AUTO] = isGasAuto
+            prefs.setGasAuto(isGasAuto)
             prefs[Keys.GAS_PRICE] = price
+            gasPriceFetchedAt?.let { prefs[Keys.GAS_PRICE_FETCHED_AT] = it }
         }
     }
 
@@ -484,7 +503,7 @@ class AppPreferencesDataSource @Inject constructor(
     }
     suspend fun setGasPriceAuto(value: Boolean, capture: SaveCapture<StoredPreference<Boolean>>? = null): StoredPreference<Boolean> {
         lateinit var previous: StoredPreference<Boolean>
-        ds.edit { previous = capture?.capture { it.capture(Keys.IS_GAS_PRICE_AUTO) } ?: it.capture(Keys.IS_GAS_PRICE_AUTO); it[Keys.IS_GAS_PRICE_AUTO] = value }
+        ds.edit { previous = capture?.capture { it.capture(Keys.IS_GAS_PRICE_AUTO) } ?: it.capture(Keys.IS_GAS_PRICE_AUTO); it.setGasAuto(value) }
         return previous
     }
     suspend fun restoreGasPriceAuto(previous: StoredPreference<Boolean>, expected: StoredPreference<Boolean>, current: () -> Boolean = { true }): Boolean {
@@ -533,6 +552,7 @@ class AppPreferencesDataSource @Inject constructor(
             EconomyField.AVG_MIN_PER_MILE, EconomyField.BASE_PICKUP_MIN, EconomyField.GAS_PRICE)
         ds.edit { prefs ->
             prefs.remove(Keys.GAS_PRICE)
+            prefs.remove(Keys.GAS_PRICE_FETCHED_AT)
             prefs.remove(Keys.IS_GAS_PRICE_AUTO)
             prefs.remove(Keys.ELECTRICITY_PRICE_PER_KWH)
             prefs.remove(Keys.PHONE_PLAN_TOTAL)

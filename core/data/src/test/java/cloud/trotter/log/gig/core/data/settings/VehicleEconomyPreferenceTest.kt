@@ -210,7 +210,7 @@ class VehicleEconomyPreferenceTest {
         source.restoreTimeConstantOverride(EconomyField.AVG_MIN_PER_MILE, time, StoredPreference(4.0, true))
         assertNull(source.avgMinPerMile.first())
         assertTrue(source.userSetEconomyFields.first().isEmpty())
-        source.updateGasPriceAuto(3.25f)
+        source.updateGasPriceAuto(3.25f, 1_000L)
         val gas = source.updateGasPriceManual(4.0f)
         assertFalse(source.isGasPriceAuto.first())
         val expected = StoredGasPrice(StoredPreference(4.0f, false), StoredPreference(false, false))

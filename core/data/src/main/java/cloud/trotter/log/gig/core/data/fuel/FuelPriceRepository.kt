@@ -5,6 +5,7 @@ import cloud.trotter.log.gig.core.location.LocationDataSource
 import cloud.trotter.log.gig.domain.model.vehicle.FuelType
 import cloud.trotter.log.gig.domain.provider.FuelPriceDataSource
 import timber.log.Timber
+import java.time.Clock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -12,10 +13,11 @@ import javax.inject.Singleton
 class FuelPriceRepository @Inject constructor(
     private val gasDataSource: FuelPriceDataSource,
     private val locationDataSource: LocationDataSource,
-    private val appPreferencesRepository: AppPreferencesRepository
+    private val appPreferencesRepository: AppPreferencesRepository,
+    private val clock: Clock,
 ) {
     suspend fun fetchAndSaveCurrentGasPrice(fuelType: FuelType): Result<Float> =
-        fetchAndPersist(fuelType) { appPreferencesRepository.updateGasPrice(it) }
+        fetchAndPersist(fuelType) { price, at -> appPreferencesRepository.updateGasPrice(price, at) }
 
     /**
      * "Resume auto" (#722) — the bubble's MANUAL-mode chip. Routes through the SAME fetch as
@@ -24,17 +26,18 @@ class FuelPriceRepository @Inject constructor(
      * the inverse of the stepper's [AppPreferencesRepository.updateGasPriceManual] flip.
      */
     suspend fun fetchAndResumeAutoGasPrice(fuelType: FuelType): Result<Float> =
-        fetchAndPersist(fuelType) { appPreferencesRepository.updateGasPriceAuto(it) }
+        fetchAndPersist(fuelType) { price, at -> appPreferencesRepository.updateGasPriceAuto(price, at) }
 
     /**
      * A failed persist is a failed [Result], never an uncaught throw — callers rely on the
      * no-throw contract (the bubble's `viewModelScope.launch` has no exception handler, and the
-     * daily worker treats a failure Result as a retry signal).
+     * daily worker treats a failure Result as a retry signal). The price is stamped with the clock's time
+     * when the lookup returned; a failed lookup writes nothing.
      */
-    private suspend fun fetchAndPersist(fuelType: FuelType, save: suspend (Float) -> Unit): Result<Float> =
+    private suspend fun fetchAndPersist(fuelType: FuelType, save: suspend (Float, Long) -> Unit): Result<Float> =
         fetchCurrentGasPrice(fuelType).mapCatching { newPrice ->
             try {
-                save(newPrice)
+                save(newPrice, clock.millis())
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "GasPriceRepository failed to persist fetched price")
                 throw e
