@@ -44,6 +44,8 @@ enum class AppEventType {
                               // correction: it re-prices the drop from the receipt's own itemization
                               // (payBasis → DROP_SHARE) and never rewrites the original completion event.
                               // One event per delivered drop of the job; payload = money + ids only (P7).
+    RECEIPT_OBSERVED, // #1598: one read of a post-delivery receipt, saved as evidence. Moves no money; folds into
+                      // `receipt_records` only.
 
     // --- User corrections (#650) ---
     MANUAL_DELIVERY, // A driver-entered missed delivery (durable correction event, never destructive)

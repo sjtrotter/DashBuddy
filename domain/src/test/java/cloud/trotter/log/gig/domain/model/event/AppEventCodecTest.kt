@@ -21,6 +21,9 @@ import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeResolution
 import cloud.trotter.log.gig.domain.model.event.payload.OfferPayload
 import cloud.trotter.log.gig.domain.model.event.payload.TaskUnassignedPayload
 import cloud.trotter.log.gig.domain.state.TaskPhase
+import cloud.trotter.log.gig.domain.model.event.payload.ReceiptObservedPayload
+import cloud.trotter.log.gig.domain.state.ReceiptProofGap
+import cloud.trotter.log.gig.domain.state.ReceiptScope
 import cloud.trotter.log.gig.domain.model.event.payload.OfferReceivedPayload
 import cloud.trotter.log.gig.domain.model.event.payload.PickupPayload
 import cloud.trotter.log.gig.domain.model.event.payload.SessionEndSource
@@ -128,6 +131,17 @@ class AppEventCodecTest {
                 ),
                 dropRealizedPay = 16.70, sourceCaptureId = "cap-1",
             ),
+            // #1598: receipt evidence, the itemization and both enums on the wire.
+            AppEventType.RECEIPT_OBSERVED to ReceiptObservedPayload(
+                evidenceId = "receipt:t2:5000", revision = 2, platform = "doordash", jobId = "j1",
+                subjectTaskId = "t2", firstSeenAt = 5_000L, observedAt = 6_000L, totalPay = 16.70,
+                parsedPay = ParsedPay(
+                    appPayComponents = listOf(ParsedPayItem("Base Pay", 9.70)),
+                    customerTips = listOf(ParsedPayItem("Store A", 7.00)),
+                ),
+                isExpanded = true, scope = ReceiptScope.UNPROVEN, proofGap = ReceiptProofGap.OFFER_COUNT,
+                sourceCaptureId = "cap-2",
+            ),
         )
 
         for ((type, payload) in cases) {
@@ -166,6 +180,22 @@ class AppEventCodecTest {
             offerPayAttribution = OfferPayAttribution.PER_OFFER_STORE,
         )
         assertEquals(stamped, roundTrip(AppEventType.DELIVERY_COMPLETED, stamped))
+    }
+
+    @Test
+    fun `#1598 — a DELIVERY_COMPLETED without the receipt marker decodes with nulls, and a marked one round-trips`() {
+        val legacy = """{"jobId":"j1","taskId":"t2","phaseStartedAt":5000,"completedAt":6000,"totalPay":9.25}"""
+        val decoded = AppEventCodec.decodePayload(AppEventType.DELIVERY_COMPLETED, legacy) as DeliveryPayload
+        assertNull(decoded.receiptScope)
+        assertNull(decoded.receiptEvidenceId)
+        val marked = decoded.copy(receiptScope = ReceiptScope.PROVEN_SINGLE, receiptEvidenceId = "receipt:t2:5000")
+        assertEquals(marked, roundTrip(AppEventType.DELIVERY_COMPLETED, marked))
+        val repriceLegacy = """{"jobId":"j1","taskId":"t2","totalPay":1.0,""" +
+            """"parsedPay":{"appPayComponents":[],"customerTips":[]},"dropRealizedPay":1.0}"""
+        val reprice = AppEventCodec.decodePayload(AppEventType.DELIVERY_RECEIPT_REPRICE, repriceLegacy)
+            as DeliveryReceiptRepricePayload
+        assertNull(reprice.receiptScope)
+        assertNull(reprice.receiptEvidenceId)
     }
 
     @Test

@@ -15,6 +15,7 @@ import cloud.trotter.log.gig.domain.model.event.payload.OfferPayload
 import cloud.trotter.log.gig.domain.model.event.payload.PayAdjustmentPayload
 import cloud.trotter.log.gig.domain.model.event.payload.OfferReceivedPayload
 import cloud.trotter.log.gig.domain.model.event.payload.PickupPayload
+import cloud.trotter.log.gig.domain.model.event.payload.ReceiptObservedPayload
 import cloud.trotter.log.gig.domain.model.event.payload.SessionPausedPayload
 import cloud.trotter.log.gig.domain.model.event.payload.SessionMilesCorrectionPayload
 import cloud.trotter.log.gig.domain.model.event.payload.SessionReportCorrectionPayload
@@ -60,6 +61,7 @@ object AppEventCodec {
         is ManualDeliveryRemovedPayload -> json.encodeToString(payload)
         is DeliveryAdjustmentPayload -> json.encodeToString(payload)
         is DeliveryReceiptRepricePayload -> json.encodeToString(payload)
+        is ReceiptObservedPayload -> json.encodeToString(payload)
         is SessionReportCorrectionPayload -> json.encodeToString(payload)
         is SessionMilesCorrectionPayload -> json.encodeToString(payload)
         is DeliverySessionAssignPayload -> json.encodeToString(payload)
@@ -128,6 +130,9 @@ object AppEventCodec {
 
             AppEventType.DELIVERY_RECEIPT_REPRICE ->
                 json.decodeFromString<DeliveryReceiptRepricePayload>(payloadJson)
+
+            AppEventType.RECEIPT_OBSERVED ->
+                json.decodeFromString<ReceiptObservedPayload>(payloadJson)
 
             AppEventType.SESSION_REPORT_CORRECTION ->
                 json.decodeFromString<SessionReportCorrectionPayload>(payloadJson)
