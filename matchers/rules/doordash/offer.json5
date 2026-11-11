@@ -513,7 +513,11 @@
             {
               "exists": {
                 "any": [
-                  { "hasTextMatchesRegex": "^\\+\\$\\d+(?:,\\d{3})*\\.\\d{2}$" },
+                  // #1343: a `+$` directly after a "Very busy" label is a boost badge, not an add-on delta.
+                  { "all": [
+                    { "hasTextMatchesRegex": "^\\+\\$\\d+(?:,\\d{3})*\\.\\d{2}$" },
+                    { "not": { "hasPrecedingSiblingText": "Very busy" } }
+                  ] },
                   { "hasTextMatchesRegex": "^\\+\\d+ stops? \\(" }
                 ]
               }
