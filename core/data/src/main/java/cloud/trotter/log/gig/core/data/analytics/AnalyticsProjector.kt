@@ -26,6 +26,8 @@ import cloud.trotter.log.gig.domain.analytics.PayAdjustmentFold
 import cloud.trotter.log.gig.domain.analytics.PayBasis
 import cloud.trotter.log.gig.domain.analytics.PickupFold
 import cloud.trotter.log.gig.domain.analytics.ReceiptFold
+import cloud.trotter.log.gig.domain.analytics.ReceiptMatchFold
+import cloud.trotter.log.gig.domain.analytics.ReceiptMatchUndoFold
 import cloud.trotter.log.gig.domain.analytics.RecordFolds
 import cloud.trotter.log.gig.domain.analytics.SessionAssignFold
 import cloud.trotter.log.gig.domain.analytics.SessionFoldContext
@@ -88,6 +90,7 @@ class AnalyticsProjector @Inject constructor(
 
     private val ledgerDao = db.ledgerDao()
     private val receiptDao = db.receiptDao()
+    private val receiptMatchApply = ReceiptMatchApply(analyticsDao, receiptDao, db.receiptMatchDao()) // #1599
 
     /** #159 store-resolution runner (row adapter over the pure `StoreResolver` core), run inside the
      *  batch transaction against the job's committed rows. */
@@ -267,6 +270,8 @@ class AnalyticsProjector @Inject constructor(
             outcome.offerUnassign?.let { adjustments += Adjustment.OfferUnassign(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.manualSourceLink?.let { adjustments += Adjustment.ManualSourceLink(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.manualDeliveryRemove?.let { adjustments += Adjustment.ManualDeliveryRemove(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.receiptMatch?.let { adjustments += Adjustment.ReceiptMatch(ev.sequenceId, ev.event.occurredAt, it) }
+            outcome.receiptMatchUndo?.let { adjustments += Adjustment.ReceiptMatchUndo(ev.sequenceId, ev.event.occurredAt, it) }
             outcome.context?.let { ctx ->
                 contexts[ctx.sessionId] = ctx
                 touched += ctx.sessionId
@@ -341,6 +346,8 @@ class AnalyticsProjector @Inject constructor(
                         removed?.storeKey?.let { storeResolutionRunner.deleteStoreIfUnreferenced(it) }
                         removed == null
                     }
+                    is Adjustment.ReceiptMatch -> receiptMatchApply.applyMatch(adj.fold) // #1599
+                    is Adjustment.ReceiptMatchUndo -> receiptMatchApply.applyUndo(adj.fold)
                 }
                 if (skipped) adjustmentSkips++
             }
@@ -442,6 +449,8 @@ class AnalyticsProjector @Inject constructor(
             override val occurredAt: Long,
             val fold: ManualDeliveryRemoveFold,
         ) : Adjustment
+        data class ReceiptMatch(override val sequenceId: Long, override val occurredAt: Long, val fold: ReceiptMatchFold) : Adjustment
+        data class ReceiptMatchUndo(override val sequenceId: Long, override val occurredAt: Long, val fold: ReceiptMatchUndoFold) : Adjustment
     }
 
     /** A #159 store-resolution trigger carrying its source event's [sequenceId] for the seq-ordered
@@ -752,6 +761,7 @@ class AnalyticsProjector @Inject constructor(
             analyticsDao.deleteAllStores()
             analyticsDao.deleteAllPickupRecords()
             receiptDao.deleteAll() // #1598: rebuilt from RECEIPT_OBSERVED like every other projection
+            db.receiptMatchDao().deleteAll() // #1599: refolded from RECEIPT_MATCHED
             analyticsDao.setWatermark(
                 AnalyticsProjectionStateEntity(watermarkSequenceId = 0, projectorVersion = PROJECTOR_VERSION),
             )

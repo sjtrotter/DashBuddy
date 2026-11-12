@@ -2,7 +2,13 @@ package cloud.trotter.log.gig.core.data.analytics
 
 import cloud.trotter.log.gig.core.data.event.AppEventRepo
 import cloud.trotter.log.gig.domain.model.event.AppEventType
+import cloud.trotter.log.gig.domain.analytics.receipts.PlannedRow
+import cloud.trotter.log.gig.domain.analytics.receipts.ReceiptMatchPlan
 import cloud.trotter.log.gig.domain.model.event.payload.DeliverySessionAssignPayload
+import cloud.trotter.log.gig.domain.model.event.payload.ReceiptMatchLine
+import cloud.trotter.log.gig.domain.model.event.payload.ReceiptMatchRole
+import cloud.trotter.log.gig.domain.model.event.payload.ReceiptMatchUndonePayload
+import cloud.trotter.log.gig.domain.model.event.payload.ReceiptMatchedPayload
 import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeCorrectionPayload
 import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeResolution
 import cloud.trotter.log.gig.domain.model.event.payload.SessionMilesCorrectionPayload
@@ -240,4 +246,60 @@ class CorrectionRepositoryTest {
         }
     }
 
+    // ── #1599 receipt match ─────────────────────────────────────────────
+
+    private val plan = ReceiptMatchPlan(
+        evidenceId = "receipt:t2:1", receiptCents = 2050,
+        covered = listOf(PlannedRow(7, 900, "OFFER_PAY", 2050)),
+        cleared = listOf(PlannedRow(6, 900, "OFFER_PAY", null)),
+        shiftPayBeforeCents = 1800, shiftPayAfterCents = 2050,
+    )
+
+    @Test
+    fun `matchReceipt appends one RECEIPT_MATCHED equal to the plan, covered lines then cleared`() = runTest {
+        repo.matchReceipt("S1", "cmd-1", plan)
+        val captor = argumentCaptor<cloud.trotter.log.gig.domain.model.event.AppEvent>()
+        verify(appEventRepo).appendUserEvent(captor.capture(), anyOrNull())
+        val event = captor.firstValue
+        assertEquals(AppEventType.RECEIPT_MATCHED, event.type)
+        assertEquals("S1", event.sessionId)
+        assertEquals(
+            ReceiptMatchedPayload(
+                commandId = "cmd-1", sessionId = "S1", evidenceId = "receipt:t2:1", receiptCents = 2050,
+                lines = listOf(
+                    ReceiptMatchLine(7, ReceiptMatchRole.COVERED, 900, "OFFER_PAY", 2050),
+                    ReceiptMatchLine(6, ReceiptMatchRole.CLEARED, 900, "OFFER_PAY", null),
+                ),
+            ),
+            event.payload,
+        )
+    }
+
+    @Test
+    fun `matchReceipt rejects each malformed plan and appends nothing`() = runTest {
+        val bad = listOf(
+            "blank command" to (" " to plan),
+            "no covered row" to ("cmd" to plan.copy(covered = emptyList())),
+            "zero receipt" to ("cmd" to plan.copy(receiptCents = 0, covered = listOf(PlannedRow(7, null, "NONE", 0)))),
+            "null share" to ("cmd" to plan.copy(covered = listOf(PlannedRow(7, null, "NONE", null)))),
+            "negative share" to ("cmd" to plan.copy(covered = listOf(PlannedRow(7, null, "NONE", -1), PlannedRow(8, null, "NONE", 2051)))),
+            "shares off the receipt" to ("cmd" to plan.copy(covered = listOf(PlannedRow(7, null, "NONE", 2049)))),
+            "cleared with pay" to ("cmd" to plan.copy(cleared = listOf(PlannedRow(6, 900, "OFFER_PAY", 1)))),
+            "a delivery twice" to ("cmd" to plan.copy(cleared = listOf(PlannedRow(7, 900, "OFFER_PAY", null)))),
+        )
+        for ((name, input) in bad) {
+            assertThrows(name, IllegalArgumentException::class.java) { runBlocking { repo.matchReceipt("S1", input.first, input.second) } }
+        }
+        verify(appEventRepo, never()).appendUserEvent(any(), anyOrNull())
+    }
+
+    @Test
+    fun `undoReceiptMatch appends one undo naming the match`() = runTest {
+        repo.undoReceiptMatch("S1", "cmd-1")
+        val captor = argumentCaptor<cloud.trotter.log.gig.domain.model.event.AppEvent>()
+        verify(appEventRepo).appendUserEvent(captor.capture(), anyOrNull())
+        assertEquals(AppEventType.RECEIPT_MATCH_UNDONE, captor.firstValue.type)
+        assertEquals("S1", captor.firstValue.sessionId)
+        assertEquals(ReceiptMatchUndonePayload("S1", "cmd-1"), captor.firstValue.payload)
+    }
 }

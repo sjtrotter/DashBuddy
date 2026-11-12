@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.core.data.analytics
 
 import cloud.trotter.log.gig.core.database.analytics.DeliveryRecordEntity
+import cloud.trotter.log.gig.core.database.analytics.ReceiptMatchRowEntity
 import cloud.trotter.log.gig.domain.analytics.DeliveryAdjustmentFold
 import cloud.trotter.log.gig.domain.analytics.PayAdjustmentFold
 import cloud.trotter.log.gig.domain.analytics.PayBasis
@@ -380,6 +381,54 @@ class DeliveryCorrectionsTest {
         assertEquals(message, expected, actual)
         assertEquals(message, followUps, outcome.followUps)
         return actual
+    }
+
+    // ── #1599 receipt match row decisions ───────────────────────────────
+
+    @Test
+    fun `a receipt share nets against the row's own cpm and keeps tip and base unless it is the receipt's sole drop`() { // non-vacuous
+        val input = row()
+        assertEquals(
+            input.copy(realizedPay = 10.25, payBasis = PayBasis.RECEIPT_MATCHED, netProfit = 10.25 - 5.0 * 0.25, driverAdjustedAt = 7_000),
+            DeliveryCorrections.applyReceiptShare(input, 1025, soleTip = null, soleBasePay = null, matchedAt = 7_000),
+        )
+        assertEquals(
+            input.copy(realizedPay = 20.5, payBasis = PayBasis.RECEIPT_MATCHED, netProfit = 20.5 - 5.0 * 0.25, tip = 7.0, basePay = 13.5, driverAdjustedAt = 7_000),
+            DeliveryCorrections.applyReceiptShare(input, 2050, soleTip = 7.0, soleBasePay = 13.5, matchedAt = 7_000),
+        )
+        val noMiles = input.copy(realizedMiles = null)
+        assertNull(DeliveryCorrections.applyReceiptShare(noMiles, 1025, null, null, 7_000).netProfit)
+    }
+
+    @Test
+    fun `clearing an estimate keeps the driven cost (#1133)`() {
+        val input = row()
+        assertEquals(
+            input.copy(realizedPay = null, payBasis = PayBasis.NONE, netProfit = -1.25),
+            DeliveryCorrections.clearEstimate(input),
+        )
+    }
+
+    @Test
+    fun `restoring before a match puts every prior money column back`() {
+        val prior = row()
+        val written = DeliveryCorrections.applyReceiptShare(prior, 2050, soleTip = 7.0, soleBasePay = 13.5, matchedAt = 7_000)
+        val record = ReceiptMatchRowEntity(
+            commandId = "M1", deliveryEventSequenceId = prior.eventSequenceId, sessionId = "S1", evidenceId = "receipt:T1:1",
+            role = "COVERED", matchEventSequenceId = 50, matchedAt = 7_000, priorRealizedPay = prior.realizedPay,
+            priorPayBasis = prior.payBasis, priorNetProfit = prior.netProfit, priorTip = prior.tip, priorBasePay = prior.basePay,
+            priorDriverAdjustedAt = prior.driverAdjustedAt, newPayCents = 2050,
+        )
+        assertEquals(prior, DeliveryCorrections.restoreBeforeMatch(written, record))
+    }
+
+    @Test
+    fun `a machine re-price never overwrites a matched row`() {
+        val matched = DeliveryCorrections.applyReceiptShare(row(), 1025, null, null, 7_000)
+        assertEquals(CorrectionOutcome.Skip(RepriceSkip.DriverOwned(PayBasis.RECEIPT_MATCHED, true)),
+            DeliveryCorrections.applyReceiptReprice(matched, reprice()))
+        assertEquals(CorrectionOutcome.Skip(RepriceSkip.DriverOwned(PayBasis.RECEIPT_MATCHED, false)),
+            DeliveryCorrections.applyReceiptReprice(matched.copy(driverAdjustedAt = null), reprice()))
     }
 
     private fun reprice() = ReceiptRepriceFold(

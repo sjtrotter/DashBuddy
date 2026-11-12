@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.core.data.analytics
 
 import cloud.trotter.log.gig.core.database.analytics.DeliveryRecordEntity
+import cloud.trotter.log.gig.core.database.analytics.ReceiptMatchRowEntity
 import cloud.trotter.log.gig.domain.analytics.DeliveryAdjustmentFold
 import cloud.trotter.log.gig.domain.analytics.PayAdjustmentFold
 import cloud.trotter.log.gig.domain.analytics.PayBasis
@@ -150,7 +151,8 @@ internal object DeliveryCorrections {
         // "est. offer pay" disclosure), so the basis test alone let a later re-price overwrite the
         // driver's own tip. Either signal refuses.
         if (row.driverAdjustedAt != null ||
-            row.payBasis == PayBasis.MANUAL || row.payBasis == PayBasis.USER_CORRECTED
+            row.payBasis == PayBasis.MANUAL || row.payBasis == PayBasis.USER_CORRECTED ||
+            row.payBasis == PayBasis.RECEIPT_MATCHED
         ) {
             return CorrectionOutcome.Skip(
                 RepriceSkip.DriverOwned(row.payBasis, row.driverAdjustedAt != null),
@@ -185,6 +187,46 @@ internal object DeliveryCorrections {
             ),
         )
     }
+
+    /**
+     * #1599: a receipt share the dasher matched. Net against the row's OWN frozen cpm (`NetProfit.realized`); tip and
+     * base only when the match covers this row alone and the receipt is itemized (the `soleDropOfReceipt` rule), else
+     * kept. Every unmentioned column is kept by `row.copy`.
+     */
+    fun applyReceiptShare(
+        row: DeliveryRecordEntity,
+        cents: Long,
+        soleTip: Double?,
+        soleBasePay: Double?,
+        matchedAt: Long,
+    ): DeliveryRecordEntity {
+        val pay = cents / 100.0
+        return row.copy(
+            realizedPay = pay,
+            payBasis = PayBasis.RECEIPT_MATCHED,
+            netProfit = NetProfit.realized(pay, row.realizedMiles, row.frozenCostPerMile),
+            tip = soleTip ?: row.tip,
+            basePay = soleBasePay ?: row.basePay,
+            driverAdjustedAt = matchedAt,
+        )
+    }
+
+    /** #1599: an estimate the match removes (it was the matched offer's money). Net keeps the driven cost (#1133). */
+    fun clearEstimate(row: DeliveryRecordEntity): DeliveryRecordEntity = row.copy(
+        realizedPay = null,
+        payBasis = PayBasis.NONE,
+        netProfit = NetProfit.realized(null, row.realizedMiles, row.frozenCostPerMile),
+    )
+
+    /** #1599: the row exactly as the match found it. */
+    fun restoreBeforeMatch(row: DeliveryRecordEntity, prior: ReceiptMatchRowEntity): DeliveryRecordEntity = row.copy(
+        realizedPay = prior.priorRealizedPay,
+        payBasis = prior.priorPayBasis,
+        netProfit = prior.priorNetProfit,
+        tip = prior.priorTip,
+        basePay = prior.priorBasePay,
+        driverAdjustedAt = prior.priorDriverAdjustedAt,
+    )
 
     /** Cent-exact equality for two nullable money figures; two nulls are equal. */
     private fun sameCents(a: Double?, b: Double?): Boolean = when {

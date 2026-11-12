@@ -3,6 +3,7 @@ package cloud.trotter.log.gig.core.data.analytics
 import cloud.trotter.log.gig.core.data.event.AppEventRepo
 import cloud.trotter.log.gig.domain.analytics.SessionMilesRule
 import cloud.trotter.log.gig.domain.analytics.SessionReportRule
+import cloud.trotter.log.gig.domain.analytics.receipts.ReceiptMatchPlan
 import cloud.trotter.log.gig.domain.model.event.AppEvent
 import cloud.trotter.log.gig.domain.model.event.AppEventType
 import cloud.trotter.log.gig.domain.model.event.payload.DeliveryAdjustmentPayload
@@ -11,6 +12,10 @@ import cloud.trotter.log.gig.domain.model.event.payload.ManualDeliveryPayload
 import cloud.trotter.log.gig.domain.model.event.payload.ManualDeliveryRemovedPayload
 import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeCorrectionPayload
 import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeResolution
+import cloud.trotter.log.gig.domain.model.event.payload.ReceiptMatchLine
+import cloud.trotter.log.gig.domain.model.event.payload.ReceiptMatchRole
+import cloud.trotter.log.gig.domain.model.event.payload.ReceiptMatchUndonePayload
+import cloud.trotter.log.gig.domain.model.event.payload.ReceiptMatchedPayload
 import cloud.trotter.log.gig.domain.model.event.payload.SessionMilesCorrectionPayload
 import cloud.trotter.log.gig.domain.model.event.payload.SessionMilesOperation
 import cloud.trotter.log.gig.domain.model.event.payload.SessionReportCorrectionPayload
@@ -274,6 +279,44 @@ class CorrectionRepository @Inject constructor(
             ),
         )
         Timber.tag(TAG).i("SESSION_MILES_CORRECTION appended for session %s (op=%s)", sessionId, operation)
+    }
+
+    /** #1599: append the dasher's receipt match, exactly [plan] as the sheet showed it. [commandId] is the sheet's. */
+    suspend fun matchReceipt(sessionId: String, commandId: String, plan: ReceiptMatchPlan) {
+        require(commandId.isNotBlank()) { "command id must not be blank" }
+        require(plan.covered.isNotEmpty()) { "a match covers at least one delivery" }
+        require(plan.receiptCents > 0) { "receipt must be positive" }
+        require(plan.covered.all { (it.newPayCents ?: -1) >= 0 }) { "every covered share must be a non-negative amount" }
+        require(plan.covered.sumOf { it.newPayCents ?: 0 } == plan.receiptCents) { "covered shares must sum to the receipt" }
+        require(plan.cleared.all { it.newPayCents == null }) { "a cleared delivery carries no new pay" }
+        val ids = (plan.covered + plan.cleared).map { it.deliveryEventSequenceId }
+        require(ids.distinct().size == ids.size) { "a delivery appears once" }
+        val lines = plan.covered.map { ReceiptMatchLine(it.deliveryEventSequenceId, ReceiptMatchRole.COVERED, it.priorPayCents, it.priorPayBasis, it.newPayCents) } +
+            plan.cleared.map { ReceiptMatchLine(it.deliveryEventSequenceId, ReceiptMatchRole.CLEARED, it.priorPayCents, it.priorPayBasis, null) }
+        appEventRepo.appendUserEvent(
+            AppEvent(
+                type = AppEventType.RECEIPT_MATCHED,
+                occurredAt = System.currentTimeMillis(),
+                sessionId = sessionId,
+                payload = ReceiptMatchedPayload(commandId, sessionId, plan.evidenceId, plan.receiptCents, lines),
+            ),
+        )
+        Timber.tag(TAG).i(
+            "RECEIPT_MATCHED appended for %s: %d covered, %d cleared", plan.evidenceId, plan.covered.size, plan.cleared.size,
+        )
+    }
+
+    /** #1599: take back the match [matchCommandId]; the projector restores its rows or skips. */
+    suspend fun undoReceiptMatch(sessionId: String, matchCommandId: String) {
+        appEventRepo.appendUserEvent(
+            AppEvent(
+                type = AppEventType.RECEIPT_MATCH_UNDONE,
+                occurredAt = System.currentTimeMillis(),
+                sessionId = sessionId,
+                payload = ReceiptMatchUndonePayload(sessionId, matchCommandId),
+            ),
+        )
+        Timber.tag(TAG).i("RECEIPT_MATCH_UNDONE appended for match %s", matchCommandId)
     }
 
     private companion object {
