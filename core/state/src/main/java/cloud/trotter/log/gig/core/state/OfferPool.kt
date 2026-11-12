@@ -115,6 +115,8 @@ internal fun PlatformRegionStepper.leavePresentation(
                 "#1119 offer %s pooled via %s (pool=%d)%s",
                 offer.offerHash.take(8), via, pool.size,
                 when {
+                    entry.demoted && via == PoolEntryVia.EXPIRY_TIMER ->
+                        " demoted by the decline sheet standing until the timer"
                     entry.demoted -> " demoted by the decline sheet"
                     cardBack -> " card back after the decline sheet"
                     else -> ""
@@ -126,10 +128,12 @@ internal fun PlatformRegionStepper.leavePresentation(
 }
 
 /**
- * Council round 6: the confirm-decline sheet COUNTS against a leaving offer when its last sighting is at most
- * `declineSheetWindowMs` before the leave, the countdown was parsed and more than `countdownExpirySlackMs` remained,
- * and the leave is not the expiry timer. It DEMOTES the offer unless a card frame of this presentation arrived after
- * that sighting ([PendingOffer.lastCardFrameAt]: the card coming back is the dasher cancelling the sheet).
+ * Council round 6: the confirm-decline sheet COUNTS against an offer leaving by a frame when its last sighting is at
+ * most `declineSheetWindowMs` before the leave and the countdown was parsed with more than `countdownExpirySlackMs`
+ * remaining. #1610 R1: on an expiry-timer leave any sighting counts, parsed countdown or not: the sheet stood until
+ * the countdown ran out, and the window and slack checks do not apply. Either way it DEMOTES the offer unless a card
+ * frame of this presentation arrived after the last sighting (the caller's card-back test on
+ * [PendingOffer.lastCardFrameAt]: the card coming back is the dasher cancelling the sheet).
  */
 private fun sheetSightingCounts(
     offer: PendingOffer,
@@ -138,7 +142,7 @@ private fun sheetSightingCounts(
     region: PlatformRegion,
     policy: TransitionPolicy,
 ): Boolean {
-    if (via == PoolEntryVia.EXPIRY_TIMER) return false
+    if (via == PoolEntryVia.EXPIRY_TIMER) return offer.declineSheetSeenAt != null
     val seen = offer.declineSheetSeenAt ?: return false
     val expiresAt = offer.countdownExpiresAt ?: return false
     if (leftAt - seen !in 0..policy.declineSheetWindowMs(region.platform)) return false
@@ -236,8 +240,13 @@ internal fun PlatformRegionStepper.poolWorkEdge(
  * - **fresh work** (no live job, or the live job is finished, #596 T2): one candidate links; two or more (or one
  *   beside a same-store demoted entry that left within the tie guard) tie on a bare job and link nothing;
  * - **a stale job** (OQ2): a sole STANDALONE candidate presented over a non-task flow after the job started, at a
- *   store new to the job, links through the slice-1 stale close;
+ *   store new to the job, with no tie guard standing, links through the slice-1 stale close;
  * - anything else: null (today's absorption).
+ *
+ * #1610 E4′: a demoted entry guards only an older rival. It is dropped from the guard list when the sole candidate
+ * is STANDALONE and was presented strictly after the entry left (a card the platform showed after the declined one
+ * was gone). Equal timestamps, an older candidate and an ADD_ON candidate keep the guard; with two or more
+ * candidates it is a tie anyway. Both branches read the same filtered list.
  */
 private fun PlatformRegionStepper.linkAtWorkEdge(
     sink: DecisionSink,
@@ -255,9 +264,15 @@ private fun PlatformRegionStepper.linkAtWorkEdge(
     }
     // The tie guard measures to the edge's own observation; a held frame only moves where the work started.
     val edgeAt = held?.at ?: obs.timestamp
+    // A same-store demoted entry that left within the tie guard turns a sole candidate into a tie, unless that
+    // candidate is a STANDALONE card presented after the entry left (#1610 E4′): it is not the older rival a false
+    // demotion could substitute for.
+    val soleStandalone = candidates.singleOrNull()?.offer
+        ?.takeIf { it.offerFields.parsedOffer.effectiveScope == OfferScope.STANDALONE }
     val guards = region.offerPool.filter {
         it.demoted && key in it.candidateStoreKeys &&
-            obs.timestamp - it.leftAt in 0..policy.demotionTieGuardMs(region.platform)
+            obs.timestamp - it.leftAt in 0..policy.demotionTieGuardMs(region.platform) &&
+            !(soleStandalone != null && soleStandalone.presentedAt > it.leftAt)
     }
     val job = region.activeJob
     if (job == null || startsNewJob(region)) {

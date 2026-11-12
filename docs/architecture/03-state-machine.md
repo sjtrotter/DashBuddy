@@ -653,15 +653,23 @@ on every fresh presentation, which precedes every pool entry in processing order
 by processing order, and a new-work edge needs no bump because any new job clears the closed-job marker and a live
 job refuses every re-price.
 
-**The decline sheet demotes, it does not decide (council round 6).** At the leave, an entry is DEMOTED when its
+**The decline sheet demotes, it does not decide (council round 6).** At a frame leave, an entry is DEMOTED when its
 LAST confirm-sheet sighting (`declineSheetSeenAt`, from a screen whose rule declares `state.offerSurface:
 decline_confirm`) is at most `GraceConfig.declineSheetWindowMs` (15 s) before the leave, its countdown was parsed
-(`countdownExpiresAt`) with more than `countdownExpirySlackMs` (3 s) left, the leave is not the expiry timer, and
-no card frame of the same instance arrived after that sighting (`PendingOffer.lastCardFrameAt`, stamped on the
+(`countdownExpiresAt`) with more than `countdownExpirySlackMs` (3 s) left, and no card frame of the same
+instance arrived after that sighting (`PendingOffer.lastCardFrameAt`, stamped on the
 fresh push and every enrich: the card coming back is the dasher cancelling the sheet). A demoted entry stays in the
-pool, is never a candidate, and ends the shift `OFFER_DECLINED` with `declineEvidence = SHEET_WINDOW`. **Tie
-guard:** a sole candidate at a store shared with a demoted entry that left at most `demotionTieGuardMs` (60 s)
-before the edge is a TIE over both, never a link. The 2026-11-11 desk measurement (402
+pool, is never a candidate, and ends the shift `OFFER_DECLINED` with `declineEvidence = SHEET_WINDOW`. **The
+timer arm (#1610):** an expiry-timer leave counts ANY sighting, parsed countdown or not (the window and slack
+checks do not apply: the sheet stood until the countdown ran out), and the card-back test still cancels it. Before
+#1610 a timer leave never demoted, so on a one-chain shift a run-out decline stayed a candidate all shift and tied
+every later job at its chain; the desk measurement found 12 timer leaves, 5 with a sighting, 1 with the card back
+and 4 demoted, none of them a true accept. **Tie guard:** a sole candidate at a store shared with a demoted entry
+that left at most `demotionTieGuardMs` (60 s) before the edge is a TIE over both, never a link, unless the sole
+candidate is STANDALONE and was presented strictly after the demoted entry left (#1610: the guard protects only an
+older rival a false demotion could substitute; 0 fresh cards came between any of 132 true accepts and their work).
+An equal timestamp, an older candidate or an ADD_ON candidate keeps the guard; the fresh-work and stale-job
+branches read the same filtered list. The 2026-11-11 desk measurement (402
 DoorDash presentations, 09-20 → 11-05) found the card back after the sheet in 0 of the 261 sighted offers without
 accept evidence and in 9 of the 10 sheet-then-accepts, all of which reached the pickup within seconds; the
 retired #1104 claim that "the card re-renders after every decline" was wrong. Residuals: a sheet-then-accept with

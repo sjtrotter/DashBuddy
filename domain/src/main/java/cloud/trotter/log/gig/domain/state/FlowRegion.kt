@@ -94,9 +94,10 @@ data class PendingOffer(
     val declineSheetSeenAt: Long? = null,
     /**
      * When the card's own countdown will reach zero (#1104): `frame timestamp + remaining seconds`,
-     * refreshed on every card frame that carries a countdown, kept when a frame lacks one. An exit
-     * at/after this instant (minus the platform's slack) is an EXPIRY whatever else was seen — the
-     * evidence that separates a real decline from a cancelled sheet whose offer then ran out.
+     * refreshed on every card frame that carries a countdown, kept when a frame lacks one. A frame
+     * exit at/after this instant (minus the platform's slack) is an EXPIRY whatever else was seen — the
+     * evidence that separates a real decline from a cancelled sheet whose offer then ran out. The
+     * expiry timer's own leave does not read it (#1610: a sheet with no card after it demotes).
      */
     val countdownExpiresAt: Long? = null,
     /**

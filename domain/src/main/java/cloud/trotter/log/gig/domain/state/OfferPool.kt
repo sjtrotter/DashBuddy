@@ -29,9 +29,10 @@ data class PooledOffer(
     /** Jobs this entry tied on (two or more equal candidates); carried onto its shift-end outcome. */
     val ambiguousJobIds: List<String> = emptyList(),
     /**
-     * The confirm-decline sheet was seen shortly before this offer left, with time on its countdown and no card
-     * frame after the sighting (#1119 council round 6). A demoted entry is never a match candidate; it can only
-     * turn a same-store link into a tie, and it ends the shift `OFFER_DECLINED` marked as inferred.
+     * The confirm-decline sheet was seen shortly before this offer left by a frame with time on its countdown, or
+     * stood until the expiry timer fired (#1610), and no card frame came after the sighting (#1119 council round 6).
+     * A demoted entry is never a match candidate; it can only turn a same-store link into a tie, and it ends the
+     * shift `OFFER_DECLINED` marked as inferred.
      */
     val demoted: Boolean = false,
 ) {

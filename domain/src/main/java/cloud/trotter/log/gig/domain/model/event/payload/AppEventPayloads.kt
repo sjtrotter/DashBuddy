@@ -78,7 +78,10 @@ data class OfferPayload(
 /** #1119 S2: the evidence behind an inferred `OFFER_DECLINED`. */
 @Serializable
 enum class DeclineEvidence {
-    /** The confirm-decline sheet was seen shortly before the offer left, with time on its countdown and no card after. */
+    /**
+     * The confirm-decline sheet, with no card frame after its last sighting: either seen shortly before a frame took
+     * the offer off the screen with time on its countdown, or standing until the expiry timer fired (#1610).
+     */
     SHEET_WINDOW,
 }
 
