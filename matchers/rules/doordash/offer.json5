@@ -457,8 +457,10 @@
                 }
               },
               {
+                // #1604: the pay may carry a trailing plus in the same node (`$27.35+`, "this much or more").
+                // A leading plus (`+$8.00`) is the add-on delta, rejected below. Drawer twin: chrome.json5.
                 "exists": {
-                  "hasTextMatchesRegex": "^\\$\\d+(?:,\\d{3})*\\.\\d{2}$"
+                  "hasTextMatchesRegex": "^\\$\\d+(?:,\\d{3})*\\.\\d{2}\\+?$"
                 }
               },
               {
@@ -533,7 +535,7 @@
                     "find": {
                       "all": [
                         {
-                          "hasTextMatchesRegex": "^\\$\\d+(?:,\\d{3})*\\.\\d{2}$"
+                          "hasTextMatchesRegex": "^\\$\\d+(?:,\\d{3})*\\.\\d{2}\\+?$"
                         },
                         {
                           "hasFollowingSiblingTextMatchesRegex": "^incl\\. tips$"
@@ -546,7 +548,7 @@
                   {
                     "from": "offerBody",
                     "find": {
-                      "hasTextMatchesRegex": "^\\$\\d+(?:,\\d{3})*\\.\\d{2}$"
+                      "hasTextMatchesRegex": "^\\$\\d+(?:,\\d{3})*\\.\\d{2}\\+?$"
                     },
                     "read": "text",
                     "transform": "parseCurrency"
