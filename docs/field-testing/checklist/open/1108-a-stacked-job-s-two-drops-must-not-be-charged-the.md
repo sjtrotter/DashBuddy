@@ -20,4 +20,5 @@ issues: #1108, #1120
       `realizedMinutes`, no stacked job.
     - desk 09-29: CLEAN, still not a confirmation — Σ realizedMiles ≤ span everywhere; the one stacked job (…-777,
       two stores) has both arrivals and legs 8.91 + 2.13 mi; 0 negative `realizedMinutes`.
+    - desk 11-12 (pull of 11-07 and 11-11, builds `9064004e.dirty` and `96fa4a89.dirty`, DoorDash 8.106.9): CLEAN, still not a confirmation. Σ drop miles ≤ span on all 4 shifts (53.2/59.1, 22.0/22.9, 8.0/8.4, 6.6/6.6), 0 negative minutes. The 11-07 5.9 mi gap is a single drop whose leg reads 0.0 after an early commit (session log, bug 3; #1611). Counter unchanged.
   Triage source: first-line blame 2026-09-15 (`5e1bf3416`, original README L408).

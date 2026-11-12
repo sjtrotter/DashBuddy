@@ -7,3 +7,4 @@ issues: #1396, #1397
   the merchant row had not rendered yet. Broken = a first-name-and-initial value as a store. Desk: the at-store and
   going-to-store captures show the merchant's instruction text as `[redacted]` (#1397), and `instructions_title`
   (the store) raw. — Confirmed: 0/2
+  - desk 11-12 (pull of 11-07 and 11-11, builds `9064004e.dirty` and `96fa4a89.dirty`, DoorDash 8.106.9): consistent. All 10 `PICKUP_NAV_STARTED` store names are the merchant, and all 10 Navigator "Pickup:" lines name the merchant. #1397: `instructions_line_2_expanded` reads `[redacted]` on the 11-11 pickup frames; `instructions_title` stays raw (it carries the store's order number on 8.106.9). Counter unchanged.

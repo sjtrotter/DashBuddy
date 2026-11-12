@@ -9,3 +9,4 @@ issues: #1598, #1326
   how often each clause refuses; STORE_MISSING and CARD_COUNT_MISSING on Compose cards are the ones to watch. Broken =
   one receipt split across drops, or an UNPROVEN receipt with placed money.
   — Confirmed: 0/2
+  - desk 11-12 (pull of 11-07 and 11-11, builds `9064004e.dirty` and `96fa4a89.dirty`, DoorDash 8.106.9): not on the phone. Desk estimate: the 6 single-drop receipts would be `PROVEN_SINGLE`; the 11-07 two-drop receipt would be `CARD_COUNT_NOT_ONE` (the drops keep the offer estimate), unless the pool ties first (#1610, see the 1119 offer-pool item), in which case the gap would be `OFFER_COUNT`. Counter unchanged.
