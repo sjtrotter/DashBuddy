@@ -8,3 +8,4 @@ issues: #1522
   `enrol_rejected unsupported_schema` with no status when the server accepts no schema this build can send. Working
   = a fresh identity enrols while the server accepts screens only (notifications off).
   - Confirmed: 0/2
+    - desk 11-12 (pull of 11-07 and 11-11, builds `9064004e.dirty` and `96fa4a89.dirty`, DoorDash 8.106.9): not exercised (no reinstall); the install identity persisted across the 11-08 and 11-11 updates. Counter unchanged.

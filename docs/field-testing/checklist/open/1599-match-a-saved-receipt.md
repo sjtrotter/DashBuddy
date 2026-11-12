@@ -11,3 +11,4 @@ issues: #1599, #1326
   delivery paid by two receipts, a save without Confirm, a matched row re-priced later, or shares that do not add up
   to the receipt.
   — Confirmed: 0/2
+  - desk 11-12 (pull of 11-07 and 11-11, builds `9064004e.dirty` and `96fa4a89.dirty`, DoorDash 8.106.9): not on the phone. Counter unchanged.

@@ -50,5 +50,6 @@ issues: #1058, #1123, #1122, #1116, #985
       the recognized frames). The workflow sheet rendered once (10-14 14:26:16) and was recognized; 27 recognized
       `dropoff_pre_arrival` envelopes grade correctly. Counter unchanged.
     - desk 10-26 (pull of 10-18 evening to 10-25, build `d807d3f3`): NOT EXERCISED. The only UNKNOWN hits are text-free `drop_off_workflow_host_fragment` skeletons (10-20 ×2). Counter unchanged.
+    - desk 11-12 (pull of 11-07 and 11-11, builds `9064004e.dirty` and `96fa4a89.dirty`, DoorDash 8.106.9): both leaks EXERCISED and masked. The alcohol arrival card (11-11 17:42:46 and 17:45:43) was recognized as `dropoff_pre_arrival` with the alcohol icon present: name and street hashed, line 2 and three more nodes plain `[redacted]`. The leave-at-door workflow sheet (11-07 14:30:00) was recognized as `dropoff_workflow_sheet`: street hashed, five plain `[redacted]`. Check 1: 10 hits, all text-free skeletons. Check 3: 2. The ID scanner was dropped by `sensitive.id_verification` (21 frames). Counter unchanged.
   Why proposed: Redaction: dropoff addresses and door codes must remain masked across the two sheet shapes.
   Triage source: first-line blame 2026-09-05 (`054433e69`, original README L716).

@@ -10,3 +10,4 @@ issues: #1459
   summary" label, even if lower; a shift whose running total equals its recorded pay keeps "From the app's
   running total". In `sessions.csv` the shift's `report_source` is `RECORDED_PAY` and `summary.csv` lists it
   under `total_recorded_pay_earnings`. — Confirmed: 0/2
+  - desk 11-12 (pull of 11-07 and 11-11, builds `9064004e.dirty` and `96fa4a89.dirty`, DoorDash 8.106.9): not exercised. Counter unchanged.

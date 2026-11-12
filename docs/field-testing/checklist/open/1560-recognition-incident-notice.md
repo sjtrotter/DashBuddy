@@ -12,3 +12,4 @@ issues: #1560
   until gig.log restarts. Desk check: `grep -h 'Recognition notice posted\|Parse rot' shareable.log` shows at
   most one "posted" line per app per 24 h.
   - Issue: #1560. Confirmed: 0/2 (awaiting field validation)
+    - desk 11-12 (pull of 11-07 and 11-11, builds `9064004e.dirty` and `96fa4a89.dirty`, DoorDash 8.106.9): three normal 11-11 shifts on a build with PR #1576: 0 `Parse rot` and 0 `Recognition notice posted` lines (strings verified in code), so no false trip, even though two trailing-plus cards fell to UNKNOWN. Counter unchanged.

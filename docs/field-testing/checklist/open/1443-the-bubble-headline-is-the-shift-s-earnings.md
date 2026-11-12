@@ -12,3 +12,4 @@ issues: #1443, #1458, #1459, #1460
   shows that shift's figure, chip, stats and cash target, not the other app's. Reopening the bubble after a long collapse never flashes the previous shift's figure; right after a shift ends the resting card shows em dashes until the shift's row lands, never "No shift yet". Known residuals: a receipt
   re-entered after an offer pop-up can be counted twice on the headline (#1460); at an early end the resting
   figure no longer drops below recorded pay since #1459 (its own item). — Confirmed: 0/2
+  - desk 11-12 (pull of 11-07 and 11-11, builds `9064004e.dirty` and `96fa4a89.dirty`, DoorDash 8.106.9): needs the dev's eyes. Captures show DoorDash's own running total at $0.00 at first pickups, which is correct for each shift's first job. Counter unchanged.
