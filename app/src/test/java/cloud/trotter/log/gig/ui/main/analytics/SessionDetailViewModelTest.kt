@@ -3,6 +3,8 @@ package cloud.trotter.log.gig.ui.main.analytics
 import androidx.lifecycle.SavedStateHandle
 import cloud.trotter.log.gig.core.data.analytics.AnalyticsRepository
 import cloud.trotter.log.gig.core.data.analytics.CorrectionRepository
+import cloud.trotter.log.gig.core.data.analytics.ReceiptMatchRead
+import cloud.trotter.log.gig.core.data.analytics.ReceiptMatchRepository
 import cloud.trotter.log.gig.core.data.analytics.RecordsStatusRepository
 import cloud.trotter.log.gig.core.data.analytics.ShiftTimelineRead
 import cloud.trotter.log.gig.core.data.analytics.ShiftTimelineRepository
@@ -59,6 +61,9 @@ class SessionDetailViewModelTest {
     private val shiftTimelineRepository: ShiftTimelineRepository = mock {
         on { read(any(), any()) } doReturn flowOf(ShiftTimelineRead(emptyList(), emptyList(), emptyList()))
     }
+    private val receiptMatchRepository: ReceiptMatchRepository = mock {
+        on { read(any()) } doReturn flowOf(ReceiptMatchRead(emptyList(), emptyList()))
+    }
     private val recordsStatus = MutableStateFlow(RecordsStatus.UP_TO_DATE)
     private val recordsStatusRepository: RecordsStatusRepository = mock { on { status } doReturn recordsStatus }
     private val clock = Clock.fixed(Instant.parse("2026-11-07T12:00:00Z"), ZoneOffset.UTC)
@@ -83,6 +88,7 @@ class SessionDetailViewModelTest {
         shiftTimelineRepository,
         recordsStatusRepository,
         correctionRepository,
+        receiptMatchRepository,
         clock,
     )
 

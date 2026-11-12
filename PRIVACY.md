@@ -256,7 +256,9 @@ identity export. Vehicle/default resets preserve these learned preferences.
   keep labels out of diagnostic logs entirely; a failed write logs only the exception class at WARN.
 - Each delivery receipt the app reads is also an event in that log and a row in `receipt_records`: the pay total, base
   pay and tips, the time, and the app's own job and delivery ids. It holds no customer data, is not in the CSV export,
-  and is sent nowhere.
+  and is sent nowhere. When you match a receipt to deliveries, that is an event in the same log and rows in
+  `receipt_match_rows`: the receipt's id, the delivery ids, and each delivery's pay before and after. It holds no
+  customer data and is sent nowhere.
 - Miles you correct for a shift stay on the device (#1535): a `SESSION_MILES_CORRECTION` event in the local
   database and its value on the shift's read-model row. The tracked GPS figure is kept beside it, and the CSV export
   marks each shift's miles as tracked or corrected.

@@ -133,6 +133,7 @@ class OfferRepairProjectorTest {
 
     private fun checks() = ShiftChecksRepository(
         AnalyticsRepository(analyticsDao, eventDao, db.hudShiftDao()), ShiftTimelineRepository(analyticsDao),
+        ReceiptMatchRepository(db.receiptDao(), db.receiptMatchDao()),
     )
 
     @Test

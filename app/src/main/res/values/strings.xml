@@ -412,6 +412,7 @@
     <string name="shift_page_source_offer_estimate">Offer amount, est.</string>
     <string name="shift_page_source_no_pay">No pay found</string>
     <string name="shift_page_source_you_entered">You entered</string>
+    <string name="shift_page_source_matched">Matched by you</string>
     <plurals name="shift_page_run_declined">
         <item quantity="one">%1$d declined offer</item>
         <item quantity="other">%1$d declined offers</item>
@@ -465,6 +466,23 @@
     <string name="shift_offer_sheet_title">What happened to this offer?</string>
     <string name="shift_offer_sheet_unassigned">It was unassigned</string>
     <string name="shift_offer_sheet_close">Close</string>
+    <!-- #1599: the receipt check and "Which deliveries did this receipt pay for?". -->
+    <string name="shift_check_receipt_format">Receipt %1$s · %2$s · not matched</string>
+    <string name="shift_check_receipt_match">Match</string>
+    <string name="shift_check_receipt_match_cd">Match receipt %1$s, %2$s</string>
+    <string name="receipt_match_title">Which deliveries did this receipt pay for?</string>
+    <string name="receipt_match_receipt_format">Receipt %1$s · Saved %2$s</string>
+    <string name="receipt_match_suggested">Suggested</string>
+    <string name="receipt_match_new_pay_format">New pay %1$s</string>
+    <string name="receipt_match_estimate_removed">Estimate removed</string>
+    <string name="receipt_match_paid_by_receipt">Paid by a receipt</string>
+    <string name="receipt_match_matched_to_format">Matched to receipt %1$s</string>
+    <string name="receipt_match_changed_by_you">Changed by you</string>
+    <string name="receipt_match_delivery_pay_format">Delivery pay %1$s to %2$s</string>
+    <string name="receipt_match_app_total_format">%1$s total %2$s</string>
+    <string name="receipt_match_not_sure">Not sure</string>
+    <string name="receipt_match_confirm">Confirm match</string>
+    <string name="shift_page_undo_match">Undo match</string>
 
     <!-- main/analytics/NoSessionAssignDialogs.kt (#660 piece 2) -->
     <string name="no_session_assign_title">Deliveries without a shift</string>

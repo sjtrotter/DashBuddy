@@ -1,6 +1,8 @@
 package cloud.trotter.log.gig.core.data.analytics
 
 import cloud.trotter.log.gig.core.database.analytics.DeliveryRecordEntity
+import cloud.trotter.log.gig.core.database.analytics.ReceiptMatchRowEntity
+import cloud.trotter.log.gig.core.database.analytics.ReceiptRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.SessionRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.SessionWithCashRow
 import cloud.trotter.log.gig.core.database.analytics.ShiftPayRow
@@ -9,7 +11,11 @@ import cloud.trotter.log.gig.domain.analytics.DeliveryRecord
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
 import cloud.trotter.log.gig.domain.analytics.SessionMilesRule
 import cloud.trotter.log.gig.domain.analytics.SessionReportRule
+import cloud.trotter.log.gig.domain.analytics.receipts.ActiveMatchRow
+import cloud.trotter.log.gig.domain.analytics.receipts.SavedReceipt
+import cloud.trotter.log.gig.domain.model.event.payload.ReceiptMatchRole
 import cloud.trotter.log.gig.domain.state.Platform
+import cloud.trotter.log.gig.domain.state.ReceiptScope
 
 /**
  * Room-entity → domain mappers for the analytics read model (#314 PR3). The
@@ -39,6 +45,30 @@ internal fun DeliveryRecordEntity.toDomain(): DeliveryRecord = DeliveryRecord(
     milesBasis = try { MilesBasis.valueOf(milesBasis) } catch (_: IllegalArgumentException) { MilesBasis.UNKNOWN },
     sessionAssigned = sessionAssigned == 1,
     receiptRepriced = receiptRepricedAt != null,
+    driverAdjustedAt = driverAdjustedAt,
+    jobOfferHashes = StringListColumn.decode(jobOfferHashes) ?: listOfNotNull(soleOfferHash),
+)
+
+/** #1599: a saved receipt as the matching rules read it. */
+internal fun ReceiptRecordEntity.toSaved(): SavedReceipt = SavedReceipt(
+    evidenceId = evidenceId,
+    jobId = jobId,
+    subjectTaskId = subjectTaskId,
+    firstSeenAt = firstSeenAt,
+    totalCents = totalCents,
+    basePayCents = basePayCents,
+    tipCents = tipCents,
+    proven = scope == ReceiptScope.PROVEN_SINGLE.name,
+)
+
+/** #1599: one row an active receipt match wrote. */
+internal fun ReceiptMatchRowEntity.toActive(): ActiveMatchRow = ActiveMatchRow(
+    commandId = commandId,
+    evidenceId = evidenceId,
+    deliveryEventSequenceId = deliveryEventSequenceId,
+    role = ReceiptMatchRole.valueOf(role),
+    newPayCents = newPayCents,
+    matchedAt = matchedAt,
 )
 
 /**

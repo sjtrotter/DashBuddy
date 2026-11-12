@@ -27,8 +27,8 @@ import timber.log.Timber
  * read — another total, a new itemization, or another proof scope — is a new REVISION of the same record, so a
  * collapsed receipt that expands updates its record rather than adding one; an unchanged re-render (or a collapsed
  * re-read at the same total) records nothing. Equal totals are never identity: a different subject or a broken
- * episode is a new record, and repeated reads of one receipt across episodes are separate records that #1599's
- * "Same receipt as…" links.
+ * episode is a new record, and repeated reads of one receipt across episodes are separate records, and #1599's
+ * matching never joins two by amount.
  *
  * Pure: `obs.timestamp` only. The id is `receipt:<subject>:<firstSeenAt>`, so a recovery replay re-derives it.
  */

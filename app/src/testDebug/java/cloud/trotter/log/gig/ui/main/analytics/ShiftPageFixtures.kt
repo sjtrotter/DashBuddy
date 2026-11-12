@@ -6,11 +6,15 @@ import cloud.trotter.log.gig.domain.analytics.PayBasis
 import cloud.trotter.log.gig.domain.analytics.SessionDetail
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
 import cloud.trotter.log.gig.domain.analytics.checks.ShiftChecks
+import cloud.trotter.log.gig.domain.analytics.receipts.ActiveMatchRow
+import cloud.trotter.log.gig.domain.analytics.receipts.SavedReceipt
+import cloud.trotter.log.gig.domain.analytics.receipts.ShiftReceipts
 import cloud.trotter.log.gig.domain.analytics.timeline.ShiftTimeline
 import cloud.trotter.log.gig.domain.analytics.timeline.TimelineDelivery
 import cloud.trotter.log.gig.domain.analytics.timeline.TimelineOffer
 import cloud.trotter.log.gig.domain.analytics.timeline.TimelinePickup
 import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeResolution
+import cloud.trotter.log.gig.domain.model.event.payload.ReceiptMatchRole
 import cloud.trotter.log.gig.domain.model.event.payload.SessionEndSource
 import cloud.trotter.log.gig.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.log.gig.domain.model.offer.OfferScope
@@ -45,10 +49,11 @@ internal object ShiftPageFixtures {
     enum class OrphanAnswer { OPEN, UNASSIGNED_RECORDED, MARKED_UNASSIGNED, MISSED_DELIVERY_ADDED }
 
     private fun record(seq: Long, job: String, store: String, minutes: Int, pay: Double?, basis: String,
-                       net: Double?, cash: Double? = null) = DeliveryRecord(
+                       net: Double?, cash: Double? = null, hashes: List<String> = emptyList(), adjustedAt: Long? = null) = DeliveryRecord(
         eventSequenceId = seq, sessionId = "shift-1", platform = Platform.DoorDash, jobId = job, taskId = "t$seq",
         storeName = store, completedAt = at(minutes), realizedPay = pay, payBasis = basis, netProfit = net,
         realizedMiles = 3.0, realizedMinutes = 12.0, tip = null, basePay = null, cashTip = cash,
+        driverAdjustedAt = adjustedAt, jobOfferHashes = hashes,
     )
 
     private fun session(endedMinutes: Int?, reported: Double?, endSource: String?, miles: Double, deliveries: Int) =
@@ -163,6 +168,81 @@ internal object ShiftPageFixtures {
         return state(detail, offers, emptyList(), deliveries, running = false)
     }
 
+    /** #1599: the receipt shift's one-offer stack, its proven delivery, its unproven receipt and its match. */
+    const val RECEIPT_Y1 = 101L
+    const val RECEIPT_Y2 = 102L
+    const val RECEIPT_PROVEN = 103L
+    const val RECEIPT_STACK_KEY = "offer:40"
+    const val RECEIPT_EVIDENCE = "receipt:t102:shift-1"
+    const val RECEIPT_MATCH_COMMAND = "match-1"
+    val receiptSeenAt: Long get() = at(74)
+    const val RECEIPT_OTHER_EVIDENCE = "receipt:t105:shift-1"
+
+    /**
+     * An ended shift (#1599): a proven single delivery (Store C, Receipt $28.51), a one-offer stack at Store A ([RECEIPT_Y1]
+     * with no pay, [RECEIPT_Y2] an offer estimate of $9.00), a two-offer job at Store D (two $7.00 estimates), an
+     * unproven $20.50 receipt read after [RECEIPT_Y2], and the app's total. [matched] adds the dasher's match of the
+     * receipt over the stack, even split; [editedAfter] then a "Fix this delivery" pay edit on [RECEIPT_Y1], so the
+     * match can no longer be undone. [y2Only] instead matches the receipt to [RECEIPT_Y2] alone, which leaves
+     * [RECEIPT_Y1] cleared, with no pay; [otherOpen] adds an unproven $7.50 receipt of the Store D job, still open.
+     */
+    fun receiptShift(
+        matched: Boolean = false,
+        editedAfter: Boolean = false,
+        y2Only: Boolean = false,
+        otherOpen: Boolean = false,
+    ): SessionDetailUiState {
+        val matchedAt = at(400)
+        val offers = listOf(
+            offer(41, 5, OfferOutcome.ACCEPTED, "Store C", 9.00, 2.0),
+            offer(40, 30, OfferOutcome.ACCEPTED, "Store A", 18.00, 5.0),
+            offer(42, 110, OfferOutcome.ACCEPTED, "Store D", 10.00, 3.0),
+            offer(43, 115, OfferOutcome.ACCEPTED, "Store D", 4.00, 1.0, OfferScope.ADD_ON, OfferQuoteBasis.INCREMENTAL),
+        )
+        val y1 = when {
+            y2Only -> record(RECEIPT_Y1, "job-y", "Store A", 40, null, PayBasis.NONE, -1.0, hashes = listOf("h40"))
+            matched && editedAfter -> record(RECEIPT_Y1, "job-y", "Store A", 40, 12.00, PayBasis.USER_CORRECTED, 11.0, hashes = listOf("h40"), adjustedAt = at(410))
+            matched -> record(RECEIPT_Y1, "job-y", "Store A", 40, 10.25, PayBasis.RECEIPT_MATCHED, 9.25, hashes = listOf("h40"), adjustedAt = matchedAt)
+            else -> record(RECEIPT_Y1, "job-y", "Store A", 40, null, PayBasis.NONE, -1.0, hashes = listOf("h40"))
+        }
+        val y2 = if (y2Only) {
+            record(RECEIPT_Y2, "job-y", "Store A", 70, 20.50, PayBasis.RECEIPT_MATCHED, 19.5, hashes = listOf("h40"), adjustedAt = matchedAt)
+        } else if (matched) {
+            record(RECEIPT_Y2, "job-y", "Store A", 70, 10.25, PayBasis.RECEIPT_MATCHED, 9.25, hashes = listOf("h40"), adjustedAt = matchedAt)
+        } else {
+            record(RECEIPT_Y2, "job-y", "Store A", 70, 9.00, PayBasis.OFFER_PAY, 8.0, hashes = listOf("h40"))
+        }
+        val records = listOf(
+            record(RECEIPT_PROVEN, "job-c", "Store C", 15, 28.51, PayBasis.RECEIPT_TOTAL, 27.0, hashes = listOf("h41")),
+            y1,
+            y2,
+            record(105, "job-d", "Store D", 125, 7.00, PayBasis.OFFER_PAY, 6.0, hashes = listOf("h42", "h43")),
+            record(106, "job-d", "Store D", 135, 7.00, PayBasis.OFFER_PAY, 6.0, hashes = listOf("h42", "h43")),
+        )
+        val deliveries = records.map { r ->
+            TimelineDelivery(
+                r.eventSequenceId, r.jobId, r.storeName, arrivedAt = r.completedAt - 120_000L, completedAt = r.completedAt,
+                realizedPay = r.realizedPay, payBasis = r.payBasis, cashTip = r.cashTip, jobOfferHashes = r.jobOfferHashes,
+                soleOfferHash = null,
+            )
+        }
+        val receipt = SavedReceipt(RECEIPT_EVIDENCE, "job-y", "t$RECEIPT_Y2", receiptSeenAt, 2050, null, null, proven = false)
+        val active = if (y2Only) {
+            listOf(
+                ActiveMatchRow(RECEIPT_MATCH_COMMAND, RECEIPT_EVIDENCE, RECEIPT_Y1, ReceiptMatchRole.CLEARED, null, matchedAt),
+                ActiveMatchRow(RECEIPT_MATCH_COMMAND, RECEIPT_EVIDENCE, RECEIPT_Y2, ReceiptMatchRole.COVERED, 2050, matchedAt),
+            )
+        } else if (matched) {
+            listOf(RECEIPT_Y1, RECEIPT_Y2).map { ActiveMatchRow(RECEIPT_MATCH_COMMAND, RECEIPT_EVIDENCE, it, ReceiptMatchRole.COVERED, 1025, matchedAt) }
+        } else {
+            emptyList()
+        }
+        val detail = SessionDetail(session(366, 63.01, SessionEndSource.SUMMARY_SCREEN, 30.0, records.size), records)
+        val other = SavedReceipt(RECEIPT_OTHER_EVIDENCE, "job-d", "t105", at(127), 750, null, null, proven = false)
+        val saved = if (otherOpen) listOf(receipt, other) else listOf(receipt)
+        return state(detail, offers, emptyList(), deliveries, running = false, ShiftReceipts.of(saved, records, active))
+    }
+
     /** The page's state as the ViewModel builds it: the fold, and the offers and deliveries the store search reads. */
     private fun state(
         detail: SessionDetail,
@@ -170,11 +250,12 @@ internal object ShiftPageFixtures {
         pickups: List<TimelinePickup>,
         deliveries: List<TimelineDelivery>,
         running: Boolean,
+        receipts: ShiftReceipts = ShiftReceipts.EMPTY,
     ): SessionDetailUiState {
         val timeline = ShiftTimeline.fold(offers, pickups, deliveries, running)
         return SessionDetailUiState(
-            detail = detail, timeline = timeline, loading = false, checks = ShiftChecks.of(detail, timeline),
-            offers = offers, deliveries = deliveries,
+            detail = detail, timeline = timeline, loading = false, checks = ShiftChecks.of(detail, timeline, receipts),
+            offers = offers, deliveries = deliveries, receipts = receipts,
         )
     }
 }

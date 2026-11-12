@@ -22,6 +22,10 @@ import cloud.trotter.log.gig.domain.model.event.payload.OfferPayload
 import cloud.trotter.log.gig.domain.model.event.payload.TaskUnassignedPayload
 import cloud.trotter.log.gig.domain.state.TaskPhase
 import cloud.trotter.log.gig.domain.model.event.payload.ReceiptObservedPayload
+import cloud.trotter.log.gig.domain.model.event.payload.ReceiptMatchLine
+import cloud.trotter.log.gig.domain.model.event.payload.ReceiptMatchRole
+import cloud.trotter.log.gig.domain.model.event.payload.ReceiptMatchUndonePayload
+import cloud.trotter.log.gig.domain.model.event.payload.ReceiptMatchedPayload
 import cloud.trotter.log.gig.domain.state.ReceiptProofGap
 import cloud.trotter.log.gig.domain.state.ReceiptScope
 import cloud.trotter.log.gig.domain.model.event.payload.OfferReceivedPayload
@@ -196,6 +200,20 @@ class AppEventCodecTest {
             as DeliveryReceiptRepricePayload
         assertNull(reprice.receiptScope)
         assertNull(reprice.receiptEvidenceId)
+    }
+
+    @Test
+    fun `#1599 — the receipt match and its undo round-trip, a CLEARED line and a null prior included`() {
+        val matched = ReceiptMatchedPayload(
+            commandId = "cmd-1", sessionId = "s1", evidenceId = "receipt:t2:5000", receiptCents = 2050,
+            lines = listOf(
+                ReceiptMatchLine(7L, ReceiptMatchRole.COVERED, priorPayCents = null, priorPayBasis = "NONE", newPayCents = 2050),
+                ReceiptMatchLine(6L, ReceiptMatchRole.CLEARED, priorPayCents = 900, priorPayBasis = "OFFER_PAY", newPayCents = null),
+            ),
+        )
+        assertEquals(matched, roundTrip(AppEventType.RECEIPT_MATCHED, matched))
+        val undone = ReceiptMatchUndonePayload(sessionId = "s1", matchCommandId = "cmd-1")
+        assertEquals(undone, roundTrip(AppEventType.RECEIPT_MATCH_UNDONE, undone))
     }
 
     @Test

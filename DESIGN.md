@@ -94,7 +94,8 @@ spoken offer follow the bubble's rules, because they are read or heard in the sa
   then job cards and runs of declined and expired offers. A card's trailing slot holds only money the dasher was
   paid; offered figures sit in the supporting text. Every run is collapsed to one row by default and opens in
   place. Tapping a job opens a sheet of its recorded milestones, with one "Fix this delivery" per delivery and no
-  estimates.
+  estimates. A receipt the app could not place is a check line whose Match opens "Which deliveries did this receipt
+  pay for?", the one sheet that shows estimates, since it replaces them.
 - **Save as you go.** On a vehicle's details page a finished field saves, there is no Save button, and a snackbar
   offers Undo for the latest change (#1383, #1385). Rebuilt settings screens follow the same pattern.
 - **Confirm only what has a lasting effect.** A reset or a retirement asks first, as the vehicle page does today

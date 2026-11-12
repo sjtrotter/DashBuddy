@@ -17,6 +17,8 @@ import cloud.trotter.log.gig.core.database.analytics.LedgerDao
 import cloud.trotter.log.gig.core.database.analytics.OfferRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.PickupRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.ReceiptDao
+import cloud.trotter.log.gig.core.database.analytics.ReceiptMatchDao
+import cloud.trotter.log.gig.core.database.analytics.ReceiptMatchRowEntity
 import cloud.trotter.log.gig.core.database.analytics.ReceiptRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.SessionRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.StoreEntity
@@ -50,6 +52,8 @@ import cloud.trotter.log.gig.core.database.snapshot.AppStateSnapshotEntity
         PickupRecordEntity::class,
         // #1598: receipt evidence, one row per receipt record.
         ReceiptRecordEntity::class,
+        // #1599: the rows each receipt match wrote, with what it found there.
+        ReceiptMatchRowEntity::class,
     ],
     version = GigLogDatabase.VERSION,
     exportSchema = true,
@@ -118,6 +122,8 @@ import cloud.trotter.log.gig.core.database.snapshot.AppStateSnapshotEntity
     // type that cannot exist in folded history, so the table starts empty and fills from new events.
     // v25→v26 (#1119 S2): nullable offer_records.ambiguousJobIds, NULL on existing rows. No `PROJECTOR_VERSION` bump:
     // OFFER_NOT_TAKEN and the payload's tie list cannot exist in folded history, so NULL is right for all of it.
+    // v26→v27 (#1599): one new table, receipt_match_rows. No `PROJECTOR_VERSION` bump: RECEIPT_MATCHED and
+    // RECEIPT_MATCH_UNDONE are new event types that cannot exist in folded history, so the table starts empty.
     autoMigrations = [
         AutoMigration(from = 8, to = 9),
         AutoMigration(from = 9, to = 10),
@@ -137,6 +143,7 @@ import cloud.trotter.log.gig.core.database.snapshot.AppStateSnapshotEntity
         AutoMigration(from = 23, to = 24), // #1517 offer unassignedAt + delivery sourceOfferSeq; refold 19
         AutoMigration(from = 24, to = 25), // #1598 receipt_records (new table); no refold
         AutoMigration(from = 25, to = 26), // #1119 offer_records ambiguousJobIds; no refold
+        AutoMigration(from = 26, to = 27), // #1599 receipt_match_rows (new table); no refold
     ],
 )
 @TypeConverters(DataTypeConverters::class)
@@ -155,6 +162,7 @@ abstract class GigLogDatabase : RoomDatabase() {
     abstract fun recapDao(): RecapDao
     abstract fun storeSearchDao(): StoreSearchDao
     abstract fun receiptDao(): ReceiptDao
+    abstract fun receiptMatchDao(): ReceiptMatchDao
 
     companion object {
         /**
@@ -170,7 +178,7 @@ abstract class GigLogDatabase : RoomDatabase() {
          * this in lockstep with a new `schemas/**/<N>.json`, an `AutoMigration(N-1 → N)`, and its
          * `MigrationTestHelper` case — see the release checklist in CLAUDE.md.
          */
-        const val VERSION = 26
+        const val VERSION = 27
     }
 
 }
