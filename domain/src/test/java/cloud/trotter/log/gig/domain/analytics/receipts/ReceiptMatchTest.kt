@@ -113,11 +113,23 @@ class ReceiptMatchTest {
         assertEquals(2050L, plan.receiptCents)
     }
 
-    @Test fun `plan - ten dollars over three is 333, 333, 334 in sequence order`() {
+    @Test fun `plan - ten dollars over three is 334, 333, 333 in display order`() {
         val rows = listOf(row(3), row(1), row(2))
         val plan = ReceiptMatch.plan(receipt(1, cents = 1000), rows, emptyList(), setOf(1, 2, 3))!!
         assertEquals(listOf(1L, 2L, 3L), plan.covered.map { it.deliveryEventSequenceId })
-        assertEquals(listOf(333L, 333L, 334L), plan.covered.map { it.newPayCents })
+        assertEquals(listOf(334L, 333L, 333L), plan.covered.map { it.newPayCents })
+        // Display order is completion time first: a row completed earlier takes the remainder cent.
+        val late = listOf(row(1).copy(completedAt = 900), row(2), row(3))
+        val reordered = ReceiptMatch.plan(receipt(1, cents = 1000), late, emptyList(), setOf(1, 2, 3))!!
+        assertEquals(listOf(2L, 3L, 1L), reordered.covered.map { it.deliveryEventSequenceId })
+        assertEquals(listOf(334L, 333L, 333L), reordered.covered.map { it.newPayCents })
+    }
+
+    @Test fun `plan - six cents over twelve deliveries is never a negative share`() {
+        val rows = (1L..12L).map { row(it) }
+        val plan = ReceiptMatch.plan(receipt(1, cents = 6), rows, emptyList(), (1L..12L).toSet())!!
+        assertTrue(plan.covered.all { (it.newPayCents ?: -1) >= 0 })
+        assertEquals(6L, plan.covered.sumOf { it.newPayCents!! })
     }
 
     @Test fun `plan - one-offer job, the subject alone clears its sibling's estimate`() { // non-vacuous
@@ -168,9 +180,16 @@ class ReceiptMatchTest {
         assertEquals(0, ReceiptMatch.offerCount("J3", rows))
     }
 
+    @Test fun `evenSplitCents - six cents over twelve rows is never a negative share`() { // non-vacuous
+        val shares = DropPayApportioner.evenSplitCents(6, 12)
+        assertEquals(12, shares.size)
+        assertTrue(shares.toString(), shares.all { it >= 0 })
+        assertEquals(6L, shares.sum())
+    }
+
     /** Pinned seed (the repo's property convention): a failure is a reproducible finding. */
     @Test
-    fun `evenSplitCents - property - the shares sum to the total and differ by at most the remainder`() {
+    fun `evenSplitCents - property - the shares sum to the total, are never negative and differ by at most a cent`() {
         val random = kotlin.random.Random(EVEN_SPLIT_SEED)
         repeat(2_000) {
             val count = random.nextInt(1, 13)
@@ -179,7 +198,9 @@ class ReceiptMatchTest {
             assertEquals("count for $total/$count", count, shares.size)
             assertEquals("sum for $total/$count", total, shares.sum())
             val spread = shares.max() - shares.min()
-            assertTrue("spread $spread for $total/$count", spread <= total % count)
+            assertTrue("spread $spread for $total/$count", spread <= 1)
+            assertTrue("negative share for $total/$count", shares.all { it >= 0 })
+            assertEquals("remainder first for $total/$count", shares.sortedDescending(), shares)
         }
     }
 

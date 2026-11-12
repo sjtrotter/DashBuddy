@@ -89,7 +89,7 @@ internal fun ReceiptMatchSheet(
     }
     val suggested = remember(receipt, receipts) { ReceiptMatch.suggestion(receipt, receipts.deliveries, receipts.active) }
     val plan = remember(selected, receipt, receipts) { ReceiptMatch.plan(receipt, receipts.deliveries, receipts.active, selected) }
-    val rows = remember(receipts) { receipts.deliveries.sortedWith(compareBy({ it.completedAt }, { it.eventSequenceId })) }
+    val rows = remember(receipts) { receipts.deliveries.sortedWith(ReceiptMatch.DISPLAY_ORDER) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).navigationBarsPadding()) {

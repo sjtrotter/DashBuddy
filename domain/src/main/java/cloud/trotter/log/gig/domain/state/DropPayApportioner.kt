@@ -105,14 +105,15 @@ object DropPayApportioner {
     }
 
     /**
-     * #1599: an even split of [totalCents] into [count] shares, the same remainder rule as [reconcileToCents]: every share
-     * but the last is `round(total / count)`, the last takes the rest, so the shares sum to [totalCents] exactly.
-     * Empty for a count below 1.
+     * #1599: an even split of [totalCents] into [count] shares in whole cents: every share is `floor(total / count)`
+     * and the first `total % count` shares take one more cent, so the shares differ by at most 1¢, are never negative
+     * for a non-negative total, and sum to [totalCents] exactly. Empty for a count below 1.
      */
     fun evenSplitCents(totalCents: Long, count: Int): List<Long> {
         if (count < 1) return emptyList()
-        val share = Math.round(totalCents.toDouble() / count)
-        return List(count) { i -> if (i == count - 1) totalCents - share * (count - 1) else share }
+        val base = Math.floorDiv(totalCents, count.toLong())
+        val extra = Math.floorMod(totalCents, count.toLong())
+        return List(count) { i -> if (i < extra) base + 1 else base }
     }
 
     /**

@@ -118,8 +118,10 @@ object ReceiptMatch {
     }
 
     /**
-     * The preview for [selected] (intersected with the selectable rows), or null when nothing selectable is selected.
-     * Covered rows in ascending sequence id take `DropPayApportioner.evenSplitCents(r.totalCents, n)` in that order.
+     * The preview for [selected] (intersected with the selectable rows), or null when nothing selectable is selected or
+     * the receipt cannot be split. Covered rows in display order (completion time, then sequence id, as the sheet lists
+     * them) take `DropPayApportioner.evenSplitCents(r.totalCents, n)` in that order, so the first rows take the
+     * remainder cents.
      */
     fun plan(
         r: SavedReceipt,
@@ -128,9 +130,10 @@ object ReceiptMatch {
         selected: Set<Long>,
     ): ReceiptMatchPlan? {
         val coveredRows = deliveries.filter { it.eventSequenceId in selected && selectable(it, active) }
-            .sortedBy { it.eventSequenceId }
+            .sortedWith(DISPLAY_ORDER)
         if (coveredRows.isEmpty()) return null
         val shares = DropPayApportioner.evenSplitCents(r.totalCents, coveredRows.size)
+        if (shares.size != coveredRows.size || shares.any { it < 0 }) return null
         val covered = coveredRows.mapIndexed { i, d -> PlannedRow(d.eventSequenceId, payCents(d), d.payBasis, shares[i]) }
         val cleared = cleared(deliveries, coveredRows.map { it.eventSequenceId }.toSet(), active)
             .map { PlannedRow(it.eventSequenceId, payCents(it), it.payBasis, null) }
@@ -158,6 +161,9 @@ object ReceiptMatch {
             ReceiptMatchRole.CLEARED -> d.realizedPay == null && d.payBasis == PayBasis.NONE && d.driverAdjustedAt == null
         }
     }
+
+    /** The sheet's row order: completion time, then sequence id. */
+    val DISPLAY_ORDER: Comparator<DeliveryRecord> = compareBy({ it.completedAt }, { it.eventSequenceId })
 
     private fun coveringRow(d: DeliveryRecord, active: List<ActiveMatchRow>): ActiveMatchRow? =
         active.firstOrNull { it.role == ReceiptMatchRole.COVERED && it.deliveryEventSequenceId == d.eventSequenceId }

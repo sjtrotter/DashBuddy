@@ -843,8 +843,9 @@ summing to the receipt to the cent. With no match in the log every row folds as 
   `driverAdjustedAt`, not moved into the shift by the dasher, not covered by an active match; a cleared row stays
   open), `lock` (matched to another receipt, paid by a receipt, changed by you), the suggestion (the receipt's own
   delivery when open, plus every other open delivery of its job when that job has at most one offer; no store, time or
-  quote ranking), the even split (`DropPayApportioner.evenSplitCents`: the last share takes the remainder), the
-  cleared set (the open `OFFER_PAY` rows of a covered row's job, when that job has at most one offer: there every
+  quote ranking), the even split (`DropPayApportioner.evenSplitCents`: every share is `floor(total / n)` and the
+  first rows in the sheet's order take one remainder cent each, so no share is negative and the shares differ by at
+  most 1¢), the cleared set (the open `OFFER_PAY` rows of a covered row's job, when that job has at most one offer: there every
   estimate is a share of the one offer the receipt pays), `plan` (the preview Confirm sends) and `holdsWritten`. The
   sheet, the checks and the apply all call it.
 - **`receipt_match_rows`** (Room v27, new table, `AutoMigration(26, 27)`, `AnalyticsMigration26to27Test`): PK
