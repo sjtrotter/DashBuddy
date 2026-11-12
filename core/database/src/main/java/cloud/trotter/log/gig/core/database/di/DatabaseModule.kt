@@ -8,6 +8,8 @@ import cloud.trotter.log.gig.core.database.analytics.AnalyticsDao
 import cloud.trotter.log.gig.core.database.analytics.LedgerDao
 import cloud.trotter.log.gig.core.database.analytics.HudShiftDao
 import cloud.trotter.log.gig.core.database.analytics.RecapDao
+import cloud.trotter.log.gig.core.database.analytics.ReceiptDao
+import cloud.trotter.log.gig.core.database.analytics.ReceiptMatchDao
 import cloud.trotter.log.gig.core.database.analytics.StoreSearchDao
 import cloud.trotter.log.gig.core.database.chat.ChatDao
 import cloud.trotter.log.gig.core.database.effects.EffectsFiredDao
@@ -113,6 +115,12 @@ object DatabaseModule {
 
     @Provides
     fun provideStoreSearchDao(db: GigLogDatabase): StoreSearchDao = db.storeSearchDao()
+
+    @Provides
+    fun provideReceiptDao(db: GigLogDatabase): ReceiptDao = db.receiptDao()
+
+    @Provides
+    fun provideReceiptMatchDao(db: GigLogDatabase): ReceiptMatchDao = db.receiptMatchDao()
 
     @Provides
     fun provideAnalyticsDao(db: GigLogDatabase): AnalyticsDao {
