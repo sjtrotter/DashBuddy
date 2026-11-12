@@ -404,7 +404,7 @@ class ReceiptMatchProjectorTest {
     }
 
     @Test
-    fun `P9 undo restores every row exactly, only while the match still holds, last in first out`() = runBlocking { // non-vacuous
+    fun `P9 undo restores every row exactly, and only while the match still holds`() = runBlocking { // non-vacuous
         val h = harness()
         val s = h.stack()
         h.projector.catchUp()
@@ -433,22 +433,17 @@ class ReceiptMatchProjectorTest {
         assertEquals(PayBasis.USER_CORRECTED, edited.row(e.y1).payBasis)
         assertEquals(2, edited.active("S1").size)
 
-        // LIFO: M1 clears Y1, M2 covers Y1; M1 cannot be undone first, then M2 and M1 both restore. M2's receipt is of
-        // another job (its delivery not recorded): a second receipt of the stack's own job is refused (P14).
-        val lifo = harness()
-        val l = lifo.stack(y1Estimate = 9.0)
-        lifo.observed("S1", 1_450, "J-K", "K1-S1", 6.00)
-        lifo.projector.catchUp()
-        val original = listOf(lifo.row(l.y1), lifo.row(l.y2))
-        lifo.match("S1", 7_000, "M1", l.evidence, 2050, covered(l.y2, 2050, 900, PayBasis.OFFER_PAY), cleared(l.y1, 900))
-        lifo.match("S1", 7_100, "M2", evidence("K1-S1", 1_450), 600, covered(l.y1, 600))
-        lifo.undo("S1", 7_200, "M1")
-        assertEquals(1, lifo.projector.catchUp().adjustmentSkips)
-        assertEquals(6.0, lifo.row(l.y1).realizedPay!!, 0.0)
-        lifo.undo("S1", 7_300, "M2")
-        lifo.undo("S1", 7_400, "M1")
-        assertEquals(0, lifo.projector.catchUp().adjustmentSkips)
-        assertEquals(original, listOf(lifo.row(l.y1), lifo.row(l.y2)))
+        // A cleared row the dasher then fixed by hand blocks the undo too. (No second match can write a row of the paid
+        // job, P15, so two active matches never share a row.)
+        val cleared = harness()
+        val c = cleared.stack(y1Estimate = 9.0)
+        cleared.match("S1", 7_000, "M1", c.evidence, 2050, covered(c.y2, 2050, 900, PayBasis.OFFER_PAY), cleared(c.y1, 900))
+        cleared.payEdit("S1", 7_050, c.y1, 4.0)
+        cleared.projector.catchUp()
+        val fixed = listOf(cleared.row(c.y1), cleared.row(c.y2))
+        cleared.undo("S1", 7_100, "M1")
+        assertEquals(1, cleared.projector.catchUp().adjustmentSkips)
+        assertEquals(fixed, listOf(cleared.row(c.y1), cleared.row(c.y2)))
     }
 
     private suspend fun Harness.matchUndoSeq(): Long =
@@ -482,10 +477,8 @@ class ReceiptMatchProjectorTest {
         val c = stack("S3", base = 20_000, y1Estimate = 9.0)
         observed("S3", 20_450, "J-K3", "K1-S3", 6.00)
         match("S3", 27_000, "MC1", c.evidence, 2050, covered(c.y2, 2050, 900, PayBasis.OFFER_PAY), cleared(c.y1, 900))
-        match("S3", 27_100, "MC2", evidence("K1-S3", 20_450), 600, covered(c.y1, 600))
-        undo("S3", 27_200, "MC1") // refused: MC2 covers the row MC1 cleared
-        undo("S3", 27_300, "MC2")
-        undo("S3", 27_350, "MC1")
+        match("S3", 27_100, "MC2", evidence("K1-S3", 20_450), 600, covered(c.y1, 600)) // refused: MC1 pays the job
+        undo("S3", 27_200, "MC1")
         match("S3", 27_400, "MC3", c.evidence, 2050, covered(c.y1, 1025), covered(c.y2, 1025, 900, PayBasis.OFFER_PAY))
     }
 
@@ -495,7 +488,7 @@ class ReceiptMatchProjectorTest {
         val skips = incremental.foldOneByOne()
         val single = harness().apply { mixedLog() }
         assertEquals(skips, single.projector.catchUp().adjustmentSkips)
-        assertEquals(1, skips) // MC1's undo, refused while MC2 covers its cleared row
+        assertEquals(1, skips) // MC2, refused: MC1 already pays the stack's job
         assertEquals(single.allRows(), incremental.allRows())
         assertEquals(single.matchRowDump(), incremental.matchRowDump())
         assertEquals(PayBasis.RECEIPT_MATCHED, single.allRows().first { it.taskId == "Y1-S1" }.payBasis)
@@ -592,6 +585,25 @@ class ReceiptMatchProjectorTest {
         h.projector.catchUp()
         assertEquals(listOf(ReceiptStatus.OPEN, ReceiptStatus.OPEN), h.shiftReceipts("S1").items.map { it.status })
         assertEquals(2, h.checks("S1").count { it is ShiftCheck.ReceiptNotMatched })
+    }
+
+    @Test
+    fun `P15 a receipt of another job cannot cover a delivery of a one-offer job already paid`() = runBlocking { // non-vacuous
+        val h = harness()
+        val s = h.stack(y1Estimate = 9.0)
+        // A receipt of another job K, whose delivery was not recorded.
+        h.observed("S1", 1_450, "J-K", "K1-S1", 6.00)
+        h.match("S1", 7_000, "M1", s.evidence, 2050, covered(s.y2, 2050, 900, PayBasis.OFFER_PAY), cleared(s.y1, 900))
+        h.projector.catchUp()
+        val y1 = h.row(s.y1)
+        assertEquals(PayBasis.NONE, y1.payBasis)
+
+        h.match("S1", 7_100, "MK", evidence("K1-S1", 1_450), 600, covered(s.y1, 600))
+        val skips = h.projector.catchUp().adjustmentSkips
+        assertEquals("job J's delivery pay", 20.50, h.deliveryPay("S1"), 1e-9)
+        assertEquals(1, skips)
+        assertEquals(y1, h.row(s.y1))
+        assertEquals(setOf("M1"), h.active("S1").map { it.commandId }.toSet())
     }
 
     private companion object {

@@ -832,7 +832,7 @@ summing to the receipt to the cent. With no match in the log every row folds as 
   match applies whole or not at all, each refusal a counted skip with a WARN of ids: the command id is new (a double
   tap); the receipt exists, is of this shift, is `UNPROVEN` and still records `receiptCents`; no active match names
   it; its job is not FUNDED by another receipt's match (below); and every covered delivery is among the shift's rows sequenced before the match (the #1517 batch-boundary rule)
-  and open (`ReceiptMatch.selectable`). The projector writes each `receipt_records` revision in log order among the
+  and open to this receipt (`ReceiptMatch.openTo`: selectable, and not of a FUNDED job). The projector writes each `receipt_records` revision in log order among the
   corrections, so the match reads the receipt as of its own log position in one batch, many or a rebuild; a revision
   logged after the match only updates the saved receipt (a `lastEventSequenceId` past the match is refused as a
   backstop that never fires). The check is structural, never by amount: the payload's prior amounts are a
@@ -863,15 +863,17 @@ summing to the receipt to the cent. With no match in the log every row folds as 
   `ShiftCheck.ReceiptNotMatched`; any other is SETTLED. Five rules keep two reads of one physical receipt from paying
   twice: a job with at most one offer that another receipt's active match pays (a row it wrote is of the job, or its
   receipt is) is FUNDED (`ReceiptMatch.funded`): every other receipt record of the job is SETTLED, whether or not its
-  subject was ticked, the apply refuses its match, and undoing the paying match re-opens them; a delivery is covered
+  subject was ticked, no delivery of the job takes another receipt (`ReceiptMatch.openTo`: the sheet shows it disabled
+  as "Matched to receipt $X", the paying receipt's total), the apply refuses either match, and undoing the paying
+  match re-opens them; a delivery is covered
   by at most one active match (the sheet shows it disabled, the apply refuses it); a
   receipt whose own delivery already carries receipt money, a match or the dasher's pay asks nothing; on a job with at
   most one offer the suggestion is the whole job, so the first Confirm covers the later read's delivery; and the preview
   shows the shift's independent total beside the new delivery pay.
 - **Undo.** `ReceiptMatchApply.applyUndo` restores every row the match wrote from its stored priors and stamps
   `undoneAt`, only while each row still holds what the match wrote (`ReceiptMatch.holdsWritten`); a later "Fix this
-  delivery" pay edit, or a later match on a row this one cleared, refuses it, so two matches on one row undo last in,
-  first out. The job sheet shows "Undo match" under each delivery an undoable match covers.
+  delivery" pay edit on any of its rows, a cleared one included, refuses it. No second match can write a row of a job
+  this one pays, so two active matches never share a row. The job sheet shows "Undo match" under each delivery an undoable match covers.
 - **Driver ownership.** A matched row carries `driverAdjustedAt`, so the machine re-price refuses it (its guard also
   names `RECEIPT_MATCHED`), and whole-job settlement (#1601) must skip any row an active match names. A later "Fix this
   delivery" still wins by log order (`DeliveryCorrections.applyPay`/`applyDelivery` are unchanged).

@@ -176,15 +176,22 @@ internal object ShiftPageFixtures {
     const val RECEIPT_EVIDENCE = "receipt:t102:shift-1"
     const val RECEIPT_MATCH_COMMAND = "match-1"
     val receiptSeenAt: Long get() = at(74)
+    const val RECEIPT_OTHER_EVIDENCE = "receipt:t105:shift-1"
 
     /**
      * An ended shift (#1599): a proven single delivery (Store C, Receipt $28.51), a one-offer stack at Store A ([RECEIPT_Y1]
      * with no pay, [RECEIPT_Y2] an offer estimate of $9.00), a two-offer job at Store D (two $7.00 estimates), an
      * unproven $20.50 receipt read after [RECEIPT_Y2], and the app's total. [matched] adds the dasher's match of the
      * receipt over the stack, even split; [editedAfter] then a "Fix this delivery" pay edit on [RECEIPT_Y1], so the
-     * match can no longer be undone.
+     * match can no longer be undone. [y2Only] instead matches the receipt to [RECEIPT_Y2] alone, which leaves
+     * [RECEIPT_Y1] cleared, with no pay; [otherOpen] adds an unproven $7.50 receipt of the Store D job, still open.
      */
-    fun receiptShift(matched: Boolean = false, editedAfter: Boolean = false): SessionDetailUiState {
+    fun receiptShift(
+        matched: Boolean = false,
+        editedAfter: Boolean = false,
+        y2Only: Boolean = false,
+        otherOpen: Boolean = false,
+    ): SessionDetailUiState {
         val matchedAt = at(400)
         val offers = listOf(
             offer(41, 5, OfferOutcome.ACCEPTED, "Store C", 9.00, 2.0),
@@ -193,11 +200,14 @@ internal object ShiftPageFixtures {
             offer(43, 115, OfferOutcome.ACCEPTED, "Store D", 4.00, 1.0, OfferScope.ADD_ON, OfferQuoteBasis.INCREMENTAL),
         )
         val y1 = when {
+            y2Only -> record(RECEIPT_Y1, "job-y", "Store A", 40, null, PayBasis.NONE, -1.0, hashes = listOf("h40"))
             matched && editedAfter -> record(RECEIPT_Y1, "job-y", "Store A", 40, 12.00, PayBasis.USER_CORRECTED, 11.0, hashes = listOf("h40"), adjustedAt = at(410))
             matched -> record(RECEIPT_Y1, "job-y", "Store A", 40, 10.25, PayBasis.RECEIPT_MATCHED, 9.25, hashes = listOf("h40"), adjustedAt = matchedAt)
             else -> record(RECEIPT_Y1, "job-y", "Store A", 40, null, PayBasis.NONE, -1.0, hashes = listOf("h40"))
         }
-        val y2 = if (matched) {
+        val y2 = if (y2Only) {
+            record(RECEIPT_Y2, "job-y", "Store A", 70, 20.50, PayBasis.RECEIPT_MATCHED, 19.5, hashes = listOf("h40"), adjustedAt = matchedAt)
+        } else if (matched) {
             record(RECEIPT_Y2, "job-y", "Store A", 70, 10.25, PayBasis.RECEIPT_MATCHED, 9.25, hashes = listOf("h40"), adjustedAt = matchedAt)
         } else {
             record(RECEIPT_Y2, "job-y", "Store A", 70, 9.00, PayBasis.OFFER_PAY, 8.0, hashes = listOf("h40"))
@@ -217,13 +227,20 @@ internal object ShiftPageFixtures {
             )
         }
         val receipt = SavedReceipt(RECEIPT_EVIDENCE, "job-y", "t$RECEIPT_Y2", receiptSeenAt, 2050, null, null, proven = false)
-        val active = if (matched) {
+        val active = if (y2Only) {
+            listOf(
+                ActiveMatchRow(RECEIPT_MATCH_COMMAND, RECEIPT_EVIDENCE, RECEIPT_Y1, ReceiptMatchRole.CLEARED, null, matchedAt),
+                ActiveMatchRow(RECEIPT_MATCH_COMMAND, RECEIPT_EVIDENCE, RECEIPT_Y2, ReceiptMatchRole.COVERED, 2050, matchedAt),
+            )
+        } else if (matched) {
             listOf(RECEIPT_Y1, RECEIPT_Y2).map { ActiveMatchRow(RECEIPT_MATCH_COMMAND, RECEIPT_EVIDENCE, it, ReceiptMatchRole.COVERED, 1025, matchedAt) }
         } else {
             emptyList()
         }
         val detail = SessionDetail(session(366, 63.01, SessionEndSource.SUMMARY_SCREEN, 30.0, records.size), records)
-        return state(detail, offers, emptyList(), deliveries, running = false, ShiftReceipts.of(listOf(receipt), records, active))
+        val other = SavedReceipt(RECEIPT_OTHER_EVIDENCE, "job-d", "t105", at(127), 750, null, null, proven = false)
+        val saved = if (otherOpen) listOf(receipt, other) else listOf(receipt)
+        return state(detail, offers, emptyList(), deliveries, running = false, ShiftReceipts.of(saved, records, active))
     }
 
     /** The page's state as the ViewModel builds it: the fold, and the offers and deliveries the store search reads. */

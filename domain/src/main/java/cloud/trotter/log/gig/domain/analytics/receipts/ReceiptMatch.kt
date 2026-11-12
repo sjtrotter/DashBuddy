@@ -76,6 +76,27 @@ object ReceiptMatch {
         (d.payBasis == PayBasis.OFFER_PAY || d.payBasis == PayBasis.NONE) && d.driverAdjustedAt == null &&
             !d.sessionAssigned && coveringRow(d, active) == null
 
+    /**
+     * Whether [d] may take the receipt [evidenceId]: [selectable], and its job is not a one-offer job another receipt's
+     * match already pays ([fundedBy]). The sheet and the projector's apply read this; [lockFor] says why not.
+     */
+    fun openTo(
+        evidenceId: String,
+        d: DeliveryRecord,
+        deliveries: List<DeliveryRecord>,
+        active: List<ActiveMatchRow>,
+        receipts: List<SavedReceipt>,
+    ): Boolean = lockFor(evidenceId, d, deliveries, active, receipts) == null
+
+    /** Why [d] cannot take the receipt [evidenceId]: its [lock], else MatchedTo the receipt that pays its job. */
+    fun lockFor(
+        evidenceId: String,
+        d: DeliveryRecord,
+        deliveries: List<DeliveryRecord>,
+        active: List<ActiveMatchRow>,
+        receipts: List<SavedReceipt>,
+    ): MatchLock? = lock(d, active) ?: fundedBy(d.jobId, evidenceId, deliveries, active, receipts)?.let { MatchLock.MatchedTo(it) }
+
     /** Null when [selectable]; else, first match wins: MatchedTo (an active COVERED row), PaidByReceipt, ChangedByYou. */
     fun lock(d: DeliveryRecord, active: List<ActiveMatchRow>): MatchLock? {
         if (selectable(d, active)) return null
@@ -118,7 +139,7 @@ object ReceiptMatch {
     }
 
     /**
-     * The preview for [selected] (intersected with the selectable rows), or null when nothing selectable is selected or
+     * The preview for [selected] (intersected with the rows [openTo] the receipt), or null when nothing selectable is selected or
      * the receipt cannot be split. Covered rows in display order (completion time, then sequence id, as the sheet lists
      * them) take `DropPayApportioner.evenSplitCents(r.totalCents, n)` in that order, so the first rows take the
      * remainder cents.
@@ -128,8 +149,9 @@ object ReceiptMatch {
         deliveries: List<DeliveryRecord>,
         active: List<ActiveMatchRow>,
         selected: Set<Long>,
+        receipts: List<SavedReceipt>,
     ): ReceiptMatchPlan? {
-        val coveredRows = deliveries.filter { it.eventSequenceId in selected && selectable(it, active) }
+        val coveredRows = deliveries.filter { it.eventSequenceId in selected && openTo(r.evidenceId, it, deliveries, active, receipts) }
             .sortedWith(DISPLAY_ORDER)
         if (coveredRows.isEmpty()) return null
         val shares = DropPayApportioner.evenSplitCents(r.totalCents, coveredRows.size)
@@ -151,9 +173,10 @@ object ReceiptMatch {
 
     /**
      * A job with at most one offer is FUNDED by an active match of another receipt than [evidenceId]: one that wrote a
-     * row of the job, or whose receipt is of the job. The job's one offer is then paid, so no other receipt record of it
-     * may take a delivery (two reads of one receipt must not pay twice), whether or not its subject was ticked. The
-     * sheet settles such a record and the projector refuses its match; undoing the paying match re-opens it.
+     * row of the job, or whose receipt is of the job. The job's one offer is then paid, so no other receipt may pay it
+     * again: no other receipt record of the job asks (whether or not its subject was ticked), and no delivery of the
+     * job takes another receipt ([openTo]). The sheet settles and locks; the projector refuses; undoing the paying
+     * match re-opens them. With this rule no two active matches ever write one row.
      */
     fun funded(
         jobId: String,
@@ -161,11 +184,22 @@ object ReceiptMatch {
         deliveries: List<DeliveryRecord>,
         active: List<ActiveMatchRow>,
         receipts: List<SavedReceipt>,
-    ): Boolean {
-        if (offerCount(jobId, deliveries) > 1) return false
+    ): Boolean = fundedBy(jobId, evidenceId, deliveries, active, receipts) != null
+
+    /** The evidence id of the receipt whose active match funds [jobId] ([funded]), or null. */
+    fun fundedBy(
+        jobId: String,
+        evidenceId: String,
+        deliveries: List<DeliveryRecord>,
+        active: List<ActiveMatchRow>,
+        receipts: List<SavedReceipt>,
+    ): String? {
+        if (offerCount(jobId, deliveries) > 1) return null
         val jobRows = deliveries.filter { it.jobId == jobId }.map { it.eventSequenceId }.toSet()
         val receiptJobs = receipts.associate { it.evidenceId to it.jobId }
-        return active.any { it.evidenceId != evidenceId && (it.deliveryEventSequenceId in jobRows || receiptJobs[it.evidenceId] == jobId) }
+        return active.firstOrNull {
+            it.evidenceId != evidenceId && (it.deliveryEventSequenceId in jobRows || receiptJobs[it.evidenceId] == jobId)
+        }?.evidenceId
     }
 
     /**

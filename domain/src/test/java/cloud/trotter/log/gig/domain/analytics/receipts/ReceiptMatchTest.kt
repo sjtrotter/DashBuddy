@@ -102,7 +102,7 @@ class ReceiptMatchTest {
 
     @Test fun `plan - twenty fifty over two is ten twenty-five each`() { // non-vacuous
         val other = row(3, jobId = "J2", pay = 9.0, basis = PayBasis.RECEIPT_TOTAL)
-        val plan = ReceiptMatch.plan(receipt(2), listOf(y1, y2, other), emptyList(), setOf(1, 2))!!
+        val plan = ReceiptMatch.plan(receipt(2), listOf(y1, y2, other), emptyList(), setOf(1, 2), emptyList())!!
         assertEquals(listOf(1025L, 1025L), plan.covered.map { it.newPayCents })
         assertEquals(listOf(null, 900L), plan.covered.map { it.priorPayCents })
         assertEquals(listOf(PayBasis.NONE, PayBasis.OFFER_PAY), plan.covered.map { it.priorPayBasis })
@@ -115,26 +115,26 @@ class ReceiptMatchTest {
 
     @Test fun `plan - ten dollars over three is 334, 333, 333 in display order`() {
         val rows = listOf(row(3), row(1), row(2))
-        val plan = ReceiptMatch.plan(receipt(1, cents = 1000), rows, emptyList(), setOf(1, 2, 3))!!
+        val plan = ReceiptMatch.plan(receipt(1, cents = 1000), rows, emptyList(), setOf(1, 2, 3), emptyList())!!
         assertEquals(listOf(1L, 2L, 3L), plan.covered.map { it.deliveryEventSequenceId })
         assertEquals(listOf(334L, 333L, 333L), plan.covered.map { it.newPayCents })
         // Display order is completion time first: a row completed earlier takes the remainder cent.
         val late = listOf(row(1).copy(completedAt = 900), row(2), row(3))
-        val reordered = ReceiptMatch.plan(receipt(1, cents = 1000), late, emptyList(), setOf(1, 2, 3))!!
+        val reordered = ReceiptMatch.plan(receipt(1, cents = 1000), late, emptyList(), setOf(1, 2, 3), emptyList())!!
         assertEquals(listOf(2L, 3L, 1L), reordered.covered.map { it.deliveryEventSequenceId })
         assertEquals(listOf(334L, 333L, 333L), reordered.covered.map { it.newPayCents })
     }
 
     @Test fun `plan - six cents over twelve deliveries is never a negative share`() {
         val rows = (1L..12L).map { row(it) }
-        val plan = ReceiptMatch.plan(receipt(1, cents = 6), rows, emptyList(), (1L..12L).toSet())!!
+        val plan = ReceiptMatch.plan(receipt(1, cents = 6), rows, emptyList(), (1L..12L).toSet(), emptyList())!!
         assertTrue(plan.covered.all { (it.newPayCents ?: -1) >= 0 })
         assertEquals(6L, plan.covered.sumOf { it.newPayCents!! })
     }
 
     @Test fun `plan - one-offer job, the subject alone clears its sibling's estimate`() { // non-vacuous
         val y1Est = row(1, pay = 9.0, basis = PayBasis.OFFER_PAY)
-        val plan = ReceiptMatch.plan(receipt(2), listOf(y1Est, y2), emptyList(), setOf(2))!!
+        val plan = ReceiptMatch.plan(receipt(2), listOf(y1Est, y2), emptyList(), setOf(2), emptyList())!!
         assertEquals(listOf(2L), plan.covered.map { it.deliveryEventSequenceId })
         assertEquals(listOf(2050L), plan.covered.map { it.newPayCents })
         assertEquals(listOf(PlannedRow(1, 900, PayBasis.OFFER_PAY, null)), plan.cleared)
@@ -145,17 +145,17 @@ class ReceiptMatchTest {
     @Test fun `plan - two-offer job clears nothing`() {
         val x1 = row(1, basis = PayBasis.OFFER_PAY, pay = 10.0, hashes = listOf("hX", "hY"))
         val x2 = row(2, basis = PayBasis.OFFER_PAY, pay = 10.0, hashes = listOf("hX", "hY"))
-        val plan = ReceiptMatch.plan(receipt(1, cents = 1000), listOf(x1, x2), emptyList(), setOf(1))!!
+        val plan = ReceiptMatch.plan(receipt(1, cents = 1000), listOf(x1, x2), emptyList(), setOf(1), emptyList())!!
         assertTrue(plan.cleared.isEmpty())
         assertEquals(listOf(1000L), plan.covered.map { it.newPayCents })
     }
 
     @Test fun `plan - a selected locked row is ignored and an empty selection is null`() {
         val locked = row(3, basis = PayBasis.RECEIPT_TOTAL, pay = 28.51, jobId = "J2")
-        val plan = ReceiptMatch.plan(receipt(2), listOf(y1, y2, locked), emptyList(), setOf(2, 3))!!
+        val plan = ReceiptMatch.plan(receipt(2), listOf(y1, y2, locked), emptyList(), setOf(2, 3), emptyList())!!
         assertEquals(listOf(2L), plan.covered.map { it.deliveryEventSequenceId })
-        assertNull(ReceiptMatch.plan(receipt(2), listOf(y1, y2), emptyList(), emptySet()))
-        assertNull(ReceiptMatch.plan(receipt(2), listOf(y1, y2, locked), emptyList(), setOf(3)))
+        assertNull(ReceiptMatch.plan(receipt(2), listOf(y1, y2), emptyList(), emptySet(), emptyList()))
+        assertNull(ReceiptMatch.plan(receipt(2), listOf(y1, y2, locked), emptyList(), setOf(3), emptyList()))
     }
 
     @Test fun `holdsWritten - true on the written state, false after any change`() {
@@ -187,6 +187,24 @@ class ReceiptMatchTest {
         val x1 = row(1, hashes = listOf("hX", "hY"))
         val x2 = row(2, hashes = listOf("hX", "hY"))
         assertFalse(ReceiptMatch.funded("J1", second.evidenceId, listOf(x1, x2), listOf(wroteY2), listOf(first, second)))
+    }
+
+    @Test fun `openTo - a delivery of a one-offer job another receipt pays takes no other receipt`() { // non-vacuous
+        val paying = receipt(2)
+        val other = receipt(9, jobId = "JK", cents = 600)
+        // The paying match covered Y2 and cleared Y1: Y1 is selectable again, but its job is paid.
+        val active = listOf(covers(2, evidence = paying.evidenceId, cents = 2050), clears(1).copy(evidenceId = paying.evidenceId))
+        val y2Matched = row(2, pay = 20.5, basis = PayBasis.RECEIPT_MATCHED, adjustedAt = 50)
+        val rows = listOf(y1, y2Matched)
+        val receipts = listOf(paying, other)
+        assertTrue(ReceiptMatch.selectable(y1, active))
+        assertFalse(ReceiptMatch.openTo(other.evidenceId, y1, rows, active, receipts))
+        assertEquals(MatchLock.MatchedTo(paying.evidenceId), ReceiptMatch.lockFor(other.evidenceId, y1, rows, active, receipts))
+        assertNull(ReceiptMatch.plan(other, rows, active, setOf(1), receipts))
+        // The paying receipt itself still sees Y1 open (its own match does not lock it), and a two-offer job is never paid.
+        assertTrue(ReceiptMatch.openTo(paying.evidenceId, y1, rows, active, receipts))
+        val twoOffer = listOf(row(1, hashes = listOf("hX", "hY")), y2Matched.copy(jobOfferHashes = listOf("hX", "hY")))
+        assertTrue(ReceiptMatch.openTo(other.evidenceId, twoOffer[0], twoOffer, active, receipts))
     }
 
     @Test fun `offerCount - distinct hashes over the job's rows`() {

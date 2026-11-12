@@ -88,7 +88,9 @@ internal fun ReceiptMatchSheet(
         mutableStateOf(ReceiptMatch.suggestion(receipt, receipts.deliveries, receipts.active))
     }
     val suggested = remember(receipt, receipts) { ReceiptMatch.suggestion(receipt, receipts.deliveries, receipts.active) }
-    val plan = remember(selected, receipt, receipts) { ReceiptMatch.plan(receipt, receipts.deliveries, receipts.active, selected) }
+    val plan = remember(selected, receipt, receipts) {
+        ReceiptMatch.plan(receipt, receipts.deliveries, receipts.active, selected, receipts.saved)
+    }
     val rows = remember(receipts) { receipts.deliveries.sortedWith(ReceiptMatch.DISPLAY_ORDER) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
@@ -108,14 +110,14 @@ internal fun ReceiptMatchSheet(
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
                 rows.forEach { d ->
                     val seq = d.eventSequenceId
-                    val open = ReceiptMatch.selectable(d, receipts.active)
+                    val open = ReceiptMatch.openTo(receipt.evidenceId, d, receipts.deliveries, receipts.active, receipts.saved)
                     ReceiptRow(
                         delivery = d,
                         jobDeliveries = receipts.deliveries.count { it.jobId == d.jobId },
                         checked = open && seq in selected,
                         open = open,
                         suggested = seq in suggested,
-                        outcome = rowOutcome(d, plan, receipts),
+                        outcome = rowOutcome(receipt, d, plan, receipts),
                         onToggle = { on -> selected = if (on) selected + seq else selected - seq },
                     )
                 }
@@ -153,13 +155,14 @@ internal fun ReceiptMatchSheet(
 
 /** A row's third line: what the match does to it, or why it cannot take the receipt; null for an unticked open row. */
 @Composable
-private fun rowOutcome(d: DeliveryRecord, plan: ReceiptMatchPlan?, receipts: ShiftReceipts): String? {
+private fun rowOutcome(receipt: SavedReceipt, d: DeliveryRecord, plan: ReceiptMatchPlan?, receipts: ShiftReceipts): String? {
     val seq = d.eventSequenceId
     plan?.covered?.firstOrNull { it.deliveryEventSequenceId == seq }?.newPayCents?.let {
         return stringResource(R.string.receipt_match_new_pay_format, cents(it))
     }
     if (plan?.cleared?.any { it.deliveryEventSequenceId == seq } == true) return stringResource(R.string.receipt_match_estimate_removed)
-    return when (val lock = ReceiptMatch.lock(d, receipts.active)) {
+    // A delivery of a one-offer job another receipt already pays reads "Matched to receipt $X", that receipt's total.
+    return when (val lock = ReceiptMatch.lockFor(receipt.evidenceId, d, receipts.deliveries, receipts.active, receipts.saved)) {
         null -> null
         MatchLock.PaidByReceipt -> stringResource(R.string.receipt_match_paid_by_receipt)
         MatchLock.ChangedByYou -> stringResource(R.string.receipt_match_changed_by_you)

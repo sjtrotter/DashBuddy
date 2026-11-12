@@ -44,6 +44,9 @@ data class ShiftReceipts(
 ) {
     val open: List<ShiftReceipt> get() = items.filter { it.status == ReceiptStatus.OPEN }
 
+    /** Every saved receipt of the shift, the input [ReceiptMatch.openTo] and [ReceiptMatch.plan] read. */
+    val saved: List<SavedReceipt> get() = items.map { it.receipt }
+
     /** Delivery PK -> command id of the undoable active match that COVERS it (the job sheet's Undo match). */
     val undoByDelivery: Map<Long, String> by lazy {
         val undoable = items.filter { it.status == ReceiptStatus.MATCHED && it.undoable }.mapNotNull { it.matchCommandId }.toSet()

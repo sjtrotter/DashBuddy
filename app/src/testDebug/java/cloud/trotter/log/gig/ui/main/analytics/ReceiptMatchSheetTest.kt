@@ -13,6 +13,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -213,6 +214,19 @@ class ReceiptMatchSheetTest {
         compose.onNodeWithText("Store A").click()
         assertEquals(0, count(string(R.string.shift_page_undo_match)))
         assertEquals(2, count(string(R.string.shift_page_fix_delivery)))
+    }
+
+    @Test fun `a delivery of a job another receipt pays is disabled on a second receipt's sheet`() { // non-vacuous
+        // The stack's receipt paid Y2 alone and cleared Y1; a receipt of the Store D job is still open.
+        show(ShiftPageFixtures.receiptShift(y2Only = true, otherOpen = true))
+        compose.onNodeWithTag("receipt_check_match_${ShiftPageFixtures.RECEIPT_OTHER_EVIDENCE}").click()
+        assertEquals(1, count(title))
+        row(RECEIPT_Y1).assertIsNotEnabled()
+        row(RECEIPT_Y1).assertIsOff()
+        row(RECEIPT_Y1).assert(hasText(string(R.string.receipt_match_matched_to_format, "$20.50"), substring = true))
+        row(RECEIPT_Y1).performClick()
+        settle()
+        row(RECEIPT_Y1).assertIsOff()
     }
 
     @Test fun `the title is a heading and a row is a checkbox with its state`() {
