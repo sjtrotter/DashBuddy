@@ -6,7 +6,7 @@ import cloud.trotter.log.gig.domain.privacy.PiiShapes
 
 object LogChatFilter {
     // EffectMap.outcomeCardText
-    private val outcomes = setOf("Offer accepted", "Offer declined", "Offer expired")
+    private val outcomes = setOf("Offer accepted", "Offer declined", "Offer expired", "Offer not taken")
     // OfferEffects: exact-match acknowledgements, already represented by the offer outcome.
     private val acknowledgements = setOf("Accepting…", "Declining…")
     // Prefix-match copy from OfferEffects and ModeEffects, represented by outcomes and shift figures.

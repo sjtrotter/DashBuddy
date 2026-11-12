@@ -8,12 +8,13 @@ import java.io.File
 class WakeIdInstallGuardTest {
     private val statePath = "core/state/src/main/java/cloud/trotter/log/gig/core/state/"
     private val domainPath = "domain/src/main/java/cloud/trotter/log/gig/domain/state/"
-    private val installers = setOf("withWakeIdIfDeadlineMoved", "modeResumeWindow", "sessionPayWindow")
+    private val installers = setOf("withWakeIdIfDeadlineMoved", "modeResumeWindow", "sessionPayWindow", "heldWorkWindow")
     private val constructors = mapOf(
         "PendingDestructive" to "withWakeIdIfDeadlineMoved",
         "PendingModeResume" to "modeResumeWindow",
         "PendingSessionPay" to "sessionPayWindow",
         "PendingWake" to "pauseSafetyWindow",
+        "HeldWorkFrame" to "heldWorkWindow",
     )
 
     @Test

@@ -116,6 +116,8 @@ import cloud.trotter.log.gig.core.database.snapshot.AppStateSnapshotEntity
     // the `PROJECTOR_VERSION` 18→19 refold stamps them from the logged TASK_UNASSIGNED and MANUAL_DELIVERY events.
     // v24→v25 (#1598): one new table, receipt_records. No `PROJECTOR_VERSION` bump: RECEIPT_OBSERVED is a new event
     // type that cannot exist in folded history, so the table starts empty and fills from new events.
+    // v25→v26 (#1119 S2): nullable offer_records.ambiguousJobIds, NULL on existing rows. No `PROJECTOR_VERSION` bump:
+    // OFFER_NOT_TAKEN and the payload's tie list cannot exist in folded history, so NULL is right for all of it.
     autoMigrations = [
         AutoMigration(from = 8, to = 9),
         AutoMigration(from = 9, to = 10),
@@ -134,6 +136,7 @@ import cloud.trotter.log.gig.core.database.snapshot.AppStateSnapshotEntity
         AutoMigration(from = 22, to = 23), // #1516 offer scope/basis + delivery job offer hashes; refold 18
         AutoMigration(from = 23, to = 24), // #1517 offer unassignedAt + delivery sourceOfferSeq; refold 19
         AutoMigration(from = 24, to = 25), // #1598 receipt_records (new table); no refold
+        AutoMigration(from = 25, to = 26), // #1119 offer_records ambiguousJobIds; no refold
     ],
 )
 @TypeConverters(DataTypeConverters::class)
@@ -167,7 +170,7 @@ abstract class GigLogDatabase : RoomDatabase() {
          * this in lockstep with a new `schemas/**/<N>.json`, an `AutoMigration(N-1 → N)`, and its
          * `MigrationTestHelper` case — see the release checklist in CLAUDE.md.
          */
-        const val VERSION = 25
+        const val VERSION = 26
     }
 
 }

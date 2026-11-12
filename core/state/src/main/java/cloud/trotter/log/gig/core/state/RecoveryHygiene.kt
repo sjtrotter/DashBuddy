@@ -120,11 +120,15 @@ fun AppState.recoveryHygiene(nowMs: Long): AppState {
             platforms = regions.platforms.mapValues { (_, region) ->
                 // #1104: the confirm-sheet sighting is EVIDENCE with a time window measured on the
                 // live clock; across a crash the gap is unobserved (evidence is dropped, only a
-                // decision in flight is re-armed), so a restored offer never inherits it.
+                // decision in flight is re-armed), so a restored PRESENTED offer never inherits it.
+                // #1119 S2: the offer pool survives untouched — each entry's demotion was decided at
+                // its leave, and the entries are owed their one outcome at the shift end. A store-less
+                // hold (council round 6) is replayed from the journal; one past its cap is dropped.
                 val scrubbed = region.copy(
                     pendingSessionPay = null,
                     pendingModeResume = null,
                     pendingOffers = region.pendingOffers.map { it.copy(declineSheetSeenAt = null) },
+                    heldWorkFrame = region.heldWorkFrame?.takeIf { nowMs <= it.deadline },
                     // #823 Phase 2 (Astra review): an arrival request whose loopback never landed before the crash
                     // is in-flight evidence — drop the latch so the next coherent shopping frame re-asks; a LANDED
                     // estimate is a decision and stays.
@@ -226,6 +230,10 @@ internal fun AppState.pendingDeadlineTimers(): List<PendingDeadline> =
             }
             region.pauseSafety?.let {
                 add(PendingDeadline(TimeoutType.SESSION_PAUSED_SAFETY, region.platform, it))
+            }
+            // #1119 S2: a store-less hold the hygiene kept (inside its cap) re-arms at its own deadline.
+            region.heldWorkFrame?.let {
+                add(PendingDeadline(TimeoutType.STORELESS_HOLD, region.platform, it.wake))
             }
         }
     }

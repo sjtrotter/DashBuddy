@@ -50,7 +50,8 @@ Protect last): the pop-up note and voice take the first (voice speaks one clause
 card badges and chat line list all. The dasher's minimum net, max distance and max items become limit notes ("Net
 under $7.00", "Over 10.0 mi", "Over 30 items"), judged on the shown figures at displayed precision, never on an
 add-on's deltas. One chat row per presentation: `PostOfferChat`, emitted beside `SpeakOffer` under the same
-once-per-presentation rule, external (skipped on replay).
+once-per-presentation rule, external (skipped on replay). The outcome chat line ("Offer accepted", "Offer
+declined") fires on a link or a confirmed decline; an offer waiting in the offer pool posts none (#1119 S2).
 
 **Barriers on the serialized queue (#1271 scenario 4).** Besides effects, the one drain worker runs
 `EffectExecutor.afterProcessed` actions in queue order — after every effect enqueued before them, before

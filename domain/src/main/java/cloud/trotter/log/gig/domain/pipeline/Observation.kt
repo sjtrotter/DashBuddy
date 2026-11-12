@@ -263,6 +263,14 @@ enum class TimeoutType {
      * mint (the #526 regression the survival rule prevents).
      */
     OFFER_EXPIRY,
+
+    /**
+     * #1119 S2 (council round 6): wakes the state machine when a store-less hold's cap lapses, so the held frame
+     * mints its bare job within the cap even when no later frame arrives (a de-duplicated task screen). Like
+     * [GRACE_COMMIT] it carries no handler logic — the stepper's lapse check performs the release. A SEPARATE type
+     * for the same reason as [MODE_RESUME_COMMIT]: the (type, platform) timer key would otherwise cross-cancel.
+     */
+    STORELESS_HOLD,
     ;
 
     companion object {
@@ -286,6 +294,7 @@ enum class TimeoutType {
             MODE_RESUME_COMMIT,
             SESSION_PAY_SETTLE,
             SESSION_PAUSED_SAFETY,
+            STORELESS_HOLD,
         )
     }
 }

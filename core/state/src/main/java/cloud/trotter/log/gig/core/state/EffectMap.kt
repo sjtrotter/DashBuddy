@@ -11,7 +11,6 @@ import cloud.trotter.log.gig.domain.model.event.AppEvent
 import cloud.trotter.log.gig.domain.model.event.AppEventType
 import cloud.trotter.log.gig.domain.model.event.payload.AppEventPayload
 import cloud.trotter.log.gig.domain.model.event.payload.DeliveryPayload
-import cloud.trotter.log.gig.domain.model.event.payload.OfferPayload
 import cloud.trotter.log.gig.domain.model.event.payload.SessionEndSource
 import cloud.trotter.log.gig.domain.model.event.payload.OfferReceivedPayload
 import cloud.trotter.log.gig.domain.model.event.payload.PickupPayload
@@ -22,7 +21,6 @@ import cloud.trotter.log.gig.domain.model.event.payload.SessionStopPayload
 import cloud.trotter.log.gig.domain.model.pay.displayLabel
 import cloud.trotter.log.gig.domain.settings.GraceConfig
 import cloud.trotter.log.gig.domain.settings.GraceConfigProvider
-import cloud.trotter.log.gig.domain.state.OfferIntent
 import cloud.trotter.log.gig.domain.pipeline.Observation
 import cloud.trotter.log.gig.domain.pipeline.ParsedFieldsGate
 import cloud.trotter.log.gig.domain.pipeline.TimeoutType
@@ -37,7 +35,6 @@ import cloud.trotter.log.gig.domain.state.Mode
 import cloud.trotter.log.gig.domain.state.OfferPayFallback
 import cloud.trotter.log.gig.domain.state.ParsedFields
 import cloud.trotter.log.gig.domain.state.PickupActivity
-import cloud.trotter.log.gig.domain.state.PendingOffer
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.PlatformRegion
 import cloud.trotter.log.gig.domain.state.Session
@@ -206,12 +203,13 @@ class EffectMap @Inject constructor(
             // arm/cancel), extracted to OfferEffects (vet L4). Session-scoped so AppEventDao dashId
             // queries see the offer events (#257) — the region's own session, per-platform.
             val offerSessionId = next.session?.sessionId ?: p.session?.sessionId
-            addAll(diffOfferLifecycle(p, next, obs, offerSessionId))
+            addAll(diffOfferLifecycle(p, next, obs, offerSessionId, decisions))
             addAll(diffMode(p, next, obs))
             addAll(diffGraceTimer(p, next, obs))
             addAll(diffModeResumeTimer(p, next, obs))
             addAll(diffSessionPaySettleTimer(p, next, obs))
             addAll(diffPauseSafetyTimer(p, next, obs))
+            addAll(diffHeldWorkTimer(p, next, obs))
             addAll(diffTask(p, next, obs))
             addAll(diffPostTask(p, next, actedNextFlow, obs))
             addAll(diffNotification(obs))
@@ -403,96 +401,6 @@ class EffectMap @Inject constructor(
     // HELPERS
     // =========================================================================
 
-    internal fun resolveOfferOutcome(
-        obs: Observation,
-        prevOffer: PendingOffer? = null,
-        prev: PlatformRegion? = null,
-        next: PlatformRegion? = null,
-    ): AppEventType {
-        // 0. Decline-commit latch (#594): a DECLINE-intent click already committed this offer's
-        //    decline server-side. That decision is final — a later "Review offer"→Accept click
-        //    cannot un-decline it — so the latch wins over lastClickIntent AND the direct-click
-        //    fallback below.
-        if (prevOffer?.declineCommittedAt != null) return AppEventType.OFFER_DECLINED
-        // 1. Stored click intent on PendingOffer — covers the common case where
-        //    the click was observed first and the resolving obs is a Screen. The
-        //    ACCEPT arm routes through the shared #526 D1b predicate (the SSOT the
-        //    accept-stash arming also uses); DECLINE stays explicit here.
-        if (prevOffer != null && prevOffer.isAcceptLatched()) return AppEventType.OFFER_ACCEPTED
-        if (prevOffer?.lastClickIntent == OfferIntent.DECLINE) return AppEventType.OFFER_DECLINED
-        // 2. Direct click observation — covers the edge case where click and
-        //    flow change arrive in the same observation. An OBSERVED tap outranks every inference
-        //    below (Astra #1104 r1 F4).
-        val clickIntent = (obs as? Observation.Click)?.let { it.parsed as? ParsedFields.ClickFields }?.intent
-        when (clickIntent) {
-            OfferIntent.ACCEPT -> return AppEventType.OFFER_ACCEPTED
-            OfferIntent.DECLINE -> return AppEventType.OFFER_DECLINED
-            else -> Unit
-        }
-        // 3. TRANSITION evidence (#1104/#1114) — the only evidence a Compose card can leave, since
-        //    its controls emit no click event for a human tap:
-        //    * the stepper armed an accepted SURVIVOR for this very offer on this step (the
-        //      click-less accept: an offer presented over a NON-task flow left to a task surface —
-        //      OfferLifecycle.destinationImpliesAccept) → ACCEPTED. Before this arm the job minted
-        //      but the offer row said TIMEOUT. The survivor is usually CONSUMED into the job on the
-        //      very same step (the task frame both arms it and mints), so the evidence is either a
-        //      surviving accepted entry OR this hash newly present on the region's active job
-        //      (absent from the pre-step job — a same-hash re-presentation over an older accept of
-        //      that hash can never re-fire it).
-        //    * the platform's confirm-decline sheet was observed over the offer, no accept followed,
-        //      and the exit lands within `GraceConfig.declineSheetWindowMs` of the LAST sighting →
-        //      DECLINED. The window is what separates a real decline (exit within seconds) from a
-        //      cancelled sheet whose offer later expires (the card re-renders after BOTH, so a card
-        //      frame is not a cancel signal — 7/7 fielded declines). Outside the window: timeout.
-        if (prevOffer != null && next != null) {
-            val survivor = next.pendingOffers.any { it.offerHash == prevOffer.offerHash && it.acceptedAt != null }
-            val consumedNow = next.activeJob?.acceptedOffers?.any { it.offerHash == prevOffer.offerHash } == true &&
-                prev?.activeJob?.acceptedOffers?.any { it.offerHash == prevOffer.offerHash } != true
-            if (survivor || consumedNow) return AppEventType.OFFER_ACCEPTED
-        }
-        if (prevOffer != null && declineInferredFromSheet(prevOffer, obs)) return AppEventType.OFFER_DECLINED
-        return AppEventType.OFFER_TIMEOUT
-    }
-
-    /**
-     * #1104: the sheet was seen, this exit lands inside the platform's decline window, and nothing
-     * says the offer simply RAN OUT: an exit at/after the card's own countdown end (`countdownExpiresAt`
-     * minus the slack) is an expiry however recent the sheet — the evidence that separates a real
-     * decline from a cancelled sheet whose offer then expired (Astra r2) — and the `OFFER_EXPIRY`
-     * safety timer (fires only when NO frame arrived) never converts to a decline on its own.
-     */
-    internal fun declineInferredFromSheet(offer: PendingOffer, obs: Observation): Boolean {
-        val seen = offer.declineSheetSeenAt ?: return false
-        if (obs is Observation.Timeout) return false
-        // Without a read countdown there is no way to tell "declined" from "ran out inside the
-        // window" — fail null (Astra r3): the sheet alone never makes a decline.
-        val expiresAt = offer.countdownExpiresAt ?: return false
-        val grace = graceConfig.forPlatform(offer.platform)
-        if (obs.timestamp - seen !in 0..grace.declineSheetWindowMs) return false
-        return obs.timestamp < expiresAt - grace.countdownExpirySlackMs
-    }
-
-    /**
-     * #1104: the human-readable evidence behind an INFERRED outcome (null for an observed tap) —
-     * one owner for the removal AND the replacement resolution paths (Astra r1 F5).
-     */
-    internal fun inferredOutcomeNote(offer: PendingOffer, outcome: AppEventType, obs: Observation): String? {
-        val clickIntent = (obs as? Observation.Click)?.let { it.parsed as? ParsedFields.ClickFields }?.intent
-        return when {
-            outcome == AppEventType.OFFER_DECLINED &&
-                offer.declineCommittedAt == null &&
-                offer.lastClickIntent != OfferIntent.DECLINE &&
-                clickIntent != OfferIntent.DECLINE &&
-                declineInferredFromSheet(offer, obs) ->
-                "Decline inferred from the confirm sheet — no click envelope (#1104)"
-            outcome == AppEventType.OFFER_ACCEPTED &&
-                !offer.isAcceptLatched() &&
-                clickIntent != OfferIntent.ACCEPT ->
-                "Accept inferred from the task surface — no click envelope (#1104)"
-            else -> null
-        }
-    }
-
     /**
      * #601: the SSOT for what an offer outcome card says. Both the resolution-block card
      * (the offer that just pop'd) and the replaced-offer card (the OLD offer, suffixed by the
@@ -503,11 +411,13 @@ class EffectMap @Inject constructor(
         AppEventType.OFFER_ACCEPTED -> "Offer accepted"
         AppEventType.OFFER_DECLINED -> "Offer declined"
         AppEventType.OFFER_TIMEOUT -> "Offer expired"
+        // #1119 S2: never announced today (a shift-end outcome posts no line); listed so it keeps off the floor below.
+        AppEventType.OFFER_NOT_TAKEN -> "Offer not taken"
         // Fail OPEN on display text, never on the reducer loop (#625 review): EffectMap
         // is diffed inside StateManagerV2's event loop, which has no try/catch — a throw
         // here would freeze the state machine and let the unbounded observation buffer
         // grow until restart. A neutral string is a harmless card; today the only caller
-        // passes resolveOfferOutcome output, so this is a future-proofing floor.
+        // passes a stepper outcome decision, so this is a future-proofing floor.
         else -> {
             Timber.e("outcomeCardText got a non-outcome type: %s — using neutral text", outcome)
             "Offer resolved"
@@ -545,22 +455,6 @@ class EffectMap @Inject constructor(
     // mapper folds these into per-phase snapshots without joining other
     // entities; see #257.
     // =========================================================================
-
-    internal fun offerPayload(
-        offer: PendingOffer,
-        outcome: AppEventType,
-        decidedAt: Long,
-        description: String? = null,
-    ): OfferPayload = OfferPayload(
-        offerHash = offer.offerHash,
-        parsedOffer = offer.offerFields.parsedOffer,
-        evaluation = offer.evaluation,
-        outcome = outcome,
-        presentedAt = offer.presentedAt,
-        decidedAt = decidedAt,
-        returnFlow = offer.returnFlow,
-        description = description,
-    )
 }
 
 /**

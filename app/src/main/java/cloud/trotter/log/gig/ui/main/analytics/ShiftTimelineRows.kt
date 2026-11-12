@@ -127,7 +127,11 @@ internal fun PassedRunRow(run: PassedRun, expanded: Boolean, onToggle: () -> Uni
 @Composable
 internal fun PassedOfferRow(offer: PassedOffer, modifier: Modifier = Modifier) {
     val outcome = stringResource(
-        if (offer.outcome == OfferOutcome.TIMED_OUT) R.string.shift_page_outcome_expired else R.string.shift_page_outcome_declined,
+        when (offer.outcome) {
+            OfferOutcome.TIMED_OUT -> R.string.shift_page_outcome_expired
+            OfferOutcome.NOT_TAKEN -> R.string.shift_page_outcome_not_taken
+            else -> R.string.shift_page_outcome_declined
+        },
     )
     val text = listOfNotNull(
         "${formatClockTime(offer.at)} ${storesText(offer.stores)}",
@@ -193,11 +197,19 @@ internal fun sourceText(source: PaySource): String = stringResource(
     },
 )
 
+/**
+ * One kind: its plural ("3 declined offers"). Two or more (#1119 S2 adds not taken): the non-zero short forms joined
+ * with ", " ("2 declined, 1 not taken").
+ */
 @Composable
-private fun runCountsText(run: PassedRun): String = when {
-    run.declined > 0 && run.expired > 0 -> stringResource(R.string.shift_page_run_both_format, run.declined, run.expired)
-    run.expired > 0 -> pluralStringResource(R.plurals.shift_page_run_expired, run.expired, run.expired)
-    else -> pluralStringResource(R.plurals.shift_page_run_declined, run.declined, run.declined)
+private fun runCountsText(run: PassedRun): String {
+    val kinds = listOf(
+        Triple(run.declined, R.plurals.shift_page_run_declined, R.string.shift_page_run_short_declined),
+        Triple(run.expired, R.plurals.shift_page_run_expired, R.string.shift_page_run_short_expired),
+        Triple(run.notTaken, R.plurals.shift_page_run_not_taken, R.string.shift_page_run_short_not_taken),
+    ).filter { it.first > 0 }
+    kinds.singleOrNull()?.let { (n, plural, _) -> return pluralStringResource(plural, n, n) }
+    return kinds.map { (n, _, short) -> stringResource(short, n) }.joinToString(", ")
 }
 
 @Composable

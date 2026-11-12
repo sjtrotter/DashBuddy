@@ -124,8 +124,9 @@ variant (it pauses the store — a side effect quick-decline consent never cover
 (no Accept / no disclaimer / no merchant row) stay UNKNOWN by design (two negatives committed). The same rollout moved the offer PUSH to a new channel
 (`dasher-notification-channel-nexus-new-offer-no-sound-haptics`), added to `new_order`. Residuals
 on #1114: badges resolve at OFFER level, a card whose every merchant address lacks a ZIP fails the recognition anchor, and — the field finding that matters most — Compose taps produced NO click envelopes, so an
-accept is inferred from the pickup-phase exit (`destinationImpliesAccept`) and a decline resolves as
-`OFFER_TIMEOUT`.
+accept was inferred from the pickup-phase exit and a decline resolved as `OFFER_TIMEOUT`; since #1119 S2 the
+Compose accept is linked by the offer pool (a pickup frame naming the card's store) and the confirm sheet only
+demotes a pool entry.
 **Compose add-on (#1121, 8.98.5).** Branch 2 requires paired `+$N.NN` and
 `+N stop(s) (N mi|ft) • +N min` lines, Compose Accept/Decline chrome, the disclaimer,
 a destination, and branch 1's merchant/address guard. Its mandatory ScrollView binding contains

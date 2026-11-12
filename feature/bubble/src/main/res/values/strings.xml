@@ -134,6 +134,7 @@
     <string name="hud_log_now">Now</string>
     <string name="hud_log_declined">Declined %1$s</string>
     <string name="hud_log_timed_out">Expired %1$s</string>
+    <string name="hud_log_not_taken">Not taken %1$s</string>
     <string name="hud_log_accepted_row">Accepted %1$s</string>
     <string name="hud_log_offer_unknown_store">Offer</string>
     <string name="hud_log_expense">Expense %1$s</string>

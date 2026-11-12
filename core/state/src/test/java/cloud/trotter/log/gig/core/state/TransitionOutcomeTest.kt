@@ -28,11 +28,12 @@ import org.junit.Test
 /**
  * #1104/#1114 — offer outcomes on TRANSITION evidence. A Compose control emits no `TYPE_VIEW_CLICKED`
  * for a human tap, so on DoorDash 8.97.8's card neither an ACCEPT nor a DECLINE click can ever arrive.
- * The resolver therefore reads (a) the accepted SURVIVOR the stepper armed on the same step (the
- * click-less accept) and (b) the confirm-decline sheet observed over the offer
- * ([cloud.trotter.log.gig.domain.state.PendingOffer.declineSheetSeenAt], set from a screen whose rule
- * declares `state.offerSurface: decline_confirm`). Every accept arm outranks the sheet; no sheet and no
- * click stays a timeout.
+ *
+ * #1119 S2 retired both inferences this suite was written for: a card that leaves with no committed decline and no
+ * accept click waits in the offer pool (no outcome at the leave), and only work at its own store links it. The
+ * confirm-decline sheet ([cloud.trotter.log.gig.domain.state.PendingOffer.declineSheetSeenAt]) decides no outcome:
+ * a recent sighting with time on the countdown and no card frame after it DEMOTES the pooled entry (council round 6).
+ * The countdown, expiry-arm and marker cases are unchanged.
  */
 class TransitionOutcomeTest {
 
@@ -104,33 +105,34 @@ class TransitionOutcomeTest {
     private fun resolve(d: Driven, o: Observation): Pair<PlatformRegion, List<AppEffect>> {
         val f = (o as? Observation.FlowObservation)?.flow
         val nextFlow = if (f != null) d.prevFlow.copy(flow = f, activePlatform = d.region.platform) else d.prevFlow
-        val next = stepper.step(d.region, d.prevFlow, nextFlow, o, policy)
-        return next to effectMap.diffOfferLifecycle(d.region, next, o, sessionId = "sess-1")
+        val stepped = stepper.stepWithDecisions(d.region, d.prevFlow, nextFlow, o, policy)
+        return stepped.region to effectMap.diffOfferLifecycle(d.region, stepped.region, o, sessionId = "sess-1", stepped.decisions)
+    }
+
+    /** #1119 S2: the offer left with no outcome and waits in the pool; [demoted] by a recent sheet sighting or not. */
+    private fun assertPooled(next: PlatformRegion, effects: List<AppEffect>, demoted: Boolean, hash: String = "o1") {
+        assertNull("no outcome at the leave", effects.outcome())
+        assertEquals(demoted, next.offerPool.single { it.offer.offerHash == hash }.demoted)
     }
 
     private fun List<AppEffect>.outcome(): OfferPayload? =
         filterIsInstance<AppEffect.LogEvent>().mapNotNull { it.event.payload as? OfferPayload }.singleOrNull()
 
     @Test
-    fun `sheet observed then the offer leaves to Idle resolves as an INFERRED decline`() {
+    fun `sheet observed then the offer leaves to Idle pools it DEMOTED, not declined (#1119 S2)`() {
         val d = drive(region(), offerObs(1_000L, "o1"), sheetObs(3_000L))
         assertEquals(3_000L, d.region.presentedOffer()?.declineSheetSeenAt)
         val (next, effects) = resolve(d, idleObs(5_000L))
-        val out = effects.outcome()
-        assertNotNull("one outcome row", out)
-        assertEquals(AppEventType.OFFER_DECLINED, out!!.outcome)
-        assertTrue(out.description!!.contains("inferred from the confirm sheet"))
-        assertTrue("offer resolved away", next.pendingOffers.isEmpty())
+        assertPooled(next, effects, demoted = true)
+        assertTrue("offer left presentation", next.pendingOffers.isEmpty())
     }
 
     @Test
     fun `the OFFER_EXPIRY safety timer never converts a sheet sighting into a decline`() {
         // The timer fires only when NO frame arrived; running out is what it means (Astra r2).
         val d = drive(region(), offerObs(1_000L, "o1"), sheetObs(118_000L))
-        val (_, effects) = resolve(d, expiry(121_000L, "o1"))
-        val out = effects.outcome()!!
-        assertEquals(AppEventType.OFFER_TIMEOUT, out.outcome)
-        assertNull(out.description)
+        val (next, effects) = resolve(d, expiry(121_000L, "o1"))
+        assertPooled(next, effects, demoted = false)
     }
 
     @Test
@@ -144,18 +146,17 @@ class TransitionOutcomeTest {
             offerObs(36_000L, "o1", countdown = 5),
         )
         assertEquals(41_000L, d.region.presentedOffer()?.countdownExpiresAt)
-        val (_, effects) = resolve(d, idleObs(41_000L))
-        val out = effects.outcome()!!
-        assertEquals(AppEventType.OFFER_TIMEOUT, out.outcome)
-        assertNull(out.description)
+        val (next, effects) = resolve(d, idleObs(41_000L))
+        assertPooled(next, effects, demoted = false)
     }
 
     @Test
-    fun `a real decline with a live countdown — exit well before the countdown ends — is a DECLINE`() {
+    fun `a card frame after the sheet is the sheet cancelled, even with time left — pooled, not demoted (#1119 S2)`() {
+        // Council round 6: the measurement saw no card frame after the sheet on any real decline (0 of 261).
         val d = drive(region(), offerObs(1_000L, "o1", countdown = 40), sheetObs(3_000L), offerObs(4_600L, "o1", countdown = 36))
         assertEquals(40_600L, d.region.presentedOffer()?.countdownExpiresAt)
-        val (_, effects) = resolve(d, idleObs(6_000L))
-        assertEquals(AppEventType.OFFER_DECLINED, effects.outcome()!!.outcome)
+        val (next, effects) = resolve(d, idleObs(6_000L))
+        assertPooled(next, effects, demoted = false)
     }
 
     @Test
@@ -221,10 +222,8 @@ class TransitionOutcomeTest {
     fun `with NO countdown ever read the sheet alone never makes a decline (fail-null)`() {
         // Astra r3: a card whose clock was never parsed cannot separate "declined" from "ran out".
         val d = drive(region(), offerObs(1_000L, "o1", countdown = null), sheetObs(3_000L))
-        val (_, effects) = resolve(d, idleObs(5_000L))
-        val out = effects.outcome()!!
-        assertEquals(AppEventType.OFFER_TIMEOUT, out.outcome)
-        assertNull(out.description)
+        val (next, effects) = resolve(d, idleObs(5_000L))
+        assertPooled(next, effects, demoted = false)
     }
 
     @Test
@@ -241,23 +240,20 @@ class TransitionOutcomeTest {
     }
 
     @Test
-    fun `a cancelled sheet whose offer later expires stays a TIMEOUT (outside the decline window)`() {
-        // Astra r1 F3: sheet → cancel back to the card → the card re-renders (as it ALSO does after
-        // a real decline, so a card frame is not a cancel signal) → the countdown ends 40 s later.
+    fun `a cancelled sheet whose offer later expires is pooled, not demoted`() {
+        // Astra r1 F3: sheet → cancel back to the card → the countdown ends 40 s later.
         val d = drive(region(), offerObs(1_000L, "o1"), sheetObs(3_000L), offerObs(4_500L, "o1"))
         assertEquals("the card frame keeps the sighting", 3_000L, d.region.presentedOffer()?.declineSheetSeenAt)
-        val (_, effects) = resolve(d, idleObs(43_000L))
-        val out = effects.outcome()!!
-        assertEquals(AppEventType.OFFER_TIMEOUT, out.outcome)
-        assertNull(out.description)
+        val (next, effects) = resolve(d, idleObs(43_000L))
+        assertPooled(next, effects, demoted = false)
     }
 
     @Test
     fun `a re-opened sheet re-arms the window from its latest sighting`() {
         val d = drive(region(), offerObs(1_000L, "o1"), sheetObs(3_000L), offerObs(4_500L, "o1"), sheetObs(30_000L))
         assertEquals(30_000L, d.region.presentedOffer()?.declineSheetSeenAt)
-        val (_, effects) = resolve(d, idleObs(36_000L))
-        assertEquals(AppEventType.OFFER_DECLINED, effects.outcome()!!.outcome)
+        val (next, effects) = resolve(d, idleObs(36_000L))
+        assertPooled(next, effects, demoted = true)
     }
 
     @Test
@@ -273,15 +269,13 @@ class TransitionOutcomeTest {
         )
         assertEquals(1, d.region.activeJob?.acceptedOffers?.size)
         val (next, effects) = resolve(d, pickupNavObs(14_000L, "Store A"))
-        val out = effects.outcome()!!
-        assertEquals(AppEventType.OFFER_DECLINED, out.outcome)
-        assertTrue(out.description!!.contains("inferred from the confirm sheet"))
+        assertPooled(next, effects, demoted = true, hash = "b")
         assertEquals("no phantom add-on economics", 1, next.activeJob?.acceptedOffers?.size)
         assertNull("no phantom survivor", next.pendingOffers.firstOrNull { it.offerHash == "b" })
     }
 
     @Test
-    fun `a mid-job ADD-ON that leaves with no sheet stays a TIMEOUT and mints nothing (fail-null)`() {
+    fun `a mid-job ADD-ON that leaves with no sheet is pooled and mints nothing (fail-null)`() {
         val d = drive(
             region(),
             offerObs(1_000L, "a", store = "Store A"),
@@ -289,33 +283,37 @@ class TransitionOutcomeTest {
             offerObs(10_000L, "b", store = "Store B"),
         )
         val (next, effects) = resolve(d, pickupNavObs(14_000L, "Store A"))
-        assertEquals(AppEventType.OFFER_TIMEOUT, effects.outcome()!!.outcome)
+        assertPooled(next, effects, demoted = false, hash = "b")
         assertEquals(1, next.activeJob?.acceptedOffers?.size)
     }
 
     @Test
     fun `a direct ACCEPT click observation outranks the sheet`() {
-        // Astra r1 F4: an observed tap always beats an inference.
+        // Astra r1 F4: an observed tap always beats an inference, also when the click carries its own flow.
         val d = drive(region(), offerObs(1_000L, "o1"), sheetObs(3_000L))
         val click = Observation.Click(
             timestamp = 5_000L, captureId = null, ruleId = "doordash.click.accept_offer",
             metadata = ReplayMetadata.EMPTY, flow = Flow.Idle, modeHint = Mode.Online,
             parsed = ParsedFields.ClickFields(intent = cloud.trotter.log.gig.domain.state.OfferIntent.ACCEPT),
         )
-        val outcome = effectMap.resolveOfferOutcome(click, d.region.presentedOffer(), d.region, d.region)
-        assertEquals(AppEventType.OFFER_ACCEPTED, outcome)
-        assertNull("an observed tap is not described as inferred", effectMap.inferredOutcomeNote(d.region.presentedOffer()!!, outcome, click))
+        val (next, effects) = resolve(d, click)
+        val out = effects.outcome()!!
+        assertEquals(AppEventType.OFFER_ACCEPTED, out.outcome)
+        assertNull("an observed tap carries no description", out.description)
+        assertEquals(5_000L, next.pendingOffers.single().acceptedAt)
+        assertTrue(next.offerPool.isEmpty())
     }
 
     @Test
-    fun `a REPLACEMENT after the sheet keeps the inference in the description`() {
+    fun `a REPLACEMENT after the sheet pools the replaced offer demoted (#1119 S2)`() {
         // Astra r1 F5: A → sheet → a different offer B replaces A.
         val d = drive(region(), offerObs(1_000L, "a", store = "Store A"), sheetObs(3_000L))
-        val (_, effects) = resolve(d, offerObs(6_000L, "b", store = "Store B"))
+        val (next, effects) = resolve(d, offerObs(6_000L, "b", store = "Store B"))
         val outs = effects.filterIsInstance<AppEffect.LogEvent>().mapNotNull { it.event.payload as? OfferPayload }
-        val replaced = outs.single { it.offerHash == "a" }
-        assertEquals(AppEventType.OFFER_DECLINED, replaced.outcome)
-        assertTrue(replaced.description!!.startsWith("Replaced by new offer; Decline inferred from the confirm sheet"))
+        assertTrue("no outcome for the replaced offer", outs.none { it.offerHash == "a" })
+        val entry = next.offerPool.single { it.offer.offerHash == "a" }
+        assertTrue(entry.demoted)
+        assertEquals(cloud.trotter.log.gig.domain.state.PoolEntryVia.REPLACED, entry.via)
     }
 
     @Test
@@ -329,31 +327,32 @@ class TransitionOutcomeTest {
     }
 
     @Test
-    fun `no sheet and no click stays a TIMEOUT (control)`() {
+    fun `no sheet and no click is pooled (control)`() {
         val d = drive(region(), offerObs(1_000L, "o1"))
-        val (_, effects) = resolve(d, idleObs(5_000L))
-        val out = effects.outcome()!!
-        assertEquals(AppEventType.OFFER_TIMEOUT, out.outcome)
-        assertNull(out.description)
+        val (next, effects) = resolve(d, idleObs(5_000L))
+        assertPooled(next, effects, demoted = false)
     }
 
     @Test
-    fun `a click-less accept logs OFFER_ACCEPTED (not TIMEOUT) while the job mints`() {
+    fun `a click-less accept logs OFFER_ACCEPTED (not TIMEOUT) while the job mints — linked by its store`() {
         val d = drive(region(), offerObs(1_000L, "o1"))
         val (next, effects) = resolve(d, pickupNavObs(4_000L))
         val out = effects.outcome()!!
         assertEquals(AppEventType.OFFER_ACCEPTED, out.outcome)
-        assertTrue(out.description!!.contains("inferred from the task surface"))
-        // The task frame both arms the survivor and consumes it into the minted job on this step.
+        assertEquals("Linked to work at its store (#1119)", out.description)
+        // The task frame both pools the card and links it into the minted job on this step.
         assertTrue("economics consumed into the minted job", next.activeJob?.acceptedOffers?.any { it.offerHash == "o1" } == true)
         assertNull("no un-consumed survivor lingers", next.pendingOffers.firstOrNull { it.offerHash == "o1" })
+        assertTrue(next.offerPool.isEmpty())
     }
 
     @Test
-    fun `an accept after the sheet outranks the sheet`() {
+    fun `RESIDUAL - an accept after the sheet with no card back loses its link (council round 6)`() {
+        // The sheet sighting 1 s before the leave demotes the offer, so the pickup at its store finds no candidate.
         val d = drive(region(), offerObs(1_000L, "o1"), sheetObs(3_000L))
-        val (_, effects) = resolve(d, pickupNavObs(4_000L))
-        assertEquals(AppEventType.OFFER_ACCEPTED, effects.outcome()!!.outcome)
+        val (next, effects) = resolve(d, pickupNavObs(4_000L))
+        assertPooled(next, effects, demoted = true)
+        assertTrue("a bare job", next.activeJob!!.acceptedOffers.isEmpty())
     }
 
     @Test

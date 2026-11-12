@@ -62,6 +62,7 @@ internal fun OfferRecordEntity.toTimeline() = TimelineOffer(
     linkedJobId = linkedJobId,
     outcomeResolved = outcomeResolved,
     unassignedAt = unassignedAt,
+    ambiguousJobIds = StringListColumn.decode(ambiguousJobIds).orEmpty(),
 )
 
 internal fun PickupRecordEntity.toTimeline() = TimelinePickup(

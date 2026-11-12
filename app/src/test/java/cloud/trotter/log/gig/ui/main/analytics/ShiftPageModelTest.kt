@@ -47,6 +47,14 @@ class ShiftPageModelTest {
         assertNull(landingRowOf(emptyList()))
     }
 
+    // #1119 S2: a tie lands on the job it left unmatched, after the two older checks.
+    @Test fun `a tie check lands on its job, after the no-delivery and more-accepts checks`() {
+        val tie = ShiftCheck.OfferNotMatched("job-9", listOf(3L, 4L))
+        assertEquals(jobRowKey("job-9"), landingRowOf(listOf(tie)))
+        assertEquals(jobRowKey("job-1"), landingRowOf(listOf(tie, ShiftCheck.MoreAcceptsThanDeliveries("job-1", 2, 1))))
+        assertEquals("offer:7", landingRowOf(listOf(tie, ShiftCheck.NoDelivery(7))))
+    }
+
     @Test fun `a passed offer opens its run and lands on its row`() {
         assertEquals(RowLanding(passedRowKey(2), "run:1", null), RowLanding.of(items, "offer:2"))
         assertEquals(RowLanding(passedRowKey(5), "run:5", null), RowLanding.of(items, "offer:5"))

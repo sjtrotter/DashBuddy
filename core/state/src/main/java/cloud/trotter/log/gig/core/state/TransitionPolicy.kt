@@ -108,6 +108,26 @@ class TransitionPolicy @Inject constructor(
     fun acceptGraceMs(platform: Platform): Long =
         graceConfig.forPlatform(platform).acceptGraceMs
 
+    /** #1119 S2: how recent a confirm-sheet sighting demotes a leaving offer on [platform] — [GraceConfig.declineSheetWindowMs]. */
+    fun declineSheetWindowMs(platform: Platform): Long =
+        graceConfig.forPlatform(platform).declineSheetWindowMs
+
+    /** #1119 S2: the countdown slack inside which a leave reads as an expiry on [platform] — [GraceConfig.countdownExpirySlackMs]. */
+    fun countdownExpirySlackMs(platform: Platform): Long =
+        graceConfig.forPlatform(platform).countdownExpirySlackMs
+
+    /** #1119 S2: the demotion tie guard on [platform] — [GraceConfig.demotionTieGuardMs]. */
+    fun demotionTieGuardMs(platform: Platform): Long =
+        graceConfig.forPlatform(platform).demotionTieGuardMs
+
+    /** #1119 S2: the store-less hold cap on [platform], in time — [GraceConfig.storelessHoldMs]. */
+    fun storelessHoldMs(platform: Platform): Long =
+        graceConfig.forPlatform(platform).storelessHoldMs
+
+    /** #1119 S2: the store-less hold cap on [platform], in task frames — [GraceConfig.storelessHoldFrames]. */
+    fun storelessHoldFrames(platform: Platform): Int =
+        graceConfig.forPlatform(platform).storelessHoldFrames
+
     /**
      * Determine what mode a flow + modeHint combination implies.
      * Returns null if no mode signal is present.

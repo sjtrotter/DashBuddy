@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.replay
 
 import cloud.trotter.log.gig.domain.model.event.AppEventType
+import cloud.trotter.log.gig.domain.state.ParsedFields
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.state.TaskPhase
 import cloud.trotter.log.gig.test.util.SessionReplay
@@ -70,7 +71,7 @@ class SingleDeliveryReplayTest {
     }
 
     @Test
-    fun `without the injected click the offer STILL resolves to OFFER_ACCEPTED on transition evidence (#1104)`() {
+    fun `without the injected click the offer STILL resolves to OFFER_ACCEPTED, linked by its store (#1119 S2)`() {
         // Screen-only: the job forms from the pickup screen (the click-less accept). Before #1104 this
         // replay pinned an inconsistency — the job minted while the offer row said OFFER_TIMEOUT —
         // because the resolver read only click latches. On the 8.97.8 Compose card no click can ever
@@ -78,13 +79,21 @@ class SingleDeliveryReplayTest {
         // rests on the transition: the hash newly present on the minted job → OFFER_ACCEPTED, with the
         // inference named in the row. The injected click (full-chain test above) still yields the
         // same OFFER_ACCEPTED, only without the "inferred" description.
-        val steps = SessionReplay.reduce(session)
+        // #1119 S2 (category D): the pool links the card to the pickup frame that names its store, so the redacted
+        // navigation frame ("Heading to <store>", masked in the capture) gets the card's store back. The accept is no
+        // longer inferred from the task surface.
+        val frames = SessionReplay.loadSession(session)
+        val card = SessionReplay.replayRecognition(frames.take(1)).single().parsed as ParsedFields.OfferFields
+        val store = card.parsedOffer.orders.first().storeName
+        val steps = SessionReplay.reduce(frames.map {
+            if (it.file == "03_pickup_navigation.json") SessionReplay.withText(it, "Heading to [redacted]", "Heading to $store") else it
+        })
         val c = counts(steps)
-        assertEquals("screen-only offer is an inferred accept, not a timeout", 0, c[AppEventType.OFFER_TIMEOUT] ?: 0)
+        assertEquals("screen-only offer is a linked accept, not a timeout", 0, c[AppEventType.OFFER_TIMEOUT] ?: 0)
         assertEquals("screen-only logs exactly one OFFER_ACCEPTED", 1, c[AppEventType.OFFER_ACCEPTED] ?: 0)
         val accepted = steps.flatMap { it.events }.single { it.type == AppEventType.OFFER_ACCEPTED }
         val description = (accepted.payload as? cloud.trotter.log.gig.domain.model.event.payload.OfferPayload)?.description
-        assertTrue("the row names the inference: $description", description?.contains("inferred from the task surface") == true)
+        assertEquals("the row names the link", "Linked to work at its store (#1119)", description)
         // The job/dropoff STRUCTURE is identical either way (clicks don't build the dropoff chain).
         assertEquals("dropoff structure is click-independent", 1, distinctDropoffTaskIds(steps).size)
     }

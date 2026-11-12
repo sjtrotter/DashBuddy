@@ -20,7 +20,9 @@ class AddOnStopsReplayTest {
             val listed: String = "Old", val pickups: Int = 1)
         for ((stops, drops, hint, resolved, listed, pickups) in listOf(Case(3, 2), Case(null, 1),
             Case(3, 2, hint = "Chick-fil-A", resolved = "Chick Fil A", listed = " chick fil a "),
-            Case(3, 1, hint = " Old ", resolved = " Old ", pickups = 2))) {
+            // #1119 S2 (OQ9, category G): the chain key trims, so a padded owned " Old " is the card's "Old" —
+            // one new store, two added drops (was 1 while the owned key kept its padding).
+            Case(3, 2, hint = " Old ", resolved = " Old ", pickups = 2))) {
             val parsed = ParsedOffer("addon", quoteBasis = OfferQuoteBasis.INCREMENTAL,
                 offerScope = OfferScope.ADD_ON, payAmount = 7.0, distanceMiles = 2.1, stopCount = stops,
                 orders = listOf(listed, "New").mapIndexed { i, store ->

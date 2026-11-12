@@ -30,6 +30,8 @@ data class TimelineOffer(
     val outcomeResolved: String? = null,
     /** When a recorded unassign named this offer's job (`offer_records.unassignedAt`); null when none. */
     val unassignedAt: Long? = null,
+    /** #1119 S2: the jobs this offer tied on at its store (`offer_records.ambiguousJobIds`); empty when none. */
+    val ambiguousJobIds: List<String> = emptyList(),
 )
 
 /** One confirmed pickup of the shift. */

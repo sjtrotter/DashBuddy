@@ -223,7 +223,11 @@ class ChurnReplayTest {
         val steps = SessionReplay.reduceMixed(inputs)
         val c = counts(steps)
 
-        assertEquals("the first offer still resolves OFFER_TIMEOUT('Replaced by new offer')", 1, c[AppEventType.OFFER_TIMEOUT] ?: 0)
+        // #1119 S2 (category B): the replaced first offer waits in the offer pool — no outcome at the replace.
+        assertEquals("no OFFER_TIMEOUT at the replace", 0, c[AppEventType.OFFER_TIMEOUT] ?: 0)
+        val pool = steps.last().stateAfter.regions.platforms.getValue(Platform.DoorDash).offerPool
+        assertEquals(listOf(hash(0)), pool.map { it.offer.offerHash })
+        assertEquals(cloud.trotter.log.gig.domain.state.PoolEntryVia.REPLACED, pool.single().via)
         // #1069 (fable F1): a REPLACE is a second offer — it logs its OWN OFFER_RECEIVED now.
 
         assertEquals(

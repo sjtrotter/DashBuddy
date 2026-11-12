@@ -106,7 +106,8 @@ class ShiftPageScreenTest {
 
     @Test fun `a run of passed offers is collapsed by default and opens in place`() {
         show(ShiftPageFixtures.stackAndAddOn())
-        val header = string(R.string.shift_page_run_both_format, 2, 1)
+        // #1119 S2: two or more kinds join their short forms.
+        val header = "${string(R.string.shift_page_run_short_declined, 2)}, ${string(R.string.shift_page_run_short_expired, 1)}"
         assertEquals(0, count("Chick-fil-A"))
         compose.onNodeWithText(header).click()
         settle()

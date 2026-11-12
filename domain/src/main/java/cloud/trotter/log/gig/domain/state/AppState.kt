@@ -17,7 +17,16 @@ data class AppState(
     /** Explicit (#366): 0 for the pre-restore initial state; obs-driven after. */
     val timestamp: Long = 0L,
     val correlationVersion: Long = 0L,
-)
+    /**
+     * The reducer generation that wrote this state; 0 = before #1119 S2. A restore whose value differs from
+     * [STATE_SCHEMA] starts fresh instead of replaying old observations through new rules (`StateManagerV2`).
+     */
+    val stateSchema: Int = 0,
+) {
+    companion object {
+        const val STATE_SCHEMA = 1
+    }
+}
 
 /**
  * Container for all statechart regions.

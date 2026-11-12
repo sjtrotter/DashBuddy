@@ -200,18 +200,22 @@ class ActiveFlowTest {
     }
 
     @Test
-    fun `an offer presented over Idle is click-lessly accepted by a following task-active frame (positive control)`() {
-        // The legitimate click-less accept this flow exists for: a job appearing where there was
-        // none. Fresh region → returnFlow = Idle → the task:active destination still infers accept.
+    fun `an offer presented over Idle is NOT click-lessly accepted by a store-less task-active frame (#1119 S2)`() {
+        // The stated Uber regression (category A): the click-less inference is retired, and a task:active frame
+        // names no store, so the pool cannot link the offer. The store-less frame is held (council round 6); at the
+        // hold's frame cap it mints a bare job from the held frame, and the offer waits in the pool.
         val r = drive(
             region(Platform.Uber),
             offerObs(1_000L, "o1", "Bill Miller BBQ", pay = 12.0), // returnFlow = Idle (no prior acted flow)
             activeTripObs(1_500L),                                 // no accept click captured
+            activeTripObs(1_600L),
+            activeTripObs(1_700L),
         )
         val job = r.activeJob
-        assertNotNull("job minted from the click-less accept", job)
-        assertEquals("economics consumed", 1, job!!.acceptedOffers.size)
-        assertEquals(12.0, job.totalPayAmount, 0.001)
+        assertNotNull("a bare job from the held frame", job)
+        assertEquals("no economics without a link", 0, job!!.acceptedOffers.size)
+        assertEquals(1_500L, job.startedAt)
+        assertEquals(listOf("o1"), r.offerPool.map { it.offer.offerHash })
     }
 
     @Test

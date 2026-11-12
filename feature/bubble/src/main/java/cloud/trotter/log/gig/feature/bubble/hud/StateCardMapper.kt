@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.feature.bubble.hud
 
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
+import cloud.trotter.log.gig.domain.analytics.liveOffersReceived
 import cloud.trotter.log.gig.domain.model.cards.CardStack
 import cloud.trotter.log.gig.domain.model.cards.FlowCardSnapshot
 import cloud.trotter.log.gig.domain.model.event.AppEventType
@@ -66,7 +67,7 @@ object StateCardMapper {
         return StateCardModel.Waiting(
             WaitingAnchor.resolve(region?.session?.startedAt,
                 region?.let { it.recentTasks + listOfNotNull(it.activeTask) }.orEmpty(), stack),
-            region?.session?.startedAt, live?.deliveries, live?.offersAccepted, live?.offersReceived,
+            region?.session?.startedAt, live?.deliveries, live?.offersAccepted, liveOffersReceived(live, region),
             outcome?.let { LastOffer(last?.payAmount, it) })
     }
 }

@@ -1236,7 +1236,8 @@ time, store pin and re-price time. Known pinned gap: `applyPay` has no suspect-r
   RECEIPT_SPLIT on a job of two or more), the paid total without cash, cash tips apart, a state (NORMAL, or
   ACCEPTED_NO_DELIVERY_YET while the shift runs, else NO_DELIVERY) and the sheet's milestones (accepted, at store,
   picked up, at customer, delivered) from the offer, pickup and delivery rows (missing ones absent). Cards sort by first offer, a card with no offer by its first delivery;
-  every maximal stretch of declined and expired offers between cards is one `PassedRun` with separate counts. Ties
+  every maximal stretch of declined, expired and not-taken (#1119 S2) offers between cards is one `PassedRun` with
+  separate counts, each passed offer carrying its `ambiguousJobIds`. Ties
   fall to the event sequence id. The model has no estimate, score, rate or minutes field.
 - **Page (PR 2).** `SessionDetailScreen` / `SessionDetailViewModel` are the shift page: `sessionDetail`, the timeline
   (folded as running while `endedAt` is null) and `RecordsStatus` in one `SessionDetailUiState`, with Retry.
@@ -1279,11 +1280,15 @@ time, store pin and re-price time. Known pinned gap: `applyPay` has no suspect-r
   `NoDelivery(offerSeq)` for each open offer on a card with no delivery, `MoreAcceptsThanDeliveries(jobId, accepted,
   delivered)` for a card with deliveries and more open offers than deliveries (one group; the app never picks which
   offer was lost), and `MoneyDiffers(higher, amount)` from `MoneyCheck` (moved to `:domain` with
-  `SessionDetail.reportSource()` / `effectiveReport()`). A running shift raises none. The shift page computes it from its
+  `SessionDetail.reportSource()` / `effectiveReport()`). #1119 S2 adds `OfferNotMatched(jobId, offerSeqs)`: one per job
+  a tie at its store left unmatched, from every passed offer carrying that job in `ambiguousJobIds` (a demoted,
+  inferred decline included), in first-seen order with the sequence ids sorted. A running shift raises none. The shift page computes it from its
   own detail and timeline (`SessionDetailUiState.checks`); `ShiftChecksRepository.checks(sessionId)` is the read for
   other screens.
 - **Page.** Under the money check, one line for the offers with no delivery ("1 accepted offer has no delivery
-  recorded") and one per group ("1 job has 2 accepted offers and 1 delivery"). A NO_DELIVERY card opens "What happened
+  recorded"), one per group ("1 job has 2 accepted offers and 1 delivery") and one per tie ("1 job could be from 2
+  offers", #1119 S2; a link lands on the job's card, after the other two kinds). The sheet that answers a tie and its
+  correction are a follow-up. A NO_DELIVERY card opens "What happened
   to this offer?" (`OfferQuestionSheet`) for its first open offer: "It was unassigned" writes `OFFER_OUTCOME_CORRECTION`;
   "Add a missed delivery" opens `AddMissedDeliveryDialog` prefilled with the offer's store and pay and writes
   `MANUAL_DELIVERY` at the offer's decision time naming it; Close leaves it open. A group shows its line and no sheet.
@@ -1308,6 +1313,28 @@ time, store pin and re-price time. Known pinned gap: `applyPay` has no suspect-r
 - **Undo of "It was unassigned".** A MARKED_UNASSIGNED card carries `markedOfferSeqs` and an Undo that writes
   `OFFER_OUTCOME_CORRECTION` with no resolution, the documented undo shape; the offer is open again and its check
   returns.
+
+### Offer pool outcomes (#1119 S2, Room v26)
+
+- **`OFFER_NOT_TAKEN`.** The offer pool (`03-state-machine.md`, "Offer outcomes and the offer pool") records it at the
+  shift end for every offer still waiting for work at its store, and for a card still on screen. It decodes
+  `OfferPayload` and folds through `foldOffer` as an offer row like the other three outcomes; on the session row it
+  counts in `offersTimeout` ("offered, neither accepted nor declined"), so `offersReceived` (the sum) counts it and no
+  session column was needed. `OfferOutcome.NOT_TAKEN` is its typed form; the timeline counts it in a `PassedRun` as
+  `notTaken` (the page's "Not taken" row and "N offers not taken" run line). `OFFER_TIMEOUT` stays for history; nothing
+  emits it after S2.
+- **Payload fields.** `OfferPayload.offerInstanceId` (the presentation, one outcome per instance), `linkedJobId` (the job
+  a pool link minted or joined), `ambiguousJobIds` (the jobs it tied on) and `declineEvidence` (`SHEET_WINDOW` on a
+  demoted entry's inferred decline); `OfferReceivedPayload.offerInstanceId`. All additive with defaults.
+- **Column.** `offer_records.ambiguousJobIds`, nullable, a `StringListColumn` JSON array (null when empty;
+  `AutoMigration(25, 26)`, `AnalyticsMigration25to26Test`), read back into `TimelineOffer.ambiguousJobIds`. **No refold:**
+  `PROJECTOR_VERSION` stays 19, because `OFFER_NOT_TAKEN` and the tie list cannot exist in folded history, so null is
+  right for every historical row. `declineEvidence` has no column.
+- **Live count.** A pooled offer has no outcome event until it links or the shift ends, so the HUD's received count
+  is `liveOffersReceived(record, region)` (`:domain`): the folded `offersReceived` plus the shift's pool entries. One
+  owner; the resting card and the waiting card read it.
+- **Stated cost.** The step that installs S2 starts fresh (`AppState.stateSchema`), so a live shift's `DASH_START`
+  folds as an open shift until the projector's inferred close.
 
 ### Store search (#1540)
 

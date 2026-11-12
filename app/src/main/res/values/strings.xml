@@ -420,12 +420,21 @@
         <item quantity="one">%1$d expired offer</item>
         <item quantity="other">%1$d expired offers</item>
     </plurals>
-    <string name="shift_page_run_both_format">%1$d declined, %2$d expired</string>
+    <!-- #1119 S2: an offer still waiting for work at its store when the shift ended. -->
+    <plurals name="shift_page_run_not_taken">
+        <item quantity="one">%1$d offer not taken</item>
+        <item quantity="other">%1$d offers not taken</item>
+    </plurals>
+    <!-- A run with two or more kinds joins these with ", ": "2 declined, 1 expired, 1 not taken". -->
+    <string name="shift_page_run_short_declined">%1$d declined</string>
+    <string name="shift_page_run_short_expired">%1$d expired</string>
+    <string name="shift_page_run_short_not_taken">%1$d not taken</string>
     <string name="shift_page_span_format">%1$s to %2$s</string>
     <string name="shift_page_run_expanded">Expanded</string>
     <string name="shift_page_run_collapsed">Collapsed</string>
     <string name="shift_page_outcome_declined">Declined</string>
     <string name="shift_page_outcome_expired">Expired</string>
+    <string name="shift_page_outcome_not_taken">Not taken</string>
     <string name="shift_page_milestone_accepted">Accepted</string>
     <string name="shift_page_milestone_at_store">At store</string>
     <string name="shift_page_milestone_picked_up">Picked up</string>
@@ -446,6 +455,11 @@
     <plurals name="shift_check_more_accepts">
         <item quantity="one">1 job has %1$d accepted offers and %2$d delivery</item>
         <item quantity="other">1 job has %1$d accepted offers and %2$d deliveries</item>
+    </plurals>
+    <!-- #1119 S2: one job whose work tied two or more offers at its store; the quantity is the offers (always 2+). -->
+    <plurals name="shift_check_offer_unmatched">
+        <item quantity="one">1 job could be from %1$d offer</item>
+        <item quantity="other">1 job could be from %1$d offers</item>
     </plurals>
     <!-- The sheet an accepted offer with no delivery opens. -->
     <string name="shift_offer_sheet_title">What happened to this offer?</string>

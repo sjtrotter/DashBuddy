@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.core.state.model.RegionDecisions
 import cloud.trotter.log.gig.domain.capture.ReplayMetadata
 import cloud.trotter.log.gig.domain.evaluation.OfferAction
 import cloud.trotter.log.gig.domain.evaluation.OfferEvaluation
@@ -188,12 +189,14 @@ class PresentationScopedOfferTest {
         assertNull(second.firstEvalLandedAt)
         assertNull(second.evaluation)
 
-        val logged = diff(prev, next, 15_000L).filterIsInstance<AppEffect.LogEvent>().map { it.event }
+        val logged = decidedDiff(prev, offerObs(15_000L, "H2", null)).filterIsInstance<AppEffect.LogEvent>().map { it.event }
         val outcomes = logged.mapNotNull { it.payload as? OfferPayload }
-        assertEquals("the old offer resolves exactly once", 1, outcomes.size)
-        assertEquals("H1", outcomes.single().offerHash)
-        assertEquals(1_000L, outcomes.single().presentedAt)
-        assertEquals(AppEventType.OFFER_TIMEOUT, outcomes.single().outcome)
+        // #1119 S2: the old offer has no outcome yet — it waits in the pool (its one outcome comes later).
+        assertTrue("no outcome for the replaced offer at the replace", outcomes.isEmpty())
+        val pooled = next.offerPool.single()
+        assertEquals("H1", pooled.offer.offerHash)
+        assertEquals(1_000L, pooled.offer.presentedAt)
+        assertEquals(cloud.trotter.log.gig.domain.state.PoolEntryVia.REPLACED, pooled.via)
         // #1069 (fable F1): the replacing offer is logged as RECEIVED on its own hash.
         val received = logged.filter { it.type == AppEventType.OFFER_RECEIVED }
         assertEquals(1, received.size)
@@ -219,7 +222,7 @@ class PresentationScopedOfferTest {
         assertNull(second.lastClickIntent)
         assertNull(second.firstEvalLandedAt)
 
-        val events = diff(prev, next, 15_000L).filterIsInstance<AppEffect.LogEvent>().map { it.event }
+        val events = decidedDiff(prev, offerObs(15_000L, "H2", null)).filterIsInstance<AppEffect.LogEvent>().map { it.event }
         val decline = events.single { it.type == AppEventType.OFFER_DECLINED }.payload as OfferPayload
         assertEquals("H1", decline.offerHash)
         assertEquals(1_000L, decline.presentedAt)
@@ -252,8 +255,17 @@ class PresentationScopedOfferTest {
     // diffOfferLifecycle — effect gating
     // =============================================================================================
 
+    /** #1119 S2: one real step from [prev] on [o], its decisions reaching the diff (outcomes are stepper decisions). */
+    private fun decidedDiff(prev: PlatformRegion, o: Observation): List<AppEffect> {
+        val step = stepper.stepWithDecisions(
+            prev, FlowRegion(flow = Flow.OfferPresented), FlowRegion(flow = Flow.OfferPresented), o, policy,
+        )
+        return effectMap.diffOfferLifecycle(prev, step.region, o, "sess-1", step.decisions)
+    }
+
+    // #1119 S2: outcomes are stepper decisions; these hand-built diffs carry none, so they pin the effect gating only.
     private fun diff(prev: PlatformRegion, next: PlatformRegion, t: Long): List<AppEffect> =
-        effectMap.diffOfferLifecycle(prev, next, offerObs(t, "x", "x"), "sess-1")
+        effectMap.diffOfferLifecycle(prev, next, offerObs(t, "x", "x"), "sess-1", RegionDecisions.NONE)
 
     @Test
     fun `enrich-as-variant emits EvaluateOffer + re-arm + stale-hash cancel but NO OFFER_TIMEOUT or 'offer replaced' bubble`() {
@@ -285,18 +297,23 @@ class PresentationScopedOfferTest {
     }
 
     @Test
-    fun `a genuine replacement (different presentationKey) still emits OFFER_TIMEOUT + cancel + bubble`() {
+    fun `a genuine replacement (different presentationKey) pools the old offer + cancel, no outcome, no bubble`() {
+        // #1119 S2: the replaced offer leaves into the pool; it gets its one outcome on a link or at the shift end.
         val prev = region(pending("H1", "P1", presentedAt = 1_000L, evaluation = evalOf()))
-        val next = region(pending("H2", "P2", presentedAt = 2_000L))
-        val fx = diff(prev, next, 2_000L)
-
-        assertTrue(
-            "the replaced offer resolves OFFER_TIMEOUT",
-            fx.any { it is AppEffect.LogEvent && it.event.type == AppEventType.OFFER_TIMEOUT },
+        val step = stepper.stepWithDecisions(
+            prev, FlowRegion(flow = Flow.OfferPresented), FlowRegion(flow = Flow.OfferPresented),
+            offerObs(2_000L, "H2", "P2"), policy,
         )
+        val fx = effectMap.diffOfferLifecycle(prev, step.region, offerObs(2_000L, "H2", "P2"), "sess-1", step.decisions)
+
+        assertFalse(
+            "no outcome at the replace",
+            fx.any { it is AppEffect.LogEvent && it.event.type != AppEventType.OFFER_RECEIVED },
+        )
+        assertEquals("the replaced offer waits in the pool", listOf("H1"), step.region.offerPool.map { it.offer.offerHash })
         assertTrue("its heads-up is cancelled", fx.any { it is AppEffect.CancelOfferNotification })
-        assertTrue(
-            "the 'replaced by a new offer' bubble fires",
+        assertFalse(
+            "no 'replaced by a new offer' bubble",
             fx.any { it is AppEffect.UpdateBubble && it.text.contains("replaced by a new offer") },
         )
         assertTrue("the new offer is evaluated", fx.any { it is AppEffect.EvaluateOffer })

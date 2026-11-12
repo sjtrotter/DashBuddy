@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.feature.bubble.hud
 
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
+import cloud.trotter.log.gig.domain.analytics.liveOffersReceived
 import cloud.trotter.log.gig.domain.state.Flow
 import cloud.trotter.log.gig.domain.state.Mode
 import cloud.trotter.log.gig.domain.state.Platform
@@ -49,7 +50,8 @@ object HudStateMapper {
                 ?: OnlineSpan.Unknown,
             deliveries = record?.deliveries,
             offersAccepted = record?.offersAccepted,
-            offersReceived = record?.offersReceived,
+            // #1119 S2: a pooled offer has no outcome event yet; the live count adds the shift's pool.
+            offersReceived = liveOffersReceived(record, region),
         )
         val dock = DockMapper.map(mode, firstRun, cashTipCue, logShown = logOpen,
             odometerLoaded = odometerLoaded, odometerCue = odometerCue, expenseCue = expenseCue, odometerShown = odometerShown)

@@ -240,6 +240,8 @@ data class OfferFold(
     val offerScope: String? = null,
     /** `ParsedOffer.quoteBasis.name` (#1516). */
     val quoteBasis: String? = null,
+    /** #1119 S2: the jobs this offer tied on at its store (`OfferPayload.ambiguousJobIds`); empty for every other row. */
+    val ambiguousJobIds: List<String> = emptyList(),
 )
 
 /**
@@ -507,7 +509,8 @@ object RecordFolds {
             AppEventType.DASH_START -> foldDashStart(event, context)
             AppEventType.OFFER_ACCEPTED,
             AppEventType.OFFER_DECLINED,
-            AppEventType.OFFER_TIMEOUT -> foldOffer(event, context)
+            AppEventType.OFFER_TIMEOUT,
+            AppEventType.OFFER_NOT_TAKEN -> foldOffer(event, context)
             AppEventType.DELIVERY_COMPLETED -> DeliveryFolds.foldDeliveryCompleted(event, context, currentCostPerMile)
             // #688 phase B leg-anchor events (each also keeps the pre-existing liveness advance) —
             // the leg machinery lives in LegFolds (P3 file split, #688 review Fix 6).
@@ -688,6 +691,7 @@ object RecordFolds {
             },
             offerScope = parsed.effectiveScope.name,
             quoteBasis = parsed.quoteBasis.name,
+            ambiguousJobIds = p.ambiguousJobIds,
         )
         val newCtx = ctx?.let {
             it.advance(e.occurredAt, event.metadata?.odometer)
@@ -787,6 +791,8 @@ object RecordFolds {
         AppEventType.OFFER_ACCEPTED -> copy(offersAccepted = offersAccepted + 1)
         AppEventType.OFFER_DECLINED -> copy(offersDeclined = offersDeclined + 1)
         AppEventType.OFFER_TIMEOUT -> copy(offersTimeout = offersTimeout + 1)
+        // #1119 S2: offered, neither accepted nor declined — the timeout counter, so no session column is needed.
+        AppEventType.OFFER_NOT_TAKEN -> copy(offersTimeout = offersTimeout + 1)
         else -> this
     }
 }

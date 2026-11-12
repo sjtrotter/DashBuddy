@@ -144,8 +144,10 @@ SELECT taskId, (confirmedAt - arrivedAt)/60000.0 AS dwell_min FROM pickup_record
 -- #438 B3 / B5  offer lifecycle + odometer arbitration (data halves)
 SELECT eventType, COUNT(*) FROM app_events WHERE eventType LIKE 'OFFER_%' GROUP BY eventType;
 SELECT taskId, realizedMiles FROM delivery_records;
--- expect: outcomes incl. OFFER_TIMEOUT coherent; accepts minted jobs WITH economics; mileage
--- deltas sane (no stuck-0 runs, no mid-dash reset shape).
+-- expect: zero OFFER_TIMEOUT after the #1119 S2 install (OFFER_NOT_TAKEN replaces it at shift end); accepts
+-- minted jobs WITH economics; mileage deltas sane (no stuck-0 runs, no mid-dash reset shape).
+-- #1119 S2 offer pool: run the desk checks of checklist item 1119-the-offer-pool-links-a-missed-accept
+-- (missed links after a NOT_TAKEN, ties, stale-link suspects, linked receipts, snapshot size).
 ```
 
 ## Log greps (shareable.log unless noted)

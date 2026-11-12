@@ -4,10 +4,9 @@ import cloud.trotter.log.gig.domain.state.OfferIntent
 import cloud.trotter.log.gig.domain.state.PendingOffer
 
 /**
- * #526 D1b — the ONE shared "this pending offer was accepted" predicate. Used by both the accept
- * stash arming ([PlatformRegionStepper]) and offer-outcome resolution ([EffectMap.resolveOfferOutcome]
- * steps 0-1); keeping it in one place stops the #594 decline-latch logic from drifting between the
- * two `:core:state` files.
+ * #526 D1b — the ONE shared "this pending offer was accepted" predicate. Used by every offer outcome decision
+ * (`leavePresentation`, `flushAtShiftEnd` in `OfferPool.kt`) and the expiry no-op ([expireOffer]); keeping it in one
+ * place stops the #594 decline-latch logic from drifting between `:core:state` files.
  *
  * True ⇔ an ACCEPT intent is latched on the offer AND no committed decline has overridden it. The
  * decline-commit latch (#594) is final: once a decline is committed server-side, a later

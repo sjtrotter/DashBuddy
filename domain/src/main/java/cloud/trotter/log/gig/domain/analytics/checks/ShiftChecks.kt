@@ -3,6 +3,7 @@ package cloud.trotter.log.gig.domain.analytics.checks
 import cloud.trotter.log.gig.domain.analytics.SessionDetail
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
 import cloud.trotter.log.gig.domain.analytics.timeline.JobCard
+import cloud.trotter.log.gig.domain.analytics.timeline.PassedRun
 import cloud.trotter.log.gig.domain.analytics.timeline.TimelineItem
 
 /** One reason an ended shift needs the dasher's look. */
@@ -15,6 +16,12 @@ sealed interface ShiftCheck {
      * never picks which offer was lost.
      */
     data class MoreAcceptsThanDeliveries(val jobId: String, val accepted: Int, val delivered: Int) : ShiftCheck
+
+    /**
+     * #1119 S2: a job whose work tied two or more pooled offers at its store; nothing linked. One per job. The offers
+     * include a demoted one (a decline inferred from the confirm sheet) the tie named.
+     */
+    data class OfferNotMatched(val jobId: String, val offerEventSequenceIds: List<Long>) : ShiftCheck
 
     /** The shift's independent total and its delivery pay differ ([MoneyCheck]). */
     data class MoneyDiffers(val higher: MoneyCheck.Higher, val amount: Double) : ShiftCheck
@@ -42,6 +49,16 @@ object ShiftChecks {
                     checks += ShiftCheck.MoreAcceptsThanDeliveries(card.jobId, open, delivered)
             }
         }
+        // Every offer a tie named: the passed ones and (a tie candidate that later linked elsewhere) the accepted ones.
+        val tiedByJob = LinkedHashMap<String, MutableList<Long>>()
+        val tied = timeline.flatMap { item ->
+            when (item) {
+                is PassedRun -> item.offers.map { it.eventSequenceId to it.ambiguousJobIds }
+                is JobCard -> item.tiedOffers.toList()
+            }
+        }
+        for ((seq, jobs) in tied) jobs.forEach { tiedByJob.getOrPut(it) { mutableListOf() } += seq }
+        tiedByJob.forEach { (jobId, seqs) -> checks += ShiftCheck.OfferNotMatched(jobId, seqs.distinct().sorted()) }
         money?.higher?.let { checks += ShiftCheck.MoneyDiffers(it, money.difference) }
         return checks
     }

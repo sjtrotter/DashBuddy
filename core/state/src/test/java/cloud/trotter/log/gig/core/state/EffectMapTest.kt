@@ -209,6 +209,20 @@ class EffectMapTest {
     private inline fun <reified T : AppEffect> List<AppEffect>.effectsOfType(): List<T> =
         filterIsInstance<T>()
 
+    /**
+     * #1119 S2: an offer outcome is a stepper decision (`OfferOutcomeDecision`), so an outcome assertion reads the
+     * effects of a REAL step from [prev] — `StateMachine.step` — not a hand-built before/after pair.
+     */
+    private val machine = StateMachine(
+        FlowRegionStepper(), PlatformRegionStepper(), CrossPlatformRegionStepper(), TransitionPolicy(), effectMap,
+    )
+
+    private fun stepped(prev: AppState, obs: Observation): List<AppEffect> = machine.step(prev, obs).effects
+
+    private fun cardObs(hash: String) = screenObs(
+        flow = Flow.OfferPresented, parsed = ParsedFields.OfferFields(parsedOffer = testParsedOffer.copy(offerHash = hash)),
+    )
+
     private fun List<AppEffect>.logEvents(): List<AppEffect.LogEvent> = effectsOfType()
 
     private fun List<AppEffect>.logEventTypes(): List<AppEventType> =
@@ -300,18 +314,17 @@ class EffectMapTest {
     @Test
     fun `offer accepted emits OFFER_ACCEPTED log`() {
         val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(lastClickIntent = "accept_offer"))
-        val next = offerState(flow = Flow.TaskPickupNavigation)
 
-        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.TaskPickupNavigation))
+        val effects = stepped(prev, screenObs(flow = Flow.TaskPickupNavigation))
         assertTrue(effects.logEventTypes().contains(AppEventType.OFFER_ACCEPTED))
     }
 
     @Test
     fun `offer declined emits OFFER_DECLINED log`() {
-        val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(lastClickIntent = "decline_offer"))
-        val next = offerState(flow = Flow.Idle)
+        // A decline click latches the commit with its intent (OfferLifecycle.latchOfferClick).
+        val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(lastClickIntent = "decline_offer", declineCommittedAt = 900L))
 
-        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
+        val effects = stepped(prev, screenObs(flow = Flow.Idle))
         assertTrue(effects.logEventTypes().contains(AppEventType.OFFER_DECLINED))
     }
 
@@ -324,9 +337,8 @@ class EffectMapTest {
                     declineCommittedAt = 900L,
                     lastClickIntent = "accept_offer",
                 ))
-        val next = offerState(flow = Flow.Idle)
 
-        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
+        val effects = stepped(prev, screenObs(flow = Flow.Idle))
         assertTrue(
             "a committed decline resolves DECLINED even when the last click was ACCEPT",
             effects.logEventTypes().contains(AppEventType.OFFER_DECLINED),
@@ -388,15 +400,13 @@ class EffectMapTest {
     }
 
     @Test
-    fun `offer timeout emits OFFER_TIMEOUT log and UpdateBubble`() {
+    fun `an un-acted offer leaving logs no outcome and posts no bubble - it waits in the pool (#1119 S2)`() {
         val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer)
-        val next = offerState(flow = Flow.Idle)
 
-        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
-        assertTrue(effects.logEventTypes().contains(AppEventType.OFFER_TIMEOUT))
-        assertTrue("Should show timeout bubble", effects.any {
-            it is AppEffect.UpdateBubble && it.text.contains("expired")
-        })
+        val t = machine.step(prev, screenObs(flow = Flow.Idle))
+        assertTrue(t.effects.logEvents().none { it.event.payload is OfferPayload })
+        assertTrue("no outcome bubble", t.effects.none { it is AppEffect.UpdateBubble })
+        assertEquals(1, t.newState.regions.platforms.getValue(Platform.DoorDash).offerPool.size)
     }
 
     // =========================================================================
@@ -434,10 +444,10 @@ class EffectMapTest {
             sourceRuleId = "uber.screen.offer",
             lastClickIntent = "decline_offer",
         )
-        val prev = multiAppOfferState(uberOffer)
-        val next = multiAppOfferState(null)
+        val prev = multiAppOfferState(uberOffer.copy(declineCommittedAt = 900L))
 
-        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
+        // The Uber frame steps the Uber region: its offer leaves, declined.
+        val effects = stepped(prev, screenObs(flow = Flow.Idle, ruleId = "uber.screen.test"))
 
         // Guard the fixture: the "active" session really is the OTHER platform's.
         assertEquals("dd-sess", prev.activeSessionId())
@@ -571,8 +581,7 @@ class EffectMapTest {
         // expectedOutcomeCard(loggedOutcome) — card==ledger by construction, not two hand-kept
         // strings that happen to agree.
         val prevAtPop = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(lastClickIntent = OfferIntent.ACCEPT))
-        val nextAtPop = offerState(flow = Flow.TaskPickupNavigation)
-        val popEffects = effectMap.diff(prevAtPop, nextAtPop, screenObs(flow = Flow.TaskPickupNavigation))
+        val popEffects = stepped(prevAtPop, screenObs(flow = Flow.TaskPickupNavigation))
 
         val outcome = popEffects.logEvents().first { it.event.type == AppEventType.OFFER_ACCEPTED }.event.type
         assertTrue(
@@ -599,8 +608,7 @@ class EffectMapTest {
                     declineCommittedAt = 900L,
                     lastClickIntent = OfferIntent.ACCEPT,
                 ))
-        val nextAtPop = offerState(flow = Flow.Idle)
-        val popEffects = effectMap.diff(prevAtPop, nextAtPop, screenObs(flow = Flow.Idle))
+        val popEffects = stepped(prevAtPop, screenObs(flow = Flow.Idle))
 
         assertTrue(popEffects.logEventTypes().contains(AppEventType.OFFER_DECLINED))
         assertTrue(
@@ -612,24 +620,20 @@ class EffectMapTest {
     }
 
     @Test
-    fun `no click, timeout pop shows only the outcome card — no ack ever fired (#601)`() {
+    fun `no click, the leave shows no card at all — no ack, no outcome (#601, #1119 S2)`() {
         val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer)
-        val next = offerState(flow = Flow.Idle)
 
-        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.Idle))
+        val effects = stepped(prev, screenObs(flow = Flow.Idle))
 
-        assertTrue(effects.logEventTypes().contains(AppEventType.OFFER_TIMEOUT))
-        val bubbles = effects.filterIsInstance<AppEffect.UpdateBubble>()
-        assertEquals("exactly one card — no click means no ack ever fired", 1, bubbles.size)
-        assertEquals(expectedOutcomeCard(AppEventType.OFFER_TIMEOUT), bubbles[0].text)
+        assertTrue(effects.logEvents().none { it.event.payload is OfferPayload })
+        assertTrue("no click means no ack, and a pooled offer has no outcome yet", effects.none { it is AppEffect.UpdateBubble })
     }
 
     @Test
     fun `a replaced offer with a stored ACCEPT intent surfaces the OLD offer's outcome card, suffixed (#601)`() {
         val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(lastClickIntent = OfferIntent.ACCEPT))
-        val next = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(offerHash = "hash-456"))
 
-        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.OfferPresented))
+        val effects = stepped(prev, cardObs("hash-456"))
 
         assertTrue(
             "the old offer's OFFER_ACCEPTED is logged even though it was silently replaced",
@@ -645,17 +649,13 @@ class EffectMapTest {
     }
 
     @Test
-    fun `a replaced offer with no click intent logs and shows OFFER_TIMEOUT, suffixed — no 4th outcome string (#601 vet amdt 1)`() {
+    fun `a replaced offer with no click intent logs nothing and shows nothing - it waits in the pool (#1119 S2)`() {
         val prev = offerState(flow = Flow.OfferPresented, offer = testPendingOffer)
-        val next = offerState(flow = Flow.OfferPresented, offer = testPendingOffer.copy(offerHash = "hash-456"))
 
-        val effects = effectMap.diff(prev, next, screenObs(flow = Flow.OfferPresented))
+        val effects = stepped(prev, cardObs("hash-456"))
 
-        assertTrue(effects.logEventTypes().contains(AppEventType.OFFER_TIMEOUT))
-        assertTrue(
-            "faithful to the ledger's OFFER_TIMEOUT — no invented 4th outcome string",
-            effects.any { it is AppEffect.UpdateBubble && it.text == "Offer expired, replaced by a new offer" },
-        )
+        assertTrue(effects.logEvents().none { it.event.type != AppEventType.OFFER_RECEIVED && it.event.payload is OfferPayload })
+        assertTrue("no outcome card for a pooled offer", effects.none { it is AppEffect.UpdateBubble && it.text.contains("replaced") })
     }
 
     // =========================================================================

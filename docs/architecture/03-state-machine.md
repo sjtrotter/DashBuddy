@@ -528,7 +528,8 @@ still runs after `diffDeliveryCompletion` so the store evidence is complete (see
 B3, moved off the shared global R0 slot so concurrent platforms don't collide; N≥1 satisfies
 ADR-0007, N>1 waits on #251). The lifecycle (`OfferLifecycle.kt` on the stepper, `OfferEffects.kt`
 on `EffectMap`) runs on THIS platform's own observations: push/replace/enrich on `OfferPresented`,
-click-latch (#594 decline-commit), eval-land by `offerHash`, resolve on leaving offer-presentation.
+click-latch (#594 decline-commit), eval-land by `offerHash`, leave through `leavePresentation` (the offer pool,
+#1119 S2, below).
 **Future rule (#251/#858, not implemented):** when the board is evaluated (evaluate-all + rank, 07-25 ruling), a card expiring must not trigger re-evaluation of the cards already evaluated.
 **Offer identity is presentation-scoped (#830), with ruleset-declared identity (#1069):**
 `ParsedFieldsFactory.buildOffer` hashes a parsed `assignmentId` as `sha256("assignment|" + assignmentId)`
@@ -545,24 +546,24 @@ uses the economics default. `offerHash` still folds in the ticking pay/distance/
 live-re-quoting card (Uber re-renders pay/miles/minutes every few seconds), a different-hash frame
 carrying the SAME non-null `presentationKey` as the offer currently on screen is an
 **enrich-as-variant** (update `offerHash`/`offerFields`/targets, CLEAR evaluation → re-eval, but
-KEEP `presentedAt` + all click latches + the speak-once `PendingOffer.firstEvalLandedAt`), NOT a
-replace — so no `OFFER_TIMEOUT("Replaced by new offer")`, no discarded accept latch, and
+KEEP `presentedAt` + all click latches + the speak-once `PendingOffer.firstEvalLandedAt` + the instance id), NOT a
+replace — so the offer never leaves, no accept latch is discarded, and
 `AppEffect.SpeakOffer` fires ONCE per physical presentation while `PostOfferNotification` still
 live-updates every landing. The `OFFER_EXPIRY` re-arm on a variant keeps the deadline anchored on
 the original `presentedAt` (churn can't extend the TTL) and carries the new hash; the stale old-hash
 heads-up is cancelled (`BubbleManager.offerNotificationId` is per-hash). Fail-CLOSED +
 platform-agnostic (P8): a null `presentationKey` degrades to replace-on-any-hash-change — a false
 MERGE is impossible, and there is no `Platform` branch. A genuinely different presentation still
-REPLACES. A REPLACE resolves the old offer through `resolveOfferOutcome` from `OfferEffects`, honouring
-its decline latches: offer 1 gets its true outcome while offer 2 gets its own presentation,
-`presentedAt`, and fresh click/speak latches. **Presentation KIND (#881):** a ruleset may parse `offerKind: match|direct` (Uber
+REPLACES. A REPLACE takes the old offer off the screen through `leavePresentation` (#1119 S2): a committed decline
+or an accept click is decided there, anything else waits in the offer pool `via REPLACED`, while offer 2 gets its
+own presentation, instance id, `presentedAt`, and fresh click/speak latches. **Presentation KIND (#881):** a ruleset may parse `offerKind: match|direct` (Uber
 discriminates on the card's own CTA); it rides `ParsedOffer.offerKind` → `PendingOffer.offerKind` (a
 read-through, never a copy) → `OfferPayload.parsedOffer`, is NOT an input to scoring / `offerHash` /
 `presentationKey`, and is null on any platform whose ruleset lacks the concept. Its one consumer is
 the replace path: a DIRECT offer landing over a MATCH one is the platform's EXPECTED
-direct-preempts-match hand-off, so it keeps the same event type + emission edge but logs
-`"Superseded by direct offer"` and suppresses the "(offer replaced)" bubble; every other pair keeps
-the older narration. Kind-keyed, never `Platform`-keyed. **Display vs identity on a stacked card
+direct-preempts-match hand-off: the old offer leaves `via SUPERSEDED_BY_DIRECT` (its shift-end row reads
+`"Superseded by direct offer"`), and a decline or accept decided at that edge posts no chat line; every other
+pair is a plain replace. Kind-keyed, never `Platform`-keyed. **Display vs identity on a stacked card
 (#882):** an Uber `Delivery (N)` card renders the type chip above ONE visible store line, so the
 chip used to win both store reads. The uber rule negates `^Delivery \(\d+\)$` on the **top-level**
 `storeName` list ONLY (`ParsedOffer.displayStoreName`); the `orders[]` list DELIBERATELY still reads
@@ -587,10 +588,10 @@ An INCREMENTAL accept in `appendAddOn` mints `stopCount − |new pickup hints|` 
 null (3+-digit route, or a pre-#1304 journal row) or out of 1..8 → 1), never `orders.size`, because the card lists the owned order too
 (#1304, fielded 2026-10-09 ×3).
 `quotedItemCount`/`offerUnitCount` are null for an INCREMENTAL accept.
-A job containing an increment has no complete blended net/rate/time. ADD_ON offers never infer
-click-less acceptance, including when return-flow context is absent; original-task return after a
-sheet or timeout preserves #1104/#1118. Marginal scoring, route recomputation and click-less add-on
-minting remain out of scope.
+A job containing an increment has no complete blended net/rate/time. #1119 S2: the offer pool matches an
+ADD_ON card only on the stores new to the job it was presented over (all of them with no live job), and a
+pooled add-on whose work appears inside a live job stays unlinked until S3 (#1600). Marginal scoring and route
+recomputation remain out of scope.
 
 **Offer scope (#1119 slice 1).** A parsed STANDALONE offer accepted over a live job that has not
 proven complete closes it through the whole-job abandon: un-arrived drops and unconfirmed pickups
@@ -611,47 +612,117 @@ Residual risk: a standalone card that really was a stack (never observed in 918 
 splits one job in two; an arrived drop is paid as a normal completion would be (the same
 exposure today's displacement stamp already carries); an un-arrived one is never paid.
 
-**Outcomes on transition evidence (#1104/#1114).** A Compose control emits no click event for a human
-tap, so on the 8.97.8 card no ACCEPT/DECLINE click can arrive. `EffectMap.resolveOfferOutcome(obs, prev,
-next)` therefore reads, after the click latches: (a) an accepted SURVIVOR for the same hash in the
-post-step region (the click-less accept — presentation left to a phased task surface) → `OFFER_ACCEPTED`
-(before this the job minted while the offer row said TIMEOUT); (b) `PendingOffer.declineSheetSeenAt` →
-`OFFER_DECLINED` — set once by `OfferLifecycle` when a screen whose rule declares
-`state.offerSurface: decline_confirm` (`OfferSurface`, load-validated vocabulary) is observed over the
-presented offer (LATEST sighting), preserved across enrich-as-variant, never a commit on its own (an accept
-always wins, and an OBSERVED tap outranks every inference). The sheet counts only when the exit lands
-within `GraceConfig.declineSheetWindowMs` (15 s; the seven fielded 8.97.8 declines exited 2–9 s after
-the sheet) — the card re-renders for one frame after a real decline AND after a cancel, so a card frame
-is not a cancel signal; a cancelled sheet whose countdown later ends is outside the window → timeout —
-and, since the window alone cannot separate a LATE cancel from a real decline, the card's own countdown is
-now parsed on both DoorDash card generations (`initialCountdownSeconds`: the legacy button's end text, the
-Compose footer's `m:ss` clock via `parseClockSeconds`) into `PendingOffer.countdownExpiresAt` (refreshed
-per frame, hash-neutral): the countdown is REQUIRED evidence — with none read the sheet alone never makes a
-decline (fail-null) — an exit at/after that instant minus `countdownExpirySlackMs` (3 s) is an EXPIRY
-however recent the sheet, and the `OFFER_EXPIRY` safety timer never converts to a decline on its own. The
-same anchor now drives the `OFFER_EXPIRY` arm and the HUD's expiry bar: the pre-#1104 `presentedAt +
-countdown` formula assumed a countdown read once, and on a card that re-renders every ~3 s it would have
-armed the timer a millisecond after any refreshed frame and timed out a live offer (Astra r3).
-The same change generalizes `destinationImpliesAccept`: a click-less accept is inferred ONLY when the
-offer's `returnFlow` was not a task flow (a job appearing where there was none) — a mid-job add-on's
-returnFlow is job A's pickup surface, whose re-render after a declined add-on used to mint a phantom
-survivor; a click-less add-on accept is not inferable and fails null. `recoveryHygiene` drops the
-sighting (evidence, not a decision in flight); the journal persists `offerSurface` so replay resolves
-the same outcome as the live run. Inferred outcomes carry a `description` naming the evidence on both
-the removal and the replacement paths. No sheet and no click → timeout, as before.
+**Offer outcomes and the offer pool (#1119 S2).** A Compose control emits no click for a human tap, so on the
+8.97.8 card an accept or a decline can only be seen in what the screens do next. Every presented offer leaves the
+screen through ONE function, `OfferPool.leavePresentation` (a frame of another flow, a replacing card, a
+direct-over-match supersession, or its own `OFFER_EXPIRY` timer), with one of three results:
+
+- a committed decline (`declineCommittedAt`, the confirm-sheet click) → `OFFER_DECLINED` at the leave;
+- an accept click (`isAcceptLatched`) → `OFFER_ACCEPTED` at the leave; leaving by a frame it stays as the
+  accepted survivor (below), by a replace it drops (#526 supersession/revocation);
+- anything else enters the platform's shift-long pool, `PlatformRegion.offerPool`, as a `PooledOffer`: the offer
+  with its `targets` emptied, `leftAt`, the leave `via` (`FRAME`/`REPLACED`/`SUPERSEDED_BY_DIRECT`/
+  `EXPIRY_TIMER`), its session, and its candidate stores — the `StoreKeys.normalizedChain` of every order's store
+  for a STANDALONE card, only the stores new to the live job for an ADD_ON card (`AddOnStops.newStores`, all of
+  them with no live job). No event is logged at that leave.
+
+The outcome is a stepper decision (`OfferOutcomeDecision` on the step's `RegionDecisions`); `OfferEffects` emits it
+first in the offer diff, keyed `log:<type>:<instanceKey>`. `PendingOffer.instanceKey` (`"<platform wire>:
+<presentedAt>"`, minted with the presentation, kept by every enrich) is the one identity every pool entry, expiry
+timer payload (`OfferExpiry.instanceId`), outcome payload (`offerInstanceId`) and effect key reads, so an instance
+logs one outcome however its leave, link or shift end replays. The job-graph dedups in `JobAcceptFlow` stay on
+`offerHash` (a re-presented same offer must not split a live job). The chat line fires on a link or a confirmed
+decline; a pooled offer posts none.
+
+**The work edge.** `poolWorkEdge` runs in `updateJobLifecycle` after the accept-survivor consumption, on a task
+frame that names a store (`TaskFields.storeName`, not blank, not `Unknown`). The candidates are the pool entries
+whose store set holds that store's chain key; nothing orders them (no recency, no scope preference):
+
+- **fresh work** — no live job, or the live job is physically complete (`startsNewJob`, the #596 T2 predicate,
+  extracted from `consumeAcceptIntoJob` with `closeCompletedJob`): one candidate LINKS — removed from the pool,
+  `acceptedAt = min(leftAt, edge)`, consumed through `acceptInputsFromPending` + `consumeAcceptIntoJob` exactly as a
+  click accept, `OFFER_ACCEPTED` with `decidedAt = acceptedAt` and `linkedJobId`; two or more TIE — the finished job
+  closes, a bare job mints, and every candidate records the job in `ambiguousJobIds`; nothing links (WARN);
+- **a stale job (OQ2)** — a live, unfinished job and exactly one candidate that is STANDALONE, presented after the
+  job started over a non-task flow, at a store the job does not own → links through the slice-1 stale close;
+- anything else → null (today's absorption).
+
+`lastAcceptResolvedAt` is stamped at a link before any T2 close, so the close-time re-price ask keeps refusing an
+accept resolved over the receipt. `possibleWorkSeq` (#1598) is unchanged and is already the right counter: it bumps
+on every fresh presentation, which precedes every pool entry in processing order, the late-frame guard compares it
+by processing order, and a new-work edge needs no bump because any new job clears the closed-job marker and a live
+job refuses every re-price.
+
+**The decline sheet demotes, it does not decide (council round 6).** At the leave, an entry is DEMOTED when its
+LAST confirm-sheet sighting (`declineSheetSeenAt`, from a screen whose rule declares `state.offerSurface:
+decline_confirm`) is at most `GraceConfig.declineSheetWindowMs` (15 s) before the leave, its countdown was parsed
+(`countdownExpiresAt`) with more than `countdownExpirySlackMs` (3 s) left, the leave is not the expiry timer, and
+no card frame of the same instance arrived after that sighting (`PendingOffer.lastCardFrameAt`, stamped on the
+fresh push and every enrich: the card coming back is the dasher cancelling the sheet). A demoted entry stays in the
+pool, is never a candidate, and ends the shift `OFFER_DECLINED` with `declineEvidence = SHEET_WINDOW`. **Tie
+guard:** a sole candidate at a store shared with a demoted entry that left at most `demotionTieGuardMs` (60 s)
+before the edge is a TIE over both, never a link. The 2026-11-11 desk measurement (402
+DoorDash presentations, 09-20 → 11-05) found the card back after the sheet in 0 of the 261 sighted offers without
+accept evidence and in 9 of the 10 sheet-then-accepts, all of which reached the pickup within seconds; the
+retired #1104 claim that "the card re-renders after every decline" was wrong. Residuals: a sheet-then-accept with
+no card re-render loses its link (10-04, 1 of 131 accepts), and becomes a wrong link only when its work edge comes
+more than 60 s later with a same-store rival in the pool.
+
+**The store-less hold (council round 6).** A store-less task frame with no live job and a non-demoted pool entry
+does not mint: it is recorded as `PlatformRegion.heldWorkFrame` (timestamp, flow, the acted flow before it,
+rule id, parsed fields) for at most `storelessHoldMs` (10 s of `obs.timestamp`) or `storelessHoldFrames` (3 task
+frames). The first store-bearing task frame inside the hold runs the work edge from the held frame (one job, one
+task, both started at the held frame). At either cap, on any non-task frame, or when the edge finds no candidate,
+the held frame is replayed into today's bare mint (`mintBareJob` + `updateTaskLifecycle` on the held frame), and
+the frame that ended the hold steps on that; a link instead replays the held frame's task lifecycle on the linked
+job, so its arrival, customer, deadline and shopping fields stay. Before that replay the held task takes the
+releasing frame's store (same phase only; blank and `Unknown` count as no store, the one predicate the hold's
+entry uses), so a releasing navigation frame updates the same pickup instead of reading as a stacked-pickup
+transition. A flow-less observation (a push, a flow-less click) neither counts toward the frame cap nor ends a
+hold; only the time cap applies to it. A non-task acted flow (Offline, a dash summary) releases a standing hold
+into the bare mint at the top of `updateLifecycle` (`releaseInterruptedHold`), before those flows' early returns.
+A dropoff released from a hold announces its leg (`DELIVERY_NAV_STARTED`) with the task's preserved start time.
+The time cap is checked on every observation
+before the stepper's early returns (`lapseHeldWork`), and the hold arms its own `STORELESS_HOLD` wake (a
+`WakeBearing` installed by `heldWorkWindow`, a region timer), so it ends within the cap even when no later frame
+arrives. Offline-to-Online healing mints nothing while offers wait in the pool: the work edge decides. No adoption,
+no placeholder husk. Recovery replays the hold from the journal; `recoveryHygiene` drops one past its deadline and
+`pendingDeadlineTimers` re-arms a kept one; `endSession` clears it. A link keeps the entry's earlier
+`ambiguousJobIds`, and the tie guard measures to the edge's own observation.
+
+**The shift end.** `endSession` first runs `flushAtShiftEnd` at its committing frame: a still-presented card gets
+`OFFER_DECLINED` (committed decline), `OFFER_ACCEPTED` (latched) or `OFFER_NOT_TAKEN` ("On screen at shift end");
+every pool entry gets `OFFER_NOT_TAKEN` (`decidedAt = leftAt`, its own session, its `ambiguousJobIds`) or, demoted,
+the inferred `OFFER_DECLINED`; the pool empties. INFO summary line per shift.
+
+**Recovery.** The pool survives a snapshot untouched (each entry's demotion was decided at its leave; the
+presented offer's sighting is still scrubbed). `AppState.stateSchema` names the reducer generation; a restore whose
+snapshot differs from `AppState.STATE_SCHEMA` starts fresh at `max(snapshot cv, latest journal cv)` and replays no
+tail, so no old-reducer observation runs through the pool; with no usable snapshot over a non-empty journal it starts
+fresh above the journal's latest version and checkpoints that too. Cost: the step that installs S2 drops a live shift's
+in-memory state; install between shifts.
+
+**History.** #1104/#1114/#1118 inferred the outcome at the leave: a click-less accept from the destination flow
+(`destinationImpliesAccept`, a phased task screen over a non-task `returnFlow`), a decline from the sheet window.
+About 40 % of real accepts left through an idle frame, a hybrid frame or the expiry timer, logged `OFFER_TIMEOUT`,
+and minted a job with no offer (no receipt proof since #1598). S2 retires both inferences and `OFFER_TIMEOUT`
+(history only). Stated costs: a store-less first work frame past the hold mints bare; Uber work never links (no
+store on its task screen; its click path is unchanged); same-store ties link nothing for the shift; a pooled add-on
+whose work appears inside a live job waits for S3 (#1600); a pooled offer has no outcome on the HUD log or the
+running shift page until it links or the shift ends (the HUD's received count adds the pool, `liveOffersReceived`);
+an offer we never saw can link an older same-store pooled offer (the INFO link line's "left Ns before" is the desk
+check).
 
 **Accept survives the offer-presentation edge** as an `acceptedAt`-marked accepted-pending-
 consumption entry (this REPLACED the #526 accept stash + `AcceptStash` + `offerBelongsToRegion`,
 all deleted): `OFFER_ACCEPTED` fires at the edge, and the survivor is minted by the task edge
 (`acceptInputsFromPending`) with full economics + pre-created placeholders even across the
 `waiting_for_offer` teardown race — cleared on supersession/revocation/session-end/accept-grace
-lapse. The accept grace is **per-platform** (`GraceConfig.acceptGraceMs` — DoorDash 120s / Uber
-600s, #762 D2), which also added the **phase-less `task:active` flow** (`Flow.TaskActive`, a coarse
-platform's in-job token — a task flow for accept-consumption/mode-Online, but `toTaskPhase()`→null
-so it is inert to task lineage; leaving offer-presentation to it infers a click-less accept only
-from a non-task `returnFlow`, the ambient-screen guard). A per-offer `OFFER_EXPIRY` timer
-(hash-carrying payload, EffectMap-armed, no-ops on an accept-latched offer) resolves an overlay
-offer that vanishes without a frame.
+lapse. It never enters the pool. The accept grace is **per-platform** (`GraceConfig.acceptGraceMs` — DoorDash
+120s / Uber 600s, #762 D2), which also added the **phase-less `task:active` flow** (`Flow.TaskActive`, a coarse
+platform's in-job token — a task flow for accept-consumption/mode-Online, but `toTaskPhase()`→null so it is inert
+to task lineage). A per-offer `OFFER_EXPIRY` timer (instance-carrying payload, EffectMap-armed, no-ops on an
+accept-latched offer) takes an overlay offer that vanishes without a frame into the pool `via EXPIRY_TIMER`.
 
 **Pickup arrival anchors (#1141).** `task:pickup:arrived` is declared by the screens whose own chrome
 states the arrival — `pickup_arrival` and, since #1141, the first branch of `pickup_wait_survey` (the

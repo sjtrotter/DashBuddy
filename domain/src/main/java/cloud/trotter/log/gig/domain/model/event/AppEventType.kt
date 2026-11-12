@@ -12,7 +12,8 @@ enum class AppEventType {
     OFFER_RECEIVED,
     OFFER_ACCEPTED,
     OFFER_DECLINED,
-    OFFER_TIMEOUT, // Timeout
+    OFFER_TIMEOUT, // Timeout — history only: nothing emits it after #1119 S2
+    OFFER_NOT_TAKEN, // #1119 S2: an offer still in the pool (or on screen) at shift end — neither linked to work nor declined
 
     // --- Pickup Phase ---
     PICKUP_NAV_STARTED,

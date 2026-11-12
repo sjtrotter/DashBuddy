@@ -84,7 +84,8 @@ object AppEventCodec {
 
             AppEventType.OFFER_ACCEPTED,
             AppEventType.OFFER_DECLINED,
-            AppEventType.OFFER_TIMEOUT ->
+            AppEventType.OFFER_TIMEOUT,
+            AppEventType.OFFER_NOT_TAKEN ->
                 json.decodeFromString<OfferPayload>(payloadJson)
 
             AppEventType.PICKUP_NAV_STARTED,

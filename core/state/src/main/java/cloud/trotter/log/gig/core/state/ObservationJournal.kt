@@ -108,6 +108,9 @@ class ObservationJournal @Inject constructor(
 
     suspend fun pruneOlderThan(cutoff: Long) = observationDao.pruneOlderThan(cutoff)
 
+    /** #1119 S2: the newest journalled correlation version, null for an empty journal (the fail-to-fresh base). */
+    suspend fun latestVersion(): Long? = observationDao.latest()?.correlationVersion
+
     // ── Codec ───────────────────────────────────────────────────────────
 
     internal fun Observation.toEntity(state: AppState): ObservationEntity {

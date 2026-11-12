@@ -55,6 +55,7 @@ A `?` suffix on a status (`status: must-watch?`, `status: superseded?`) marks a 
 - [🆕 NEW — S2 overall (#1333)](checklist/open/1333-s2-overall.md)
 - [🆕 NEW — unassigning the LAST order of a job (DoorDash returns to "Finding offers") closes…](checklist/open/1312-unassigning-the-last-order-of-a-job-doordash.md)
 - [🆕 NEW — accepting an ORDINARY offer card while the app still shows a job open closes that…](checklist/open/1119-accepting-an-ordinary-offer-card-while-the-app.md)
+- [🆕 NEW — the offer pool links a missed accept to its job (#1119 S2)](checklist/open/1119-the-offer-pool-links-a-missed-accept.md)
 - [🆕 NEW — the HUD earnings reads "—" until the first parsed total of the dash, never…](checklist/open/1041-the-hud-earnings-reads-until-the-first-parsed.md)
 
 Five items the dev confirmed on 2026-10-07. Each full item appears once, with its original counter. #1149 reached 2/2 on the 10-26 desk pass and moved to §5, so four remain.

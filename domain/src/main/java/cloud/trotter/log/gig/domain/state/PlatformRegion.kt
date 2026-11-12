@@ -303,6 +303,17 @@ data class PlatformRegion(
      * it. Not dropped by recovery: the journal replay re-derives it and the evidence effect keys dedup.
      */
     val openReceiptEvidence: OpenReceiptEvidence? = null,
+    /**
+     * #1119 S2: the shift-long offer pool. An offer that leaves presentation with no committed decline and no accept
+     * click enters it in `OfferLifecycle`; it leaves by a link to work at its store or at `endSession`. Survives
+     * recovery. Default-empty so a snapshot decodes, though a pre-S2 snapshot is never restored (`AppState.stateSchema`).
+     */
+    val offerPool: List<PooledOffer> = emptyList(),
+    /**
+     * #1119 S2: a store-less first work frame held for the pool (council round 6, [HeldWorkFrame]). Step-local:
+     * replayed from the journal, dropped by recovery hygiene once past its cap, cleared at `endSession`.
+     */
+    val heldWorkFrame: HeldWorkFrame? = null,
 ) {
     /**
      * This platform's current PRESENTED offer — the accepted-pending-consumption survivors

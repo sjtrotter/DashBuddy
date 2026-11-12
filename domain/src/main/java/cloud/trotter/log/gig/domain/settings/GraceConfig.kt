@@ -78,13 +78,13 @@ data class GraceConfig(
      */
     val receiptExpandGraceMs: Long = RECEIPT_EXPAND_GRACE_MS,
     /**
-     * #1104: how long after the platform's confirm-decline sheet was last observed an offer's exit
-     * from presentation (without an accept) still counts as a DECLINE rather than a timeout. The
-     * sheet is transition evidence, not a commit — the dasher may cancel back to the card and let the
-     * offer expire — and the card ALWAYS re-renders for one frame after a real decline too (7/7
-     * fielded declines on 8.97.8: sheet → card 1.6–2.0 s → idle 2–9 s after the sheet), so "card seen
-     * after the sheet" cannot mean "cancelled". The window is what separates the two: a real decline
-     * leaves within seconds; a cancelled sheet leaves when the countdown ends. Per-platform data.
+     * #1104, #1119 S2: how long after the platform's confirm-decline sheet was last observed an offer's exit from
+     * presentation (without an accept) still DEMOTES the pooled offer: it stays recorded but can never be linked, and
+     * it ends the shift as an inferred decline. The sheet is transition evidence, not a commit: the dasher may cancel
+     * back to the card. A card frame after the last sighting is that cancel (the 09-20 → 11-05 desk measurement saw
+     * no card frame after the sheet on 261 of 261 sighted offers that were not accepted), so it demotes nothing. The
+     * window separates a real decline (the exit within seconds) from a cancelled sheet whose offer later expires.
+     * Per-platform data.
      */
     val declineSheetWindowMs: Long = DECLINE_SHEET_WINDOW_MS,
     /**
@@ -93,6 +93,19 @@ data class GraceConfig(
      * the last countdown read and the actual zero.
      */
     val countdownExpirySlackMs: Long = COUNTDOWN_EXPIRY_SLACK_MS,
+    /**
+     * #1119 S2 (council round 6): a work edge whose single pooled candidate shares a store with a DEMOTED offer that
+     * left at most this long before is a tie, not a link. Every measured sheet-then-accept reached its pickup within
+     * seconds, so a demoted offer that was really accepted is caught inside this window.
+     */
+    val demotionTieGuardMs: Long = DEMOTION_TIE_GUARD_MS,
+    /**
+     * #1119 S2 (council round 6): how long a store-less first work frame is held for the frame that names its store,
+     * in `obs.timestamp`, before it mints a bare job as before. [storelessHoldFrames] caps it by frames too.
+     */
+    val storelessHoldMs: Long = STORELESS_HOLD_MS,
+    /** #1119 S2: the most task-flow frames a store-less hold spans, the held frame included. */
+    val storelessHoldFrames: Int = STORELESS_HOLD_FRAMES,
 ) {
     companion object {
         const val JOB_ABANDON_GRACE_MS = 5_000L
@@ -116,6 +129,13 @@ data class GraceConfig(
 
         /** #1104: 3 s — the offer-card frame debounce is ~3 s, so a countdown read can lag by that much. */
         const val COUNTDOWN_EXPIRY_SLACK_MS = 3_000L
+
+        /** #1119 S2: 60 s — all 10 measured sheet-then-accepts reached the pickup within seconds. */
+        const val DEMOTION_TIE_GUARD_MS = 60_000L
+
+        /** #1119 S2: 10 s or [STORELESS_HOLD_FRAMES] task frames, whichever comes first. */
+        const val STORELESS_HOLD_MS = 10_000L
+        const val STORELESS_HOLD_FRAMES = 3
 
         /**
          * Default accept-consumption grace (DoorDash and any platform without an override): a fine-

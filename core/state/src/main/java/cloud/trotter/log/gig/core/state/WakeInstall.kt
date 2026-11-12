@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.core.state
 
+import cloud.trotter.log.gig.domain.state.HeldWorkFrame
 import cloud.trotter.log.gig.domain.state.PendingDestructive
 import cloud.trotter.log.gig.domain.state.PendingModeResume
 import cloud.trotter.log.gig.domain.state.PendingSessionPay
@@ -65,6 +66,10 @@ internal fun PlatformRegion.modeResumeWindow(
 internal fun PlatformRegion.sessionPayWindow(
     build: (WakeId) -> PendingSessionPay,
 ): Pair<PlatformRegion, PendingSessionPay> =
+    install(prev = null, same = { _, _ -> false }, build = build)
+
+/** #1119 S2: a store-less hold's cap window; every new hold mints its own wake. */
+internal fun PlatformRegion.heldWorkWindow(build: (WakeId) -> HeldWorkFrame): Pair<PlatformRegion, HeldWorkFrame> =
     install(prev = null, same = { _, _ -> false }, build = build)
 
 internal fun PlatformRegion.pauseSafetyWindow(deadline: Long): Pair<PlatformRegion, PendingWake> =

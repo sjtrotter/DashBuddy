@@ -121,7 +121,7 @@ class PlatformRegionStepper @Inject constructor() {
                             // #1073 round 13: the PostTask-exit latch is a pure flow-edge fact about the
                             // frame, so it is stamped before any of stepCore's early returns can skip it.
                             stampPostTaskExit(
-                                landArrivalEstimate(stepOffers(prev, obs, policy), obs),
+                                landArrivalEstimate(stepOffers(sink, prev, obs, policy), obs),
                                 prevFlow, obs,
                             ),
                             prevFlow, nextFlow, obs, policy,
@@ -321,6 +321,7 @@ class PlatformRegionStepper @Inject constructor() {
         }
 
         current = SessionPaySettleGate.lapse(current, prevFlow, nextFlow, obs)
+        current = lapseHeldWork(sink, current, obs, policy) // #1119 S2: the hold's cap, before any early return
 
         // Handle timeout-driven transitions
         if (obs is Observation.Timeout) return handleTimeout(current, obs, policy)
@@ -582,7 +583,8 @@ class PlatformRegionStepper @Inject constructor() {
 
         // If we're healing into an active task flow but have no active job/task,
         // synthesize them with recovered=true
-        if (flow.isTaskFlow() && region.activeJob == null) {
+        // #1119 S2: with offers waiting in the pool, the job lifecycle's work edge decides (link, tie, hold, bare).
+        if (flow.isTaskFlow() && region.activeJob == null && region.offerPool.isEmpty()) {
             val taskPhase = flow.toTaskPhase() ?: return region
             val parsed = flowObs.parsed
             val storeName = (parsed as? ParsedFields.TaskFields)?.storeName
@@ -732,6 +734,7 @@ class PlatformRegionStepper @Inject constructor() {
         // #438 item 5 (D3): the lifecycle edges below diff THIS region's own acted flow, not the
         // shared global R0 flow — see [actedFlowEdge], the one owner of that derivation.
         val (prev, next) = actedFlowEdge(region, prevFlow, obs)
+        r = releaseInterruptedHold(sink, r, next, policy) // #1119 S2: before the summary and Offline returns
 
         // Authoritative session end: the dash-summary screen. It no longer ends
         // the session on the spot (#431) — one misrecognized frame used to split
@@ -841,10 +844,12 @@ class PlatformRegionStepper @Inject constructor() {
         // (Ratings stamping moved to stepCore, ahead of this function's early returns — #967.)
 
         // Job lifecycle
+        val held = r.heldWorkFrame // #1119 S2: a store-less hold this frame may release into a link
         r = updateJobLifecycle(sink, r, prev, next, obs, policy)
 
         // Task lifecycle
         r = updateTaskLifecycle(sink, r, prev, next, obs, policy)
+        r = startLinkedWorkAtHeldFrame(held, r)
 
         // Idle anchor: track when we started waiting for offers
         r = when {
@@ -1014,20 +1019,12 @@ class PlatformRegionStepper @Inject constructor() {
             current = current.copy(pendingOffers = current.pendingOffers.filterNot { it === accepted })
         }
 
-        // Job start: task flow without active job (recovery, mid-session restart, or an accept that
-        // was never latched — genuine bare fallback with no economics).
-        if (nextFlowVal.isTaskFlow() && current.activeJob == null) {
-            val parsed = obs.parsed as? ParsedFields.TaskFields
-            return current.copy(
-                activeJob = Job(
-                    jobId = mintId("job", current, obs),
-                    offerStoreHint = listOfNotNull(parsed?.storeName),
-                    parentOfferHash = null,
-                    startedAt = obs.timestamp,
-                ),
-                mintCounter = current.mintCounter + 1,
-            )
-        }
+        // #1119 S2: the offer pool's work edge (a link by store, a tie, the store-less hold) — OfferPool.kt.
+        poolWorkEdge(sink, current, prevFlowVal, nextFlowVal, obs, policy)?.let { return it }
+
+        // Job start: task flow without active job (recovery, mid-session restart, an accept never
+        // seen, or no pooled offer at this store — genuine bare fallback with no economics).
+        if (nextFlowVal.isTaskFlow() && current.activeJob == null) return mintBareJob(current, obs)
 
         // #1312: the marked NEXT flow-bearing frame arms a cancellable whole-job abandon.
         // Bare Idle can be navigation; recognize-only frames leave R0 unchanged.
@@ -1139,10 +1136,12 @@ class PlatformRegionStepper @Inject constructor() {
      */
     private fun endSession(
         sink: DecisionSink,
-        region: PlatformRegion,
+        live: PlatformRegion,
         timestamp: Long,
         observedAt: Long = timestamp,
     ): PlatformRegion {
+        // #1119 S2: every offer still without an outcome gets one; the pool and any hold go with the shift.
+        val region = flushAtShiftEnd(sink, live, observedAt)
         // #1033 round 10: a terminal session end tears down the job WITHOUT going through
         // [completeActiveJob], so it bypassed the close-time re-price decision entirely — and then
         // cleared the cached receipt. The fielded shape: an offer overlay pops a collapsed receipt
