@@ -139,6 +139,9 @@ rejects the paired delta signature even before Accept/disclaimer/merchant inflat
 A `+$N.NN` whose immediately preceding sibling is a "Very busy" label is a boost badge, not an add-on delta (#1343):
 the `+$` arm of both rejects carries `not hasPrecedingSiblingText "Very busy"`, so a boosted TOTAL card parses its
 own pay and never the badge (`DoorDashBoostBadgeOfferTest`).
+A total card can show its pay as one node with a trailing plus, `$27.35+` above `incl. tips` (#1604, 8.106.9): branch
+1's pay anchor and both pay reads, and the drawer's total-pay give-up twin, take `^\$\d+(?:,\d{3})*\.\d{2}\+?$`, and
+`parseCurrency` already drops the plus. The leading-plus `+$N.NN` stays the add-on delta (`DoorDashTrailingPlusPayTest`).
 Branch 2 also parses `stopCount` from the delta route (optional, not a hash input, #1304).
 `quoteBasis: incremental` is a load-validated declaration, mirrored in census authoring.
 It requires `offerScope: add_on` in the same resolved parse block; a violation isolates the rule at compile time.
