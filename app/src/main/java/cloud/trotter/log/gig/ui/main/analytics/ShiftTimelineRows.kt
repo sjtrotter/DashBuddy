@@ -194,6 +194,7 @@ internal fun sourceText(source: PaySource): String = stringResource(
         PaySource.OFFER_AMOUNT_EST -> R.string.shift_page_source_offer_estimate
         PaySource.NO_PAY_FOUND -> R.string.shift_page_source_no_pay
         PaySource.YOU_ENTERED -> R.string.shift_page_source_you_entered
+        PaySource.MATCHED_BY_YOU -> R.string.shift_page_source_matched
     },
 )
 

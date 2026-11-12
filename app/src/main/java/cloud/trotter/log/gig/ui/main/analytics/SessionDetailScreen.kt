@@ -44,6 +44,8 @@ import cloud.trotter.log.gig.core.designsystem.theme.AppTheme
 import cloud.trotter.log.gig.domain.analytics.RecordsStatus
 import cloud.trotter.log.gig.domain.analytics.SessionDetail
 import cloud.trotter.log.gig.domain.analytics.checks.MoneyCheck
+import cloud.trotter.log.gig.domain.analytics.receipts.ReceiptMatchPlan
+import cloud.trotter.log.gig.domain.analytics.receipts.ReceiptStatus
 import cloud.trotter.log.gig.domain.analytics.timeline.JobCard
 import cloud.trotter.log.gig.domain.analytics.timeline.JobState
 import cloud.trotter.log.gig.domain.analytics.timeline.PassedOffer
@@ -96,6 +98,8 @@ fun SessionDetailScreen(
             onAddDeliveryForOffer = viewModel::addMissedDeliveryForOffer,
             onRemoveDelivery = viewModel::removeManualDelivery,
             onUndoMarkedUnassigned = viewModel::undoOfferUnassigned,
+            onConfirmReceiptMatch = viewModel::confirmReceiptMatch,
+            onUndoReceiptMatch = viewModel::undoReceiptMatch,
         ),
     )
 }
@@ -135,6 +139,10 @@ internal class ShiftPageActions(
     val onRemoveDelivery: (deliveryEventSequenceId: Long) -> Unit = {},
     /** Undoes "It was unassigned" for one offer. */
     val onUndoMarkedUnassigned: (offerEventSequenceId: Long) -> Unit = {},
+    /** #1599: Confirm on the receipt sheet, the plan exactly as it showed. */
+    val onConfirmReceiptMatch: (commandId: String, plan: ReceiptMatchPlan) -> Unit = { _, _ -> },
+    /** #1599: Undo match on the job sheet. */
+    val onUndoReceiptMatch: (matchCommandId: String) -> Unit = {},
 )
 
 /**
@@ -280,6 +288,7 @@ private fun ShiftPageBody(
 ) {
     var expanded by rememberSaveable(saver = expandedSaver) { mutableStateOf(emptySet()) }
     var sheetKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var receiptSheet by rememberSaveable { mutableStateOf<String?>(null) }
     var landed by rememberSaveable { mutableStateOf(false) }
     var pendingLanding by remember { mutableStateOf<RowLanding?>(null) }
     var highlightKey by remember { mutableStateOf<String?>(null) }
@@ -296,9 +305,20 @@ private fun ShiftPageBody(
     }
     val rows = pageItems(state, check, expanded, hits)
 
-    // A row link lands once, after the timeline has loaded: open its run and its sheet, then scroll to it.
-    LaunchedEffect(landingRow, state.timeline, shown) {
-        if (landed || landingRow == null || state.timeline.isEmpty() || !shown) return@LaunchedEffect
+    // A row link lands once, after the timeline has loaded: open its run and its sheet, then scroll to it. A receipt
+    // check's link (#1599) waits for its receipt instead, opens its sheet while the receipt is open, and scrolls to the
+    // checks.
+    LaunchedEffect(landingRow, state.timeline, shown, state.receipts) {
+        if (landed || landingRow == null || !shown) return@LaunchedEffect
+        if (landingRow.startsWith(MATCH_KEY_PREFIX)) {
+            val id = landingRow.removePrefix(MATCH_KEY_PREFIX)
+            val item = state.receipts.items.firstOrNull { it.receipt.evidenceId == id } ?: return@LaunchedEffect
+            landed = true
+            if (item.status == ReceiptStatus.OPEN) receiptSheet = id
+            pendingLanding = RowLanding(PageItem.Checks.key, null, null)
+            return@LaunchedEffect
+        }
+        if (state.timeline.isEmpty()) return@LaunchedEffect
         landed = true
         val landing = RowLanding.of(state.timeline, landingRow) ?: return@LaunchedEffect
         landing.expandRun?.let { expanded = expanded + it }
@@ -342,7 +362,7 @@ private fun ShiftPageBody(
                         }
                     }
                     PageItem.Check -> check?.let { MoneyCheckBlock(it, detail.session.platform.displayName) }
-                    PageItem.Checks -> ShiftChecksBlock(state.checks)
+                    PageItem.Checks -> ShiftChecksBlock(state.checks, onMatch = { receiptSheet = it })
                     PageItem.Corrections -> CorrectionButtons(
                         ended = detail.session.endedAt != null,
                         onAddMissed = { dialogs.showAdd = true },
@@ -403,6 +423,28 @@ private fun ShiftPageBody(
             // The correction opens over the sheet; the sheet re-reads the delivery once the fix folds.
             onFix = { seq -> dialogs.adjustTarget = detail.deliveries.firstOrNull { it.eventSequenceId == seq } },
             onDismiss = { sheetKey = null },
+            undoMatchFor = { seq -> state.receipts.undoByDelivery[seq] },
+            onUndoMatch = actions.onUndoReceiptMatch,
+        )
+    }
+    // One sheet at a time; a receipt that leaves OPEN (matched, or an undo later) never re-opens its sheet by itself.
+    // The effect reads the live selection, so the landing that set it in the same frame is not undone.
+    val openReceipt = receiptSheet?.let { id -> state.receipts.open.firstOrNull { it.receipt.evidenceId == id } }
+    LaunchedEffect(receiptSheet, state.receipts) {
+        val id = receiptSheet ?: return@LaunchedEffect
+        if (state.receipts.open.none { it.receipt.evidenceId == id }) receiptSheet = null
+    }
+    if (openReceipt != null && sheetCard == null) {
+        ReceiptMatchSheet(
+            receipt = openReceipt.receipt,
+            receipts = state.receipts,
+            appTotal = check?.appTotal,
+            appName = detail.session.platform.displayName,
+            onConfirm = { cmd, plan ->
+                actions.onConfirmReceiptMatch(cmd, plan)
+                receiptSheet = null
+            },
+            onDismiss = { receiptSheet = null },
         )
     }
     ShiftPageDialogs(detail, dialogs, actions)

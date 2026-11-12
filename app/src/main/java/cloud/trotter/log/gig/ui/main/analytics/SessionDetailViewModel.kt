@@ -5,9 +5,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.log.gig.core.data.analytics.AnalyticsRepository
 import cloud.trotter.log.gig.core.data.analytics.CorrectionRepository
+import cloud.trotter.log.gig.core.data.analytics.ReceiptMatchRepository
 import cloud.trotter.log.gig.core.data.analytics.RecordsStatusRepository
 import cloud.trotter.log.gig.core.data.analytics.ShiftTimelineRepository
 import cloud.trotter.log.gig.domain.analytics.checks.ShiftChecks
+import cloud.trotter.log.gig.domain.analytics.receipts.ReceiptMatchPlan
+import cloud.trotter.log.gig.domain.analytics.receipts.ShiftReceipts
 import cloud.trotter.log.gig.ui.main.navigation.Screen
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.Clock
@@ -48,6 +51,7 @@ class SessionDetailViewModel @Inject constructor(
     private val shiftTimelineRepository: ShiftTimelineRepository,
     private val recordsStatusRepository: RecordsStatusRepository,
     private val correctionRepository: CorrectionRepository,
+    private val receiptMatchRepository: ReceiptMatchRepository,
     private val clock: Clock,
 ) : ViewModel() {
 
@@ -82,11 +86,12 @@ class SessionDetailViewModel @Inject constructor(
         val timeline = detail.map { it?.session?.endedAt == null }
             .distinctUntilChanged()
             .flatMapLatest { running -> shiftTimelineRepository.read(sessionId, running) }
-        return combine(detail, timeline, recordsStatusRepository.status) { d, t, records ->
-            val checks = d?.let { ShiftChecks.of(it, t.items) }.orEmpty()
+        return combine(detail, timeline, recordsStatusRepository.status, receiptMatchRepository.read(sessionId)) { d, t, records, r ->
+            val receipts = d?.let { ShiftReceipts.of(r.receipts, it.deliveries, r.active) } ?: ShiftReceipts.EMPTY
+            val checks = d?.let { ShiftChecks.of(it, t.items, receipts) }.orEmpty()
             SessionDetailUiState(
                 detail = d, timeline = t.items, loading = false, records = records, checks = checks,
-                offers = t.offers, deliveries = t.deliveries,
+                offers = t.offers, deliveries = t.deliveries, receipts = receipts,
             )
         }
     }
@@ -277,6 +282,34 @@ class SessionDetailViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 Timber.tag(TAG).w("correctShiftMiles rejected for session %s", sessionId)
+            }
+        }
+    }
+
+    /** #1599: the dasher's Confirm on the receipt sheet: the plan exactly as the sheet showed it. */
+    fun confirmReceiptMatch(commandId: String, plan: ReceiptMatchPlan) {
+        viewModelScope.launch {
+            try {
+                correctionRepository.matchReceipt(sessionId, commandId, plan)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // P7: ids only.
+                Timber.tag(TAG).w(e, "confirmReceiptMatch rejected for receipt %s", plan.evidenceId)
+            }
+        }
+    }
+
+    /** #1599: Undo match on the job sheet. */
+    fun undoReceiptMatch(matchCommandId: String) {
+        viewModelScope.launch {
+            try {
+                correctionRepository.undoReceiptMatch(sessionId, matchCommandId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // P7: ids only.
+                Timber.tag(TAG).w(e, "undoReceiptMatch rejected for match %s", matchCommandId)
             }
         }
     }

@@ -30,11 +30,19 @@ private const val SEPARATOR = " · "
 /**
  * A job's story: the stores and day as the title, one line per recorded milestone with its time on the right
  * (a milestone not recorded is absent), and one "Fix this delivery" under each delivery, opening that delivery's
- * correction. No estimates and no offered-against-paid difference. Back closes the sheet before the page.
+ * correction; under a delivery a receipt match still covers (#1599), "Undo match" ([undoMatchFor] names the match).
+ * No estimates and no offered-against-paid difference. Back closes the sheet before the page.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun ShiftJobSheet(card: JobCard, day: String, onFix: (deliveryEventSequenceId: Long) -> Unit, onDismiss: () -> Unit) {
+internal fun ShiftJobSheet(
+    card: JobCard,
+    day: String,
+    onFix: (deliveryEventSequenceId: Long) -> Unit,
+    onDismiss: () -> Unit,
+    undoMatchFor: (deliveryEventSequenceId: Long) -> String? = { null },
+    onUndoMatch: (matchCommandId: String) -> Unit = {},
+) {
     val c = AppTheme.colors
     val manyStores = card.milestones.mapNotNull { it.store }.distinct().size > 1
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
@@ -50,6 +58,11 @@ internal fun ShiftJobSheet(card: JobCard, day: String, onFix: (deliveryEventSequ
                     if (milestone.kind == MilestoneKind.DELIVERED && delivery != null) {
                         TextButton(onClick = { onFix(delivery.deliveryEventSequenceId) }) {
                             Text(stringResource(R.string.shift_page_fix_delivery))
+                        }
+                        undoMatchFor(delivery.deliveryEventSequenceId)?.let { command ->
+                            TextButton(onClick = { onUndoMatch(command) }) {
+                                Text(stringResource(R.string.shift_page_undo_match))
+                            }
                         }
                     }
                 }

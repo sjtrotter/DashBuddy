@@ -7,6 +7,7 @@ import cloud.trotter.log.gig.domain.analytics.ShiftEarnings
 import cloud.trotter.log.gig.domain.analytics.checks.ShiftCheck
 import cloud.trotter.log.gig.domain.analytics.checks.ShiftChecks
 import cloud.trotter.log.gig.domain.analytics.checks.effectiveReport
+import cloud.trotter.log.gig.domain.analytics.receipts.ShiftReceipts
 import cloud.trotter.log.gig.domain.analytics.timeline.JobCard
 import cloud.trotter.log.gig.domain.analytics.timeline.PassedRun
 import cloud.trotter.log.gig.domain.analytics.timeline.TimelineDelivery
@@ -32,6 +33,8 @@ data class SessionDetailUiState(
     val offers: List<TimelineOffer> = emptyList(),
     /** The deliveries [timeline] was folded from: the store search reads their names. */
     val deliveries: List<TimelineDelivery> = emptyList(),
+    /** The shift's saved receipts and matches (#1599); the receipt sheet and the Undo match read it. */
+    val receipts: ShiftReceipts = ShiftReceipts.EMPTY,
 )
 
 /** True when the page may show the shift's figures, timeline and corrections. */
@@ -108,3 +111,8 @@ internal fun offerRowKey(eventSequenceId: Long): String = "$OFFER_KEY_PREFIX$eve
 
 /** A link to a job's card by its job id, whatever the card is keyed by (Recap's "more accepts" check, #1515). */
 internal fun jobRowKey(jobId: String): String = "job:$jobId"
+
+internal const val MATCH_KEY_PREFIX = "match:"
+
+/** The `row` link that opens the receipt sheet for [evidenceId] (#1599, a receipt check's landing). */
+internal fun receiptRowKey(evidenceId: String) = "$MATCH_KEY_PREFIX$evidenceId"

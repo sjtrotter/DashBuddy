@@ -4,10 +4,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import cloud.trotter.log.gig.R
+import cloud.trotter.log.gig.domain.format.formatClockTime
 import cloud.trotter.log.gig.ui.main.analytics.ShiftPageActions
 import cloud.trotter.log.gig.ui.main.analytics.ShiftPageContent
 import cloud.trotter.log.gig.ui.main.analytics.ShiftPageFixtures
 import cloud.trotter.log.gig.ui.main.analytics.SessionDetailUiState
+import cloud.trotter.log.gig.ui.main.analytics.receiptRowKey
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import org.junit.After
@@ -25,7 +27,8 @@ import java.util.TimeZone
 /**
  * The shift page for PR CI's screenshots (#1463's procedure, [renderShot]): a stack and an add-on, the 47-offer
  * shape collapsed and with one run open, a job's sheet, and an accepted offer with no delivery with its "What
- * happened to this offer?" sheet, at 100 % and 200 % text, light and dark.
+ * happened to this offer?" sheet, a saved receipt's check line and its "Which deliveries did this receipt pay for?"
+ * sheet (#1599), at 100 % and 200 % text, light and dark.
  */
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = RobolectricDeviceQualifiers.Pixel7)
@@ -95,6 +98,22 @@ class ShiftPageScreenshotsTest(private val theme: String) {
     @Test @Config(fontScale = 2f)
     fun orphanSheetFont200() =
         page("shift/orphan-sheet-font-200", orphan, row = ShiftPageFixtures.ORPHAN_KEY, window = true, expect = question)
+
+    private val receipts get() = ShiftPageFixtures.receiptShift()
+    private val receiptLine get() =
+        context.getString(R.string.shift_check_receipt_format, "$20.50", formatClockTime(ShiftPageFixtures.receiptSeenAt))
+    private val receiptRow get() = receiptRowKey(ShiftPageFixtures.RECEIPT_EVIDENCE)
+
+    /** #1599: the receipt's check line with its Match button, under the money check. */
+    @Test fun receiptCheck() = page("shift/receipt-check", receipts, expect = receiptLine)
+
+    @Test fun receiptSheet() = page("shift/receipt-sheet", receipts, row = receiptRow, window = true,
+        expect = context.getString(R.string.receipt_match_title))
+
+    /** At 200 % the list scrolls and the buttons stay on screen. */
+    @Test @Config(fontScale = 2f)
+    fun receiptSheetFont200() = page("shift/receipt-sheet-font-200", receipts, row = receiptRow, window = true,
+        expect = context.getString(R.string.receipt_match_confirm))
 
     private fun page(path: String, state: SessionDetailUiState, expect: String, row: String? = null, window: Boolean = false) =
         compose.renderShot(theme, path, window, assertion = {
