@@ -42,6 +42,8 @@ internal class ReceiptMatchApply(
         val receipt = receiptDao.receipt(fold.evidenceId) ?: return refuse("receipt not found")
         if (receipt.sessionId != fold.sessionId) return refuse("receipt of another shift")
         if (receipt.scope != ReceiptScope.UNPROVEN.name) return refuse("receipt is proven")
+        // Backstop: the projector writes receipt revisions in log order, so a later revision is never visible here.
+        if (receipt.lastEventSequenceId > fold.sequenceId) return refuse("receipt revised after the match")
         if (receipt.totalCents != fold.receiptCents) return refuse("receipt total changed")
         val active = matchDao.activeRowsInSession(fold.sessionId).map { it.toActive() }
         if (active.any { it.evidenceId == fold.evidenceId }) return refuse("receipt already matched")

@@ -832,7 +832,10 @@ summing to the receipt to the cent. With no match in the log every row folds as 
   match applies whole or not at all, each refusal a counted skip with a WARN of ids: the command id is new (a double
   tap); the receipt exists, is of this shift, is `UNPROVEN` and still records `receiptCents`; no active match names
   it; and every covered delivery is among the shift's rows sequenced before the match (the #1517 batch-boundary rule)
-  and open (`ReceiptMatch.selectable`). The check is structural, never by amount: the payload's prior amounts are a
+  and open (`ReceiptMatch.selectable`). The projector writes each `receipt_records` revision in log order among the
+  corrections, so the match reads the receipt as of its own log position in one batch, many or a rebuild; a revision
+  logged after the match only updates the saved receipt (a `lastEventSequenceId` past the match is refused as a
+  backstop that never fires). The check is structural, never by amount: the payload's prior amounts are a
   record, so a later projector change that re-prices estimates cannot drop the dasher's statement on refold. The
   apply derives the cleared set itself (`ReceiptMatch.cleared`); a difference from the payload's is a WARN. Writes:
   `DeliveryCorrections.applyReceiptShare` on each covered row (basis `RECEIPT_MATCHED`, net against its own frozen cpm,

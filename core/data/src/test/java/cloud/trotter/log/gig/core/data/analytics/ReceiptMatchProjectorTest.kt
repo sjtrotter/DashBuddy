@@ -528,6 +528,39 @@ class ReceiptMatchProjectorTest {
         assertEquals(2, sameBatch.matchRowDump().size)
     }
 
+    @Test
+    fun `P13 a receipt revision logged after the match folds the same in its batch, a later one and a rebuild`() = runBlocking { // non-vacuous
+        suspend fun Harness.log(foldBeforeRevision: Boolean): Stack {
+            val s = stack()
+            match("S1", 7_000, "M1", s.evidence, 2050, covered(s.y1, 1025), covered(s.y2, 1025, 900, PayBasis.OFFER_PAY))
+            if (foldBeforeRevision) projector.catchUp()
+            // A second revision of the same record, with another total, logged after the match.
+            insert(
+                AppEventType.RECEIPT_OBSERVED, "S1", 7_100,
+                ReceiptObservedPayload(
+                    evidenceId = s.evidence, revision = 2, platform = Platform.DoorDash.wire, jobId = "J-S1",
+                    subjectTaskId = "Y2-S1", firstSeenAt = 1_400, observedAt = 7_100, totalPay = 21.00,
+                    isExpanded = false, scope = ReceiptScope.UNPROVEN,
+                ),
+            )
+            projector.catchUp()
+            return s
+        }
+        val sameBatch = harness()
+        val s = sameBatch.log(foldBeforeRevision = false)
+        val laterBatch = harness().apply { log(foldBeforeRevision = true) }
+        assertEquals(laterBatch.allRows(), sameBatch.allRows())
+        assertEquals(laterBatch.matchRowDump(), sameBatch.matchRowDump())
+        // The match applies at the total it was made against; the revision only updates the saved receipt.
+        assertEquals(listOf(10.25, 10.25), listOf(sameBatch.row(s.y1).realizedPay, sameBatch.row(s.y2).realizedPay))
+        assertEquals(setOf("M1"), sameBatch.active("S1").map { it.commandId }.toSet())
+        assertEquals(2100L, sameBatch.db.receiptDao().receipt(s.evidence)!!.totalCents)
+        laterBatch.db.analyticsDao().setWatermark(AnalyticsProjectionStateEntity(watermarkSequenceId = 99, projectorVersion = 1))
+        laterBatch.projector.catchUp()
+        assertEquals(sameBatch.allRows(), laterBatch.allRows())
+        assertEquals(sameBatch.matchRowDump(), laterBatch.matchRowDump())
+    }
+
     private companion object {
         fun evidence(subject: String, at: Long) = "receipt:$subject:$at"
     }
