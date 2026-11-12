@@ -128,11 +128,12 @@ class TransitionOutcomeTest {
     }
 
     @Test
-    fun `the OFFER_EXPIRY safety timer never converts a sheet sighting into a decline`() {
-        // The timer fires only when NO frame arrived; running out is what it means (Astra r2).
+    fun `the OFFER_EXPIRY timer after a sheet with no card back pools it DEMOTED (#1610 R1)`() {
+        // The sheet stood until the countdown ran out: the dasher could not tap Accept under it. Measured: 4 such
+        // timer leaves, none a true accept. A timer leave with no sighting stays live (OfferPoolOneChainTest).
         val d = drive(region(), offerObs(1_000L, "o1"), sheetObs(118_000L))
         val (next, effects) = resolve(d, expiry(121_000L, "o1"))
-        assertPooled(next, effects, demoted = false)
+        assertPooled(next, effects, demoted = true)
     }
 
     @Test

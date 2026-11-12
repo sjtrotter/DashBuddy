@@ -91,18 +91,28 @@ class OfferPoolDemotionTest {
         assertFalse("a card frame after the last sighting cancels it", demotedOf(inverse, "hA"))
     }
 
-    // R6-4 test 5
-    @Test fun `no countdown, the countdown nearly out, or a timer-only leave never demotes`() {
+    // R6-4 test 5, split by #1610: the frame-leave half is unchanged.
+    @Test fun `a frame leave with no countdown or the countdown nearly out never demotes`() {
         val noCountdown = PoolDriver().step(PF.card(1_000, "hA"), PF.sheet(3_000), PF.idle(5_000))
         assertFalse(demotedOf(noCountdown, "hA"))
         // 20 s countdown ends at 21 000; the leave at 18 500 has 2.5 s left (inside the 3 s slack).
         val nearlyOut = PoolDriver().step(PF.card(1_000, "hA", countdown = 20), PF.sheet(15_000), PF.idle(18_500))
         assertFalse(demotedOf(nearlyOut, "hA"))
-        val timerOnly = PoolDriver().step(
-            PF.card(1_000, "hA", countdown = 60), PF.sheet(10_000), PF.expiry(16_000, "hA", PF.instanceOf(1_000)),
-        )
+    }
+
+    @Test fun `a timer leave with no sighting never demotes`() {
+        val timerOnly = PoolDriver().step(PF.card(1_000, "hA", countdown = 60), PF.expiry(61_000, "hA", PF.instanceOf(1_000)))
         assertEquals(PoolEntryVia.EXPIRY_TIMER, timerOnly.region.offerPool.single().via)
         assertFalse(demotedOf(timerOnly, "hA"))
+    }
+
+    // #1610 R1 (changed oracle: this leave did not demote before): the sheet stood until the timer fired.
+    @Test fun `a timer leave with a sighting and no card back demotes`() {
+        val timer = PoolDriver().step(
+            PF.card(1_000, "hA", countdown = 60), PF.sheet(10_000), PF.expiry(16_000, "hA", PF.instanceOf(1_000)),
+        )
+        assertEquals(PoolEntryVia.EXPIRY_TIMER, timer.region.offerPool.single().via)
+        assertTrue(demotedOf(timer, "hA"))
     }
 
     // R6-4 test 7
