@@ -258,4 +258,14 @@ class DropPayApportionerTest {
         assertEquals(2, shares.size)
         assertEquals(900L, shares.values.sumOf { cents(it) })
     }
+
+    // ---- #1599 evenSplitCents: the receipt-match split in whole cents ----
+
+    @Test
+    fun `evenSplitCents - a count below one is empty, one share is the whole, three take the remainder last`() {
+        assertEquals(emptyList<Long>(), DropPayApportioner.evenSplitCents(1000, 0))
+        assertEquals(listOf(2050L), DropPayApportioner.evenSplitCents(2050, 1))
+        assertEquals(listOf(333L, 333L, 334L), DropPayApportioner.evenSplitCents(1000, 3))
+        assertEquals(listOf(1025L, 1025L), DropPayApportioner.evenSplitCents(2050, 2))
+    }
 }

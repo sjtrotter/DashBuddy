@@ -105,6 +105,17 @@ object DropPayApportioner {
     }
 
     /**
+     * #1599: an even split of [totalCents] into [count] shares, the same remainder rule as [reconcileToCents]: every share
+     * but the last is `round(total / count)`, the last takes the rest, so the shares sum to [totalCents] exactly.
+     * Empty for a count below 1.
+     */
+    fun evenSplitCents(totalCents: Long, count: Int): List<Long> {
+        if (count < 1) return emptyList()
+        val share = Math.round(totalCents.toDouble() / count)
+        return List(count) { i -> if (i == count - 1) totalCents - share * (count - 1) else share }
+    }
+
+    /**
      * Reconcile per-drop raw (double) shares to integer cents so they sum EXACTLY to [totalCents];
      * the rounding remainder is assigned to the LAST drop. The one splitting invariant shared by
      * [apportion] (tip-matched or even receipt split) and [equalSplit] (offer-pay estimate split).

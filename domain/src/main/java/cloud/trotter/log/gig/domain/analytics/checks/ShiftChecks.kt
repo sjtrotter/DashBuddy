@@ -2,6 +2,7 @@ package cloud.trotter.log.gig.domain.analytics.checks
 
 import cloud.trotter.log.gig.domain.analytics.SessionDetail
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
+import cloud.trotter.log.gig.domain.analytics.receipts.ShiftReceipts
 import cloud.trotter.log.gig.domain.analytics.timeline.JobCard
 import cloud.trotter.log.gig.domain.analytics.timeline.PassedRun
 import cloud.trotter.log.gig.domain.analytics.timeline.TimelineItem
@@ -23,21 +24,28 @@ sealed interface ShiftCheck {
      */
     data class OfferNotMatched(val jobId: String, val offerEventSequenceIds: List<Long>) : ShiftCheck
 
+    /**
+     * #1599: a saved receipt the app could not place and the dasher has not matched; one per receipt, also when the
+     * shift's totals agree.
+     */
+    data class ReceiptNotMatched(val evidenceId: String, val totalCents: Long, val firstSeenAt: Long) : ShiftCheck
+
     /** The shift's independent total and its delivery pay differ ([MoneyCheck]). */
     data class MoneyDiffers(val higher: MoneyCheck.Higher, val amount: Double) : ShiftCheck
 }
 
 /**
  * The one owner of "this shift needs a check". Pure, over the shift's folded timeline (which owns how offers join
- * jobs) and its [MoneyCheck]. A running shift raises none: an accepted offer with no delivery yet is just accepted.
- * Read by the shift page; Recap and Home read it too.
+ * jobs), its saved receipts ([ShiftReceipts], #1599: one check per OPEN receipt) and its [MoneyCheck]. A running
+ * shift raises none: an accepted offer with no delivery yet is just accepted. Read by the shift page; Recap and Home
+ * read it too.
  */
 object ShiftChecks {
 
-    fun of(detail: SessionDetail, timeline: List<TimelineItem>): List<ShiftCheck> =
-        of(detail.session, timeline, MoneyCheck.of(detail))
+    fun of(detail: SessionDetail, timeline: List<TimelineItem>, receipts: ShiftReceipts): List<ShiftCheck> =
+        of(detail.session, timeline, MoneyCheck.of(detail), receipts)
 
-    fun of(session: SessionRecord, timeline: List<TimelineItem>, money: MoneyCheck?): List<ShiftCheck> {
+    fun of(session: SessionRecord, timeline: List<TimelineItem>, money: MoneyCheck?, receipts: ShiftReceipts): List<ShiftCheck> {
         if (session.endedAt == null) return emptyList()
         val checks = mutableListOf<ShiftCheck>()
         for (card in timeline.filterIsInstance<JobCard>()) {
@@ -59,6 +67,7 @@ object ShiftChecks {
         }
         for ((seq, jobs) in tied) jobs.forEach { tiedByJob.getOrPut(it) { mutableListOf() } += seq }
         tiedByJob.forEach { (jobId, seqs) -> checks += ShiftCheck.OfferNotMatched(jobId, seqs.distinct().sorted()) }
+        receipts.open.forEach { checks += ShiftCheck.ReceiptNotMatched(it.receipt.evidenceId, it.receipt.totalCents, it.receipt.firstSeenAt) }
         money?.higher?.let { checks += ShiftCheck.MoneyDiffers(it, money.difference) }
         return checks
     }

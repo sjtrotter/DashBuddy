@@ -63,6 +63,13 @@ object PayBasis {
     const val USER_CORRECTED = "USER_CORRECTED"
 
     /**
+     * The dasher matched a saved receipt to this delivery (#1599): its share of an even split of the receipt. Driver-owned
+     * (the match stamps `driverAdjustedAt`), so a machine re-price never overwrites it. Not in [RECEIPT_EVIDENCE]: that
+     * list is the #691 guard's machine receipts, read through `originalPayBasis`, which a match never rewrites.
+     */
+    const val RECEIPT_MATCHED = "RECEIPT_MATCHED"
+
+    /**
      * The bases that PROVE a receipt existed for a job (#691 mixed-receipt guard). [DROP_SHARE] /
      * [RECEIPT_TOTAL] carry receipt dollars directly; [SUSPECT_FULL_RECEIPT] is a receipt whose
      * money was nulled as a double-count guard (#653) — the receipt still HAPPENED, so it must deny
@@ -312,6 +319,10 @@ data class FoldOutcome(
     val manualSourceLink: ManualSourceLinkFold? = null,
     /** A hand-added delivery's removal ([OfferRepairFolds.removeManual]). */
     val manualDeliveryRemove: ManualDeliveryRemoveFold? = null,
+    /** The dasher's receipt match (#1599, [ReceiptMatchFolds.foldMatched]); the projector applies it all or nothing. */
+    val receiptMatch: ReceiptMatchFold? = null,
+    /** The dasher's undo of a receipt match (#1599, [ReceiptMatchFolds.foldUndone]). */
+    val receiptMatchUndo: ReceiptMatchUndoFold? = null,
 )
 
 /**
@@ -462,6 +473,8 @@ object RecordFolds {
         AppEventType.MANUAL_DELIVERY_REMOVED,
         AppEventType.DELIVERY_SESSION_ASSIGN,
         AppEventType.OFFER_OUTCOME_CORRECTION,
+        AppEventType.RECEIPT_MATCHED,
+        AppEventType.RECEIPT_MATCH_UNDONE,
         AppEventType.SESSION_REPORT_CORRECTION,
         AppEventType.SESSION_MILES_CORRECTION,
     )
@@ -539,6 +552,8 @@ object RecordFolds {
             AppEventType.SESSION_MILES_CORRECTION -> CorrectionFolds.foldSessionMilesCorrection(event, context)
             AppEventType.DELIVERY_SESSION_ASSIGN -> CorrectionFolds.foldDeliverySessionAssign(event, context)
             AppEventType.OFFER_OUTCOME_CORRECTION -> CorrectionFolds.foldOfferOutcomeCorrection(event, context)
+            AppEventType.RECEIPT_MATCHED -> ReceiptMatchFolds.foldMatched(event, context)
+            AppEventType.RECEIPT_MATCH_UNDONE -> ReceiptMatchFolds.foldUndone(event, context)
             // #810 B2 Tier 1: emit the orphan-reconcile trigger (the orchestrator runs the store-evidence
             // join against committed rows in-transaction) AND still advance liveness exactly as the old
             // read-model-inert `else` arm did (the #810 B1 tripwire mints no record itself).

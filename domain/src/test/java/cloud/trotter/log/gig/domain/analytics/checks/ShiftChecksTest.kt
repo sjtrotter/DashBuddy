@@ -2,13 +2,18 @@ package cloud.trotter.log.gig.domain.analytics.checks
 
 import cloud.trotter.log.gig.domain.analytics.OfferOutcome
 import cloud.trotter.log.gig.domain.analytics.PayBasis
+import cloud.trotter.log.gig.domain.analytics.DeliveryRecord
 import cloud.trotter.log.gig.domain.analytics.SessionRecord
+import cloud.trotter.log.gig.domain.analytics.receipts.ActiveMatchRow
+import cloud.trotter.log.gig.domain.analytics.receipts.SavedReceipt
+import cloud.trotter.log.gig.domain.analytics.receipts.ShiftReceipts
 import cloud.trotter.log.gig.domain.analytics.timeline.JobCard
 import cloud.trotter.log.gig.domain.analytics.timeline.JobState
 import cloud.trotter.log.gig.domain.analytics.timeline.ShiftTimeline
 import cloud.trotter.log.gig.domain.analytics.timeline.TimelineDelivery
 import cloud.trotter.log.gig.domain.analytics.timeline.TimelineOffer
 import cloud.trotter.log.gig.domain.model.event.payload.OfferOutcomeResolution
+import cloud.trotter.log.gig.domain.model.event.payload.ReceiptMatchRole
 import cloud.trotter.log.gig.domain.model.offer.OfferQuoteBasis
 import cloud.trotter.log.gig.domain.model.offer.OfferScope
 import cloud.trotter.log.gig.domain.state.Platform
@@ -42,8 +47,13 @@ class ShiftChecksTest {
     private fun drop(seq: Long, jobId: String, hashes: List<String>?, source: Long? = null, basis: String = PayBasis.DROP_SHARE) =
         TimelineDelivery(seq, jobId, "Sample Tacos", null, seq * 100, 7.5, basis, null, hashes, hashes?.singleOrNull(), source)
 
-    private fun checks(offers: List<TimelineOffer>, drops: List<TimelineDelivery>, ended: Boolean = true, money: MoneyCheck? = null) =
-        ShiftChecks.of(session(ended), ShiftTimeline.fold(offers, emptyList(), drops, running = !ended), money)
+    private fun checks(
+        offers: List<TimelineOffer>,
+        drops: List<TimelineDelivery>,
+        ended: Boolean = true,
+        money: MoneyCheck? = null,
+        receipts: ShiftReceipts = ShiftReceipts.EMPTY,
+    ) = ShiftChecks.of(session(ended), ShiftTimeline.fold(offers, emptyList(), drops, running = !ended), money, receipts)
 
     private fun cards(offers: List<TimelineOffer>, drops: List<TimelineDelivery>) =
         ShiftTimeline.fold(offers, emptyList(), drops, running = false).filterIsInstance<JobCard>()
@@ -161,5 +171,47 @@ class ShiftChecksTest {
 
     @Test fun `a running shift raises no tie check`() {
         assertTrue(checks(listOf(passed(1, OfferOutcome.NOT_TAKEN, "J1"), passed(2, OfferOutcome.NOT_TAKEN, "J1")), emptyList(), ended = false).isEmpty())
+    }
+
+    // #1599: one ReceiptNotMatched per open saved receipt, after the offer checks and before the money check.
+    private fun deliveryRow(seq: Long, basis: String, pay: Double?) = DeliveryRecord(
+        eventSequenceId = seq, sessionId = "S", platform = Platform.DoorDash, jobId = "J$seq", taskId = "t$seq",
+        storeName = "Sample Tacos", completedAt = seq * 100, realizedPay = pay, payBasis = basis, netProfit = null,
+        realizedMiles = null, realizedMinutes = null, tip = null, basePay = null,
+    )
+
+    private fun saved(seq: Long, firstSeenAt: Long, cents: Long) =
+        SavedReceipt("receipt:t$seq:$firstSeenAt", "J$seq", "t$seq", firstSeenAt, cents, null, null, proven = false)
+
+    @Test fun `two open receipts raise two checks in first-seen order between the offer and money checks`() { // non-vacuous
+        val rows = listOf(deliveryRow(1, PayBasis.OFFER_PAY, 9.0), deliveryRow(2, PayBasis.NONE, null))
+        val receipts = ShiftReceipts.of(listOf(saved(2, 300, 2050), saved(1, 200, 2851)), rows, emptyList())
+        val money = MoneyCheck(appTotal = 50.0, deliveryPay = 9.0, deliveryPayEstimated = true)
+        val out = checks(listOf(passed(5, OfferOutcome.NOT_TAKEN, "J9"), passed(6, OfferOutcome.NOT_TAKEN, "J9")), emptyList(), money = money, receipts = receipts)
+        assertEquals(
+            listOf(
+                ShiftCheck.OfferNotMatched("J9", listOf(5L, 6L)),
+                ShiftCheck.ReceiptNotMatched("receipt:t1:200", 2851, 200),
+                ShiftCheck.ReceiptNotMatched("receipt:t2:300", 2050, 300),
+                ShiftCheck.MoneyDiffers(MoneyCheck.Higher.APP_TOTAL, 41.0),
+            ),
+            out,
+        )
+    }
+
+    @Test fun `an open receipt is raised also when the money check agrees`() {
+        val receipts = ShiftReceipts.of(listOf(saved(1, 200, 2050)), listOf(deliveryRow(1, PayBasis.OFFER_PAY, 20.5)), emptyList())
+        val agrees = MoneyCheck(appTotal = 20.5, deliveryPay = 20.5, deliveryPayEstimated = true)
+        assertEquals(listOf(ShiftCheck.ReceiptNotMatched("receipt:t1:200", 2050, 200)), checks(emptyList(), emptyList(), money = agrees, receipts = receipts))
+    }
+
+    @Test fun `a matched or settled receipt raises none, nor does a running shift`() {
+        val matched = saved(1, 200, 2050)
+        val settled = saved(2, 300, 900)
+        val rows = listOf(deliveryRow(1, PayBasis.RECEIPT_MATCHED, 20.5).copy(driverAdjustedAt = 9), deliveryRow(2, PayBasis.DROP_SHARE, 9.0))
+        val active = listOf(ActiveMatchRow("M1", matched.evidenceId, 1, ReceiptMatchRole.COVERED, 2050, matchedAt = 9))
+        assertTrue(checks(emptyList(), emptyList(), receipts = ShiftReceipts.of(listOf(matched, settled), rows, active)).isEmpty())
+        val open = ShiftReceipts.of(listOf(saved(3, 400, 500)), listOf(deliveryRow(3, PayBasis.NONE, null)), emptyList())
+        assertTrue(checks(emptyList(), emptyList(), ended = false, receipts = open).isEmpty())
     }
 }

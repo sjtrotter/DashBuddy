@@ -66,6 +66,10 @@ data class DeliveryRecord(
      * refold re-derives it.
      */
     val receiptRepriced: Boolean = false,
+    /** When the dasher last changed this row's money, a match included; null on an untouched machine row. */
+    val driverAdjustedAt: Long? = null,
+    /** The job's offer hashes on this row: its `jobOfferHashes`, else its sole hash; empty on MANUAL rows. */
+    val jobOfferHashes: List<String> = emptyList(),
 )
 
 /** One dash session. */

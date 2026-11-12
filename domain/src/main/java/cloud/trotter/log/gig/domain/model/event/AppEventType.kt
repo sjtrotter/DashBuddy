@@ -73,6 +73,9 @@ enum class AppEventType {
     OFFER_OUTCOME_CORRECTION, // A driver attests (or undoes) which accepted offer was invisibly unassigned
                               // (#810 B2 Tier 2) — stamps offer_records.outcomeResolved only (never pay/net);
                               // the original OFFER_ACCEPTED event/outcome stays
+    RECEIPT_MATCHED, // #1599: the dasher says which deliveries a saved, unproven receipt paid for; replaces their
+                     // estimates with an even split of the receipt. Append-only, dasher-owned.
+    RECEIPT_MATCH_UNDONE, // #1599: the dasher takes a receipt match back; its rows return to what the match found.
 
     // --- System / Generic ---
     SCREEN_VIEWED, // For generic screen transitions like "Earnings Screen"

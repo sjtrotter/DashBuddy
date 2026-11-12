@@ -10,6 +10,8 @@ enum class PaySource {
     OFFER_AMOUNT_EST,
     NO_PAY_FOUND,
     YOU_ENTERED,
+    /** A share of a receipt the dasher matched (#1599). */
+    MATCHED_BY_YOU,
     ;
 
     val estimated: Boolean get() = this == OFFER_AMOUNT_EST
@@ -26,6 +28,7 @@ enum class PaySource {
                 PayBasis.RECEIPT_TOTAL -> RECEIPT
                 PayBasis.OFFER_PAY -> OFFER_AMOUNT_EST
                 PayBasis.MANUAL, PayBasis.USER_CORRECTED -> YOU_ENTERED
+                PayBasis.RECEIPT_MATCHED -> MATCHED_BY_YOU
                 else -> NO_PAY_FOUND // NONE, SUSPECT_FULL_RECEIPT (its money nulled), an unknown basis
             }
             return if (pay == null && source != YOU_ENTERED) NO_PAY_FOUND else source
