@@ -28,3 +28,4 @@ or a new data type in `PRIVACY.md` § 6.
 | App category | Finance | Where the comparable driver earnings apps are listed. Business is the alternative. |
 | Contact details | Email `support@trotter.cloud`, website `https://gig.log.trotter.cloud/` | The same address as the About screen and the privacy page. trotter.cloud forwards it with Cloudflare Email Routing. |
 | Accessibility API | Declaration and video per `play/accessibility-declaration.md` | `isAccessibilityTool` is false in the Play build. |
+| Precise location | Live tracking, with the justification in `play/location-declaration.md` | Required from 2027-01-27. GPS counts the miles of a running shift; approximate location is too coarse for that. |
