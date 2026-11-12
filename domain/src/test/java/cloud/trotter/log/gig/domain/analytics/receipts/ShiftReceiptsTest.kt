@@ -79,6 +79,19 @@ class ShiftReceiptsTest {
         assertEquals(ReceiptStatus.OPEN, ShiftReceipts.of(listOf(receipt(9)), listOf(row(1)), emptyList()).items.single().status)
     }
 
+    @Test fun `a second read of a one-offer job another match pays is settled, and open again once that match is undone`() { // non-vacuous
+        val first = receipt(2, firstSeenAt = 1)
+        val second = receipt(1, firstSeenAt = 2)
+        // The first read paid Y2 alone and cleared Y1's estimate: Y1 is open again, the job is paid.
+        val clearedY1 = ActiveMatchRow("M1", first.evidenceId, 1, ReceiptMatchRole.CLEARED, null, matchedAt = 50)
+        val rows = listOf(row(1), row(2, pay = 20.5, basis = PayBasis.RECEIPT_MATCHED, adjustedAt = 50))
+        val paid = ShiftReceipts.of(listOf(first, second), rows, listOf(clearedY1, active(first.evidenceId, 2, cents = 2050)))
+        assertEquals(listOf(ReceiptStatus.MATCHED, ReceiptStatus.SETTLED), paid.items.map { it.status })
+        assertTrue(paid.open.isEmpty())
+        val undone = ShiftReceipts.of(listOf(first, second), listOf(row(1, 9.0, PayBasis.OFFER_PAY), row(2, 9.0, PayBasis.OFFER_PAY)), emptyList())
+        assertEquals(listOf(ReceiptStatus.OPEN, ReceiptStatus.OPEN), undone.items.map { it.status })
+    }
+
     @Test fun `items are in first-seen order, then evidence id`() {
         val late = receipt(1, firstSeenAt = 30)
         val early = receipt(2, firstSeenAt = 10)

@@ -831,7 +831,7 @@ summing to the receipt to the cent. With no match in the log every row folds as 
 - **Apply** (`ReceiptMatchApply`, in the batch transaction, in event order). Every check runs before any write, so a
   match applies whole or not at all, each refusal a counted skip with a WARN of ids: the command id is new (a double
   tap); the receipt exists, is of this shift, is `UNPROVEN` and still records `receiptCents`; no active match names
-  it; and every covered delivery is among the shift's rows sequenced before the match (the #1517 batch-boundary rule)
+  it; its job is not FUNDED by another receipt's match (below); and every covered delivery is among the shift's rows sequenced before the match (the #1517 batch-boundary rule)
   and open (`ReceiptMatch.selectable`). The projector writes each `receipt_records` revision in log order among the
   corrections, so the match reads the receipt as of its own log position in one batch, many or a rebuild; a revision
   logged after the match only updates the saved receipt (a `lastEventSequenceId` past the match is refused as a
@@ -860,8 +860,11 @@ summing to the receipt to the cent. With no match in the log every row folds as 
   hold a cleared row's prior values.
 - **Statuses** (`ShiftReceipts`). A proven receipt is SETTLED; one an active match names is MATCHED (undoable while
   every row it wrote holds it); an unproven one whose own delivery is missing or open is OPEN and raises
-  `ShiftCheck.ReceiptNotMatched`; any other is SETTLED. Four rules keep two reads of one physical receipt from paying
-  twice: a delivery is covered by at most one active match (the sheet shows it disabled, the apply refuses it); a
+  `ShiftCheck.ReceiptNotMatched`; any other is SETTLED. Five rules keep two reads of one physical receipt from paying
+  twice: a job with at most one offer that another receipt's active match pays (a row it wrote is of the job, or its
+  receipt is) is FUNDED (`ReceiptMatch.funded`): every other receipt record of the job is SETTLED, whether or not its
+  subject was ticked, the apply refuses its match, and undoing the paying match re-opens them; a delivery is covered
+  by at most one active match (the sheet shows it disabled, the apply refuses it); a
   receipt whose own delivery already carries receipt money, a match or the dasher's pay asks nothing; on a job with at
   most one offer the suggestion is the whole job, so the first Confirm covers the later read's delivery; and the preview
   shows the shift's independent total beside the new delivery pay.

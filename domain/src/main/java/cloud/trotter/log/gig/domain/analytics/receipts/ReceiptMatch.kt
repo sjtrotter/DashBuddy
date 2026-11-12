@@ -150,6 +150,25 @@ object ReceiptMatch {
     }
 
     /**
+     * A job with at most one offer is FUNDED by an active match of another receipt than [evidenceId]: one that wrote a
+     * row of the job, or whose receipt is of the job. The job's one offer is then paid, so no other receipt record of it
+     * may take a delivery (two reads of one receipt must not pay twice), whether or not its subject was ticked. The
+     * sheet settles such a record and the projector refuses its match; undoing the paying match re-opens it.
+     */
+    fun funded(
+        jobId: String,
+        evidenceId: String,
+        deliveries: List<DeliveryRecord>,
+        active: List<ActiveMatchRow>,
+        receipts: List<SavedReceipt>,
+    ): Boolean {
+        if (offerCount(jobId, deliveries) > 1) return false
+        val jobRows = deliveries.filter { it.jobId == jobId }.map { it.eventSequenceId }.toSet()
+        val receiptJobs = receipts.associate { it.evidenceId to it.jobId }
+        return active.any { it.evidenceId != evidenceId && (it.deliveryEventSequenceId in jobRows || receiptJobs[it.evidenceId] == jobId) }
+    }
+
+    /**
      * True while [d] still holds what the match wrote: COVERED -> cents == newPayCents, basis RECEIPT_MATCHED,
      * driverAdjustedAt == matchedAt; CLEARED -> no pay, basis NONE, driverAdjustedAt null. False for a missing row.
      */

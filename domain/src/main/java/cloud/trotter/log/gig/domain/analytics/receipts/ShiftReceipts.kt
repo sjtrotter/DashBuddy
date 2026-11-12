@@ -10,7 +10,11 @@ enum class ReceiptStatus {
     /** An active match names it. */
     MATCHED,
 
-    /** Proven, or its own delivery already carries receipt money, a match or the dasher's pay: nothing to ask. */
+    /**
+     * Proven; or its job has at most one offer and another receipt's active match already pays it
+     * ([ReceiptMatch.funded]); or its own delivery already carries receipt money, a match or the dasher's pay: nothing
+     * to ask.
+     */
     SETTLED,
 }
 
@@ -26,7 +30,8 @@ data class ShiftReceipt(
 /**
  * One shift's saved receipts judged against its deliveries and active matches (#1599). Pure.
  *
- * A receipt whose own delivery is no longer open (it carries receipt money, a match or the dasher's pay) is SETTLED
+ * A receipt of a one-offer job another receipt's active match already pays is SETTLED ([ReceiptMatch.funded]), so two
+ * reads of one receipt never pay that job twice. A receipt whose own delivery is no longer open (it carries receipt money, a match or the dasher's pay) is SETTLED
  * and raises no check, so once one read of a receipt is matched across its job, a second read of the same receipt
  * never asks (the repeated-read rule). Residual: on a job with two or more offers the suggestion is the subject
  * alone, so two reads of one offer's receipt confirmed on that offer's two drops separately count it twice; the money
@@ -62,6 +67,8 @@ data class ShiftReceipts(
                         val undoable = rows.all { ReceiptMatch.holdsWritten(it, byId[it.deliveryEventSequenceId]) }
                         ShiftReceipt(r, ReceiptStatus.MATCHED, match.commandId, undoable)
                     }
+                    ReceiptMatch.funded(r.jobId, r.evidenceId, deliveries, active, receipts) ->
+                        ShiftReceipt(r, ReceiptStatus.SETTLED, null, false)
                     else -> {
                         val subject = ReceiptMatch.subjectOf(r, deliveries)
                         val open = subject == null || ReceiptMatch.selectable(subject, active)

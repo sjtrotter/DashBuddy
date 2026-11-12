@@ -433,14 +433,15 @@ class ReceiptMatchProjectorTest {
         assertEquals(PayBasis.USER_CORRECTED, edited.row(e.y1).payBasis)
         assertEquals(2, edited.active("S1").size)
 
-        // LIFO: M1 clears Y1, M2 covers Y1; M1 cannot be undone first, then M2 and M1 both restore.
+        // LIFO: M1 clears Y1, M2 covers Y1; M1 cannot be undone first, then M2 and M1 both restore. M2's receipt is of
+        // another job (its delivery not recorded): a second receipt of the stack's own job is refused (P14).
         val lifo = harness()
         val l = lifo.stack(y1Estimate = 9.0)
-        lifo.observed("S1", 1_450, "J-S1", "Y1-S1", 6.00)
+        lifo.observed("S1", 1_450, "J-K", "K1-S1", 6.00)
         lifo.projector.catchUp()
         val original = listOf(lifo.row(l.y1), lifo.row(l.y2))
         lifo.match("S1", 7_000, "M1", l.evidence, 2050, covered(l.y2, 2050, 900, PayBasis.OFFER_PAY), cleared(l.y1, 900))
-        lifo.match("S1", 7_100, "M2", evidence("Y1-S1", 1_450), 600, covered(l.y1, 600))
+        lifo.match("S1", 7_100, "M2", evidence("K1-S1", 1_450), 600, covered(l.y1, 600))
         lifo.undo("S1", 7_200, "M1")
         assertEquals(1, lifo.projector.catchUp().adjustmentSkips)
         assertEquals(6.0, lifo.row(l.y1).realizedPay!!, 0.0)
@@ -479,9 +480,9 @@ class ReceiptMatchProjectorTest {
         val b = stack("S2", base = 10_000, y1Estimate = 9.0)
         match("S2", 17_000, "MB", b.evidence, 2050, covered(b.y2, 2050, 900, PayBasis.OFFER_PAY), cleared(b.y1, 900))
         val c = stack("S3", base = 20_000, y1Estimate = 9.0)
-        observed("S3", 20_450, "J-S3", "Y1-S3", 6.00)
+        observed("S3", 20_450, "J-K3", "K1-S3", 6.00)
         match("S3", 27_000, "MC1", c.evidence, 2050, covered(c.y2, 2050, 900, PayBasis.OFFER_PAY), cleared(c.y1, 900))
-        match("S3", 27_100, "MC2", evidence("Y1-S3", 20_450), 600, covered(c.y1, 600))
+        match("S3", 27_100, "MC2", evidence("K1-S3", 20_450), 600, covered(c.y1, 600))
         undo("S3", 27_200, "MC1") // refused: MC2 covers the row MC1 cleared
         undo("S3", 27_300, "MC2")
         undo("S3", 27_350, "MC1")
@@ -559,6 +560,38 @@ class ReceiptMatchProjectorTest {
         laterBatch.projector.catchUp()
         assertEquals(sameBatch.allRows(), laterBatch.allRows())
         assertEquals(sameBatch.matchRowDump(), laterBatch.matchRowDump())
+    }
+
+    @Test
+    fun `P14 a one-offer job paid by one read of its receipt is not paid again by the other read`() = runBlocking { // non-vacuous
+        val h = harness()
+        val s = h.stack(y1Estimate = 9.0)
+        // A second evidence record of the same $20.50 receipt, read after Y1.
+        h.observed("S1", 1_450, "J-S1", "Y1-S1", 20.50)
+        h.projector.catchUp()
+        assertEquals(2, h.checks("S1").count { it is ShiftCheck.ReceiptNotMatched })
+
+        // The first read matched to Y2 alone: Y1's estimate is cleared.
+        h.match("S1", 7_000, "M1", s.evidence, 2050, covered(s.y2, 2050, 900, PayBasis.OFFER_PAY), cleared(s.y1, 900))
+        assertEquals(0, h.projector.catchUp().adjustmentSkips)
+
+        // A match of the second read on the cleared Y1 is refused: the job is already paid.
+        h.match("S1", 7_100, "M2", evidence("Y1-S1", 1_450), 2050, covered(s.y1, 2050))
+        val skips = h.projector.catchUp().adjustmentSkips
+        assertEquals("the job's delivery pay", 20.50, h.deliveryPay("S1"), 1e-9)
+        assertEquals(1, skips)
+        assertEquals(setOf("M1"), h.active("S1").map { it.commandId }.toSet())
+        assertTrue("the second read raises no check", h.checks("S1").none { it is ShiftCheck.ReceiptNotMatched })
+        assertEquals(
+            listOf(ReceiptStatus.MATCHED, ReceiptStatus.SETTLED),
+            h.shiftReceipts("S1").items.map { it.status },
+        )
+
+        // Undo of the first match re-opens both reads.
+        h.undo("S1", 7_200, "M1")
+        h.projector.catchUp()
+        assertEquals(listOf(ReceiptStatus.OPEN, ReceiptStatus.OPEN), h.shiftReceipts("S1").items.map { it.status })
+        assertEquals(2, h.checks("S1").count { it is ShiftCheck.ReceiptNotMatched })
     }
 
     private companion object {

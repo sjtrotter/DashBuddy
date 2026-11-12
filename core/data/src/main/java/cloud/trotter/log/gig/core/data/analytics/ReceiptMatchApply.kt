@@ -20,8 +20,8 @@ private const val TAG = "Projector"
  * All or nothing: every check runs before any write, so a match either writes every row it names or none. The
  * stale-preview check is structural, never by amount: at its log position the match applies only when every covered
  * row is still open ([ReceiptMatch.selectable]: an estimate or no pay, no dasher edit, not covered by another active
- * match), the receipt's recorded total still equals the payload's, the receipt has no active match and the command id
- * is new. The payload's prior amounts are a record of what the dasher saw, never a gate, so a later projector change
+ * match), the receipt's recorded total still equals the payload's, the receipt has no active match, its job is not a
+ * one-offer job another receipt's match already pays ([ReceiptMatch.funded]), and the command id is new. The payload's prior amounts are a record of what the dasher saw, never a gate, so a later projector change
  * that re-prices estimates cannot drop the dasher's statement on refold. Only delivery rows sequenced before the match
  * take part (the #1517 batch-boundary rule), so incremental folding and a refold agree. Each refusal is a counted
  * skip with a WARN of ids only.
@@ -51,6 +51,8 @@ internal class ReceiptMatchApply(
         val entities = analyticsDao.deliveryRecordsInSessionBefore(fold.sessionId, fold.sequenceId).associateBy { it.eventSequenceId }
         val rows = entities.values.map { it.toDomain() }
         val byId = rows.associateBy { it.eventSequenceId }
+        val saved = receiptDao.receiptsInSession(fold.sessionId).map { it.toSaved() }
+        if (ReceiptMatch.funded(receipt.jobId, fold.evidenceId, rows, active, saved)) return refuse("job already paid by another receipt")
         for ((seq, _) in fold.covered) {
             val row = byId[seq]
             if (row == null || !ReceiptMatch.selectable(row, active)) return refuse("delivery $seq is not open to a match")

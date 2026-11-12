@@ -173,6 +173,22 @@ class ReceiptMatchTest {
         assertFalse(ReceiptMatch.holdsWritten(cleared, row(1, adjustedAt = 60)))
     }
 
+    @Test fun `funded - a one-offer job another receipt's match pays, by a row it wrote or by its receipt's job`() {
+        val first = receipt(2)
+        val second = receipt(1)
+        val wroteY2 = covers(2, evidence = first.evidenceId, cents = 2050)
+        assertTrue(ReceiptMatch.funded("J1", second.evidenceId, listOf(y1, y2), listOf(wroteY2), listOf(first, second)))
+        assertFalse("its own match does not count", ReceiptMatch.funded("J1", first.evidenceId, listOf(y1, y2), listOf(wroteY2), listOf(first, second)))
+        // The first receipt matched to a delivery of another job still pays its own job.
+        val elsewhere = covers(9, evidence = first.evidenceId)
+        assertTrue(ReceiptMatch.funded("J1", second.evidenceId, listOf(y1, y2), listOf(elsewhere), listOf(first, second)))
+        assertFalse(ReceiptMatch.funded("J1", second.evidenceId, listOf(y1, y2), emptyList(), listOf(first, second)))
+        // A job with two offers is never funded: its estimates pool every offer.
+        val x1 = row(1, hashes = listOf("hX", "hY"))
+        val x2 = row(2, hashes = listOf("hX", "hY"))
+        assertFalse(ReceiptMatch.funded("J1", second.evidenceId, listOf(x1, x2), listOf(wroteY2), listOf(first, second)))
+    }
+
     @Test fun `offerCount - distinct hashes over the job's rows`() {
         val rows = listOf(row(1, hashes = listOf("a")), row(2, hashes = listOf("a", "b")), row(3, jobId = "J2", hashes = listOf("c")))
         assertEquals(2, ReceiptMatch.offerCount("J1", rows))
