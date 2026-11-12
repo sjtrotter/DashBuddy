@@ -107,6 +107,17 @@ WHERE r.sessionId = :sid GROUP BY r.evidenceId ORDER BY r.firstSeenAt;
 -- DROP_SHARE/RECEIPT_TOTAL (its drops show OFFER_PAY or NONE). Gap counts: GROUP BY proofGap.
 -- grep '#1598 receipt' app.log → evidence, placement and late-frame lines (DEBUG).
 
+-- #1599 matched receipts (each active match against its receipt)
+SELECT m.commandId, m.evidenceId, r.totalCents,
+       SUM(CASE WHEN m.role = 'COVERED' THEN m.newPayCents END) AS coveredCents,
+       SUM(m.role = 'COVERED') AS covered, SUM(m.role = 'CLEARED') AS cleared
+FROM receipt_match_rows m JOIN receipt_records r ON r.evidenceId = m.evidenceId
+WHERE m.sessionId = :sid AND m.undoneAt IS NULL GROUP BY m.commandId;
+-- expect: coveredCents = totalCents; one active commandId per evidenceId.
+SELECT deliveryEventSequenceId, COUNT(*) FROM receipt_match_rows
+WHERE role = 'COVERED' AND undoneAt IS NULL GROUP BY 1 HAVING COUNT(*) > 1;
+-- expect: no rows (a delivery is paid by one receipt).
+
 -- #736 / #752  unassign produces NO paid/confirmed artifacts (either phase)
 SELECT eventType, json_extract(eventPayload,'$.phase') AS phase,
        json_extract(eventPayload,'$.taskId') AS tid

@@ -791,7 +791,7 @@ clause). Identity is one record per (receipt episode, subject): the episode
 reached from it (the #1460 continuity rule, `receiptEpisodeContinues`), and a changed read inside it — a
 new total, a new itemization or a new scope — is a new revision of the same `evidenceId`
 (`receipt:<subject>:<firstSeenAt>`); an unchanged re-render records nothing. Equal totals are never
-identity: another subject or a broken episode is a new record, which #1599's "Same receipt as…" links.
+identity: another subject or a broken episode is a new record, and #1599's matching never joins two by amount.
 The effect key is `log:RECEIPT_OBSERVED:<evidenceId>:r<revision>`. The fold is bookkeeping
 (`RecordFolds.BOOKKEEPING_EVENTS`: no liveness advance, no odometer measurement), so every other row is
 byte-identical with or without these events. `receipt_records` (Room v25, new table, `AutoMigration`
@@ -814,6 +814,67 @@ unpriced (`NONE`), as receipt-less stacks do today (#1599 is the repair). A prov
 receipt expands after its job closed is not re-priced if any offer appeared since the receipt was first
 read; the row keeps the mint's receipt total, without the tip/base split. Legacy View card receipts (none
 fielded since 2026-09-17) are all unproven: that card shows no drop count.
+
+### Receipt matching (#1599, Room v27)
+
+A receipt's money reaches a delivery the proof did not cover only through the dasher's Confirm, once per delivery,
+summing to the receipt to the cent. With no match in the log every row folds as before.
+
+- **Events.** `RECEIPT_MATCHED` (`ReceiptMatchedPayload`: a `commandId` minted when the sheet opens, the shift, the
+  receipt's `evidenceId`, `receiptCents`, and one `ReceiptMatchLine` per delivery, `COVERED` with its share in cents or
+  `CLEARED` with none, each with the pay and basis the preview showed) and `RECEIPT_MATCH_UNDONE` (the shift and the
+  match's command id). Both are dasher-owned, append-only and in `RecordFolds.BOOKKEEPING_EVENTS`.
+- **Fold.** `ReceiptMatchFolds` (the `foldSessionReportCorrection` shape): the envelope, the context and the payload
+  name one shift that has ENDED at the event's log position, and the outcome carries no context. A malformed match
+  (blank command id, a receipt of 0, no covered line, a delivery twice, a covered line with no or negative cents, a
+  cleared line with cents, covered cents not summing to the receipt) is a counted skip in any batch.
+- **Apply** (`ReceiptMatchApply`, in the batch transaction, in event order). Every check runs before any write, so a
+  match applies whole or not at all, each refusal a counted skip with a WARN of ids: the command id is new (a double
+  tap); the receipt exists, is of this shift, is `UNPROVEN` and still records `receiptCents`; no active match names
+  it; and every covered delivery is among the shift's rows sequenced before the match (the #1517 batch-boundary rule)
+  and open (`ReceiptMatch.selectable`). The check is structural, never by amount: the payload's prior amounts are a
+  record, so a later projector change that re-prices estimates cannot drop the dasher's statement on refold. The
+  apply derives the cleared set itself (`ReceiptMatch.cleared`); a difference from the payload's is a WARN. Writes:
+  `DeliveryCorrections.applyReceiptShare` on each covered row (basis `RECEIPT_MATCHED`, net against its own frozen cpm,
+  tip and base only for a sole covered row of an itemized receipt, `driverAdjustedAt` = the event's `occurredAt`),
+  `clearEstimate` on each cleared row (no pay, basis `NONE`, net keeps the driven cost), and one `receipt_match_rows`
+  row per delivery with what it found there.
+- **One owner.** `domain.analytics.receipts.ReceiptMatch` owns `selectable` (an `OFFER_PAY` or `NONE` row, no
+  `driverAdjustedAt`, not moved into the shift by the dasher, not covered by an active match; a cleared row stays
+  open), `lock` (matched to another receipt, paid by a receipt, changed by you), the suggestion (the receipt's own
+  delivery when open, plus every other open delivery of its job when that job has at most one offer; no store, time or
+  quote ranking), the even split (`DropPayApportioner.evenSplitCents`: the last share takes the remainder), the
+  cleared set (the open `OFFER_PAY` rows of a covered row's job, when that job has at most one offer: there every
+  estimate is a share of the one offer the receipt pays), `plan` (the preview Confirm sends) and `holdsWritten`. The
+  sheet, the checks and the apply all call it.
+- **`receipt_match_rows`** (Room v27, new table, `AutoMigration(26, 27)`, `AnalyticsMigration26to27Test`): PK
+  (`commandId`, `deliveryEventSequenceId`), `sessionId`, `evidenceId`, `role`, `matchEventSequenceId`, `matchedAt`,
+  the row's prior `realizedPay`, `payBasis`, `netProfit`, `tip`, `basePay` and `driverAdjustedAt`, `newPayCents`,
+  `undoneAt`, `undoEventSequenceId`. Wiped and refolded by a version rebuild. **No `PROJECTOR_VERSION` bump:** the two
+  event types cannot exist in folded history, so an empty table is right for every past shift. Columns on
+  `receipt_records` would be clobbered by its `REPLACE` upsert per revision; columns on `delivery_records` would not
+  hold a cleared row's prior values.
+- **Statuses** (`ShiftReceipts`). A proven receipt is SETTLED; one an active match names is MATCHED (undoable while
+  every row it wrote holds it); an unproven one whose own delivery is missing or open is OPEN and raises
+  `ShiftCheck.ReceiptNotMatched`; any other is SETTLED. Four rules keep two reads of one physical receipt from paying
+  twice: a delivery is covered by at most one active match (the sheet shows it disabled, the apply refuses it); a
+  receipt whose own delivery already carries receipt money, a match or the dasher's pay asks nothing; on a job with at
+  most one offer the suggestion is the whole job, so the first Confirm covers the later read's delivery; and the preview
+  shows the shift's independent total beside the new delivery pay.
+- **Undo.** `ReceiptMatchApply.applyUndo` restores every row the match wrote from its stored priors and stamps
+  `undoneAt`, only while each row still holds what the match wrote (`ReceiptMatch.holdsWritten`); a later "Fix this
+  delivery" pay edit, or a later match on a row this one cleared, refuses it, so two matches on one row undo last in,
+  first out. The job sheet shows "Undo match" under each delivery an undoable match covers.
+- **Driver ownership.** A matched row carries `driverAdjustedAt`, so the machine re-price refuses it (its guard also
+  names `RECEIPT_MATCHED`), and whole-job settlement (#1601) must skip any row an active match names. A later "Fix this
+  delivery" still wins by log order (`DeliveryCorrections.applyPay`/`applyDelivery` are unchanged).
+- **Stated costs.** On a job with two or more offers the suggestion is the receipt's own delivery alone, so two reads
+  of one offer's receipt confirmed on that offer's two drops separately count it twice (the app total line and the money
+  check show it; Undo takes it back). A repeated read whose total changed between reads, when the earlier read was
+  matched first, settles at the earlier amount; "Fix this delivery" corrects the row. After a match on a multi-offer
+  job, the job's other estimates stay and can hold part of the matched offer's quote until their own receipts are
+  matched. An even split is the platform's own per-delivery split only by chance; the rows say "Matched by you". A later
+  pay edit on a matched row wins, the receipt stays matched and Undo is no longer offered. No amount editing in v1.
 
 ### Session report correction (#1134, Room v17)
 
@@ -1204,7 +1265,9 @@ Automated build/migration/export-drift checks and two field confirmations are se
 
 `DeliveryCorrections` (`:core:data`, `analytics/DeliveryCorrections.kt`) owns the single-row decisions of the three
 delivery corrections: `applyPay` (legacy `PAY_ADJUSTMENT`), `applyDelivery` (`DELIVERY_ADJUSTMENT`) and
-`applyReceiptReprice` (`DELIVERY_RECEIPT_REPRICE`). Each takes the row the projector already read and returns
+`applyReceiptReprice` (`DELIVERY_RECEIPT_REPRICE`), and of the receipt match (#1599): `applyReceiptShare`,
+`clearEstimate` and `restoreBeforeMatch`, each a `row.copy` of the money columns it names. The re-price's driver-owned
+guard refuses `MANUAL`, `USER_CORRECTED`, `RECEIPT_MATCHED` and any `driverAdjustedAt`. Each takes the row the projector already read and returns
 `CorrectionOutcome.Write(row, followUps)` or, for a re-price only, `Skip(DriverOwned | AlreadyPriced)`. Pay and delivery
 always write (a note-only edit writes an identical row; `adjustmentSkips` depends on it). Follow-ups are the two WARN
 notices (#653 suspect-receipt pay/tip block, F3 sessionless cash) and `SweepStoreIfUnreferenced(priorKey)`, which the
@@ -1233,7 +1296,7 @@ time, store pin and re-price time. Known pinned gap: `applyPay` has no suspect-r
   the job has no offer or only add-on quotes), its later accepts as `AddOnLine.Incremental` (INCREMENTAL quote),
   `NewTotal` (TOTAL-basis add-on) or `Offered` (scope and basis not recorded), one `DeliveryLine` per drop with a
   `PaySource` (`PaySource.of(payBasis, pay, jobDeliveries)`: `DROP_SHARE` is RECEIPT on a sole drop and
-  RECEIPT_SPLIT on a job of two or more), the paid total without cash, cash tips apart, a state (NORMAL, or
+  RECEIPT_SPLIT on a job of two or more; `RECEIPT_MATCHED` is MATCHED_BY_YOU, "Matched by you", #1599), the paid total without cash, cash tips apart, a state (NORMAL, or
   ACCEPTED_NO_DELIVERY_YET while the shift runs, else NO_DELIVERY) and the sheet's milestones (accepted, at store,
   picked up, at customer, delivered) from the offer, pickup and delivery rows (missing ones absent). Cards sort by first offer, a card with no offer by its first delivery;
   every maximal stretch of declined, expired and not-taken (#1119 S2) offers between cards is one `PassedRun` with
@@ -1282,13 +1345,20 @@ time, store pin and re-price time. Known pinned gap: `applyPay` has no suspect-r
   offer was lost), and `MoneyDiffers(higher, amount)` from `MoneyCheck` (moved to `:domain` with
   `SessionDetail.reportSource()` / `effectiveReport()`). #1119 S2 adds `OfferNotMatched(jobId, offerSeqs)`: one per job
   a tie at its store left unmatched, from every passed offer carrying that job in `ambiguousJobIds` (a demoted,
-  inferred decline included), in first-seen order with the sequence ids sorted. A running shift raises none. The shift page computes it from its
+  inferred decline included), in first-seen order with the sequence ids sorted. #1599 adds `ReceiptNotMatched(evidenceId,
+  totalCents, firstSeenAt)`: one per OPEN saved receipt (`ShiftReceipts`), after the tie checks and before the money
+  check, also when the totals agree. A running shift raises none. The shift page computes it from its
   own detail and timeline (`SessionDetailUiState.checks`); `ShiftChecksRepository.checks(sessionId)` is the read for
   other screens.
 - **Page.** Under the money check, one line for the offers with no delivery ("1 accepted offer has no delivery
   recorded"), one per group ("1 job has 2 accepted offers and 1 delivery") and one per tie ("1 job could be from 2
-  offers", #1119 S2; a link lands on the job's card, after the other two kinds). The sheet that answers a tie and its
-  correction are a follow-up. A NO_DELIVERY card opens "What happened
+  offers", #1119 S2; a link lands on the job's card, after the other two kinds), then one row per unmatched receipt
+  ("Receipt $20.50 · 2:14 PM · not matched", #1599) with a Match button that opens "Which deliveries did this receipt
+  pay for?" (`ReceiptMatchSheet`); its link, `match:<evidenceId>`, lands last and opens the sheet. The sheet lists
+  every delivery of the shift with the suggestion ticked and marked Suggested, a locked delivery disabled with its
+  reason, and the preview (each row's new pay or "Estimate removed", "Delivery pay $A to $B", the independent total);
+  Confirm writes `RECEIPT_MATCHED`, and nothing else on the sheet writes. It is the one sheet that shows estimates.
+  The sheet that answers a tie and its correction are a follow-up. A NO_DELIVERY card opens "What happened
   to this offer?" (`OfferQuestionSheet`) for its first open offer: "It was unassigned" writes `OFFER_OUTCOME_CORRECTION`;
   "Add a missed delivery" opens `AddMissedDeliveryDialog` prefilled with the offer's store and pay and writes
   `MANUAL_DELIVERY` at the offer's decision time naming it; Close leaves it open. A group shows its line and no sheet.
