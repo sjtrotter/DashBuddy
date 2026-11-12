@@ -162,8 +162,11 @@ internal fun candidateStoreKeys(offer: PendingOffer, job: Job?): Set<String> {
 }
 
 /** The store a work frame names, trimmed; null when it names none. */
-private fun storeOf(obs: Observation.FlowObservation): String? =
-    (obs.parsed as? ParsedFields.TaskFields)?.storeName?.trim()
+private fun storeOf(obs: Observation.FlowObservation): String? = storeNamed(obs.parsed)
+
+/** The one store-less predicate: a task frame's store, trimmed; null when blank, `Unknown` or not a task frame. */
+private fun storeNamed(parsed: ParsedFields): String? =
+    (parsed as? ParsedFields.TaskFields)?.storeName?.trim()
         ?.takeIf { it.isNotBlank() && !it.equals(UNKNOWN_STORE, ignoreCase = true) }
 
 /** No ordering, no recency, no scope preference: every live (non-demoted) entry at the store. */
@@ -190,7 +193,9 @@ internal fun PlatformRegionStepper.poolWorkEdge(
     val held = region.heldWorkFrame
     val store = storeOf(obs)
     if (held != null) {
-        // The time cap is `lapseHeldWork`'s, run by the stepper before any early return.
+        // A flow-less observation (a push, a flow-less click) is not a work frame: it neither counts toward the hold
+        // nor ends it. The time cap is `lapseHeldWork`'s, run by the stepper before any early return.
+        if (obs.flow == null) return region
         if (!nextFlow.isTaskFlow()) return releaseHeldBare(sink, region, held, policy, "non-task frame")
         if (store == null) {
             val frames = held.frames + 1
@@ -361,11 +366,12 @@ private fun PlatformRegionStepper.releaseHeldBare(
     return updateTaskLifecycle(sink, minted, held.prevFlow, held.flow, heldObs, policy)
 }
 
-/** A store-less held pickup's fields with [release]'s store, when [release] is a pickup naming one; else unchanged. */
+/** A store-less held task's fields ([storeNamed]) with [release]'s store, when [release] is the same phase naming one. */
 private fun ParsedFields.withStoreOf(release: ParsedFields): ParsedFields {
     val held = this as? ParsedFields.TaskFields ?: return this
-    val store = (release as? ParsedFields.TaskFields)?.takeIf { it.phase == held.phase }?.storeName ?: return this
-    return if (held.storeName == null) held.copy(storeName = store) else this
+    if (storeNamed(held) != null) return this
+    val store = (release as? ParsedFields.TaskFields)?.takeIf { it.phase == held.phase }?.let(::storeNamed) ?: return this
+    return held.copy(storeName = store)
 }
 
 /**

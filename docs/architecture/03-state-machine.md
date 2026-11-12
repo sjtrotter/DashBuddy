@@ -676,8 +676,10 @@ task, both started at the held frame). At either cap, on any non-task frame, or 
 the held frame is replayed into today's bare mint (`mintBareJob` + `updateTaskLifecycle` on the held frame), and
 the frame that ended the hold steps on that; a link instead replays the held frame's task lifecycle on the linked
 job, so its arrival, customer, deadline and shopping fields stay. Before that replay the held task takes the
-releasing frame's store (same phase only), so a releasing navigation frame updates the same pickup instead of
-reading as a stacked-pickup transition. A non-task acted flow (Offline, a dash summary) releases a standing hold
+releasing frame's store (same phase only; blank and `Unknown` count as no store, the one predicate the hold's
+entry uses), so a releasing navigation frame updates the same pickup instead of reading as a stacked-pickup
+transition. A flow-less observation (a push, a flow-less click) neither counts toward the frame cap nor ends a
+hold; only the time cap applies to it. A non-task acted flow (Offline, a dash summary) releases a standing hold
 into the bare mint at the top of `updateLifecycle` (`releaseInterruptedHold`), before those flows' early returns.
 A dropoff released from a hold announces its leg (`DELIVERY_NAV_STARTED`) with the task's preserved start time.
 The time cap is checked on every observation
