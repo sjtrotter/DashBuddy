@@ -25,7 +25,7 @@
     <string name="census_disclosure_who_body">El servidor del censo de gig.log, en %1$s. El servidor también ve la dirección IP del teléfono durante cada envío.</string>
     <string name="census_disclosure_when_title">Cuándo</string>
     <string name="census_disclosure_when_body">Una vez al día a una hora aleatoria, solo por Wi-Fi a menos que permitas datos móviles en los ajustes del censo. Los envíos van cifrados (HTTPS).</string>
-    <string name="census_disclosure_identity_title">No es anónimo</string>
+    <string name="census_disclosure_identity_title">Vinculado a este teléfono durante 30 días</string>
     <string name="census_disclosure_identity_body">Los envíos llevan un identificador de este teléfono, así que el servidor puede distinguir los envíos del mismo teléfono durante 30 días, y no después.</string>
     <string name="census_disclosure_stop_title">Detener y borrar</string>
     <string name="census_disclosure_stop_body">Puedes desactivar el censo en cualquier momento y borrar desde Ajustes los datos del censo que el servidor guarda de este teléfono y todo lo que gig.log guarda en el teléfono.</string>

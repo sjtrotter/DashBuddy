@@ -25,7 +25,7 @@
     <string name="census_disclosure_who_body">Le serveur du recensement de gig.log, à l\'adresse %1$s. Le serveur voit aussi l\'adresse IP du téléphone pendant chaque envoi.</string>
     <string name="census_disclosure_when_title">Quand</string>
     <string name="census_disclosure_when_body">Une fois par jour à une heure aléatoire, en Wi-Fi uniquement sauf si vous autorisez les données mobiles dans les réglages du recensement. Les envois sont chiffrés (HTTPS).</string>
-    <string name="census_disclosure_identity_title">Pas anonyme</string>
+    <string name="census_disclosure_identity_title">Lié à ce téléphone pendant 30 jours</string>
     <string name="census_disclosure_identity_body">Les envois portent un identifiant de ce téléphone : le serveur peut donc distinguer les envois d\'un même téléphone pendant 30 jours, et pas au-delà.</string>
     <string name="census_disclosure_stop_title">Arrêter et supprimer</string>
     <string name="census_disclosure_stop_body">Vous pouvez désactiver le recensement à tout moment et supprimer depuis les Paramètres les données du recensement que le serveur garde pour ce téléphone et tout ce que gig.log garde sur le téléphone.</string>

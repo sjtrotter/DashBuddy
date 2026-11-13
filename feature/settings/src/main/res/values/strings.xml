@@ -202,7 +202,7 @@
     <string name="census_disclosure_who_body">gig.log\'s census server, at %1$s. The server also sees the phone\'s IP address during each upload.</string>
     <string name="census_disclosure_when_title">When</string>
     <string name="census_disclosure_when_body">Once a day at a random time, on Wi-Fi only unless you allow mobile data in the census settings. Uploads are encrypted (HTTPS).</string>
-    <string name="census_disclosure_identity_title">Not anonymous</string>
+    <string name="census_disclosure_identity_title">Linked to this phone for 30 days</string>
     <string name="census_disclosure_identity_body">Uploads carry an ID for this phone, so the server can tell uploads from the same phone apart for 30 days, and not after.</string>
     <string name="census_disclosure_stop_title">Stop and delete</string>
     <string name="census_disclosure_stop_body">You can turn the census off at any time, and delete from Settings the census data the server holds for this phone and everything gig.log keeps on the phone.</string>
