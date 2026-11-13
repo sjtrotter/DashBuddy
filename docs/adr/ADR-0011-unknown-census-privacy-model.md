@@ -1017,8 +1017,10 @@ build's census runs as §1 to §11 describe.
   before anything else (`CensusDataDeletion`). "What gig.log sent" summarizes the request bodies the server read,
   from their bytes, for 7 days on the phone. An install the server no longer knows (a restore after a deletion
   erases it whole) re-enrols with consent kept. The server keeps the install record and today's ledger row so uploads
-  continue (census API.md); the bullet below that lists "the install record" describes withdrawal. The on-phone wipe
-  is still #1579; the disclosure's per-build line says so.
+  continue (census API.md), and the confirmation says so with today's quota row; the bullet below that lists "the
+  install record" describes withdrawal. Until the live server is deployed with census#79 it answers 404 and the request
+  waits on the phone, bound to its install ID, with uploads held; a 401 never counts as deleted. The on-phone wipe is
+  still #1579; the disclosure's per-build line says both.
 - The capture bus stays `NoOpCaptureBus` in the Play and sideload builds. Only skeletons, health counts and, from a
   contributor, the role tags and gated words of §15 leave those phones.
 - The debug build keeps the trusted-envelope path until #1633; after that the official server accepts no plaintext

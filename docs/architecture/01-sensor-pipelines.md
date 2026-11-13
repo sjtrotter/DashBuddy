@@ -925,26 +925,37 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   enrolled prefix and (#1185) a **Copy install id** button for the FULL id — a random handle, never the
   secret — because the server-side trust step (`POST /ops/installs/<uuid>/trust`) needs it.
   **Unknown identity (#1622):** a 401 for an enrolled ID that the clock does not explain (Date within 300 s) after
-  the run's one re-sign, before the server took any request from it this run, or a health 401 the same way, means
-  the server no longer knows the ID (a restore from a backup older than a deletion erases the install whole,
-  census#88). The worker forgets it (envelopes, capture sharing, health ledger, as any new identity), mints and
-  enrols a fresh one, consent kept, and sends once more under it; the queued outlines and their in-flight batch stay.
+  the run's one re-sign, or a health 401 the same way, with no answer earlier in the run that proves the server
+  verified this credential (`RunRecord.authorized`: health accepted / batch quality / budget, uploads accepted /
+  duplicate / batch quality / budget / not trusted, across every stage), means the server no longer knows the ID (a
+  restore from a backup older than a deletion erases the install whole, census#88). The worker forgets it
+  (envelopes, capture sharing, health ledger, as any new identity), mints and enrols a fresh one, consent kept, and
+  sends once more under it; the queued outlines and their in-flight batch stay.
   **Sent record and deletion (#1622):** `CensusApi` hands the exact bytes of each skeleton, health or envelope body
   the server read (200, 400, 422) to `CensusSentObserver`, bound to `CensusSentLog`, which keeps only
   `CensusSentBatch.read`'s summary (kind, platform, day, node count, codes / formats / type-only / withheld counts;
-  no hash, template or value) in `filesDir/census/sent.json`, 7 days and at most 60 requests, one entry per batch
-  id; an observer failure never changes the request's result. "What gig.log sent" renders it with the stored daily
-  target (the time left ticks with `rememberNow`). `CensusDataDeletion` (`:core:data`, the one entry point; #1579's
-  wipe calls `delete()`) runs under `CensusUploadLock`: it stores a pending `CensusDeletion` in `dev_settings`,
-  cancels a waiting manual run, clears the skeleton spool and in-flight marker, invalidates the envelope sink and
-  resets the health ledger (a failed clear is retried before the next attempt), then sends a signed
-  `DELETE /v1/installs/me/data` with an empty body. 200 stores the rows and the server's UTC day (only a parsed
-  date); not enrolled, or a 401 the clock does not explain, stores `nothing_held` (the 401 also wipes the credential so the
-  next run enrols afresh); revoked switches the census off and stores `not_possible`; anything else stays pending
-  and `enqueueDeletion` queues a `census_delete` run (CONNECTED, exponential backoff from one minute). Every worker
-  run calls `resumePending()` first under the lock, whatever the consent: while a request is pending it sends
-  nothing else (INFO `census skipped cause=deletion_pending`), and a `census_delete`-tagged run never uploads. An
-  unreadable stored state decodes as pending (fail closed). Deleting never changes consent; the switch is stop.
+  no hash, template, batch id or value) in `filesDir/census/sent.json`, `CensusSentBatch.KEEP_MILLIS` (7 days) and at
+  most 60 requests; every read prunes expired entries and rewrites the file, and the screen filters by
+  `rememberNow` so rows leave while it is open. An observer failure never changes the request's result. "What
+  gig.log sent" shows the stored daily target with the time left ticking. `CensusDataDeletion` (`:core:data`, the
+  one entry point; #1579's wipe calls `delete()`) runs under `CensusUploadLock`: it stores a pending `CensusDeletion`
+  in `dev_settings`, queues `enqueueDeletion` (a `census_delete` run, CONNECTED, exponential backoff from one minute)
+  BEFORE the first attempt, cancels a waiting manual run, clears the skeleton spool and in-flight marker, invalidates
+  the envelope sink and resets the health ledger, then sends a signed `DELETE /v1/installs/me/data` with an empty
+  body under the credential of the install id the request binds at its first attempt. `CensusSpool.generation` is
+  the clear boundary: `HttpCensusSink` tags each offered record with it and `append` drops a record tagged before
+  a clear, so an outline in the sink's channel or consumer during a deletion is never written behind it. 200 stores
+  the rows and the server's UTC day (only a parsed date); 401 (any cause: bad signature, clock, unknown id), 404/405
+  (the server is not yet deployed with census#79), 429, 5xx and transport failures keep it pending with a
+  `waiting` reason the screen words (unconfirmed / not yet / unreachable), the credential kept; only "no enrolled
+  credential at the first attempt" stores `nothing_held`; revoked switches the census off and stores `not_possible`,
+  as does a bound id the phone no longer holds. A request is `resolved` only when the server answered AND the local
+  clear succeeded (a failed clear is retried, uploads blocked meanwhile). Every worker run calls `resumePending()`
+  first under the lock, whatever the consent: while unresolved it sends nothing else (INFO `census skipped
+  cause=deletion_pending`), and a `census_delete`-tagged run never uploads. `CensusIdentityResetter` calls it too and
+  refuses the reset while unresolved, so a request is never sent under another id. App start queues the retry run
+  again for an unresolved request (`reconcile`). An unreadable stored state decodes as pending (fail closed).
+  Deleting never changes consent; the switch is stop.
   **Identity reset + run status (#1185):** when the server no longer knows an enrolled install (alpha
   database reset, withdrawn install) uploads 401 and, since #1622, the worker enrols a fresh identity itself; the developer screen's **Reset
   census identity** action (confirmation dialog) runs `CensusIdentityResetter` (`:core:data`) on the
