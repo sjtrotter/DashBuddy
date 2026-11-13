@@ -29,7 +29,8 @@ import kotlin.reflect.typeOf
 class UiSkeletonDtoTypeTest {
 
     private val nodeStrings = setOf("class", "id")
-    private val slotStrings = setOf("h", "kind")
+    /** `shape` (v2, ADR-0011 §13) is a string the DTO accepts only from the closed `ShapeTemplate` list. */
+    private val slotStrings = setOf("h", "kind", "shape")
     private val envelopeStrings = setOf(
         // ReplayMetadata's own names
         "platformAppVersion", "appVersion", "rulesetReleaseTag",
@@ -58,7 +59,7 @@ class UiSkeletonDtoTypeTest {
     @Test
     fun `wire - the element sets are exactly the ADR's, nothing else`() {
         assertEquals(
-            setOf("class", "id", "isClickable", "isEnabled", "isChecked", "text", "children"),
+            setOf("class", "id", "isClickable", "isEnabled", "isChecked", "hasClickAction", "isVisibleToUser", "text", "children"),
             UiSkeletonNodeDto.serializer().descriptor.elementNames.toSet(),
         )
         assertEquals(slotStrings, TextSlot.serializer().descriptor.elementNames.toSet())
@@ -116,6 +117,9 @@ class UiSkeletonDtoTypeTest {
             { TextSlot(h = h, kind = "words:8+") },
             { TextSlot(h = "Accept", kind = "words:1") },
             { TextSlot(kind = "plaintext") },
+            { TextSlot(kind = "shape") },
+            { TextSlot(kind = "shape", shape = "Jane S") },
+            { TextSlot(kind = "mixed", shape = "\$#.##") },
         ).forEachIndexed { i, make ->
             try {
                 make(); fail("case $i must be rejected")

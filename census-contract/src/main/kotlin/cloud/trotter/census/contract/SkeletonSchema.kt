@@ -23,7 +23,8 @@ package cloud.trotter.census.contract
 import kotlinx.serialization.json.Json
 
 /**
- * The `uinode.skeleton.v1` wire schema (ADR-0011 §1; ADR-0003 versioning rules apply) — the census
+ * The `uinode.skeleton.v1` / `uinode.skeleton.v2` wire schema (ADR-0011 §1, §13; ADR-0003 versioning rules apply;
+ * the versions are [SkeletonVersion]) — the census
  * sibling of `UiNodeSchema`. Deliberately NOT a `CaptureSchema`: the contract package depends on
  * nothing outside the JDK, kotlinx-serialization and `sha256OrNull`.
  *
@@ -34,7 +35,11 @@ import kotlinx.serialization.json.Json
  */
 object SkeletonSchema {
 
+    /** The v1 screen schema ([SkeletonVersion.V1]). */
     const val SCHEMA_ID: String = "uinode.skeleton.v1"
+
+    /** The v2 screen schema ([SkeletonVersion.V2]): shape slots and the click/visibility node flags (#1619). */
+    const val SCHEMA_ID_V2: String = "uinode.skeleton.v2"
 
     /** Size cap on one item: uncompressed UTF-8 bytes of its serialized JSON, metadata included. */
     const val MAX_ITEM_BYTES: Int = 65_536

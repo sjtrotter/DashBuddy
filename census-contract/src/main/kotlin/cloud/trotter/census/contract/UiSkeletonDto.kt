@@ -28,14 +28,18 @@ import kotlinx.serialization.Serializable
  * when the §2 filter admitted a hash, [h]. **There is no plaintext slot** — the value itself never
  * enters this type, so a text leak is a type error rather than a policy breach.
  *
+ * From v2 (ADR-0011 §13, #1619) a `mixed` value may instead go out as kind [KindClassifier.SHAPE] with its
+ * format template in [shape], one of the closed [ShapeTemplate] list — never the value, never free text.
+ *
  * Invariants checked at construction (so a decoded item that violates them is rejected, too):
  * [kind] is a wire kind of [KindClassifier]; [h] is present IFF [kind] is `words:1..8`; [h] is
- * [CensusHash.HEX_LENGTH] lowercase hex.
+ * [CensusHash.HEX_LENGTH] lowercase hex; [shape] is present IFF [kind] is `shape`, and is a [ShapeTemplate] wire.
  */
 @Serializable
 data class TextSlot(
     val h: String? = null,
     val kind: String,
+    val shape: String? = null,
 ) {
     init {
         require(KindClassifier.isWireKind(kind)) { "unknown census kind" }
@@ -43,17 +47,31 @@ data class TextSlot(
             "a hash is present iff the kind is words:1..8"
         }
         if (h != null) require(CensusHash.isWellFormed(h)) { "a census hash is 16 lowercase hex" }
+        require((shape != null) == (kind == KindClassifier.SHAPE)) { "a shape is present iff the kind is shape" }
+        if (shape != null) require(ShapeTemplate.isWire(shape)) { "a shape must be a template of the closed list" }
     }
+
+    /** True when this slot uses a v2-only field. */
+    val isV2Only: Boolean get() = kind == KindClassifier.SHAPE
+
+    /** The v1 wire form: a shape reads `mixed` (what v1 emitted for the same value); anything else is unchanged. */
+    fun toV1(): TextSlot = if (isV2Only) TextSlot(kind = KindClassifier.MIXED) else this
 
     companion object {
         /** The constant emitted when a withholding step fired: no hash, no length, no count. */
         val WITHHELD: TextSlot = TextSlot(kind = KindClassifier.WITHHELD)
+
+        /** The v2 slot of a value that fits [template]. */
+        fun ofShape(template: ShapeTemplate): TextSlot = TextSlot(kind = KindClassifier.SHAPE, shape = template.wire)
     }
 }
 
 /**
- * One node of the `uinode.skeleton.v1` tree (ADR-0011 §1): class, view id (the platform's own resource
- * name), the three flags, the per-field [text] map and the children — in tree ORDER only.
+ * One node of the `uinode.skeleton` tree (ADR-0011 §1): class, view id (the platform's own resource
+ * name), the three flags, the per-field [text] map and the children — in tree ORDER only. v2 (ADR-0011 §13,
+ * #1619) adds two flags a click rule needs: [hasClickAction] (the node advertises `ACTION_CLICK`, as Compose
+ * controls do without setting [isClickable]) and [isVisibleToUser]. Their defaults are the common values, so a
+ * typical node serializes nothing new and a v1 node, which may not set them, serializes as before.
  *
  * **No bounds, no other string field.** [text] is keyed by the `UiNodeTextField` wire key (`text`,
  * `desc`, `state`, `pane`, … `uid`); a blank or null field is OMITTED, never emitted. Every value has
@@ -67,6 +85,10 @@ data class UiSkeletonNodeDto(
     val isEnabled: Boolean = false,
     /** The `UiNode` tri-state: 0 unchecked, 1 checked, 2 partial. */
     val isChecked: Int = 0,
+    /** v2 only. */
+    val hasClickAction: Boolean = false,
+    /** v2 only. */
+    val isVisibleToUser: Boolean = true,
     val text: Map<String, TextSlot> = emptyMap(),
     val children: List<UiSkeletonNodeDto> = emptyList(),
 ) {
@@ -87,6 +109,18 @@ data class UiSkeletonNodeDto(
         require(text.keys.all { TEXT_KEY_SHAPE.matches(it) }) { "a text-map key must have the wire-key shape" }
     }
 
+    /** True when this node or a descendant uses a v2-only field. */
+    fun usesV2Fields(): Boolean =
+        hasClickAction || !isVisibleToUser || text.values.any { it.isV2Only } || children.any { it.usesV2Fields() }
+
+    /** The v1 wire form of this subtree: shapes read `mixed`, the v2 flags take their defaults. */
+    fun toV1(): UiSkeletonNodeDto = copy(
+        hasClickAction = false,
+        isVisibleToUser = true,
+        text = text.mapValues { it.value.toV1() },
+        children = children.map { it.toV1() },
+    )
+
     companion object {
         /** The wire-key shape of a text-map key (review UU1). */
         private val TEXT_KEY_SHAPE = Regex("^[a-z][A-Za-z0-9]{0,15}$")
@@ -94,7 +128,7 @@ data class UiSkeletonNodeDto(
 }
 
 /**
- * One census item — a `uinode.skeleton.v1` skeleton with its envelope (ADR-0011 §1).
+ * One census item — a `uinode.skeleton.v1` or `.v2` skeleton with its envelope (ADR-0011 §1, §13; [version]).
  *
  * The envelope is exactly the §7(a) allowlist: the window title as a [TextSlot]; the strings
  * [schemaId], [fingerprint], [platform], [platformAppVersion], [appVersion], [rulesetReleaseTag],
@@ -121,10 +155,27 @@ data class UiSkeletonDto(
 ) : CensusSkeletonDto {
     override val kind: SkeletonKind get() = SkeletonKind.SCREEN
 
+    /** The wire version [schemaId] names. */
+    val version: SkeletonVersion get() = requireNotNull(SkeletonVersion.ofScreenSchema(schemaId))
+
     init {
-        require(schemaId == SkeletonSchema.SCHEMA_ID) { "not a ${SkeletonSchema.SCHEMA_ID} item" }
+        val version = SkeletonVersion.ofScreenSchema(schemaId)
+        require(version != null) { "not a uinode skeleton item" }
         validateEnvelope(this)
+        if (version == SkeletonVersion.V1) {
+            require(windowTitle?.isV2Only != true && !root.usesV2Fields()) { "a v1 skeleton carries no v2 field" }
+        }
     }
+
+    /**
+     * This item as `uinode.skeleton.v1`: every shape reads `mixed` and the v2 node flags drop, which is exactly
+     * what v1 emitted for the same frame. The fingerprint is unchanged (it covers class, id and structure only).
+     */
+    fun toV1(): UiSkeletonDto = if (version == SkeletonVersion.V1) this else copy(
+        schemaId = SkeletonSchema.SCHEMA_ID,
+        windowTitle = windowTitle?.toV1(),
+        root = root.toV1(),
+    )
 
     companion object {
         /** A version stamp is a short release fact, never free text. */

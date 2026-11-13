@@ -22,8 +22,11 @@ package cloud.trotter.census.contract
 
 /** Strict notification wire schema, sharing the screen JSON settings and item-size limit. */
 object NotificationSkeletonSchema {
+    /** The v1 notification schema ([SkeletonVersion.V1]). */
     const val SCHEMA_ID: String = "notification.skeleton.v1"
-    const val SCHEMA_VERSION: Int = 1
+
+    /** The v2 notification schema ([SkeletonVersion.V2]): shape slots and the action labels as slots (#1619). */
+    const val SCHEMA_ID_V2: String = "notification.skeleton.v2"
 
     fun serialize(item: NotificationSkeletonDto): String = SkeletonSchema.json.encodeToString(
         NotificationSkeletonDto.serializer(),

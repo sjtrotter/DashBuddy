@@ -44,6 +44,9 @@ enum class SkeletonRejectionReason(val wire: String) {
     UNKNOWN_SKELETON_KIND("unknown_skeleton_kind"),
     KIND_SCHEMA_MISMATCH("kind_schema_mismatch"),
     BAD_CHANNEL("bad_channel"),
+
+    /** A v2 slot's shape is not a [ShapeTemplate] of the closed list (ADR-0011 §13). */
+    BAD_SHAPE("bad_shape"),
     ;
 
     companion object {

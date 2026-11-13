@@ -7,6 +7,7 @@ import cloud.trotter.census.contract.NotificationSkeletonSchema
 import cloud.trotter.census.contract.SensitiveMarkerScan
 import cloud.trotter.census.contract.SkeletonKind
 import cloud.trotter.census.contract.SkeletonSchema
+import cloud.trotter.census.contract.SkeletonVersion
 import cloud.trotter.census.contract.TextSlot
 import cloud.trotter.log.gig.core.pipeline.CustomerTextMarkers
 import cloud.trotter.log.gig.domain.capture.ReplayMetadata
@@ -15,7 +16,12 @@ import cloud.trotter.log.gig.domain.state.Platform
 import java.time.LocalDate
 import kotlin.coroutines.cancellation.CancellationException
 
-/** Pure ADR-0011 §10 publication gate, independent of capture enablement or its scrubbed payload. */
+/**
+ * Pure ADR-0011 §10 publication gate, independent of capture enablement or its scrubbed payload. From v2 (§13,
+ * #1619) the action labels travel as slots through the same frame filter as the five text fields: a hash for a
+ * chrome label, `withheld` for anything a step catches, never a label in clear. A v1 item is the v2 build projected
+ * through `NotificationSkeletonDto.toV1`, which drops them.
+ */
 object NotificationSkeletonBuilder {
     enum class Refusal {
         /** Publisher refused this kind because the server policy does not advertise its schema. */
@@ -31,15 +37,27 @@ object NotificationSkeletonBuilder {
 
     private val channelGrammar = Regex(NotificationSkeletonDto.CHANNEL_ID_PATTERN)
 
-    fun outcome(raw: RawNotificationData, meta: ReplayMetadata, platform: Platform, day: LocalDate): Outcome = try {
-        buildOutcome(raw, meta, platform, day)
+    fun outcome(
+        raw: RawNotificationData,
+        meta: ReplayMetadata,
+        platform: Platform,
+        day: LocalDate,
+        version: SkeletonVersion = SkeletonVersion.V1,
+    ): Outcome = try {
+        buildOutcome(raw, meta, platform, day, version)
     } catch (e: CancellationException) {
         throw e
     } catch (_: Throwable) {
         Outcome.Refused(Refusal.BUILD_FAILED)
     }
 
-    private fun buildOutcome(raw: RawNotificationData, meta: ReplayMetadata, platform: Platform, day: LocalDate): Outcome {
+    private fun buildOutcome(
+        raw: RawNotificationData,
+        meta: ReplayMetadata,
+        platform: Platform,
+        day: LocalDate,
+        version: SkeletonVersion,
+    ): Outcome {
         if (platform == Platform.Unknown || platform != Platform.fromPackage(raw.packageName)) {
             return Outcome.Refused(Refusal.INVALID_ENVELOPE)
         }
@@ -57,17 +75,22 @@ object NotificationSkeletonBuilder {
         val channel = raw.channelId
         if (channel == null || !channelGrammar.matches(channel)) return Outcome.Refused(Refusal.INVALID_CHANNEL)
 
-        // Actions participated only in refusal. Never emit their scrubbed values or metadata.
+        // The scrub masks a marker-bearing field or action label before the filter sees it. Pass 1 judges every
+        // field and every label (each seeds the frame's caught set); pass 2 emits.
         val scrubbed = CustomerTextMarkers.scrubNotif(raw)
         val frame = FrameFilter(SkeletonBuilder::withholdingStep)
         val pending = scrubbed.textFields().map { (field, value) -> field to frame.field(value, IdClass.NONE) }
+        // A blank label is omitted, as a blank field is everywhere else; the list is cut at the contract's cap.
+        val pendingActions = scrubbed.actionLabels.mapNotNull { frame.field(it, IdClass.NONE) }
+            .take(NotificationSkeletonDto.MAX_ACTIONS)
         val slots = pending.associate { (field, value) -> field to (value?.let(frame::slot) ?: TextSlot.WITHHELD) }
+        val actions = pendingActions.map(frame::slot)
         val fingerprint = CensusFingerprint.of(platform.wire, channel, slots)
             ?: return Outcome.Refused(Refusal.FINGERPRINT_FAILED)
         val item = try {
             NotificationSkeletonDto(
                 kind = SkeletonKind.NOTIFICATION,
-                schemaId = NotificationSkeletonSchema.SCHEMA_ID,
+                schemaId = NotificationSkeletonSchema.SCHEMA_ID_V2,
                 hashDomain = CensusHash.HASH_DOMAIN,
                 filterRev = SkeletonBuilder.FILTER_REV,
                 fingerprint = fingerprint,
@@ -80,7 +103,8 @@ object NotificationSkeletonBuilder {
                 day = day.toString(),
                 channelId = channel,
                 slots = slots,
-            )
+                actions = actions,
+            ).let { if (version == SkeletonVersion.V1) it.toV1() else it }
         } catch (_: IllegalArgumentException) {
             return Outcome.Refused(Refusal.INVALID_ENVELOPE)
         }

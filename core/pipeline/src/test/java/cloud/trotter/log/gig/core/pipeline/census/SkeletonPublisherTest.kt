@@ -23,6 +23,7 @@ import cloud.trotter.log.gig.domain.state.ParsedFields
 import cloud.trotter.log.gig.domain.state.Platform
 import java.time.Instant
 import java.time.ZoneId
+import java.util.TimeZone
 import kotlin.coroutines.cancellation.CancellationException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -89,7 +90,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
                     return queued
                 }
             }
-            val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), envelopes)
+            val publisher = SkeletonPublisher(sink, stats, envelopes)
             publisher.publish(screen(captureId = "same-frame"), event(tree("Continue")))
             assertEquals(listOf("same-frame" to sink.records.single().fingerprint), pairs)
             assertTrue(stats.summary().contains(if (queued) "envelopesPaired=1" else "envelopesUnpaired=1"))
@@ -106,7 +107,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
             override fun hold(captureId: String, platform: Platform, envelopeJson: String) = Unit
             override fun pair(captureId: String, fingerprint: String): Boolean { pairs++; return true }
         }
-        val publisher = SkeletonPublisher(sink, PipelineStats(), ZoneId.of("UTC"), envelopes)
+        val publisher = SkeletonPublisher(sink, PipelineStats(), envelopes)
         publisher.publish(screen(), event(tree("Continue")))
         publisher.publish(screen(captureId = "refused"), event(tree("Transfer to bank")))
         enabled = false
@@ -124,7 +125,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
             override fun hold(captureId: String, platform: Platform, envelopeJson: String) = Unit
             override fun pair(captureId: String, fingerprint: String): Boolean { pairs++; return true }
         }
-        SkeletonPublisher(sink, stats, ZoneId.of("UTC"), envelopes)
+        SkeletonPublisher(sink, stats, envelopes)
             .publish(screen(captureId = "refused"), event(tree("Continue")))
         assertEquals(1, sink.records.size)
         assertEquals(1L, stats.censusSinkRefusedCount())
@@ -140,7 +141,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
             override fun hold(captureId: String, platform: Platform, envelopeJson: String) = Unit
             override fun pair(captureId: String, fingerprint: String): Boolean = throw AssertionError("test_failure")
         }
-        SkeletonPublisher(sink, stats, ZoneId.of("UTC"), envelopes)
+        SkeletonPublisher(sink, stats, envelopes)
             .publish(screen(captureId = "same-frame"), event(tree("Continue")))
         assertEquals(1, sink.records.size)
         assertEquals(1L, stats.censusPublishFailureCount())
@@ -160,7 +161,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
     fun `disabled sink - nothing is built and no counter moves`() {
         val sink = FakeSink(enabled = false)
         val stats = PipelineStats()
-        val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), NoOpCensusEnvelopeSink)
+        val publisher = SkeletonPublisher(sink, stats, NoOpCensusEnvelopeSink)
 
         publisher.publish(screen(), event(tree("Continue")))
         publisher.publish(screen(), event(tree("Transfer out", "\$45.66 available")))
@@ -174,7 +175,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
         listOf(null, "cap-1").forEach { captureId ->
             val sink = FakeSink(enabled = true)
             val stats = PipelineStats()
-            val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), NoOpCensusEnvelopeSink)
+            val publisher = SkeletonPublisher(sink, stats, NoOpCensusEnvelopeSink)
 
             publisher.publish(screen(captureId = captureId), event(tree("Continue")))
 
@@ -191,7 +192,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
     fun `a recognized frame never reaches the sink`() {
         val sink = FakeSink(enabled = true)
         val stats = PipelineStats()
-        val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), NoOpCensusEnvelopeSink)
+        val publisher = SkeletonPublisher(sink, stats, NoOpCensusEnvelopeSink)
 
         publisher.publish(
             screen(target = "idle_map", ruleId = "doordash.screen.idle_map"),
@@ -206,7 +207,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
     fun `a sensitive frame yields no record and counts SENSITIVE_FRAME`() {
         val sink = FakeSink(enabled = true)
         val stats = PipelineStats()
-        val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), NoOpCensusEnvelopeSink)
+        val publisher = SkeletonPublisher(sink, stats, NoOpCensusEnvelopeSink)
 
         publisher.publish(screen(), event(tree("Transfer out", "\$45.66 available")))
 
@@ -240,7 +241,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
         assertEquals(3 to 2, tokenCounts(built.skeleton.copy(windowTitle = TextSlot.WITHHELD)))
         val sink = FakeSink(enabled = true)
         val stats = PipelineStats()
-        val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), NoOpCensusEnvelopeSink)
+        val publisher = SkeletonPublisher(sink, stats, NoOpCensusEnvelopeSink)
 
         publisher.publish(screen(), event(tree, windowTitle = "Offer"))
 
@@ -254,7 +255,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
     fun `an unattributable package is refused before any build (#1171 review)`() {
         val stats = PipelineStats()
         val sink = FakeSink(enabled = true)
-        val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), NoOpCensusEnvelopeSink)
+        val publisher = SkeletonPublisher(sink, stats, NoOpCensusEnvelopeSink)
         val t = tree("Continue")
         publisher.publish(
             screen(target = UNKNOWN_TARGET),
@@ -272,7 +273,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
             override val isEnabled: Boolean get() = error("boom")
             override fun offer(record: CensusRecord): Boolean = true
         }
-        val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), NoOpCensusEnvelopeSink)
+        val publisher = SkeletonPublisher(sink, stats, NoOpCensusEnvelopeSink)
         publisher.publish(screen(target = UNKNOWN_TARGET), event(tree("Continue")))
         assertEquals(1L, stats.censusPublishFailureCount())
         assertEquals(0L, stats.censusSkeletonCount())
@@ -285,7 +286,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
             override fun offer(record: CensusRecord): Boolean = throw IllegalStateException("not logged")
         }
         val stats = PipelineStats()
-        val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), NoOpCensusEnvelopeSink)
+        val publisher = SkeletonPublisher(sink, stats, NoOpCensusEnvelopeSink)
 
         publisher.publish(screen(), event(tree("Continue")))
 
@@ -298,7 +299,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
     fun `a sink refusal counts separately from a build refusal`() {
         val sink = FakeSink(enabled = true, accept = false)
         val stats = PipelineStats()
-        val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), NoOpCensusEnvelopeSink)
+        val publisher = SkeletonPublisher(sink, stats, NoOpCensusEnvelopeSink)
 
         publisher.publish(screen(), event(tree("Continue")))
 
@@ -317,7 +318,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
             override fun offer(record: CensusRecord): Boolean = throw cancellation
         }
         val stats = PipelineStats()
-        val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), NoOpCensusEnvelopeSink)
+        val publisher = SkeletonPublisher(sink, stats, NoOpCensusEnvelopeSink)
 
         try {
             publisher.publish(screen(), event(tree("Continue")))
@@ -331,16 +332,21 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
     }
 
     @Test
-    fun `day comes from the observation timestamp in the publisher's zone`() {
-        val timestamp = Instant.parse("2026-10-01T03:30:00Z").toEpochMilli()
-        mapOf("America/Chicago" to "2026-09-30", "UTC" to "2026-10-01").forEach { (zone, day) ->
+    fun `day is the observation timestamp's UTC day, whatever the phone's zone (ADR-0011 section 21)`() {
+        val original = TimeZone.getDefault()
+        try {
+            // 03:30 UTC is still the previous evening in Chicago; the skeleton carries the UTC day.
+            TimeZone.setDefault(TimeZone.getTimeZone("America/Chicago"))
             val sink = FakeSink(enabled = true)
-            val publisher = SkeletonPublisher(sink, PipelineStats(), ZoneId.of(zone), NoOpCensusEnvelopeSink)
-
+            val publisher = SkeletonPublisher(sink, PipelineStats(), NoOpCensusEnvelopeSink)
+            val time = Instant.parse("2026-10-01T03:30:00Z").toEpochMilli()
             // The event keeps the fixture timestamp; only the observation supplies the day.
-            publisher.publish(screen(timestamp = timestamp), event(tree("Continue")))
-
-            assertTrue(sink.records.single().skeletonJson.contains("\"day\":\"$day\""))
+            publisher.publish(screen(timestamp = time), event(tree("Continue")))
+            publisher.publish(notification(time = time), rawNotification())
+            sink.records.forEach { assertTrue(it.skeletonJson, it.skeletonJson.contains("\"day\":\"2026-10-01\"")) }
+            assertEquals(2, sink.records.size)
+        } finally {
+            TimeZone.setDefault(original)
         }
     }
     private fun notification(target: String = UNKNOWN_TARGET, captureId: String? = "capture", time: Long = timestamp) =
@@ -359,7 +365,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
             override fun hold(captureId: String, platform: Platform, envelopeJson: String) = Unit
             override fun pair(captureId: String, fingerprint: String): Boolean { pairs++; return true }
         }
-        val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), envelopes)
+        val publisher = SkeletonPublisher(sink, stats, envelopes)
         sink.acceptedSchemaIds = setOf(SkeletonSchema.SCHEMA_ID)
         publisher.publish(notification(), rawNotification())
         assertTrue(sink.records.isEmpty())
@@ -387,7 +393,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
             override fun offer(record: CensusRecord): Boolean { records += record; return true }
         }
         val stats = PipelineStats()
-        val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), NoOpCensusEnvelopeSink)
+        val publisher = SkeletonPublisher(sink, stats, NoOpCensusEnvelopeSink)
         publisher.publish(notification(), rawNotification())
         publisher.publish(screen(), event(tree("Continue")))
         assertEquals(setOf(SkeletonSchema.SCHEMA_ID), sink.acceptedSchemaIds)
@@ -406,13 +412,13 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
             override fun hold(captureId: String, platform: Platform, envelopeJson: String) = error("unexpected hold")
             override fun pair(captureId: String, fingerprint: String): Boolean = error("unexpected pair")
         }
-        val publisher = SkeletonPublisher(sink, stats, ZoneId.of("America/Chicago"), envelopes)
+        val publisher = SkeletonPublisher(sink, stats, envelopes)
         val time = Instant.parse("2026-10-01T03:30:00Z").toEpochMilli()
         publisher.publish(notification(time = time), rawNotification())
         publisher.publish(notification(captureId = null, time = time), rawNotification().copy(actionLabels = listOf("Next")))
         val first = sink.records.first()
         val item = NotificationSkeletonSchema.deserialize(first.skeletonJson)
-        assertEquals("2026-09-30", item.day)
+        assertEquals("2026-10-01", item.day)
         assertEquals(meta.engineVersion, item.engineVersion)
         assertEquals(Platform.DoorDash, first.platform)
         assertEquals("capture", first.captureId)
@@ -429,7 +435,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
         for (enabled in listOf(true, false)) {
             val sink = FakeSink(enabled)
             val stats = PipelineStats()
-            val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), NoOpCensusEnvelopeSink)
+            val publisher = SkeletonPublisher(sink, stats, NoOpCensusEnvelopeSink)
             publisher.publish(notification(target = "known"), rawNotification().copy(channelId = null))
             if (!enabled) publisher.publish(notification(), rawNotification().copy(actionLabels = listOf("Transfer out")))
             assertNoCensus(stats)
@@ -441,7 +447,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
     @Test fun `notification refusals and unknown packages are counted without offers`() {
         val sink = FakeSink(true)
         val stats = PipelineStats()
-        val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), NoOpCensusEnvelopeSink)
+        val publisher = SkeletonPublisher(sink, stats, NoOpCensusEnvelopeSink)
         publisher.publish(notification(), rawNotification().copy(packageName = "unregistered"))
         publisher.publish(notification(), rawNotification().copy(actionLabels = listOf("Transfer out")))
         assertEquals(1L, stats.censusUnattributedPlatformCount())
@@ -459,7 +465,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
                     override fun offer(record: CensusRecord): Boolean = throw failure
                 }
                 val stats = PipelineStats()
-                val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), NoOpCensusEnvelopeSink)
+                val publisher = SkeletonPublisher(sink, stats, NoOpCensusEnvelopeSink)
                 if (cancel) {
                     try { publisher.publish(notification(), rawNotification()); fail("cancellation must escape") }
                     catch (e: CancellationException) { assertSame(failure, e) }
@@ -468,7 +474,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
             }
         }
         val stats = PipelineStats()
-        SkeletonPublisher(FakeSink(true, accept = false), stats, ZoneId.of("UTC"), NoOpCensusEnvelopeSink)
+        SkeletonPublisher(FakeSink(true, accept = false), stats, NoOpCensusEnvelopeSink)
             .publish(notification(), rawNotification())
         assertEquals(1L, stats.censusSinkRefusedCount())
         assertEquals(1L, stats.censusNotificationCount())
@@ -489,7 +495,7 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
             override fun offer(record: CensusRecord) = false
         }
         val stats = PipelineStats()
-        val publisher = SkeletonPublisher(sink, stats, ZoneId.of("UTC"), NoOpCensusEnvelopeSink)
+        val publisher = SkeletonPublisher(sink, stats, NoOpCensusEnvelopeSink)
         timber.log.Timber.plant(logTree)
         try {
             publisher.publish(notification(), rawNotification())
@@ -502,4 +508,40 @@ class SkeletonPublisherTest : SkeletonBuilderTestBase() {
         assertEquals(3L, stats.censusPublishFailureCount())
     }
 
+    @Test fun `each kind goes out in the newest version the policy lists, so v2 fields wait for the server`() {
+        val sink = FakeSink(true)
+        val publisher = SkeletonPublisher(sink, PipelineStats(), NoOpCensusEnvelopeSink)
+        val frame = UiNode(children = listOf(
+            UiNode(className = "android.widget.TextView", text = "\$7.50", hasClickAction = true),
+        )).restoreParents()
+        val raw = rawNotification().copy(title = "\$7.50", actionLabels = listOf("Accept"))
+
+        sink.acceptedSchemaIds = setOf(SkeletonSchema.SCHEMA_ID, NotificationSkeletonSchema.SCHEMA_ID)
+        publisher.publish(screen(), event(frame))
+        publisher.publish(notification(), raw)
+        val (v1Screen, v1Notification) = sink.records.map { CensusSkeletonSchema.deserialize(it.skeletonJson) }
+        assertEquals(SkeletonSchema.SCHEMA_ID, v1Screen.schemaId)
+        assertEquals(NotificationSkeletonSchema.SCHEMA_ID, v1Notification.schemaId)
+        sink.records.forEach {
+            assertFalse(it.skeletonJson, it.skeletonJson.contains("shape"))
+            assertFalse(it.skeletonJson, it.skeletonJson.contains("hasClickAction"))
+            assertFalse(it.skeletonJson, it.skeletonJson.contains("actions"))
+        }
+
+        sink.records.clear()
+        sink.acceptedSchemaIds = CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS.toSet()
+        publisher.publish(screen(), event(frame))
+        publisher.publish(notification(), raw)
+        val (v2Screen, v2Notification) = sink.records.map { CensusSkeletonSchema.deserialize(it.skeletonJson) }
+        assertEquals(SkeletonSchema.SCHEMA_ID_V2, v2Screen.schemaId)
+        assertEquals(NotificationSkeletonSchema.SCHEMA_ID_V2, v2Notification.schemaId)
+        assertEquals(v1Screen.fingerprint, v2Screen.fingerprint)
+        assertEquals(v1Notification.fingerprint, v2Notification.fingerprint)
+        val node = (v2Screen as cloud.trotter.census.contract.UiSkeletonDto).root.children.single()
+        assertEquals(TextSlot.ofShape(cloud.trotter.census.contract.ShapeTemplate.MONEY), node.text.getValue("text"))
+        assertTrue(node.hasClickAction)
+        val notificationItem = v2Notification as cloud.trotter.census.contract.NotificationSkeletonDto
+        assertEquals(1, notificationItem.actions.size)
+        assertFalse(sink.records.last().skeletonJson, sink.records.last().skeletonJson.contains("Accept"))
+    }
 }

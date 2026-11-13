@@ -6,9 +6,9 @@ import cloud.trotter.log.gig.core.pipeline.census.SkeletonBuilder.Outcome
 import cloud.trotter.log.gig.domain.capture.CensusEnvelopeSink
 import cloud.trotter.log.gig.domain.capture.CensusRecord
 import cloud.trotter.log.gig.domain.capture.CensusSink
+import cloud.trotter.census.contract.CensusSkeletonSchema
 import cloud.trotter.census.contract.NotificationSkeletonDto
-import cloud.trotter.census.contract.NotificationSkeletonSchema
-import cloud.trotter.census.contract.SkeletonSchema
+import cloud.trotter.census.contract.SkeletonVersion
 import cloud.trotter.log.gig.domain.model.notification.RawNotificationData
 import cloud.trotter.census.contract.KindClassifier
 import cloud.trotter.census.contract.TextSlot
@@ -18,7 +18,8 @@ import cloud.trotter.log.gig.domain.pipeline.Observation
 import cloud.trotter.log.gig.domain.pipeline.UNKNOWN_TARGET
 import cloud.trotter.log.gig.domain.state.Platform
 import java.time.Instant
-import java.time.ZoneId
+import java.time.LocalDate
+import java.time.ZoneOffset
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -31,16 +32,18 @@ import timber.log.Timber
  * Screens and notifications share one sink and server daily budget (ADR §10).
  * Clicks stay OUT until a reliable screen fingerprint is carried at click time.
  * Debug binds the opt-in HTTP spool sink; release binds `NoOpCensusSink` (#1182).
+ *
+ * Each kind goes out in the NEWEST wire version the server's last policy lists in `acceptedSchemaIds`
+ * ([SkeletonVersion.newestScreen] / [SkeletonVersion.newestNotification]; ADR-0011 §13): a server that does not
+ * accept `uinode.skeleton.v2` yet keeps receiving v1, and the v2 fields leave the phone only once it does. The
+ * skeleton `day` is the observation's UTC day (ADR-0011 §21), never the phone's zone.
  */
 @Singleton
-class SkeletonPublisher internal constructor(
+class SkeletonPublisher @Inject constructor(
     private val sink: CensusSink,
     private val stats: PipelineStats,
-    private val zoneId: ZoneId,
     private val envelopeSink: CensusEnvelopeSink,
 ) {
-    @Inject constructor(sink: CensusSink, stats: PipelineStats, envelopeSink: CensusEnvelopeSink) :
-        this(sink, stats, ZoneId.systemDefault(), envelopeSink)
 
     /** One WARN per publisher; the publisher is a Hilt @Singleton, so per process in the app (#1171 review: an instance field, not a JVM static, keeps tests isolated). */
     private val warned = AtomicBoolean()
@@ -60,17 +63,18 @@ class SkeletonPublisher internal constructor(
                 stats.onCensusUnattributedPlatform()
                 return
             }
-            if (SkeletonSchema.SCHEMA_ID !in sink.acceptedSchemaIds) {
+            val version = SkeletonVersion.newestScreen(sink.acceptedSchemaIds)
+            if (version == null) {
                 stats.onCensusRefused(SkeletonBuilder.Refusal.POLICY_UNSUPPORTED_SCHEMA)
                 return
             }
-            val day = Instant.ofEpochMilli(obs.timestamp).atZone(zoneId).toLocalDate()
             when (val outcome = SkeletonBuilder.outcome(
                 event.tree,
                 event.snapshot.windowContext?.windowTitle,
                 obs.metadata,
                 platform,
-                day,
+                utcDay(obs.timestamp),
+                version,
             )) {
                 is Outcome.Built -> {
                     val (hashed, withheld) = tokenCounts(outcome.skeleton)
@@ -113,12 +117,12 @@ class SkeletonPublisher internal constructor(
                 stats.onCensusUnattributedPlatform()
                 return
             }
-            if (NotificationSkeletonSchema.SCHEMA_ID !in sink.acceptedSchemaIds) {
+            val version = SkeletonVersion.newestNotification(sink.acceptedSchemaIds)
+            if (version == null) {
                 stats.onCensusNotificationRefused(NotificationSkeletonBuilder.Refusal.POLICY_UNSUPPORTED_SCHEMA)
                 return
             }
-            val day = Instant.ofEpochMilli(obs.timestamp).atZone(zoneId).toLocalDate()
-            when (val outcome = NotificationSkeletonBuilder.outcome(raw, obs.metadata, platform, day)) {
+            when (val outcome = NotificationSkeletonBuilder.outcome(raw, obs.metadata, platform, utcDay(obs.timestamp), version)) {
                 is NotificationSkeletonBuilder.Outcome.Built -> {
                     val (hashed, withheld) = tokenCounts(outcome.skeleton)
                     stats.onCensusNotificationSkeleton(hashed, withheld)
@@ -142,6 +146,7 @@ class SkeletonPublisher internal constructor(
         }
     }
 
+    private fun utcDay(timestamp: Long): LocalDate = Instant.ofEpochMilli(timestamp).atZone(ZoneOffset.UTC).toLocalDate()
 }
 
 /** Counts every node text slot and the window title, without retaining token content (#1146). */
@@ -161,7 +166,8 @@ internal fun tokenCounts(skeleton: UiSkeletonDto): Pair<Int, Int> {
     return hashed to withheld
 }
 
-/** Only the five contract slots count; action labels never become tokens. */
-internal fun tokenCounts(skeleton: NotificationSkeletonDto): Pair<Int, Int> =
-    skeleton.slots.values.count { it.h != null } to
-        skeleton.slots.values.count { it.kind == KindClassifier.WITHHELD }
+/** The five text slots and, from v2, the action slots ([CensusSkeletonSchema.slots]). */
+internal fun tokenCounts(skeleton: NotificationSkeletonDto): Pair<Int, Int> {
+    val slots = CensusSkeletonSchema.slots(skeleton)
+    return slots.count { it.h != null } to slots.count { it.kind == KindClassifier.WITHHELD }
+}

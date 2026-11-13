@@ -1032,6 +1032,15 @@ closed list: money (`$##.##`), a 12-hour clock time, distance (`#.# mi`), minute
 On the workbench, a shape test runs generated boundary values through the draft's real regex and transforms. A regex
 run against a literal `#` proves nothing (census#83).
 
+> **Built by #1619 (2026-11-13).** The new fields ride new schema ids, `uinode.skeleton.v2` and
+> `notification.skeleton.v2`; the phone sends v2 only once the server's policy lists it, and v1 otherwise (the v2
+> build projected, byte-identical to what v1 sent before). The list is `ShapeTemplate` in `census-contract/`. The node
+> flags are `hasClickAction` and `isVisibleToUser`. The action list's form: each label a slot judged by the same
+> filter as the five text slots (a hash, `withheld` or a shape), in order, at most 8, and outside the fingerprint. The
+> skeleton `day` is the UTC day. The local "this slot varied" flag is left to #1620: it needs per-variant state across
+> frames, which arrives with #1620's sampling, and slot identity across frames is not settled (the fingerprint does
+> not cover the text map, and a spliced wrapper can carry text).
+
 ### §14 Per-slot constancy (census#80)
 
 The server classifies each text slot of a cluster from the hashes it already holds:
