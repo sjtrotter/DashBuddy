@@ -33,8 +33,12 @@ object NotificationSkeletonSchema {
         item.copy(slots = NotifTextField.entries.associateWith { item.slots.getValue(it) }),
     )
 
-    fun deserialize(text: String): NotificationSkeletonDto =
-        SkeletonSchema.json.decodeFromString(NotificationSkeletonDto.serializer(), text)
+    /** Strict decode; a v1 item carrying any v2 key is refused whatever its value ([V2WireKeys]). */
+    fun deserialize(text: String): NotificationSkeletonDto {
+        // The guard reads a parsed copy; the typed decode stays the strict string decoder it always was.
+        V2WireKeys.requireV1Keys(SkeletonSchema.json.parseToJsonElement(text))
+        return SkeletonSchema.json.decodeFromString(NotificationSkeletonDto.serializer(), text)
+    }
 
     /** Measured against [SkeletonSchema.MAX_ITEM_BYTES] by the publication/ingest gate. */
     fun measure(item: NotificationSkeletonDto): SkeletonSchema.Measured {

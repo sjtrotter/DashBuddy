@@ -103,6 +103,46 @@ class SkeletonV2ContractTest {
     }
 
     @Test
+    fun `a v1 item carrying any v2 key is refused at decode, whatever the value`() {
+        val child = UiSkeletonNodeDto(className = "android.widget.TextView", text = mapOf("text" to TextSlot(kind = "mixed")))
+        val v1 = screen(SkeletonVersion.V1, UiSkeletonNodeDto(children = listOf(child)), title = TextSlot(kind = "mixed"))
+        val wire = SkeletonSchema.serialize(v1)
+        assertEquals(v1, CensusSkeletonSchema.deserialize(wire))
+        val nodeKey = "{\"class\":\"android.widget.TextView\","
+        val slot = "{\"kind\":\"mixed\"}"
+        assertTrue(wire, wire.contains(nodeKey) && wire.contains(slot))
+        val variants = listOf("false", "true").flatMap { b ->
+            listOf(
+                wire.replace(nodeKey, "{\"hasClickAction\":$b,\"class\":\"android.widget.TextView\","),
+                wire.replace(nodeKey, "{\"isVisibleToUser\":$b,\"class\":\"android.widget.TextView\","),
+                wire.replace("\"root\":{", "\"root\":{\"hasClickAction\":$b,"),
+                wire.replace("\"root\":{", "\"root\":{\"isVisibleToUser\":$b,"),
+            )
+        } + listOf(
+            wire.replace("\"windowTitle\":$slot", "\"windowTitle\":{\"kind\":\"mixed\",\"shape\":null}"),
+            wire.replace("\"text\":$slot", "\"text\":{\"kind\":\"mixed\",\"shape\":null}"),
+        )
+        variants.forEach { bad ->
+            assertTrue(bad, bad != wire)
+            rejects { SkeletonSchema.deserialize(bad) }
+            rejects { CensusSkeletonSchema.deserialize(bad) }
+        }
+        // The same keys are fine in a v2 item.
+        variants.forEach { CensusSkeletonSchema.deserialize(it.replace("uinode.skeleton.v1", "uinode.skeleton.v2")) }
+
+        val notification = NotificationSkeletonSchema.serialize(notification(SkeletonVersion.V1))
+        listOf(
+            notification.replaceFirst("{", "{\"actions\":[],"),
+            notification.replaceFirst("{", "{\"actions\":null,"),
+            notification.replace("\"title\":{\"kind\":\"withheld\"}", "\"title\":{\"kind\":\"withheld\",\"shape\":null}"),
+        ).forEach { bad ->
+            assertTrue(bad, bad != notification)
+            rejects { NotificationSkeletonSchema.deserialize(bad) }
+            rejects { CensusSkeletonSchema.deserialize(bad) }
+        }
+    }
+
+    @Test
     fun `an unknown shape on the wire is refused`() {
         val wire = SkeletonSchema.serialize(screen(SkeletonVersion.V2, UiSkeletonNodeDto(text = mapOf("text" to money))))
         listOf("\$7.50", "#:## PM", "anything").forEach { bad ->

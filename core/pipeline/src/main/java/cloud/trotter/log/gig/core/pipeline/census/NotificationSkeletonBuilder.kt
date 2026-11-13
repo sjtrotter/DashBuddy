@@ -18,8 +18,8 @@ import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Pure ADR-0011 §10 publication gate, independent of capture enablement or its scrubbed payload. From v2 (§13,
- * #1619) the action labels travel as slots through the same frame filter as the five text fields: a hash for a
- * chrome label, `withheld` for anything a step catches, never a label in clear. A v1 item is the v2 build projected
+ * #1619) the action labels travel as slots through the same filter as the five text fields (a hash, a coarse kind,
+ * a shape or `withheld`), never a label in clear, judged in a frame of their own so they never change the fields. A v1 item is the v2 build projected
  * through `NotificationSkeletonDto.toV1`, which drops them.
  */
 object NotificationSkeletonBuilder {
@@ -75,16 +75,15 @@ object NotificationSkeletonBuilder {
         val channel = raw.channelId
         if (channel == null || !channelGrammar.matches(channel)) return Outcome.Refused(Refusal.INVALID_CHANNEL)
 
-        // The scrub masks a marker-bearing field or action label before the filter sees it. Pass 1 judges every
-        // field and every label (each seeds the frame's caught set); pass 2 emits.
+        // The scrub masks a marker-bearing field or action label before the filter sees it.
         val scrubbed = CustomerTextMarkers.scrubNotif(raw)
+        // The five fields are judged in a frame of their own, exactly as v1 always judged them: an action label
+        // must never change a field's slot (a near-duplicate label seeding the caught set would turn a hashed title
+        // `withheld`), because that would change the v1 bytes and the fingerprint, and `toV1` cannot undo it.
         val frame = FrameFilter(SkeletonBuilder::withholdingStep)
         val pending = scrubbed.textFields().map { (field, value) -> field to frame.field(value, IdClass.NONE) }
-        // A blank label is omitted, as a blank field is everywhere else; the list is cut at the contract's cap.
-        val pendingActions = scrubbed.actionLabels.mapNotNull { frame.field(it, IdClass.NONE) }
-            .take(NotificationSkeletonDto.MAX_ACTIONS)
         val slots = pending.associate { (field, value) -> field to (value?.let(frame::slot) ?: TextSlot.WITHHELD) }
-        val actions = pendingActions.map(frame::slot)
+        val actions = if (version == SkeletonVersion.V2) actionSlots(scrubbed) else emptyList()
         val fingerprint = CensusFingerprint.of(platform.wire, channel, slots)
             ?: return Outcome.Refused(Refusal.FINGERPRINT_FAILED)
         val item = try {
@@ -111,5 +110,17 @@ object NotificationSkeletonBuilder {
         val measured = NotificationSkeletonSchema.measure(item)
         if (measured.bytes > SkeletonSchema.MAX_ITEM_BYTES) return Outcome.Refused(Refusal.OVERSIZE)
         return Outcome.Built(item, measured.json, measured.bytes)
+    }
+
+    /**
+     * The v2 action slots: a second frame that sees the five fields and then every label, so a value caught in a
+     * field also withholds the same label (and labels seed each other), while nothing here reaches [buildOutcome]'s
+     * field frame. A blank label is omitted, as a blank field is everywhere else; the list is cut at the contract's cap.
+     */
+    private fun actionSlots(scrubbed: RawNotificationData): List<TextSlot> {
+        val frame = FrameFilter(SkeletonBuilder::withholdingStep)
+        scrubbed.textFields().forEach { (_, value) -> frame.field(value, IdClass.NONE) }
+        val pending = scrubbed.actionLabels.mapNotNull { frame.field(it, IdClass.NONE) }
+        return pending.take(NotificationSkeletonDto.MAX_ACTIONS).map(frame::slot)
     }
 }

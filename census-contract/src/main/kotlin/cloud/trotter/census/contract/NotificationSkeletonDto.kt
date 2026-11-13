@@ -25,7 +25,7 @@ import kotlinx.serialization.Serializable
 /**
  * Notification shape only (ADR-0011 §10): no source text, package or timestamp. v2 (ADR-0011 §13, #1619) adds shape
  * slots and [actions], the action labels in order, each a [TextSlot] judged by the same census filter as the five
- * text slots (a hash for chrome, `withheld` for anything a step catches), never a label in clear. [CensusFingerprint]
+ * text slots (a hash, a coarse kind, a shape or `withheld`), never a label in clear. [CensusFingerprint]
  * ignores both, so a notification keeps its cluster across the versions.
  */
 @Serializable

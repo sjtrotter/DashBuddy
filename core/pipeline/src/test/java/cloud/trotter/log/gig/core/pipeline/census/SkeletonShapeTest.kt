@@ -117,6 +117,34 @@ class SkeletonShapeTest : SkeletonBuilderTestBase() {
     }
 
     @Test
+    fun `an action label never changes the five field slots, the v1 bytes or the fingerprint`() {
+        // Raw, the label is a quoted note (six characters inside the quotes) and is caught; its canonical form is
+        // the title's, so a label that seeded the field frame would turn the hashed title `withheld`.
+        val title = "\"ab cd\""
+        val bare = raw.copy(title = title)
+        val labelled = bare.copy(actionLabels = listOf("\"ab  cd\""))
+        val v2 = notification(labelled)
+        assertEquals(TextSlot.WITHHELD, v2.actions.single())
+        val titleSlot = v2.slots.getValue(cloud.trotter.census.contract.NotifTextField.TITLE)
+        assertEquals("words:2", titleSlot.kind)
+        assertNotNull(titleSlot.h)
+        assertEquals(notification(bare).slots, v2.slots)
+        assertEquals(notification(bare).fingerprint, v2.fingerprint)
+        val v1With = NotificationSkeletonBuilder.outcome(labelled, meta, platform, day) as Outcome.Built
+        val v1Without = NotificationSkeletonBuilder.outcome(bare, meta, platform, day) as Outcome.Built
+        assertEquals(v1Without.json, v1With.json)
+        assertEquals(v1Without.skeleton.fingerprint, v1With.skeleton.fingerprint)
+    }
+
+    @Test
+    fun `a value caught in a field also withholds the same action label`() {
+        // The field is caught only on its raw form; the label alone would hash, but the field seeds the action frame.
+        val item = notification(raw.copy(text = "\"ab  cd\"", actionLabels = listOf("\"ab cd\"", "Accept")))
+        assertEquals(TextSlot.WITHHELD, item.actions[0])
+        assertNotNull(item.actions[1].h)
+    }
+
+    @Test
     fun `the action list is cut at the contract cap`() {
         val labels = List(NotificationSkeletonDto.MAX_ACTIONS + 3) { "Option" }
         assertEquals(NotificationSkeletonDto.MAX_ACTIONS, notification(raw.copy(actionLabels = labels)).actions.size)

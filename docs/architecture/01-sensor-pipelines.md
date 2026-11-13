@@ -803,8 +803,10 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   mask and over-40-character fields emit constant `withheld`. `notification.skeleton.v1` carries five enum-ordered
   slots and a domain-separated fingerprint, and actions participate only in refusal. `notification.skeleton.v2`
   (#1619) adds `actions`: each non-blank scrubbed label, in order, cut at `NotificationSkeletonDto.MAX_ACTIONS` (8),
-  judged by the same `FrameFilter` as the five fields (it seeds the frame's caught set too) and emitted as a slot: a
-  hash for chrome, `withheld` for anything a step catches, a shape when it fits one; never the label. The fingerprint
+  judged by the same filter as the five fields and emitted as a slot of the same kinds (a hash, a coarse kind, a
+  shape, or `withheld`); never the label. The labels are judged in a SECOND `FrameFilter` that first sees the five
+  fields: a value caught in a field withholds the same label, but a label never seeds the fields' frame, so it cannot
+  change their slots, the v1 bytes or the fingerprint (#1619 review S1, pinned by `SkeletonShapeTest`). The fingerprint
   ignores the actions and writes a shape slot's kind as `mixed`, so a notification keeps its cluster across versions.
   Both kinds are published only when the cached server policy advertises their schema (before the first
   policy, screens only); unsupported kinds count `POLICY_UNSUPPORTED_SCHEMA` per kind and never enter
@@ -921,7 +923,8 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   `UiSkeletonNodeDto` / `TextSlot` + `SkeletonSchema` (`uinode.skeleton.v1` and `.v2`, ADR §1 and §13 — no plaintext slot,
   no bounds; a per-node `text` map keyed by `UiNodeTextField.wire`, each value `{h?, kind, shape?}`, `h` present
   iff `kind` is `words:1..8`, `shape` present iff `kind` is `shape` and then a `ShapeTemplate` wire; a v1 item that
-  sets any v2 field is refused at construction and decode; the contract adds the `bad_shape` rejection reason for
+  sets any v2 field is refused at construction, and a v1 item that merely CARRIES a v2 key (`hasClickAction`,
+  `isVisibleToUser`, `shape`, `actions`), even at its default value, is refused at decode (`V2WireKeys`, review S2); the contract adds the `bad_shape` rejection reason for
   the server; invariants checked at construction AND on decode, incl. well-formed UTF-16
   without U+0000 for class/id/stamps (`WireStrings`) and a real calendar `day`; 64 KB item cap measured
   once by `SkeletonSchema.measure`); `CensusHash` (§3, `sha256("census.v1:" + canonical)` → 16 hex,

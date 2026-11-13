@@ -51,7 +51,12 @@ object SkeletonSchema {
 
     fun serialize(item: UiSkeletonDto): String = json.encodeToString(UiSkeletonDto.serializer(), item)
 
-    fun deserialize(text: String): UiSkeletonDto = json.decodeFromString(UiSkeletonDto.serializer(), text)
+    /** Strict decode; a v1 item carrying any v2 key is refused whatever its value ([V2WireKeys]). */
+    fun deserialize(text: String): UiSkeletonDto {
+        // The guard reads a parsed copy; the typed decode stays the strict string decoder it always was.
+        V2WireKeys.requireV1Keys(json.parseToJsonElement(text))
+        return json.decodeFromString(UiSkeletonDto.serializer(), text)
+    }
 
     /** A serialized item and its size in uncompressed UTF-8 bytes — what [MAX_ITEM_BYTES] caps. */
     data class Measured(val json: String, val bytes: Int)
