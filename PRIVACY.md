@@ -235,9 +235,10 @@ does asks for an upload: queueing a skeleton never schedules work (`HttpCensusSi
 `SecureRandom`, stored in the developer-settings store, and drawn again at the start of each daily run. Opening the app
 keeps the stored time. The drawn time is the target, not the send: with Wi-Fi only on (the default) the run waits for an
 unmetered network (`NetworkType.UNMETERED`), and with it off for any connection, and either way for a battery that is
-not low. A daily run that starts more than an hour after its target (`CensusUploadPlanner.LATE_LIMIT_MILLIS`) sends
-nothing and only draws the next day's time, so a send never waits long enough to start when the phone reaches home
-Wi-Fi at the end of a shift; within that hour the send time can still follow when the phone gets Wi-Fi or a charge.
+not low. A daily run sends only if it starts between its target and an hour after it
+(`CensusUploadPlanner.LATE_LIMIT_MILLIS`); a run that starts later, earlier, or with no stored target sends nothing
+and only draws the next day's time. So a send can be delayed by up to an hour, and within that hour it can start
+when the phone gets Wi-Fi or a charge, for example on reaching home; a send held back longer than that is skipped.
 Before sending, every run (manual ones included) checks the current Wi-Fi only choice against the active network
 (`CensusNetwork`): on a metered network with Wi-Fi only on it sends nothing, so nothing uploads over mobile data even
 for a run queued before the choice changed; changing the choice also cancels a waiting manual run. A failed run waits
@@ -432,8 +433,8 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 - **r21 (2026-11-13)** — §6: the census sends from every build, Play and sideload included, once the dasher accepts
   its disclosure (#1620); the Play and sideload builds bind the census sink and keep the no-op capture bus and envelope
   sink, so no screen text leaves those phones. New "When the census uploads": at most one send a day, at a random target
-  time drawn on the phone, never triggered by a screen or a notification, skipped that day when it would start more
-  than an hour late, Wi-Fi only by default (unmetered network, checked again before sending), the census choices
+  time drawn on the phone, never triggered by a screen or a notification, sent only within an hour after that target
+  (so it can still start when the phone gets Wi-Fi or a charge) and otherwise skipped that day, Wi-Fi only by default (unmetered network, checked again before sending), the census choices
   filtering skeletons, envelopes and health rows, and at most one skeleton per variant a UTC day, keyed on layout and
   formats, never on words. Every connection is HTTPS: a network security config refuses cleartext app-wide. The
   disclosure's per-build lines change: the Play and sideload line says there is no delete button yet and that the

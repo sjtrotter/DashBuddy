@@ -879,9 +879,12 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   `census_daily` (24 h, `setNextScheduleTimeOverride`, UPDATE, tag `census_daily`) from the app's start, re-applying the
   stored time when Wi-Fi only changes (`UNMETERED` when on, `CONNECTED` when off; battery-not-low either way) and
   cancelling a waiting manual run, whose constraint is stale. The drawn time is a target: `beginDailyRun` (the start
-  of a tagged run) redraws and lets the run send only if it started within `LATE_LIMIT_MILLIS` (1 h) of the target, so
-  a run held back by the network or battery constraint until the phone reaches home Wi-Fi sends nothing that day
-  (INFO `census skipped cause=late`). Every run, manual included, then checks the current Wi-Fi only choice against
+  of a tagged run) redraws and lets the run send only if it started between the stored target and `LATE_LIMIT_MILLIS`
+  (1 h) after it; a run held back longer by the network or battery constraint, one before its target (work a failed
+  schedule update left in place) or one with no target sends nothing that day. Within the hour a send can still start
+  when the phone reaches Wi-Fi or a charge, so the hour bounds, not removes, how far the send follows a shift's end
+  (a skip logs INFO `census skipped cause=off_schedule`). The target is stored only after the work is scheduled for
+  it, so a failed update never stores a target no work matches. Every run, manual included, then checks the current Wi-Fi only choice against
   `CensusNetwork.isMetered()` before sending (INFO `census skipped cause=metered`, no status written). The
   worker draws the next day's time at the start of a tagged run only, so the test build's Upload now (and the identity
   reset's run), which keep to Wi-Fi only too (`enqueueNow(wifiOnly)`), never move it;

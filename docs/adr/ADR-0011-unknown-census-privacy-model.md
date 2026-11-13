@@ -1189,7 +1189,7 @@ once §12 to §21 ship.
 
 | Party | Today | After |
 |---|---|---|
-| The live operator, or whoever controls the running server | each request's install credential and IP address in flight; every table joined on the install id: daily health rows with frame counts for 180 days, cluster sightings for 90 days, token sightings for 30 days, an install-id prefix in request logs for 14 days; upload arrival about 5 minutes after the first unrecognized frame (`HttpCensusSink.kt:53-58`, `CensusWorkScheduler.kt:29-38`), which tracks shift starts; dictionary guesses against stored word hashes | the credential and IP in flight, until #1635; rows from the two live epochs can be tied to an install by recomputing pseudonyms, and dictionary lookups still work with the pepper; older rows cannot be tied to any install; per-install health for 30 days, then fleet totals; which days a phone uploaded, but not when its shifts start |
+| The live operator, or whoever controls the running server | each request's install credential and IP address in flight; every table joined on the install id: daily health rows with frame counts for 180 days, cluster sightings for 90 days, token sightings for 30 days, an install-id prefix in request logs for 14 days; upload arrival about 5 minutes after the first unrecognized frame (`HttpCensusSink.kt:53-58`, `CensusWorkScheduler.kt:29-38`), which tracks shift starts; dictionary guesses against stored word hashes | the credential and IP in flight, until #1635; rows from the two live epochs can be tied to an install by recomputing pseudonyms, and dictionary lookups still work with the pepper; older rows cannot be tied to any install; per-install health for 30 days, then fleet totals; which days a phone uploaded, at a random target time; a send can start up to an hour after it, when the phone gets Wi-Fi or a charge (#1620) |
 | A thief with a database dump or a backup, without the server's peppers | the same joins at rest, and offline guesses (place, store and first names) against the unsalted word hashes, per install | content rows carry epoch pseudonyms, not install ids; stored word hashes are keyed, so a guess list matches nothing; the `installs` table still holds install ids, enrolment days and grants |
 | A network observer on the Wi-Fi or cellular path | content hidden by TLS; the census host, request sizes, and upload times that track shift starts, on any network | HTTPS only, cleartext refused app-wide; one upload a day at a random time, on Wi-Fi by default, so a cellular observer sees no census traffic by default |
 
@@ -1203,9 +1203,10 @@ per UTC day, as presence (§8).
 **Upload timing and transport** (#1620).
 
 - No upload is triggered by recognition activity. The phone uploads once a day at a random time, independent of shift
-  starts and ends. As built (#1620) the random time is a target: a run that waited for Wi-Fi or a charge and starts
-  more than an hour after it sends nothing that day, so a send cannot wait for home Wi-Fi after a shift; within that
-  hour the send can still follow when the phone gets Wi-Fi or a charge. Fable dissented (arrival times are not persisted, and an hourly cadence speeds fixes); the window
+  starts and ends. As built (#1620) the random time is a target, not the send: a run sends only if it starts within an
+  hour after its target, so a send can be delayed by up to an hour and can then start when the phone gets Wi-Fi or a
+  charge (on reaching home after a shift, say); a run held back longer, or one before its target, sends nothing that
+  day. The send time is therefore not fully independent of shift ends; the hour bounds how much it can follow them. Fable dissented (arrival times are not persisted, and an hourly cadence speeds fixes); the window
   was adopted because the live operator and a network observer see timing, and drafting, not upload latency, sets how
   fast a fix ships.
 - Wi-Fi only, on by default.
