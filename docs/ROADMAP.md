@@ -83,8 +83,8 @@ the first rule shipped from release-build evidence.
 tied offer, **#1601** settle whole jobs on proof, **#1602** correct three historical losses · the #1326 receipt
 identity decision (§6). **#1342** the drawer rule still claims every closed-drawer frame. **#1402** click half (§6).
 
-**On hold:** #1615 backup and restore (draft PR #1616); the council suggests reshaping it into a versioned manual
-database export first. Developer's call.
+**On hold:** #1615 backup and restore (draft PR #1616). Planned to become a database export only, with an import
+possibly later; it waits until the census work above is under way.
 
 ## 2. Next: the look-back redesign (#1510), heaviest last
 
