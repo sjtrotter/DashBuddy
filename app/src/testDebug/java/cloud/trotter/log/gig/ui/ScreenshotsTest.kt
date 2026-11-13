@@ -47,6 +47,7 @@ import cloud.trotter.log.gig.domain.capability.ConsentReceipt
 import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
 import cloud.trotter.log.gig.domain.capability.RuleCapability
 import cloud.trotter.log.gig.domain.capability.RuleCapabilityGrants
+import cloud.trotter.log.gig.domain.census.CensusConsent
 import cloud.trotter.log.gig.domain.config.OfferAutomationConfig
 import cloud.trotter.log.gig.domain.format.Formats
 import cloud.trotter.log.gig.domain.format.formatDuration
@@ -59,6 +60,10 @@ import cloud.trotter.log.gig.domain.state.AppState
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.feature.settings.CapabilityConsentScreen
 import cloud.trotter.log.gig.feature.settings.CapabilityConsentViewModel
+import cloud.trotter.log.gig.feature.settings.CensusContent
+import cloud.trotter.log.gig.feature.settings.CensusDisclosure
+import cloud.trotter.log.gig.feature.settings.CensusPlatformRow
+import cloud.trotter.log.gig.feature.settings.CensusUiState
 import cloud.trotter.log.gig.feature.settings.EventReceiptConsentDialog
 import cloud.trotter.log.gig.feature.settings.EventReceiptOffConfirmDialog
 import cloud.trotter.log.gig.feature.settings.PrivacyScreen
@@ -250,6 +255,26 @@ class ScreenshotsTest(private val theme: String) {
 
     @Test @Config(qualifiers = FULL)
     fun settingsPrivacyTestBuildFull() = privacy("settings/privacy-test-build-full")
+
+    /** #1621: the census opt-in, accepted, as the test build shows it. */
+    @Test fun settingsCensus() = render("settings/census", assertion = {
+        text(string(SettingsR.string.census_switch_label)).assertExists()
+    }) {
+        CensusContent(
+            state = CensusUiState(
+                consent = CensusConsent.ON,
+                platforms = listOf(CensusPlatformRow(Platform.DoorDash, true), CensusPlatformRow(Platform.Uber, false)),
+                wifiOnly = true, serverHost = "census.dashbuddy.trotter.cloud", sendsInThisBuild = true,
+            ),
+            onBack = {}, onAccept = {}, onDecline = {}, onWifiOnly = {}, onPlatform = { _, _ -> },
+        )
+    }
+
+    /** #1621: the census disclosure as a Play or sideload user sees it before accepting. */
+    @Test fun settingsCensusDisclosure() = censusDisclosure("settings/census-disclosure")
+
+    @Test @Config(qualifiers = FULL)
+    fun settingsCensusDisclosureFull() = censusDisclosure("settings/census-disclosure-full")
 
     // ── Home ─────────────────────────────────────────────────────────────
 
@@ -464,6 +489,15 @@ class ScreenshotsTest(private val theme: String) {
         text("app $APP_VERSION").assertExists()
     }) {
         ConsentScreen(EventReceiptConsent.ALLOWED)
+    }
+
+    private fun censusDisclosure(path: String) = render(path, assertion = {
+        text(string(SettingsR.string.census_disclosure_heading)).assertExists()
+    }) {
+        CensusDisclosure(
+            serverHost = "census.dashbuddy.trotter.cloud", sendsInThisBuild = false, accepted = false,
+            onAccept = {}, onNotNow = {}, onClose = {},
+        )
     }
 
     private fun privacy(path: String) = render(path, assertion = {

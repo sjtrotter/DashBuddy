@@ -69,7 +69,8 @@ private val BubbleSessionMode.explainerRes: Int
     }
 
 /**
- * Developer Options — the bubble session experiment (#867) and opt-in debug census uploads (#1182/#1185).
+ * Developer Options — the bubble session experiment (#867) and the debug census tools (#1182/#1185): capture sharing,
+ * status, upload now and identity reset. The census itself turns on in Settings > Data & privacy > Census (#1621).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -160,8 +161,7 @@ fun DeveloperSettingsScreen(
                 val clipboard = LocalClipboard.current
                 val scope = rememberCoroutineScope()
                 var showReset by remember { mutableStateOf(false) }
-                Text(stringResource(R.string.developer_settings_census_upload))
-                Switch(checked = censusEnabled, onCheckedChange = { viewModel.setCensusUploadEnabled(it) })
+                // #1621: the census turns on only through its disclosure, Settings > Data & privacy > Census.
                 Text(stringResource(R.string.developer_settings_census_share_captures))
                 Switch(checked = shareCaptures, onCheckedChange = { viewModel.setCensusShareCaptures(it) }, enabled = censusEnabled)
                 Text(

@@ -170,13 +170,13 @@ class DataExportViewModelTest {
 
     private val labels = ReceiptLabels(
         allowed = "Allowed", denied = "Not allowed", format = "%1${'$'}s, %2${'$'}s, app %3${'$'}s, privacy notice %4${'$'}d",
-        screenEvents = "Screen events",
+        screenEvents = "Screen events", census = "Census",
     )
     private val zone = ZoneId.of("UTC")
 
-    /** #170 — every stored receipt is listed: Screen events first, then capabilities by key, named where enumerated. */
+    /** #170 — every stored receipt is listed: Screen events first, then the census (#1621), then capabilities by key, named where enumerated. */
     @Test
-    fun `receipt lines list the Screen events receipt and each capability receipt`() {
+    fun `receipt lines list the Screen events, census and each capability receipt`() {
         val day = 1_791_244_800_000L // 2026-10-06 UTC
         val capability = RuleCapability(
             ruleId = "doordash.screen.offer", action = RuleAction.CONFIRM_DECLINE, targetBindName = "declineButton",
@@ -184,6 +184,7 @@ class DataExportViewModelTest {
         )
         val lines = consentReceiptLines(
             eventReceipt = ConsentReceipt(day, "0.230.1+abc", 16, true),
+            censusReceipt = ConsentReceipt(day, "0.233.1+abc", 20, false),
             receipts = mapOf(
                 "b-key" to ConsentReceipt(day, "0.230.1+abc", 16, false),
                 "a-retired" to ConsentReceipt(day, "0.229.0+def", 15, true),
@@ -193,12 +194,14 @@ class DataExportViewModelTest {
             zone = zone,
             locale = Locale.US,
         )
-        assertEquals(3, lines.size)
+        assertEquals(4, lines.size)
         assertTrue(lines[0], lines[0].startsWith("Screen events: Allowed, "))
         assertTrue(lines[0], lines[0].endsWith(", app 0.230.1+abc, privacy notice 16"))
-        assertTrue(lines[1], lines[1].startsWith("Capability a-retired: Allowed, "))
-        assertTrue(lines[1], lines[1].endsWith("privacy notice 15"))
-        assertTrue(lines[2], lines[2].startsWith("confirm_decline on doordash.screen.offer (b-key): Not allowed, "))
+        assertTrue(lines[1], lines[1].startsWith("Census: Not allowed, "))
+        assertTrue(lines[1], lines[1].endsWith("privacy notice 20"))
+        assertTrue(lines[2], lines[2].startsWith("Capability a-retired: Allowed, "))
+        assertTrue(lines[2], lines[2].endsWith("privacy notice 15"))
+        assertTrue(lines[3], lines[3].startsWith("confirm_decline on doordash.screen.offer (b-key): Not allowed, "))
     }
 
     /** #170 — the appended lines pass the sink's scrubber; a failed scrubber drops the section, never writes it raw. */
@@ -228,6 +231,7 @@ class DataExportViewModelTest {
         val stored = StoredConsentReceipts(
             screenEvents = ConsentReceipt(1_791_244_800_000L, "0.230.1+abc", 16, true),
             capabilities = mapOf("k" to ConsentReceipt(1_791_244_800_000L, "0.230.1+abc", 16, false)),
+            census = ConsentReceipt(1_791_244_800_000L, "0.233.1+abc", 20, true),
         )
         val out = exportLogWith(object : ConsentReceiptReader {
             override suspend fun read(): StoredConsentReceipts {
@@ -237,6 +241,7 @@ class DataExportViewModelTest {
         })
         assertTrue(out, out.contains("Screen events: Allowed, "))
         assertTrue(out, out.contains("Capability k: Not allowed, "))
+        assertTrue(out, out.contains("Census: Allowed, "))
         assertFalse(out, out.contains("No choices recorded"))
     }
 
@@ -274,6 +279,7 @@ class DataExportViewModelTest {
                 R.string.consent_receipt_denied to "Not allowed",
                 R.string.consent_receipt_format to "%1${'$'}s, %2${'$'}s, app %3${'$'}s, privacy notice %4${'$'}d",
                 R.string.event_receipt_title to "Screen events",
+                R.string.census_title to "Census",
             )
             whenever(context.getString(any())).thenAnswer { labels.getValue(it.getArgument<Int>(0)) }
             val resolver: ContentResolver = mock()

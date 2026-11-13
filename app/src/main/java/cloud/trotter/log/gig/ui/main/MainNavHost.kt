@@ -8,6 +8,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import cloud.trotter.log.gig.core.designsystem.motion.rememberReducedMotion
 import cloud.trotter.log.gig.feature.settings.CapabilityConsentScreen
+import cloud.trotter.log.gig.feature.settings.CensusScreen
 import cloud.trotter.log.gig.feature.settings.DataExportScreen
 import cloud.trotter.log.gig.feature.settings.DeveloperSettingsScreen
 import cloud.trotter.log.gig.feature.settings.EvidenceSettingsScreen
@@ -109,6 +110,7 @@ private fun MainScreen(route: String, actions: MainNavActions) {
         Screen.EvidenceSettings.route -> EvidenceSettingsScreen(onBack = actions::back)
         Screen.DataExport.route -> DataExportScreen(onBack = actions::back)
         Screen.PrivacySettings.route -> PrivacyScreen(onBack = actions::back)
+        Screen.CensusSettings.route -> CensusScreen(onBack = actions::back)
         Screen.ConsentSettings.route -> CapabilityConsentScreen(
             onBack = actions::back,
             onOpenPrivacy = actions::openPrivacy,

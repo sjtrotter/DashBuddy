@@ -22,7 +22,7 @@ class AddOnSpeechSettingsTest {
         }
         val source = DevSettingsDataSource(store)
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val repo = DevSettingsRepository(source, true, dispatcher)
+        val repo = DevSettingsRepository(source, true, dispatcher, "test")
         runCurrent()
         val story = StoryFixtures.addOn()
         assertEquals(AddOnSpeech.JOB_TOTALS, repo.addOnSpeech.value)
@@ -30,7 +30,7 @@ class AddOnSpeechSettingsTest {
         repo.setAddOnSpeech(AddOnSpeech.DELTAS_ONLY)
         runCurrent()
         assertEquals(story.added, story.forPresentation(repo.addOnSpeech.value).facts)
-        val reopened = DevSettingsRepository(source, true, dispatcher)
+        val reopened = DevSettingsRepository(source, true, dispatcher, "test")
         runCurrent()
         assertEquals(AddOnSpeech.DELTAS_ONLY, reopened.addOnSpeech.value)
         source.setAddOnSpeech("unknown")

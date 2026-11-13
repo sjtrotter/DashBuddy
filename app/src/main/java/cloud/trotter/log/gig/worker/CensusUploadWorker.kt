@@ -144,6 +144,10 @@ class CensusUploadWorker @AssistedInject constructor(
         result
     }
 
+    /**
+     * The admission check. [DevSettingsRepository.censusUploadEnabled] is on only with the switch on AND an accepted
+     * disclosure's receipt for this build's endpoint (#1621), so no receipt, a decline or a changed endpoint runs nothing.
+     */
     private suspend fun canRun(record: RunRecord): Boolean {
         if (!BuildConfig.DEBUG || !preferences.censusUploadEnabled.first()) {
             record.set(CensusRunOutcome.DISABLED)

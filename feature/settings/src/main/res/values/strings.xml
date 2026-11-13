@@ -123,7 +123,6 @@
     <string name="event_receipt_settings_section">Screen events</string>
     <string name="event_receipt_android11_caveat">On Android 11, this may not take effect.</string>
     <string name="event_receipt_settings_switch">See which other app is open</string>
-    <string name="developer_settings_census_upload">Census upload (debug)</string>
     <string name="developer_settings_census_identity">%1$s, install %2$s</string>
     <string name="developer_settings_census_not_enrolled">Not enrolled</string>
     <string name="developer_settings_census_upload_now">Upload now</string>
@@ -132,7 +131,7 @@
     <string name="developer_settings_census_copy_id">Copy install ID</string>
     <string name="developer_settings_census_reset">Reset census identity</string>
     <string name="developer_settings_census_reset_title">Reset census identity?</string>
-    <string name="developer_settings_census_reset_body">Forgets this phone\'s census install ID and secret, deletes the waiting outlines and captures, and turns capture sharing off. The next upload signs up a new install ID, which the census server must trust again. The Census upload switch stays as it is.</string>
+    <string name="developer_settings_census_reset_body">Forgets this phone\'s census install ID and secret, deletes the waiting outlines and captures, and turns capture sharing off. The next upload signs up a new install ID, which the census server must trust again. The census switch stays as it is.</string>
     <string name="developer_settings_census_reset_confirm">Reset</string>
     <string name="developer_settings_census_reset_cancel">Cancel</string>
     <string name="developer_settings_census_share_captures">Share unrecognized screens (trusted installs)</string>
@@ -165,6 +164,9 @@
     <string name="privacy_saves_body">From the screens and notifications it recognizes: shifts, offers, deliveries and pay. From what you enter: expenses, fill-ups, cash tips, notes, odometer readings, corrected shift miles, vehicles, your goal and settings. Also the miles GPS counted, and a log of main events that keeps only recent entries.</string>
     <string name="privacy_leaves_title">What leaves your phone</string>
     <string name="privacy_leaves_body">gig.log has no account and no ads ID, and includes no outside analytics code. Gas-price lookups: Android\'s address lookup may send your location, rounded to about 11 km, to its provider to find your region, and the U.S. Energy Information Administration gets a price request for that region, with no account or install ID. Daily updates are off on a new install, and an update keeps your setting; to stop them, set the bubble\'s gas price to manual, or turn off daily updates in setup and save. Vehicle lookup starts after you tap \"Look up my vehicle\". gig.log saves that choice. The year, make, model and EPA vehicle ID you pick go to fueleconomy.gov, with no account or install ID. \"Search Google for MPG\" opens Google with the year, make and model. Spoken offers go to your phone\'s text-to-speech engine, which may use the network. Exports go to the folder you choose, and a cloud folder may upload them; spreadsheets leave out customer codes, and bug reports replace known private details but can miss some.</string>
+    <!-- #1621: the census opt-in as built. Every build shows it; only the test build sends until #1620. -->
+    <string name="privacy_census_title">Census</string>
+    <string name="privacy_census_body">Off unless you accept it in Settings > Data &amp; privacy > Census, which first shows what it sends. The choice is saved on this phone with its date, app version, privacy notice version and the census server\'s address, together with the delivery apps and Wi-Fi setting you pick. That record leaves the phone only in a bug report you export. If the server\'s address changes, the census stays off until you accept again. The Play and sideload versions of gig.log send nothing to the census, even with it on.</string>
     <string name="privacy_storage_title">How it is stored</string>
     <string name="privacy_storage_body">Your history, settings and consent choices are kept in gig.log\'s private storage on the phone, which other apps can\'t read, and Android encrypts that storage. gig.log adds no encryption of its own. Gas-price and vehicle lookups use HTTPS. Screenshots and exports are ordinary files outside that storage, so apps you let see your photos or files can read them.</string>
     <string name="privacy_screenshots_title">Screenshots</string>
@@ -176,5 +178,35 @@
     <string name="privacy_choices_title">Your choices</string>
     <string name="privacy_choices_body">Each choice on Automation &amp; consent is saved on this phone with its date, app version and privacy notice version. The app log notes each automatic-tap choice. Both leave the phone only in a bug report you export.</string>
     <string name="privacy_test_builds_title">Test builds</string>
-    <string name="privacy_test_builds_body">This test build saves the text of the delivery apps\' screens and notifications on the phone. On screens it recognizes, its rules replace the customer details they know about; elsewhere the filters can miss them. Its log also keeps screen text. That text stays until removed or uninstalled, and backup and transfer leave it out. Census upload, off unless turned on in developer options, sends outlines of unrecognized screens and notifications, plus counts showing which screens gig.log recognizes and the app version, with this install\'s ID, to gig.log\'s census server (census.dashbuddy.trotter.cloud), which enrolls the install when census upload is turned on. Capture sharing, also off unless turned on, needs census upload and the server\'s trust; it sends the text of unrecognized screens, never notifications, and the server\'s operator can read it. Screen events are required: without them, screen reading turns itself off and the app can\'t be used.</string>
+    <string name="privacy_test_builds_body">This test build saves the text of the delivery apps\' screens and notifications on the phone. On screens it recognizes, its rules replace the customer details they know about; elsewhere the filters can miss them. Its log also keeps screen text. That text stays until removed or uninstalled, and backup and transfer leave it out. The census, off unless you accept it in Settings > Data &amp; privacy > Census, sends outlines of unrecognized screens and notifications, plus counts showing which screens gig.log recognizes and the app version, with this install\'s ID, to gig.log\'s census server (census.dashbuddy.trotter.cloud), which enrolls the install when the census is turned on. This test build uploads within minutes of a screen gig.log doesn\'t recognize, and about every hour after that, on any network and from every delivery app, whatever the census choices. Capture sharing, off unless turned on in developer options, needs the census and the server\'s trust; it sends the text of unrecognized screens, never notifications, and the server\'s operator can read it. Screen events are required: without them, screen reading turns itself off and the app can\'t be used.</string>
+    <!-- #1621: the census opt-in (Settings > Data & privacy > Census) and its disclosure, shown before the census
+         can turn on. Every claim matches PRIVACY.md §6 and ADR-0011 §12 and §21; counsel (#246) reviews the wording
+         before recruiting. The two build notes say what this build does where it differs. -->
+    <string name="census_title">Census</string>
+    <string name="census_settings_subtitle">Outlines of unrecognized screens, off by default</string>
+    <string name="census_switch_label">Census uploads</string>
+    <string name="census_endpoint_changed">The census server changed, so uploads stopped. Turn the census on to accept again.</string>
+    <string name="census_platforms_title">Delivery apps</string>
+    <string name="census_wifi_only_label">Wi-Fi only</string>
+    <string name="census_wifi_only_supporting">When off, uploads can use mobile data</string>
+    <string name="census_read_disclosure">What the census sends</string>
+    <string name="census_note_sends_nothing">This version of gig.log sends nothing to the census, even with it on, and has no delete button yet.</string>
+    <string name="census_note_test_build">This test build uploads within minutes of a screen gig.log doesn\'t recognize, and about every hour after that, on any network and from every delivery app, whatever the census choices. The 30-day limit and deleting from Settings do not apply to it yet.</string>
+    <string name="census_disclosure_heading">Before you turn on the census</string>
+    <string name="census_disclosure_intro">The census is off unless you accept. gig.log works the same with it off.</string>
+    <string name="census_disclosure_what_title">What it sends</string>
+    <string name="census_disclosure_what_body">Outlines of the delivery apps\' screens and notifications that gig.log doesn\'t recognize. An outline keeps the screen\'s layout and replaces each word with a code made by a one-way function, a fingerprint the server can\'t turn back into the word. The server can still recognize the code of a common word by trying that word. Amounts, clock times, distances, minutes and item counts go as their format, such as $#.##, never the value. Before coding, gig.log leaves out words that look like a name or an address; the filters can miss a name, which then goes only as a code. The screen as you see it is never sent. With the outlines go daily counts of the screens gig.log recognized, by delivery app and app version.</string>
+    <string name="census_disclosure_why_title">Why</string>
+    <string name="census_disclosure_why_body">Delivery apps change their screens, often in some areas before others. Outlines from phones in other areas let gig.log keep recognizing screens after a change.</string>
+    <string name="census_disclosure_who_title">Who receives it</string>
+    <string name="census_disclosure_who_body">gig.log\'s census server, at %1$s. The server also sees the phone\'s IP address during each upload.</string>
+    <string name="census_disclosure_when_title">When</string>
+    <string name="census_disclosure_when_body">Once a day at a random time, on Wi-Fi only unless you allow mobile data in the census settings. Uploads are encrypted (HTTPS).</string>
+    <string name="census_disclosure_identity_title">Linked to this phone for 30 days</string>
+    <string name="census_disclosure_identity_body">Uploads carry an ID for this phone, so the server can tell uploads from the same phone apart for 30 days, and not after.</string>
+    <string name="census_disclosure_stop_title">Stop and delete</string>
+    <string name="census_disclosure_stop_body">You can turn the census off at any time, and delete from Settings the census data the server holds for this phone and everything gig.log keeps on the phone.</string>
+    <string name="census_disclosure_agreement">Your agreement with a delivery company is between you and that company.</string>
+    <string name="census_disclosure_accept">Accept</string>
+    <string name="census_disclosure_close">Close</string>
 </resources>

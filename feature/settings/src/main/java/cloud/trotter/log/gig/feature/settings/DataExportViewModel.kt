@@ -13,6 +13,7 @@ import cloud.trotter.log.gig.core.data.vehicle.DashVehicleRepository
 import cloud.trotter.log.gig.core.data.vehicle.GarageRepository
 import cloud.trotter.log.gig.domain.capability.ConsentReceipt
 import cloud.trotter.log.gig.domain.capability.ConsentReceiptReader
+import cloud.trotter.log.gig.domain.capability.StoredConsentReceipts
 import cloud.trotter.log.gig.domain.capability.RuleCapability
 import cloud.trotter.log.gig.domain.capability.RuleCapabilityGrants
 import cloud.trotter.log.gig.domain.di.IoDispatcher
@@ -202,18 +203,20 @@ class DataExportViewModel @Inject constructor(
             Timber.tag("Export").w("Consent receipts unreadable for the bug report: %s", e.javaClass.simpleName)
             return null
         }
-        return receiptLines(stored.screenEvents, stored.capabilities)
+        return receiptLines(stored)
     }
 
-    private fun receiptLines(eventReceipt: ConsentReceipt?, receipts: Map<String, ConsentReceipt>) = consentReceiptLines(
-        eventReceipt = eventReceipt,
-        receipts = receipts,
+    private fun receiptLines(stored: StoredConsentReceipts) = consentReceiptLines(
+        eventReceipt = stored.screenEvents,
+        censusReceipt = stored.census,
+        receipts = stored.capabilities,
         capabilities = capabilityGrants.capabilities.value,
         labels = ReceiptLabels(
             allowed = context.getString(R.string.consent_receipt_allowed),
             denied = context.getString(R.string.consent_receipt_denied),
             format = context.getString(R.string.consent_receipt_format),
             screenEvents = context.getString(R.string.event_receipt_title),
+            census = context.getString(R.string.census_title),
         ),
         zone = ZoneId.systemDefault(),
         locale = Locale.getDefault(),
@@ -285,17 +288,24 @@ class DataExportViewModel @Inject constructor(
     }
 }
 
-/** The words a receipt line uses: the decision labels, `consent_receipt_format` and the Screen events name. */
-internal data class ReceiptLabels(val allowed: String, val denied: String, val format: String, val screenEvents: String)
+/** The words a receipt line uses: the decision labels, `consent_receipt_format`, the Screen events and census names. */
+internal data class ReceiptLabels(
+    val allowed: String,
+    val denied: String,
+    val format: String,
+    val screenEvents: String,
+    val census: String,
+)
 
 /**
  * #170 — one line per stored receipt, in the `consent_receipt_format` shape Automation & consent shows: the
- * Screen events decision first, then each automatic-tap decision by capability key. A key the loaded rules
+ * Screen events decision first, then the census decision (#1621), then each automatic-tap decision by capability key. A key the loaded rules
  * enumerate also names its action and rule; a key they no longer enumerate is listed by key alone. Keys are
  * sha256 hashes, rule ids and action names are app vocabulary: no screen text.
  */
 internal fun consentReceiptLines(
     eventReceipt: ConsentReceipt?,
+    censusReceipt: ConsentReceipt?,
     receipts: Map<String, ConsentReceipt>,
     capabilities: List<RuleCapability>,
     labels: ReceiptLabels,
@@ -312,6 +322,7 @@ internal fun consentReceiptLines(
     val byKey = capabilities.associateBy { it.key }
     return buildList {
         eventReceipt?.let { add(line(labels.screenEvents, it)) }
+        censusReceipt?.let { add(line(labels.census, it)) }
         receipts.toSortedMap().forEach { (key, receipt) ->
             val capability = byKey[key]
             val subject = if (capability == null) "Capability $key" else "${capability.action.wire} on ${capability.ruleId} ($key)"

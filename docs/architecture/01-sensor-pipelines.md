@@ -837,7 +837,16 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   Sharing off or an identity boundary forgets held, queued, and spooled envelopes, serialized against the writer.
   A `not_trusted` response turns sharing off and invalidates the sink; every non-debug build (Play, sideload) binds
   `NoOpCensusEnvelopeSink`.
-- *Uploader (#1182)* — debug binds `HttpCensusSink` behind the default-off developer switch;
+- *Consent (#1621)* — the census turns on only through the disclosure on Settings > Data & privacy > Census, in every
+  build; the developer switch is gone. Accept writes the switch, a `CensusConsentReceipt` (a `ConsentReceipt` plus the
+  census endpoint it was given for) and the platform and Wi-Fi choices in one `dev_settings` edit; Not now and the
+  switch turned off write a declined receipt. `CensusConsent.of` (`:domain`) is the one rule: ON only with the switch
+  on and a granted receipt for exactly the current `censusBaseUrl`; no receipt (an install from before the disclosure)
+  is OFF, another endpoint is `ENDPOINT_CHANGED`, which is off until the dasher accepts again. Every upload stage reads
+  `DevSettingsRepository.censusUploadEnabled` (`isDebug` AND ON), the worker's admission check included, so a changed
+  endpoint stops uploads in the debug build too. A server revoke turns the switch off and keeps the receipt. The
+  choices are stored data for #1620; the debug build's uploads ignore them, and its disclosure says so.
+- *Uploader (#1182)* — debug binds `HttpCensusSink` behind the census consent (#1621);
   every non-debug build (Play, sideload) binds `NoOpCensusSink` and schedules no census work. `offer` only calls `trySend` on a
   256-item drop-oldest channel; one IO consumer writes atomically to `filesDir/census/spool/`.
   Both skeleton schemas decode through `CensusSkeletonSchema` in the same spool; rejection codes derive from

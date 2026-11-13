@@ -98,7 +98,7 @@ class PrivacyExportReplay(
         SupervisorJob(test.backgroundScope.coroutineContext[Job]) + io)
     val uploadStats = CensusUploadStats()
     val stats = PipelineStats("privacy-e2e", uploadStats)
-    val preferences = DevSettingsRepository(DevSettingsDataSource(ReplayEdges.MemoryPreferences()), debug, io)
+    val preferences = DevSettingsRepository(DevSettingsDataSource(ReplayEdges.MemoryPreferences()), debug, io, "test")
     val skeletonSpool = CensusSpool(context, uploadStats, io)
     val envelopeSpool = CensusCredentialsModule.envelopeSpool(context, uploadStats, io)
     val skeletonRoot = File(context.filesDir, "census/spool")

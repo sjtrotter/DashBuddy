@@ -10,6 +10,7 @@ import cloud.trotter.log.gig.core.data.settings.DevSettingsRepository
 import cloud.trotter.log.gig.core.datastore.settings.DevSettingsDataSource
 import cloud.trotter.census.contract.SkeletonSchema
 import cloud.trotter.census.contract.NotificationSkeletonSchema
+import cloud.trotter.log.gig.domain.census.CensusConsent
 import cloud.trotter.log.gig.domain.census.CensusEnrolRejectReason
 import cloud.trotter.log.gig.domain.census.CensusLastRun
 import cloud.trotter.log.gig.domain.census.CensusRunOutcome
@@ -39,7 +40,7 @@ class CensusUploadPreferencesTest {
         val scope = CoroutineScope(io + Job())
         try {
             val ds = PreferenceDataStoreFactory.create(scope = scope) { File(tmp.root, "last-run.preferences_pb") }
-            val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, io)
+            val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, io, "test")
             repo.setCensusUploadEnabled(true)
             repo.setCensusPolicy(Json.parseToJsonElement("""{"k":10}""").jsonObject)
             val run = CensusLastRun(5L, CensusRunOutcome.UPLOADED, 12, envelopesPosted = 4)
@@ -70,7 +71,7 @@ class CensusUploadPreferencesTest {
                 transform(data.value).also { data.value = it; edits += it }
         }
         val source = DevSettingsDataSource(ds)
-        val repo = DevSettingsRepository(source, true, StandardTestDispatcher(testScheduler))
+        val repo = DevSettingsRepository(source, true, StandardTestDispatcher(testScheduler), "test")
         repo.setCensusUploadEnabled(true)
         repo.setCensusShareCaptures(true)
         edits.clear()
@@ -92,7 +93,7 @@ class CensusUploadPreferencesTest {
             override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
                 transform(data.value).also { data.value = it }
         }
-        val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, StandardTestDispatcher(testScheduler))
+        val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, StandardTestDispatcher(testScheduler), "test")
         val run = CensusLastRun(5L, CensusRunOutcome.ENROL_REJECTED, 422, reason = CensusEnrolRejectReason.UNSUPPORTED_SCHEMA)
         repo.setCensusLastRun(run)
         assertEquals(run, repo.censusLastRun.first())
@@ -117,7 +118,7 @@ class CensusUploadPreferencesTest {
             it[androidx.datastore.preferences.core.longPreferencesKey("census_last_run_at_millis")] = 5L
             it[stringPreferencesKey("census_last_run_outcome")] = "uploaded"
         }
-        val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, StandardTestDispatcher(testScheduler))
+        val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, StandardTestDispatcher(testScheduler), "test")
         assertEquals(CensusLastRun(5L, CensusRunOutcome.UPLOADED), repo.censusLastRun.first())
     }
 
@@ -126,7 +127,7 @@ class CensusUploadPreferencesTest {
         val scope = CoroutineScope(io + Job())
         try {
             val ds = PreferenceDataStoreFactory.create(scope = scope) { File(tmp.root, "dev.preferences_pb") }
-            val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, io)
+            val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, io, "test")
             assertFalse(repo.enabled.first())
             assertFalse(repo.censusShareCaptures.first())
             assertEquals("https://census.dashbuddy.trotter.cloud", repo.baseUrl.first())
@@ -140,12 +141,15 @@ class CensusUploadPreferencesTest {
             assertFalse(repo.censusShareCaptures.first())
             repo.setCensusUploadEnabled(true)
             assertFalse(repo.censusShareCaptures.first())
-            val release = DevSettingsRepository(DevSettingsDataSource(ds), false, io)
+            val release = DevSettingsRepository(DevSettingsDataSource(ds), false, io, "test")
             assertFalse(release.enabled.first())
             release.setCensusShareCaptures(true)
             assertFalse(release.censusShareCaptures.first())
+            // #1621: every build stores the choice; only the debug build sends, until #1620.
+            release.declineCensus()
             release.setCensusUploadEnabled(true)
-            assertFalse(repo.enabled.first())
+            assertEquals(CensusConsent.ON, release.censusConsent.first())
+            assertFalse(release.enabled.first())
         } finally {
             scope.cancel()
         }
@@ -156,7 +160,7 @@ class CensusUploadPreferencesTest {
         val scope = CoroutineScope(io + Job())
         try {
             val ds = PreferenceDataStoreFactory.create(scope = scope) { File(tmp.root, "toggle.preferences_pb") }
-            val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, io)
+            val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, io, "test")
             for (enabled in listOf(true, false, true)) {
                 repo.setNextAllowedAtMillis(Long.MAX_VALUE)
                 repo.setCensusUploadEnabled(enabled)
@@ -173,12 +177,12 @@ class CensusUploadPreferencesTest {
         val scope = CoroutineScope(io + Job())
         try {
             val ds = PreferenceDataStoreFactory.create(scope = scope) { File(tmp.root, "schemas.preferences_pb") }
-            val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, io)
+            val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, io, "test")
             assertEquals(setOf(SkeletonSchema.SCHEMA_ID), repo.acceptedSchemaIds.first())
             repo.setCensusPolicy(Json.parseToJsonElement(
                 """{"acceptedSchemaIds":["uinode.skeleton.v1","notification.skeleton.v1"],"k":10}""",
             ).jsonObject)
-            val reopened = DevSettingsRepository(DevSettingsDataSource(ds), true, io)
+            val reopened = DevSettingsRepository(DevSettingsDataSource(ds), true, io, "test")
             assertEquals(setOf(SkeletonSchema.SCHEMA_ID, NotificationSkeletonSchema.SCHEMA_ID), reopened.acceptedSchemaIds.first())
             repo.setCensusPolicy(Json.parseToJsonElement("""{"acceptedSchemaIds":[]}""").jsonObject)
             assertEquals(emptySet<String>(), reopened.acceptedSchemaIds.first())
@@ -196,7 +200,7 @@ class CensusUploadPreferencesTest {
         val scope = CoroutineScope(io + Job())
         try {
             val ds = PreferenceDataStoreFactory.create(scope = scope) { File(tmp.root, "policy.preferences_pb") }
-            val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, io)
+            val repo = DevSettingsRepository(DevSettingsDataSource(ds), true, io, "test")
             ds.edit { it[stringPreferencesKey("census_policy")] = "legacy raw JSON" }
             val policy = """{"dailySkeletonBudget":300,"maxBatchItems":100,"maxBatchBytes":921600,
                 "maxSkeletonBytes":65536,"k":10,"unknownLimit":123,"padding":"${"x".repeat(50_000)}"}"""

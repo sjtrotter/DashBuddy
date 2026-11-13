@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
@@ -184,6 +185,12 @@ fun SettingsHomeContent(
                     title = stringResource(R.string.settings_home_item_export_title),
                     subtitle = stringResource(R.string.settings_home_item_export_subtitle),
                     onClick = { onNavigate(Screen.DataExport.route) }
+                )
+                SettingsNavItem(
+                    icon = Icons.Default.CloudUpload,
+                    title = stringResource(SettingsR.string.census_title),
+                    subtitle = stringResource(SettingsR.string.census_settings_subtitle),
+                    onClick = { onNavigate(Screen.CensusSettings.route) }
                 )
                 SettingsNavItem(
                     icon = Icons.Default.Security,

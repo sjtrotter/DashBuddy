@@ -1000,6 +1000,10 @@ build's census runs as §1 to §11 describe.
   sent, who receives it, and how to stop. Off by default, per platform, Wi-Fi only by default. The consent receipt is
   bound to the server endpoint, so a new endpoint asks again. Health reports ride the same consent: no consent, no
   upload of any kind.
+  Built by #1621 (2026-11-13): Settings > Data & privacy > Census in every build, its disclosure, a
+  `CensusConsentReceipt` bound to `censusBaseUrl` that every upload stage checks (`CensusConsent.of`), and the
+  platform and Wi-Fi-only choices as stored data. The upload cadence, the Wi-Fi constraint and the per-platform filter
+  stay #1620's; until then the disclosure carries a line for the build it runs in (`PRIVACY.md` §6).
 - The capture bus stays `NoOpCaptureBus` in the Play and sideload builds. Only skeletons, health counts and, from a
   contributor, the role tags and gated words of §15 leave those phones.
 - The debug build keeps the trusted-envelope path until #1633; after that the official server accepts no plaintext

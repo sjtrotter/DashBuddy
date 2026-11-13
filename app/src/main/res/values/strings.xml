@@ -197,7 +197,7 @@
     <string name="settings_home_item_rerun_wizard_subtitle">Vehicle and offer targets</string>
     <string name="settings_home_item_about_title">About</string>
     <string name="settings_home_item_about_subtitle">Version, support and developer</string>
-    <string name="settings_home_item_debug_menu_subtitle">Bubble app display and census upload</string>
+    <string name="settings_home_item_debug_menu_subtitle">Bubble app display and census tools</string>
 
     <string name="time_tab_delivery_singular">delivery</string>
     <string name="time_tab_delivery_plural">deliveries</string>
