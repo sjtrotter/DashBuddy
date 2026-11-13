@@ -14,7 +14,7 @@
     <string name="census_wifi_only_supporting">Si está desactivado, los envíos pueden usar datos móviles</string>
     <string name="census_read_disclosure">Qué envía el censo</string>
     <string name="census_note_sends_nothing">Esta versión de gig.log no envía nada al censo, aunque esté activado, y todavía no tiene botón para borrar.</string>
-    <string name="census_note_test_build">Esta versión de prueba envía cerca de una vez por hora, en cualquier red y desde todas las apps de reparto, sin importar las opciones del censo. El límite de 30 días y el borrado desde Ajustes todavía no se aplican a ella.</string>
+    <string name="census_note_test_build">Esta versión de prueba envía a los pocos minutos de una pantalla que gig.log no reconoce, y luego cerca de cada hora, en cualquier red y desde todas las apps de reparto, sin importar las opciones del censo. El límite de 30 días y el borrado desde Ajustes todavía no se aplican a ella.</string>
     <string name="census_disclosure_heading">Antes de activar el censo</string>
     <string name="census_disclosure_intro">El censo está desactivado a menos que aceptes. gig.log funciona igual sin él.</string>
     <string name="census_disclosure_what_title">Qué envía</string>

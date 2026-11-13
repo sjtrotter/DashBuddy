@@ -213,7 +213,9 @@ dasher and that company. Those timing, 30-day and deletion statements describe t
 builds will send (#1620, #1622, census#79, census#85, census#86); the disclosure carries one line for the build it
 runs in: in the Play and sideload builds, "This version of gig.log sends nothing to the census, even with it on, and
 has no delete button yet" (they bind `NoOpCensusSink`, and `CensusUploadWorker` refuses outside debug); in the debug build, that it uploads
-about once an hour, on any network and from every delivery app whatever the choices, and that the 30-day limit and
+within minutes of a screen gig.log doesn't recognize and about every hour after that (`HttpCensusSink` schedules a run
+about 5 minutes after the queue fills from empty and at once every 50 items or at 100 queued, beside the hourly run),
+on any network and from every delivery app whatever the choices, and that the 30-day limit and
 deleting from Settings do not apply to it yet. The census screen also holds the choices: which delivery apps
 (default: every app the build reads) and Wi-Fi only (default on), saved as they change; uploads do not read them yet
 (#1620). Accept records the switch, a consent receipt bound to the census endpoint (§8) and the choices in one write;
