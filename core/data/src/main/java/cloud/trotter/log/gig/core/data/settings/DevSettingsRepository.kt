@@ -93,7 +93,9 @@ class DevSettingsRepository @Inject constructor(
     suspend fun declineCensus() = dataSource.setCensusUploadEnabled(false, censusReceipt(granted = false))
 
     suspend fun setCensusWifiOnly(wifiOnly: Boolean) = dataSource.setCensusWifiOnly(wifiOnly)
-    suspend fun setCensusPlatforms(platforms: Set<Platform>) = dataSource.setCensusPlatforms(platforms.map { it.wire }.toSet())
+    /** One platform in or out of the census, applied inside the store's edit; [readable] is the unsaved default. */
+    suspend fun setCensusPlatform(platform: Platform, covered: Boolean, readable: List<Platform>) =
+        dataSource.setCensusPlatform(platform.wire, covered, readable.map { it.wire }.toSet())
 
     private suspend fun censusReceipt(granted: Boolean) = CensusConsentReceipt(
         ConsentReceipt(System.currentTimeMillis(), appVersion, PrivacyDisclosure.REVISION, granted),

@@ -165,8 +165,15 @@ class DevSettingsDataSource @Inject constructor(
         ds.edit { it[Keys.CENSUS_WIFI_ONLY] = wifiOnly }
     }
 
-    suspend fun setCensusPlatforms(wires: Set<String>) {
-        ds.edit { it[Keys.CENSUS_PLATFORMS] = wires }
+    /**
+     * Adds or removes one platform inside the edit, so two quick changes each apply to the other's result. Before any
+     * choice is saved the set starts from [unsavedDefault].
+     */
+    suspend fun setCensusPlatform(wire: String, covered: Boolean, unsavedDefault: Set<String>) {
+        ds.edit {
+            val current = it[Keys.CENSUS_PLATFORMS] ?: unsavedDefault
+            it[Keys.CENSUS_PLATFORMS] = if (covered) current + wire else current - wire
+        }
     }
 
     suspend fun setNextAllowedAtMillis(value: Long) {

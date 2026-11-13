@@ -125,7 +125,7 @@ class CensusConsentTest {
     @Test fun `choices save on their own and unknown platform wires are dropped`() = runTest {
         val repo = repo()
         repo.setCensusWifiOnly(false)
-        repo.setCensusPlatforms(setOf(Platform.Uber))
+        repo.setCensusPlatform(Platform.DoorDash, covered = false, readable = Platform.boundPlatforms)
         assertEquals(CensusChoices(setOf(Platform.Uber), wifiOnly = false), repo.censusChoices.first())
         store.edit {
             it[androidx.datastore.preferences.core.stringSetPreferencesKey("census_platforms")] = setOf("doordash", "retired")

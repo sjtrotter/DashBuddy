@@ -70,9 +70,8 @@ class CensusViewModel @Inject constructor(
         viewModelScope.launch { settings.setCensusWifiOnly(wifiOnly) }
     }
 
+    /** Changes one platform inside the store's edit, never from this screen's snapshot, so quick taps never overwrite each other. */
     fun setPlatform(platform: Platform, covered: Boolean) {
-        val state = uiState.value ?: return
-        val chosen = state.choices.platforms.orEmpty()
-        viewModelScope.launch { settings.setCensusPlatforms(if (covered) chosen + platform else chosen - platform) }
+        viewModelScope.launch { settings.setCensusPlatform(platform, covered, readable) }
     }
 }
