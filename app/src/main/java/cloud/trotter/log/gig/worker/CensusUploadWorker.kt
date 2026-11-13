@@ -98,9 +98,9 @@ class CensusUploadWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         // #1620: the daily run draws the next day's time first, whatever this run then does; a manual run never does.
-        // A daily run that starts over an hour late waited for Wi-Fi or a charge, and sends nothing.
+        // A daily run that starts more than an hour after its target, before it, or with none, sends nothing.
         if (CensusWorkScheduler.DAILY_TAG in tags && !planner.beginDailyRun()) {
-            Timber.tag(TAG).i("census skipped cause=late")
+            Timber.tag(TAG).i("census skipped cause=off_schedule")
             return Result.success()
         }
         return uploadLock.mutex.withLock { run() }

@@ -40,6 +40,13 @@ class CensusUploadPlannerTest {
         override fun cancelManual() { cancelled++ }
     }
 
+    /** WorkManager refuses every schedule update. */
+    private class FailingScheduler : CensusUploadScheduler {
+        override fun enqueueNow(wifiOnly: Boolean, replaceQueued: Boolean) = Unit
+        override fun scheduleDaily(runAtMillis: Long, wifiOnly: Boolean) = throw IllegalStateException("refused")
+        override fun cancelManual() = Unit
+    }
+
     private val settings = DevSettingsRepository(DevSettingsDataSource(MemoryPreferences()), false, Dispatchers.Unconfined, "test")
     private val scheduler = Scheduler()
     /** 2026-11-13T15:20Z, mid-shift time of day. */
@@ -101,5 +108,38 @@ class CensusUploadPlannerTest {
         val next = settings.censusNextRunAtMillis.first()!!
         assertTrue("redrawn into the next UTC day", next in dayStart until dayStart + DAY_MILLIS)
         assertEquals(2, scheduler.daily.size)
+    }
+
+    private fun plannerAt(millis: Long, scheduler: CensusUploadScheduler = this.scheduler) =
+        CensusUploadPlanner(settings, scheduler, Clock.fixed(Instant.ofEpochMilli(millis), ZoneOffset.UTC), Random(3))
+
+    @Test fun `a missing target sends nothing and draws one`() = runTest {
+        assertEquals(null, settings.censusNextRunAtMillis.first())
+        assertEquals(false, plannerAt(now.toEpochMilli()).beginDailyRun())
+        assertTrue(settings.censusNextRunAtMillis.first()!! in dayStart until dayStart + DAY_MILLIS)
+    }
+
+    @Test fun `a run before its target is stale work and sends nothing`() = runTest {
+        val target = now.toEpochMilli()
+        settings.setCensusNextRunAtMillis(target)
+        assertEquals(false, plannerAt(target - 1).beginDailyRun())
+        assertEquals("redrawn and rescheduled", 1, scheduler.daily.size)
+        settings.setCensusNextRunAtMillis(target)
+        assertTrue("at the target itself", plannerAt(target).beginDailyRun())
+    }
+
+    @Test fun `a failed schedule keeps the old target, so the work it left in place sends nothing`() = runTest {
+        val target = now.toEpochMilli()
+        settings.setCensusNextRunAtMillis(target)
+        assertTrue("this run is on time", plannerAt(target + 60_000, FailingScheduler()).beginDailyRun())
+        assertEquals("a target no work was scheduled for is never stored", target, settings.censusNextRunAtMillis.first())
+        // The periodic work the failed update left in place fires again a day later, or early, before any new target.
+        assertEquals(false, plannerAt(target + DAY_MILLIS, FailingScheduler()).beginDailyRun())
+        assertEquals(false, plannerAt(target - 3_600_000L, FailingScheduler()).beginDailyRun())
+    }
+
+    @Test fun `app start stores no target it failed to schedule`() = runTest {
+        plannerAt(now.toEpochMilli(), FailingScheduler()).start(backgroundScope); runCurrent()
+        assertEquals(null, settings.censusNextRunAtMillis.first())
     }
 }

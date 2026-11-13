@@ -437,7 +437,7 @@ class CensusUploadWorkerTest {
         assertEquals("nothing sent", 0, h.factoryCalls)
         assertEquals(1, h.queued.size)
         assertEquals("the next day's time is drawn", 1, h.scheduler.daily.size)
-        assertTrue(logs.any { it.message == "census skipped cause=late" })
+        assertTrue(logs.any { it.message == "census skipped cause=off_schedule" })
 
         // The redrawn target lies ahead; a run that starts on time sends.
         h.preferences.setCensusNextRunAtMillis(System.currentTimeMillis() - 60_000)

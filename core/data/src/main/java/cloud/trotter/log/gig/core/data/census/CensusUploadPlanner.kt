@@ -19,8 +19,8 @@ import kotlin.random.asKotlinRandom
 
 /**
  * #1620 (ADR-0011 §21): owns the census's one daily run. The time is drawn on the phone ([CensusUploadWindow]), stored,
- * and drawn again at the start of each daily run, so it never follows a shift. Wi-Fi only (default on) is read from
- * the census choices and re-applied when it changes, keeping the stored time.
+ * and drawn again at the start of each daily run; a run sends only within an hour after it. Wi-Fi only (default on)
+ * is read from the census choices and re-applied when it changes, keeping the stored time.
  */
 @Singleton
 class CensusUploadPlanner internal constructor(
@@ -43,21 +43,23 @@ class CensusUploadPlanner internal constructor(
                 guarded {
                     if (previous != null) scheduler.cancelManual()
                     previous = wifiOnly
-                    scheduler.scheduleDaily(settings.censusNextRunAtMillis.first() ?: draw(), wifiOnly)
+                    val stored = settings.censusNextRunAtMillis.first()
+                    if (stored != null) scheduler.scheduleDaily(stored, wifiOnly) else schedule(draw(), wifiOnly)
                 }
             }
         }
     }
 
     /**
-     * The start of a daily run: draws the next day's time, and says whether this run may send. A run that starts more
-     * than [LATE_LIMIT_MILLIS] after its drawn time waited for a network or battery constraint, and could then send
-     * when the dasher reaches home Wi-Fi after a shift, so it sends nothing. A failure to read the time is late too.
+     * The start of a daily run: draws the next day's time, and says whether this run may send. It may only when it
+     * starts between its stored target and [LATE_LIMIT_MILLIS] after it. Later, it waited for a network or battery
+     * constraint; earlier, or with no target, it is work left from a schedule that failed to update. A failure to read
+     * the target sends nothing too.
      */
     suspend fun beginDailyRun(): Boolean {
         val onTime = try {
             val target = settings.censusNextRunAtMillis.first()
-            target == null || clock.millis() - target <= LATE_LIMIT_MILLIS
+            target != null && clock.millis() - target in 0..LATE_LIMIT_MILLIS
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -69,11 +71,19 @@ class CensusUploadPlanner internal constructor(
 
     /** Draws the next run, a new random time in the next UTC day. */
     suspend fun advance() = guarded {
-        scheduler.scheduleDaily(draw(), settings.censusChoices.first().wifiOnly)
+        schedule(draw(), settings.censusChoices.first().wifiOnly)
     }
 
-    private suspend fun draw(): Long =
-        CensusUploadWindow.next(clock.millis(), random).also { settings.setCensusNextRunAtMillis(it) }
+    private fun draw(): Long = CensusUploadWindow.next(clock.millis(), random)
+
+    /**
+     * Stores [runAtMillis] only once the work is scheduled for it: if scheduling fails, the stored target stays the
+     * old one, and work that the failed update left in place never matches a target it was not scheduled for.
+     */
+    private suspend fun schedule(runAtMillis: Long, wifiOnly: Boolean) {
+        scheduler.scheduleDaily(runAtMillis, wifiOnly)
+        settings.setCensusNextRunAtMillis(runAtMillis)
+    }
 
     companion object {
         /**
