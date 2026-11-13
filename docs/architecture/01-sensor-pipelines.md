@@ -873,8 +873,8 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   server-authoritative 300/day ledger and common 429 deferral; no client daily counter is introduced.
   The spool retains at most 2,000 records / 20 MiB, dropping oldest first; corrupt and oversized
   records are deleted and counted. **The daily window (#1620, ADR-0011 §21):** queueing never requests work (the
-  five-minute and every-50/100 triggers are gone, and `CensusUploadScheduler` has only `enqueueNow`, `scheduleDaily`
-  and `cancelManual`). `CensusUploadPlanner` (`:core:data`) draws `CensusUploadWindow.next` (a uniform `SecureRandom`
+  five-minute and every-50/100 triggers are gone, and `CensusUploadScheduler` has only `enqueueNow`, `scheduleDaily`,
+  `cancelManual` and #1622's `enqueueDeletion`, a run that sends no census data). `CensusUploadPlanner` (`:core:data`) draws `CensusUploadWindow.next` (a uniform `SecureRandom`
   time in the next UTC day), stores it (`census_next_run_at_millis`), and schedules the unique periodic work
   `census_daily` (24 h, `setNextScheduleTimeOverride`, UPDATE, tag `census_daily`) from the app's start, re-applying the
   stored time when Wi-Fi only changes (`UNMETERED` when on, `CONNECTED` when off; battery-not-low either way) and
@@ -924,8 +924,29 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   Logs contain counters / allowlisted reason codes; the settings screen shows the eight-character
   enrolled prefix and (#1185) a **Copy install id** button for the FULL id — a random handle, never the
   secret — because the server-side trust step (`POST /ops/installs/<uuid>/trust`) needs it.
+  **Unknown identity (#1622):** a 401 for an enrolled ID that the clock does not explain (Date within 300 s) after
+  the run's one re-sign, before the server took any request from it this run, or a health 401 the same way, means
+  the server no longer knows the ID (a restore from a backup older than a deletion erases the install whole,
+  census#88). The worker forgets it (envelopes, capture sharing, health ledger, as any new identity), mints and
+  enrols a fresh one, consent kept, and sends once more under it; the queued outlines and their in-flight batch stay.
+  **Sent record and deletion (#1622):** `CensusApi` hands the exact bytes of each skeleton, health or envelope body
+  the server read (200, 400, 422) to `CensusSentObserver`, bound to `CensusSentLog`, which keeps only
+  `CensusSentBatch.read`'s summary (kind, platform, day, node count, codes / formats / type-only / withheld counts;
+  no hash, template or value) in `filesDir/census/sent.json`, 7 days and at most 60 requests, one entry per batch
+  id; an observer failure never changes the request's result. "What gig.log sent" renders it with the stored daily
+  target (the time left ticks with `rememberNow`). `CensusDataDeletion` (`:core:data`, the one entry point; #1579's
+  wipe calls `delete()`) runs under `CensusUploadLock`: it stores a pending `CensusDeletion` in `dev_settings`,
+  cancels a waiting manual run, clears the skeleton spool and in-flight marker, invalidates the envelope sink and
+  resets the health ledger (a failed clear is retried before the next attempt), then sends a signed
+  `DELETE /v1/installs/me/data` with an empty body. 200 stores the rows and the server's UTC day (only a parsed
+  date); not enrolled, or a 401 the clock does not explain, stores `nothing_held` (the 401 also wipes the credential so the
+  next run enrols afresh); revoked switches the census off and stores `not_possible`; anything else stays pending
+  and `enqueueDeletion` queues a `census_delete` run (CONNECTED, exponential backoff from one minute). Every worker
+  run calls `resumePending()` first under the lock, whatever the consent: while a request is pending it sends
+  nothing else (INFO `census skipped cause=deletion_pending`), and a `census_delete`-tagged run never uploads. An
+  unreadable stored state decodes as pending (fail closed). Deleting never changes consent; the switch is stop.
   **Identity reset + run status (#1185):** when the server no longer knows an enrolled install (alpha
-  database reset, withdrawn install) uploads 401 and the worker stops; the developer screen's **Reset
+  database reset, withdrawn install) uploads 401 and, since #1622, the worker enrols a fresh identity itself; the developer screen's **Reset
   census identity** action (confirmation dialog) runs `CensusIdentityResetter` (`:core:data`) on the
   APPLICATION scope (leaving the screen cannot cancel it half-done; a failure is recorded as `failure`, never
   thrown) under the shared `CensusUploadLock` (moved to `:core:data` so the resetter and the `:app` worker
@@ -936,8 +957,8 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   policy, not identity state — a fresh id must not bypass it); only if consent is still on does it enqueue an
   immediate run with `enqueueNow(replaceQueued = true)` (REPLACE, so a manual run parked in WorkManager
   backoff cannot swallow it), which mints + enrols a fresh id (the old server install is orphaned, not
-  withdrawn). The worker's "identity unknown to server" WARN latch is keyed to the current install id
-  (`unauthorizedWarnedFor`: a changed identity re-arms it). Every run persists ONE
+  withdrawn). The worker WARNs once per re-enrolment ("identity unknown to server, enrolling a new one"; the
+  per-process latch is gone with the stuck state it rate-limited, #1622). Every run persists ONE
   `CensusLastRun(atMillis, CensusRunOutcome, detail?, envelopesPosted, reason?)` into developer settings (`:domain` vocabulary, wire
   strings `deferred|enrolled|enrol_conflict|enrol_rejected|keystore_transient|spool_empty|stale_removed|
   uploaded|duplicate|rejected|oversized|bad_request|unauthorized|clock_skew|revoked|failure|reset`, decode

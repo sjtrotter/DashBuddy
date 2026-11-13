@@ -1011,6 +1011,14 @@ build's census runs as §1 to §11 describe.
   one upload a day at a time drawn on the phone (`CensusUploadPlanner`), never on a recognition trigger, Wi-Fi only by
   default (`UNMETERED`), and an app-wide network security config refusing cleartext. The deletion button (#1622) and
   the server's 30-day pseudonyms (census#86) are not built; the disclosure's per-build line says so.
+  Built by #1622 (2026-11-13): "Delete my census data" on the census screen, separate from the switch, with the
+  confirmation naming what survives and the 14-day backups; it clears the phone's queue, sends
+  `DELETE /v1/installs/me/data` (census#79) and shows the server's confirmation, and a request made offline is sent
+  before anything else (`CensusDataDeletion`). "What gig.log sent" summarizes the request bodies the server read,
+  from their bytes, for 7 days on the phone. An install the server no longer knows (a restore after a deletion
+  erases it whole) re-enrols with consent kept. The server keeps the install record and today's ledger row so uploads
+  continue (census API.md); the bullet below that lists "the install record" describes withdrawal. The on-phone wipe
+  is still #1579; the disclosure's per-build line says so.
 - The capture bus stays `NoOpCaptureBus` in the Play and sideload builds. Only skeletons, health counts and, from a
   contributor, the role tags and gated words of §15 leave those phones.
 - The debug build keeps the trusted-envelope path until #1633; after that the official server accepts no plaintext

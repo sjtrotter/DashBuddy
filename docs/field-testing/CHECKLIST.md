@@ -92,6 +92,7 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 - [#1620 a Play-build install with the census on uploads once a day, on Wi-Fi only](checklist/open/1620-census-daily-upload-play-build.md)
 - [#1621 the census turns on only through its disclosure](checklist/open/1621-census-opt-in-disclosure.md)
+- [#1622 What gig.log sent matches the server, and Delete my census data empties it](checklist/open/1622-census-sent-and-delete.md)
 - [#1610 a one-chain shift links its offers](checklist/open/1610-one-chain-shift-links-its-offers.md)
 - [#1515 Recap is the week](checklist/open/1515-recap-week.md)
 - [#1517 an accepted offer with no delivery is checked on its shift page](checklist/open/1517-shift-checks.md)
