@@ -21,10 +21,15 @@ import cloud.trotter.census.contract.sha256OrNull
  */
 object CensusSampleKey {
 
-    /** The key of [item]: 64 hex, or null when no digest is available (the caller then keeps nothing). */
-    fun of(item: CensusSkeletonDto): String? = sha256OrNull(canonical(item))
+    /**
+     * The key of [item]: 64 hex, or null when no digest is available (the caller then keeps nothing). [presentFields]
+     * are a notification's fields that held a value: on the wire an absent field and a withheld one are both
+     * `withheld`, so moving the body from one field to another would otherwise be the same variant.
+     */
+    fun of(item: CensusSkeletonDto, presentFields: Set<NotifTextField>? = null): String? =
+        sha256OrNull(canonical(item, presentFields))
 
-    internal fun canonical(item: CensusSkeletonDto): String = buildString {
+    internal fun canonical(item: CensusSkeletonDto, presentFields: Set<NotifTextField>? = null): String = buildString {
         line("schema", item.schemaId)
         line("platform", item.platform)
         line("platformAppVersion", item.platformAppVersion ?: "")
@@ -40,7 +45,13 @@ object CensusSampleKey {
             is NotificationSkeletonDto -> {
                 line("kind", item.kind.name)
                 line("channel", item.channelId)
-                NotifTextField.entries.forEach { line(it.name, item.slots[it]?.let(::format) ?: "") }
+                NotifTextField.entries.forEach { field ->
+                    val presence = when (presentFields) {
+                        null -> "?"
+                        else -> if (field in presentFields) "present" else "absent"
+                    }
+                    line(field.name, "$presence;${item.slots[field]?.let(::format) ?: ""}")
+                }
                 line("actions", item.actions.joinToString(",") { format(it) })
             }
         }

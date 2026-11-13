@@ -57,14 +57,16 @@ class CensusSamplingEndToEndTest {
         return CensusRecord(Platform.DoorDash, built.skeleton.fingerprint, built.json, built.itemBytes, null)
     }
 
-    private fun push(title: String, text: String): CensusRecord {
+    /** A push with [body] in its text field, or in its big-text field when [bigText]. */
+    private fun push(title: String, body: String, bigText: Boolean = false): CensusRecord {
         val raw = RawNotificationData(
-            title, text, null, null, packageName = requireNotNull(Platform.DoorDash.packageName),
+            title, body.takeUnless { bigText }, null, body.takeIf { bigText },
+            packageName = requireNotNull(Platform.DoorDash.packageName),
             postTime = 0, isClearable = true, channelId = "offers",
         )
         val built = NotificationSkeletonBuilder.outcome(raw, meta, Platform.DoorDash, day, SkeletonVersion.V2)
             as NotificationSkeletonBuilder.Outcome.Built
-        return CensusRecord(Platform.DoorDash, built.skeleton.fingerprint, built.json, built.itemBytes, null)
+        return CensusRecord(Platform.DoorDash, built.skeleton.fingerprint, built.json, built.itemBytes, null, built.presentFields)
     }
 
     @Test fun `two frames that differ only in a customer's name and the pay are one sample`() = runTest {
@@ -78,9 +80,17 @@ class CensusSamplingEndToEndTest {
         oneSample(ann, maria)
     }
 
+    @Test fun `a push whose body moved to another field is a new variant`() = runTest {
+        assertEquals(2, samples(push("Order from Ann", "Pickup ready"), push("Order from Ann", "Pickup ready", bigText = true)))
+    }
+
     private fun kotlinx.coroutines.test.TestScope.oneSample(ann: CensusRecord, maria: CensusRecord) {
         assertNotEquals("the skeletons differ, so the test is not vacuous", ann.skeletonJson, maria.skeletonJson)
+        assertEquals(1, samples(ann, maria))
+    }
 
+    /** How many of [records] the sink queues on one UTC day. */
+    private fun kotlinx.coroutines.test.TestScope.samples(vararg records: CensusRecord): Int {
         val io = StandardTestDispatcher(testScheduler)
         val context = RuntimeEnvironment.getApplication()
         val stats = CensusUploadStats()
@@ -93,10 +103,9 @@ class CensusSamplingEndToEndTest {
         }
         val sink = HttpCensusSink(prefs, spool, CensusDailySample(context, io), stats, backgroundScope, io, readsUnboundPlatforms = false)
         runCurrent()
-        sink.offer(ann)
-        sink.offer(maria)
+        records.forEach { sink.offer(it) }
         runCurrent()
-        assertEquals(1, spool.count())
-        assertEquals(1L, stats.sampledRepeat.get())
+        assertEquals(records.size - spool.count(), stats.sampledRepeat.get().toInt())
+        return spool.count()
     }
 }

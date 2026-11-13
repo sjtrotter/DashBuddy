@@ -64,7 +64,7 @@ class HttpCensusSink @Inject constructor(
                             continue
                         }
                         val item = CensusSkeletonSchema.deserialize(record.skeletonJson)
-                        val key = requireNotNull(CensusSampleKey.of(item))
+                        val key = requireNotNull(CensusSampleKey.of(item, record.presentFields))
                         if (!sample.admit(item.day, key)) {
                             stats.sampledRepeat.incrementAndGet()
                             continue

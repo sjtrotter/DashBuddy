@@ -100,6 +100,18 @@ class CensusSampleKeyTest {
         assertFalse("no fingerprint in a notification's key input", ann.fingerprint in CensusSampleKey.canonical(ann))
     }
 
+    @Test fun `which notification fields held a value is a variant, separate from withholding`() {
+        val item = push(TextSlot.WITHHELD)
+        val inText = setOf(NotifTextField.TITLE, NotifTextField.TEXT)
+        val inBigText = setOf(NotifTextField.TITLE, NotifTextField.BIG_TEXT)
+        assertNotEquals("same wire slots, body in another field", CensusSampleKey.of(item, inText), CensusSampleKey.of(item, inBigText))
+        assertEquals(
+            "a name change keeps the layout",
+            CensusSampleKey.of(push(words("Ann")), inText),
+            CensusSampleKey.of(push(words("Maria Elena Ruiz")), inText),
+        )
+    }
+
     @Test fun `a notification's channel and formats are variants`() {
         val base = CensusSampleKey.of(push(words("Ann")))
         assertNotEquals(base, CensusSampleKey.of(push(words("Ann"), channel = "chat")))

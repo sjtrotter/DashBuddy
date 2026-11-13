@@ -132,6 +132,7 @@ class SkeletonPublisher @Inject constructor(
                         skeletonJson = outcome.json,
                         itemBytes = outcome.itemBytes,
                         captureId = obs.captureId,
+                        presentFields = outcome.presentFields,
                     ))) stats.onCensusSinkRefused()
                 }
                 is NotificationSkeletonBuilder.Outcome.Refused -> stats.onCensusNotificationRefused(outcome.reason)
