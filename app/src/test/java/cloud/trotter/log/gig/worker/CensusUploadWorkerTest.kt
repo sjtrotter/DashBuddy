@@ -42,6 +42,10 @@ import cloud.trotter.log.gig.domain.census.EnvelopeProjection
 import cloud.trotter.census.contract.CensusSkeletonSchema
 import cloud.trotter.census.contract.NotificationSkeletonSchema
 import cloud.trotter.census.contract.SkeletonSchema
+import cloud.trotter.log.gig.domain.capability.ConsentReceipt
+import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
+import cloud.trotter.log.gig.domain.census.CensusConsent
+import cloud.trotter.log.gig.domain.census.CensusConsentReceipt
 import cloud.trotter.log.gig.domain.census.CensusEnrolRejectReason
 import cloud.trotter.log.gig.domain.census.CensusLastRun
 import cloud.trotter.log.gig.domain.census.CensusRunOutcome
@@ -158,7 +162,7 @@ class CensusUploadWorkerTest {
 
     private class Harness(scope: CoroutineScope, io: CoroutineDispatcher) {
         private val memory = MemoryPreferences()
-        val preferences = spy(DevSettingsRepository(DevSettingsDataSource(memory), true, Dispatchers.Unconfined))
+        val preferences = spy(DevSettingsRepository(DevSettingsDataSource(memory), true, Dispatchers.Unconfined, "test"))
         val credentials: CensusCredentialStore = mock()
         val spool: CensusSpool = mock()
         val envelopeSpool: CensusSpool = mock()
@@ -260,6 +264,15 @@ class CensusUploadWorkerTest {
             }
         }
 
+        /** #1621: replace the stored receipt with one accepted for [endpoint], as a build with another server would find it. */
+        fun setReceiptEndpointSync(endpoint: String) {
+            val receipt = CensusConsentReceipt(ConsentReceipt(1L, "test", PrivacyDisclosure.REVISION, granted = true), endpoint)
+            memory.data.value = memory.data.value.toMutablePreferences().apply {
+                this[androidx.datastore.preferences.core.stringPreferencesKey("census_consent_receipt_json")] =
+                    Json.encodeToString(CensusConsentReceipt.serializer(), receipt)
+            }
+        }
+
         fun setShareSync(enabled: Boolean) {
             memory.data.value = memory.data.value.toMutablePreferences().apply {
                 this[androidx.datastore.preferences.core.booleanPreferencesKey("census_share_captures")] = enabled
@@ -325,6 +338,56 @@ class CensusUploadWorkerTest {
         assertEquals(0, h.factoryCalls)
         verify(h.credentials, never()).current()
         verify(h.spool, never()).take(any(), any())
+    }
+
+    @Test fun `nothing uploads until the disclosure is accepted`() = runTest {
+        val h = harness()
+        h.initialize(enabled = false)
+        h.queue()
+        h.health()
+        h.setConsentSync(true) // A switch with no receipt: an install from before the disclosure.
+        assertEquals(CensusConsent.OFF, h.preferences.censusConsent.first())
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(0, h.factoryCalls)
+        verify(h.spool, never()).take(any(), any())
+        assertTrue(h.api.healthBodies.isEmpty())
+
+        h.preferences.setCensusUploadEnabled(true) // The disclosure's Accept.
+        h.api.healthResults += HealthResult.Accepted(1, emptyMap())
+        h.api.uploads += UploadResult.Duplicate
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(1, h.api.healthBodies.size)
+        assertTrue(h.queued.isEmpty())
+    }
+
+    @Test fun `a changed endpoint drops the consent and stops uploads until accepted again`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.queue()
+        h.setReceiptEndpointSync("https://census.old.example")
+        assertEquals(CensusConsent.ENDPOINT_CHANGED, h.preferences.censusConsent.first())
+        assertFalse(h.preferences.enabled.first())
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(0, h.factoryCalls)
+        assertEquals(1, h.queued.size)
+
+        h.preferences.setCensusUploadEnabled(true)
+        assertEquals(CensusConsent.ON, h.preferences.censusConsent.first())
+        h.api.uploads += UploadResult.Duplicate
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertTrue(h.queued.isEmpty())
+    }
+
+    @Test fun `a decline is durable - the switch alone never turns uploads back on`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.queue()
+        h.preferences.declineCensus()
+        h.setConsentSync(true)
+        assertEquals(CensusConsent.OFF, h.preferences.censusConsent.first())
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(0, h.factoryCalls)
+        assertEquals(1, h.queued.size)
     }
 
     @Test fun `fresh enrollment is persisted before upload and lost replies reuse pending identity`() = runTest {

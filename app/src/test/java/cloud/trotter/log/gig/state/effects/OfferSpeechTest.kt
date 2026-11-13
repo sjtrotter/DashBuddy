@@ -102,7 +102,7 @@ class OfferSpeechTest {
         }
         val settings = cloud.trotter.log.gig.core.data.settings.DevSettingsRepository(
             cloud.trotter.log.gig.core.datastore.settings.DevSettingsDataSource(store), true,
-            kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+            kotlinx.coroutines.test.StandardTestDispatcher(testScheduler), "test")
         testScheduler.runCurrent()
         val story = StoryFixtures.addOn()
         assertEquals("Add-on. H-E-B. Adds 6 dollars. Job estimated net: 30 dollars. 15.2 miles. 58 minutes. 31 dollars an hour.",

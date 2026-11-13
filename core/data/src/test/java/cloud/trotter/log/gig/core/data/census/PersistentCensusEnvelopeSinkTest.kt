@@ -42,7 +42,7 @@ class PersistentCensusEnvelopeSinkTest {
 
     private class Harness(scope: TestScope) {
         val io = StandardTestDispatcher(scope.testScheduler)
-        val preferences = DevSettingsRepository(DevSettingsDataSource(MemoryPreferences()), true, io)
+        val preferences = DevSettingsRepository(DevSettingsDataSource(MemoryPreferences()), true, io, "test")
         val stats = CensusUploadStats()
         val spool: CensusSpool = mock()
         val records = mutableListOf<CensusRecord>()
@@ -174,7 +174,7 @@ class PersistentCensusEnvelopeSinkTest {
 
     @Test fun `invalidate waits for active writer clears its result and drops the next queued record`() = runTest {
         val io = StandardTestDispatcher(testScheduler)
-        val preferences = DevSettingsRepository(DevSettingsDataSource(MemoryPreferences()), true, io)
+        val preferences = DevSettingsRepository(DevSettingsDataSource(MemoryPreferences()), true, io, "test")
         val stats = CensusUploadStats()
         val started = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()

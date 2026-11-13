@@ -44,10 +44,6 @@ class SettingsMenuViewModel @Inject constructor(
     val censusEnvelopesQueued = envelopeSpool.queued
     val censusShareCaptures = devSettingsRepository.censusShareCaptures
 
-    fun setCensusUploadEnabled(enabled: Boolean) = viewModelScope.launch {
-        devSettingsRepository.setCensusUploadEnabled(enabled)
-    }
-
     fun setCensusShareCaptures(enabled: Boolean) = viewModelScope.launch {
         devSettingsRepository.setCensusShareCaptures(enabled)
     }

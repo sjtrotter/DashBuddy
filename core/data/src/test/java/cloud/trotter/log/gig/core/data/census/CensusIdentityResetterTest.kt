@@ -54,7 +54,7 @@ class CensusIdentityResetterTest {
     private val spool: CensusSpool = mock()
     private val envelopeSink: CensusEnvelopeSink = mock()
     private val healthStore: HealthLedgerStore = mock()
-    private val preferences = spy(DevSettingsRepository(DevSettingsDataSource(MemoryPreferences()), true, Dispatchers.Unconfined))
+    private val preferences = spy(DevSettingsRepository(DevSettingsDataSource(MemoryPreferences()), true, Dispatchers.Unconfined, "test"))
     private val scheduler = Scheduler()
     private val lock = CensusUploadLock()
 

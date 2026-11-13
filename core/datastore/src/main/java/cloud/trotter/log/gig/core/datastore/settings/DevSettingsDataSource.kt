@@ -8,10 +8,14 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import cloud.trotter.log.gig.core.datastore.capability.ConsentReceiptJson
 import cloud.trotter.log.gig.core.datastore.di.DevSettingsPreferences
+import cloud.trotter.log.gig.domain.census.CensusChoices
+import cloud.trotter.log.gig.domain.census.CensusConsentReceipt
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.serialization.encodeToString
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,6 +29,9 @@ class DevSettingsDataSource @Inject constructor(
         val LOG_LEVEL = intPreferencesKey("log_level")
         val CENSUS_SHARE_CAPTURES = booleanPreferencesKey("census_share_captures")
         val CENSUS_UPLOAD_ENABLED = booleanPreferencesKey("census_upload_enabled")
+        val CENSUS_CONSENT_RECEIPT = stringPreferencesKey("census_consent_receipt_json")
+        val CENSUS_WIFI_ONLY = booleanPreferencesKey("census_wifi_only")
+        val CENSUS_PLATFORMS = stringSetPreferencesKey("census_platforms")
         val CENSUS_NEXT_ALLOWED_AT = longPreferencesKey("census_next_allowed_at_millis")
         val CENSUS_LAST_RUN_AT = longPreferencesKey("census_last_run_at_millis")
         val CENSUS_LAST_RUN_OUTCOME = stringPreferencesKey("census_last_run_outcome")
@@ -114,13 +121,52 @@ class DevSettingsDataSource @Inject constructor(
         ds.edit { it[Keys.CENSUS_SHARE_CAPTURES] = enabled }
     }
 
-    suspend fun setCensusUploadEnabled(enabled: Boolean) {
+    /** #1621: the census switch and its receipt from ONE emission, so a reader never pairs one with the other's past. */
+    data class RawCensusConsent(val switchOn: Boolean, val receipt: CensusConsentReceipt?)
+
+    /** A malformed receipt reads as absent, which reads as consent OFF. */
+    val censusConsent: Flow<RawCensusConsent> = ds.data.map { prefs ->
+        RawCensusConsent(
+            switchOn = prefs[Keys.CENSUS_UPLOAD_ENABLED] ?: false,
+            receipt = prefs[Keys.CENSUS_CONSENT_RECEIPT]?.let { encoded ->
+                runCatching { ConsentReceiptJson.decodeFromString<CensusConsentReceipt>(encoded) }.getOrNull()
+            },
+        )
+    }
+
+    val censusWifiOnly: Flow<Boolean> = ds.data.map { it[Keys.CENSUS_WIFI_ONLY] ?: CensusChoices.DEFAULT_WIFI_ONLY }
+
+    /** Platform wire values; null until a choice is saved. */
+    val censusPlatforms: Flow<Set<String>?> = ds.data.map { it[Keys.CENSUS_PLATFORMS] }
+
+    /**
+     * The census switch, in ONE edit with what goes with it: a [receipt] when the dasher decided (null keeps the stored
+     * one, as a server revoke does), the choices saved with an Accept, sharing off when the switch goes off, and the
+     * deferral deadline cleared.
+     */
+    suspend fun setCensusUploadEnabled(
+        enabled: Boolean,
+        receipt: CensusConsentReceipt? = null,
+        platforms: Set<String>? = null,
+        wifiOnly: Boolean? = null,
+    ) {
         ds.edit {
             it[Keys.CENSUS_UPLOAD_ENABLED] = enabled
             // One transaction: cancellation or process death cannot leave sharing ON with consent OFF.
             if (!enabled) it[Keys.CENSUS_SHARE_CAPTURES] = false
             it.remove(Keys.CENSUS_NEXT_ALLOWED_AT)
+            if (receipt != null) it[Keys.CENSUS_CONSENT_RECEIPT] = ConsentReceiptJson.encodeToString(receipt)
+            if (platforms != null) it[Keys.CENSUS_PLATFORMS] = platforms
+            if (wifiOnly != null) it[Keys.CENSUS_WIFI_ONLY] = wifiOnly
         }
+    }
+
+    suspend fun setCensusWifiOnly(wifiOnly: Boolean) {
+        ds.edit { it[Keys.CENSUS_WIFI_ONLY] = wifiOnly }
+    }
+
+    suspend fun setCensusPlatforms(wires: Set<String>) {
+        ds.edit { it[Keys.CENSUS_PLATFORMS] = wires }
     }
 
     suspend fun setNextAllowedAtMillis(value: Long) {
