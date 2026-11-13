@@ -1004,6 +1004,13 @@ build's census runs as §1 to §11 describe.
   `CensusConsentReceipt` bound to `censusBaseUrl` that every upload stage checks (`CensusConsent.of`), and the
   platform and Wi-Fi-only choices as stored data. The upload cadence, the Wi-Fi constraint and the per-platform filter
   stay #1620's; until then the disclosure carries a line for the build it runs in (`PRIVACY.md` §6).
+  Built by #1620 (2026-11-13): every build binds `HttpCensusSink` and runs the worker behind that consent, health
+  reports included; the release variant keeps `NoOpCaptureBus` and the no-op envelope sink. One collection floor for
+  all three builds: one skeleton per variant per UTC day (`CensusSampleKey`: structure, flags, field names and format
+  templates, never a word hash, word count or withheld mark), the census choices filtering skeletons and health rows,
+  one upload a day at a time drawn on the phone (`CensusUploadPlanner`), never on a recognition trigger, Wi-Fi only by
+  default (`UNMETERED`), and an app-wide network security config refusing cleartext. The deletion button (#1622) and
+  the server's 30-day pseudonyms (census#86) are not built; the disclosure's per-build line says so.
 - The capture bus stays `NoOpCaptureBus` in the Play and sideload builds. Only skeletons, health counts and, from a
   contributor, the role tags and gated words of §15 leave those phones.
 - The debug build keeps the trusted-envelope path until #1633; after that the official server accepts no plaintext

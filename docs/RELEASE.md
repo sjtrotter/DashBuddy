@@ -13,8 +13,8 @@ it in any form. The steps below are the developer's; an agent has no signing key
 | `sideload` | `cloud.trotter.log.gig.sideload` | true | yes | GitHub Release, `giglog-sideload-<version>.apk` | the sideload key |
 | `debug` | `cloud.trotter.log.gig.debug` | true | yes | GitHub Release, `giglog-debug-<version>.apk` | the debug key (#1469) |
 
-`app/build.gradle.kts` owns this table. The sideload build is a release build (no saved screen text, no census
-upload, no verbose logs); it differs from the Play build only where Play's rules force it. The debug build is the
+`app/build.gradle.kts` owns this table. The sideload build is a release build (no saved screen text, no capture
+sharing, no verbose logs; its census, as in every build, is off until the driver accepts it); it differs from the Play build only where Play's rules force it. The debug build is the
 developer's test build: it keeps its application ID, its key and version code 1, so a CI debug APK installs over
 the phone's build and keeps its data. It is not a build for other drivers.
 
