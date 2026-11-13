@@ -448,6 +448,24 @@ class CensusUploadWorkerTest {
         assertEquals(1, h.api.healthBodies.size)
     }
 
+    @Test fun `a daily run whose upload fails is not retried inside its hour`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.queue()
+        val daily = listOf(CensusWorkScheduler.DAILY_TAG)
+        h.preferences.setCensusNextRunAtMillis(System.currentTimeMillis() - 60_000)
+        h.api.uploads += UploadResult.TransportFailure("IOException")
+        assertEquals("the failed upload asks WorkManager to retry", ListenableWorker.Result.retry(), h.worker(daily).doWork())
+        val calls = h.factoryCalls
+        assertEquals(1, h.api.bodies.size)
+
+        // WorkManager's backoff runs the same daily work again 30 s later, inside the target's hour.
+        assertEquals(ListenableWorker.Result.success(), h.worker(daily).doWork())
+        assertEquals("the retry sends nothing", calls, h.factoryCalls)
+        assertEquals(1, h.api.bodies.size)
+        assertEquals(1, h.queued.size)
+    }
+
     @Test fun `a manual run is never skipped as late`() = runTest {
         val h = harness()
         h.initialize()

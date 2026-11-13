@@ -51,26 +51,30 @@ class CensusUploadPlanner internal constructor(
     }
 
     /**
-     * The start of a daily run: draws the next day's time, and says whether this run may send. It may only when it
-     * starts between its stored target and [LATE_LIMIT_MILLIS] after it. Later, it waited for a network or battery
-     * constraint; earlier, or with no target, it is work left from a schedule that failed to update. A failure to read
-     * the target sends nothing too.
+     * The start of a daily run: consumes the stored target, draws the next day's time, and says whether this run may
+     * send. It may only when it starts between its target and [LATE_LIMIT_MILLIS] after it. Later, it waited for a
+     * network or battery constraint; earlier, or with no target, it is work left from a schedule that failed to update.
+     *
+     * Fail closed: the target is removed from the store before anything is sent, so a WorkManager retry of this run,
+     * or any work left in place, finds no target and sends nothing; and if the target cannot be read or removed, or the
+     * next day's time cannot be scheduled, this run sends nothing either.
      */
     suspend fun beginDailyRun(): Boolean {
         val onTime = try {
             val target = settings.censusNextRunAtMillis.first()
+            if (target != null) settings.clearCensusNextRunAtMillis()
             target != null && clock.millis() - target in 0..LATE_LIMIT_MILLIS
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             false
         }
-        advance()
-        return onTime
+        val advanced = advance()
+        return onTime && advanced
     }
 
-    /** Draws the next run, a new random time in the next UTC day. */
-    suspend fun advance() = guarded {
+    /** Draws the next run, a new random time in the next UTC day. False when it could not be scheduled. */
+    suspend fun advance(): Boolean = guarded {
         schedule(draw(), settings.censusChoices.first().wifiOnly)
     }
 
@@ -93,14 +97,14 @@ class CensusUploadPlanner internal constructor(
         const val LATE_LIMIT_MILLIS: Long = 3_600_000L
     }
 
-    /** A scheduling failure never reaches the caller: the periodic work keeps its last time. */
-    private suspend fun guarded(block: suspend () -> Unit) {
-        try {
-            block()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            Timber.tag("Census").w("census schedule failed")
-        }
+    /** A scheduling failure never throws to the caller; it returns false and the periodic work keeps its last time. */
+    private suspend fun guarded(block: suspend () -> Unit): Boolean = try {
+        block()
+        true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        Timber.tag("Census").w("census schedule failed")
+        false
     }
 }

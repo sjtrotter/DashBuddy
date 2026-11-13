@@ -128,14 +128,23 @@ class CensusUploadPlannerTest {
         assertTrue("at the target itself", plannerAt(target).beginDailyRun())
     }
 
-    @Test fun `a failed schedule keeps the old target, so the work it left in place sends nothing`() = runTest {
+    @Test fun `a run whose next day cannot be scheduled sends nothing, and neither does any later work`() = runTest {
         val target = now.toEpochMilli()
         settings.setCensusNextRunAtMillis(target)
-        assertTrue("this run is on time", plannerAt(target + 60_000, FailingScheduler()).beginDailyRun())
-        assertEquals("a target no work was scheduled for is never stored", target, settings.censusNextRunAtMillis.first())
-        // The periodic work the failed update left in place fires again a day later, or early, before any new target.
+        assertEquals("on time, but the next day failed to schedule", false, plannerAt(target + 60_000, FailingScheduler()).beginDailyRun())
+        assertEquals("the target is consumed, and no unscheduled one is stored", null, settings.censusNextRunAtMillis.first())
+        // The periodic work the failed update left in place fires again: a retry, a day later, or early.
+        assertEquals(false, plannerAt(target + 90_000, FailingScheduler()).beginDailyRun())
         assertEquals(false, plannerAt(target + DAY_MILLIS, FailingScheduler()).beginDailyRun())
         assertEquals(false, plannerAt(target - 3_600_000L, FailingScheduler()).beginDailyRun())
+    }
+
+    @Test fun `a target admits one run only, so a retry inside the hour sends nothing`() = runTest {
+        val target = now.toEpochMilli()
+        settings.setCensusNextRunAtMillis(target)
+        assertTrue("admitted at the target", plannerAt(target).beginDailyRun())
+        // The upload fails and WorkManager retries 30 s later, well inside the target's hour.
+        assertEquals("the retry sends nothing", false, plannerAt(target + 30_000).beginDailyRun())
     }
 
     @Test fun `app start stores no target it failed to schedule`() = runTest {

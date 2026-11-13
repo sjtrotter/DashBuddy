@@ -188,6 +188,10 @@ class DevSettingsDataSource @Inject constructor(
         ds.edit { it[Keys.CENSUS_NEXT_RUN_AT] = value }
     }
 
+    suspend fun clearCensusNextRunAtMillis() {
+        ds.edit { it.remove(Keys.CENSUS_NEXT_RUN_AT) }
+    }
+
     suspend fun setCensusPolicy(value: Map<String, Int>, acceptedSchemaIds: Set<String>) {
         ds.edit { prefs ->
             prefs.remove(stringPreferencesKey("census_policy"))

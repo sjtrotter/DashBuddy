@@ -884,7 +884,9 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   schedule update left in place) or one with no target sends nothing that day. Within the hour a send can still start
   when the phone reaches Wi-Fi or a charge, so the hour bounds, not removes, how far the send follows a shift's end
   (a skip logs INFO `census skipped cause=off_schedule`). The target is stored only after the work is scheduled for
-  it, so a failed update never stores a target no work matches. Every run, manual included, then checks the current Wi-Fi only choice against
+  it, so a failed update never stores a target no work matches. A run consumes its target (removes it from the store)
+  before it may send, and sends nothing if the next day's time fails to schedule, so a WorkManager retry of a failed
+  upload inside the hour finds no target and sends nothing. Every run, manual included, then checks the current Wi-Fi only choice against
   `CensusNetwork.isMetered()` before sending (INFO `census skipped cause=metered`, no status written). The
   worker draws the next day's time at the start of a tagged run only, so the test build's Upload now (and the identity
   reset's run), which keep to Wi-Fi only too (`enqueueNow(wifiOnly)`), never move it;

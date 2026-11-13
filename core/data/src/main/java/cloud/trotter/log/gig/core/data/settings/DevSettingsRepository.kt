@@ -78,6 +78,8 @@ class DevSettingsRepository @Inject constructor(
     /** #1620: when the daily census run is due, drawn by [cloud.trotter.log.gig.core.data.census.CensusUploadPlanner]. */
     val censusNextRunAtMillis: Flow<Long?> = dataSource.censusNextRunAtMillis
     suspend fun setCensusNextRunAtMillis(value: Long) = dataSource.setCensusNextRunAtMillis(value)
+    /** A daily run consumes its target before it sends, so no retry or left-over work matches it again. */
+    suspend fun clearCensusNextRunAtMillis() = dataSource.clearCensusNextRunAtMillis()
     val censusLastRun: Flow<CensusLastRun?> = dataSource.censusLastRun.map { raw ->
         raw?.let { (at, wire, detail, envelopes, reason) ->
             CensusLastRun(at, CensusRunOutcome.fromWire(wire), detail, envelopes, CensusEnrolRejectReason.fromWire(reason))
