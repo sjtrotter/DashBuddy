@@ -13,10 +13,10 @@ SHIFTS AND MILES
 gig.log notices when a shift starts, pauses and ends. It records miles with GPS only while a shift is running. You can end a shift by hand and correct its miles.
 
 VEHICLES AND COSTS
-Keep a list of vehicles, from a gas car to a bicycle. Each type starts with its own cost estimates, which you can change.
+Keep a list of vehicles, car to bicycle. Each type starts with its own cost estimates, which you can change.
 
 HISTORY
-The app has three tabs. Home shows today and this week so far. Recap goes back through past weeks, shift by shift and delivery by delivery. Plan shows when and where you earn most, and builds a weekly plan from your best hours.
+Home shows today and this week so far. Recap goes back through past weeks, shift by shift and delivery by delivery. Plan shows when and where you earn most, and builds a weekly plan from your best hours.
 
 EXPORT
 Save your deliveries, shifts, expenses, fill-ups and an estimated IRS mileage deduction as spreadsheet files, to a folder you choose. The files include store names and leave out customer names and addresses.
@@ -25,7 +25,7 @@ PRIVACY
 - gig.log has no account, no ads and no analytics. Every calculation runs on your phone.
 - gig.log drops the banking, DasherDirect and payment screens it recognizes, without saving them. It recognizes known layouts on English screens, so it can miss one; the privacy policy says what it can miss.
 - Customer names and addresses are saved in your history as a code, not the text itself.
-- Data leaves your phone only for features you turn on: the daily gas-price lookup (Android's address lookup gets a location rounded to about 11 km, and the U.S. Energy Information Administration gets your region) and the vehicle lookup in setup. Spoken offers go to your phone's text-to-speech engine, which may use the network. Android backup and your own exports can also copy your history.
+- Data leaves your phone only for features you turn on: the daily gas-price lookup (Android's address lookup gets a location rounded to about 11 km, and the U.S. Energy Information Administration gets your region), the vehicle lookup in setup, and the census (outlines of unrecognized screens, each word sent only as a one-way code). Spoken offers go to your phone's text-to-speech engine, which may use the network. Android backup and your exports can also copy your history.
 - Screenshots of offers, receipts and shift summaries are off by default. A screenshot is the whole display, so it can show customer details and other apps, and it is saved to your gallery, which may sync it.
 - The privacy policy lists everything the app reads, keeps and sends: https://gig.log.trotter.cloud/privacy/
 
@@ -35,4 +35,4 @@ gig.log uses Android's accessibility service to read the text, numbers and butto
 SUPPORTED APPS
 DoorDash (the Dasher app) is supported for offers, pickups, drop-offs, shifts and receipts. Uber Driver support is partial: on Android 14 and later this version of gig.log cannot read Uber's offer pop-up, and its Accept and Decline buttons do not work in Uber. It reads Uber's other screens, such as trips and shift summaries. The delivery app must be in English.
 
-gig.log is early software from one developer. gig.log is not affiliated with, endorsed by or sponsored by DoorDash or Uber.
+gig.log is early software from one developer and is not affiliated with, endorsed by or sponsored by DoorDash or Uber.

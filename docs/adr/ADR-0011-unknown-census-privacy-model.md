@@ -1203,7 +1203,9 @@ per UTC day, as presence (§8).
 **Upload timing and transport** (#1620).
 
 - No upload is triggered by recognition activity. The phone uploads once a day at a random time, independent of shift
-  starts and ends. Fable dissented (arrival times are not persisted, and an hourly cadence speeds fixes); the window
+  starts and ends. As built (#1620) the random time is a target: a run that waited for Wi-Fi or a charge and starts
+  more than an hour after it sends nothing that day, so a send cannot wait for home Wi-Fi after a shift; within that
+  hour the send can still follow when the phone gets Wi-Fi or a charge. Fable dissented (arrival times are not persisted, and an hourly cadence speeds fixes); the window
   was adopted because the live operator and a network observer see timing, and drafting, not upload latency, sets how
   fast a fix ships.
 - Wi-Fi only, on by default.

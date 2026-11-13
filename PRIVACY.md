@@ -211,7 +211,8 @@ and item counts as their format such as `$#.##`; words that look like a name or 
 with the limit that the filters can miss a name, which then goes only as a code; never the screen as the dasher sees
 it; daily recognition counts by delivery app and app version), why (delivery apps change screens in some areas
 before others), who receives it (gig.log's census server, by host name, which also sees the phone's IP address), when
-(once a day at a random time, on Wi-Fi only unless mobile data is allowed, over HTTPS), that it is not anonymous (the
+(at most once a day: a random time picked each day, a send that waits up to an hour for Wi-Fi, unless mobile data is
+allowed, and for enough battery, and is skipped that day if it cannot start by then; over HTTPS), that it is not anonymous (the
 server can tell one phone's uploads apart for 30 days, not after), that the census can be stopped and its data on the
 server and on the phone deleted from Settings, and that the dasher's agreement with a delivery company is between the
 dasher and that company. The timing, Wi-Fi and HTTPS statements are built in every build (#1620, below); the 30-day
@@ -231,19 +232,28 @@ screen asks again. A server revoke turns the switch off and keeps the receipt.
 **When the census uploads** (#1620, ADR-0011 §8 and §21). The same in every build. Nothing a screen or a notification
 does asks for an upload: queueing a skeleton never schedules work (`HttpCensusSink`). The one scheduled run is daily
 (`CensusUploadPlanner`, `CensusWorkScheduler`): a random time in the next UTC day, drawn on the phone with
-`SecureRandom`, stored in the developer-settings store, and drawn again at the start of each daily run, so the upload
-time does not follow shift starts or ends. Opening the app keeps the stored time. With Wi-Fi only on (the default) the
-run waits for an unmetered network (`NetworkType.UNMETERED`), so nothing uploads over mobile data; with it off, any
-connection. The run also waits for a battery that is not low. A failed run waits for the next day's time. Health
+`SecureRandom`, stored in the developer-settings store, and drawn again at the start of each daily run. Opening the app
+keeps the stored time. The drawn time is the target, not the send: with Wi-Fi only on (the default) the run waits for an
+unmetered network (`NetworkType.UNMETERED`), and with it off for any connection, and either way for a battery that is
+not low. A daily run that starts more than an hour after its target (`CensusUploadPlanner.LATE_LIMIT_MILLIS`) sends
+nothing and only draws the next day's time, so a send never waits long enough to start when the phone reaches home
+Wi-Fi at the end of a shift; within that hour the send time can still follow when the phone gets Wi-Fi or a charge.
+Before sending, every run (manual ones included) checks the current Wi-Fi only choice against the active network
+(`CensusNetwork`): on a metered network with Wi-Fi only on it sends nothing, so nothing uploads over mobile data even
+for a run queued before the choice changed; changing the choice also cancels a waiting manual run. A failed run waits
+for the next day's time. Health
 reports ride the same run and the same consent. The run checks the consent first: without it, nothing is sent. The
-census choices filter both kinds of data: a skeleton from a delivery app the choices leave out is not queued, and that
-app's health rows are not sent (they age out on the phone after 8 days). **Sampling:** at most one skeleton of each
-variant a UTC day is queued (`CensusDailySample`, `CensusSampleKey`). A variant is the skeleton's schema, platform,
-platform app version, structural fingerprint, each node's flags and text fields, and each value's format template; it
-never includes a word hash, a word count or whether a filter withheld a word, so frames that differ only in a
+census choices filter every kind of data: a skeleton from a delivery app the choices leave out is not queued, one
+queued before the dasher unchecked the app is removed unsent, that app's health rows are not sent (they age out on the
+phone after 8 days), and in the test build its capture envelopes are neither queued nor sent. **Sampling:** at most one skeleton of each
+variant a UTC day is queued (`CensusDailySample`, `CensusSampleKey`). A variant is the skeleton's schema, platform and
+platform app version, then for a screen its structural fingerprint (classes, ids, nesting) and each node's flags and
+text fields, and for a notification its channel and which fields and actions it has; every value adds only its format
+template. It never includes a word hash, a word count, whether a filter withheld a word, or a notification's
+fingerprint (which covers its words), so frames that differ only in a
 customer's or a store's name are one variant. Later sightings of a variant that day add to a count in
 `filesDir/census/sampled.json`, which never leaves the phone and keeps two days. The test build's developer options
-keep Upload now for a manual run, which keeps to Wi-Fi only and does not move the daily time. Retention on the server follows ADR-0011's
+keep Upload now for a manual run, which keeps to Wi-Fi only, is never skipped as late and does not move the daily time. Retention on the server follows ADR-0011's
 server-side commitments; deleting the server's census data from Settings is #1622.
 
 Exports replace existing files with the same names in the chosen folder. Exported files survive uninstall and remain until deleted through that provider. “No direct gig.log upload” does not mean that a selected cloud folder keeps the files on the phone.
@@ -421,9 +431,10 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 - **r21 (2026-11-13)** — §6: the census sends from every build, Play and sideload included, once the dasher accepts
   its disclosure (#1620); the Play and sideload builds bind the census sink and keep the no-op capture bus and envelope
-  sink, so no screen text leaves those phones. New "When the census uploads": one run a day at a random time drawn on
-  the phone, never triggered by a screen or a notification, Wi-Fi only by default (unmetered network), the census
-  choices filtering skeletons and health rows, and at most one skeleton per variant a UTC day, keyed on layout and
+  sink, so no screen text leaves those phones. New "When the census uploads": at most one send a day, at a random target
+  time drawn on the phone, never triggered by a screen or a notification, skipped that day when it would start more
+  than an hour late, Wi-Fi only by default (unmetered network, checked again before sending), the census choices
+  filtering skeletons, envelopes and health rows, and at most one skeleton per variant a UTC day, keyed on layout and
   formats, never on words. Every connection is HTTPS: a network security config refuses cleartext app-wide. The
   disclosure's per-build lines change: the Play and sideload line says there is no delete button yet and that the
   30-day limit takes effect with the server's next update; the debug line names capture sharing and keeps the 30-day
