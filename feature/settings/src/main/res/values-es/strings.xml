@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="backup_heading">Copia de seguridad completa</string>
+    <string name="backup_desc">Un archivo con tu historial, vehículos y ajustes, para restaurar en otro teléfono u otra instalación de gig.log. Contiene nombres de tiendas y códigos de clientes y no está cifrado, así que guárdalo en privado. Los permisos y las opciones de consentimiento quedan fuera; la otra instalación vuelve a preguntar.</string>
+    <string name="backup_button">Hacer copia</string>
+    <string name="restore_button">Restaurar</string>
+    <string name="backup_done_format">Eventos copiados: %1$d</string>
+    <string name="backup_failed_format">La copia falló (%1$s). Revisa la ubicación del archivo e inténtalo de nuevo.</string>
+    <string name="restore_confirm_title">¿Reemplazar todos los datos?</string>
+    <string name="restore_confirm_body_format">Tu historial, vehículos y ajustes en este teléfono se reemplazan con la copia del %1$s (gig.log %2$s). gig.log se reinicia para terminar.</string>
+    <string name="restore_confirm_replace">Reemplazar</string>
+    <string name="restore_confirm_cancel">Cancelar</string>
+    <string name="restore_refused_not_a_backup">Este archivo no es una copia de seguridad de gig.log. No cambió nada.</string>
+    <string name="restore_refused_newer_app">Esta copia es de un gig.log más reciente. Actualiza gig.log y luego restaura.</string>
+    <string name="restore_refused_no_space">No hay espacio libre suficiente para restaurar. Libera espacio y luego restaura.</string>
+    <string name="restore_refused_read_failed">No se pudo leer el archivo. No cambió nada.</string>
+    <string name="restore_result_ok_format">Se restauró la copia del %1$s.</string>
+    <string name="restore_result_ok">Se restauró una copia.</string>
+    <string name="restore_result_failed">La restauración falló. No cambió nada.</string>
+    <string name="privacy_leaves_body">gig.log no tiene cuenta ni ID de anuncios, y no incluye código de analítica externo. Precios de gasolina: la búsqueda de direcciones de Android puede enviar tu ubicación, redondeada a unos 11 km, a su proveedor para hallar tu región, y la Administración de Información Energética de EE. UU. recibe una solicitud de precio para esa región, sin cuenta ni ID de instalación. Las actualizaciones diarias están desactivadas en una instalación nueva, y una actualización conserva tu ajuste; para detenerlas, pon el precio de gasolina de la burbuja en manual, o desactiva las actualizaciones diarias en la configuración y guarda. La búsqueda de vehículo empieza cuando tocas \"Consultar mi vehículo\". gig.log guarda esa elección. El año, la marca, el modelo y el ID de vehículo de la EPA que elijas van a fueleconomy.gov, sin cuenta ni ID de instalación. \"Search Google for MPG\" abre Google con el año, la marca y el modelo. Las ofertas habladas van al motor de texto a voz de tu teléfono, que puede usar la red. Las exportaciones y copias de seguridad van donde elijas, y una carpeta en la nube puede subirlas; las hojas de cálculo omiten los códigos de clientes, una copia de seguridad completa los incluye, y los informes de errores reemplazan los datos privados conocidos pero pueden omitir algunos.</string>
+    <string name="privacy_backup_body">La copia de seguridad y la transferencia de Android pueden copiar tu historial y ajustes y restaurarlos. Las opciones de consentimiento y los registros quedan fuera, así que un teléfono nuevo vuelve a preguntar. Un archivo de copia de seguridad completa también puede llevar tu historial y ajustes a otro teléfono o instalación de gig.log; restaurarlo reemplaza los datos allí y guarda una copia de los datos reemplazados en el almacenamiento privado de gig.log.</string>
+</resources>

@@ -22,4 +22,7 @@
     <exclude domain="file" path="shareable.log" />
     <exclude domain="file" path="shareable.log.1" />
     <exclude domain="file" path="logs/" />
+    <!-- #1615: a staged restore and the copy it replaced are this install's own files, never a second copy in a backup. -->
+    <exclude domain="file" path="restore-staging/" />
+    <exclude domain="file" path="restore-previous/" />
 </full-backup-content>

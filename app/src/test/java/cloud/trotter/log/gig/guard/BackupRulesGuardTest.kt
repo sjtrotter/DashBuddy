@@ -17,6 +17,8 @@ class BackupRulesGuardTest {
         "file" to "datastore/consent_event_receipt.preferences_pb",
         "file" to "datastore/recognition_notices.preferences_pb",
         "file" to "census/",
+        "file" to "restore-staging/",
+        "file" to "restore-previous/",
     ) + listOf("file", "external").flatMap { domain ->
         listOf("captures/", "app.log", "shareable.log", "shareable.log.1", "logs/")
             .map { domain to it }

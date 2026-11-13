@@ -31,7 +31,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.log.gig.feature.settings.R
 
 /**
- * Free-tier CSV data export (#319). One folder pick → five CSVs (deliveries, sessions, summary, expenses, fuel)
+ * The full backup (#1615, [BackupSection]) above the free-tier CSV data export (#319). One folder pick → five CSVs (deliveries, sessions, summary, expenses, fuel)
  * written into it. All-time export (v1); a date-range picker is a follow-up. Driver-owned data out,
  * no network, no storage permission (Storage Access Framework grants the chosen folder only).
  */
@@ -78,6 +78,8 @@ fun DataExportScreen(
                 .padding(horizontal = 16.dp)
         ) {
             Spacer(Modifier.height(8.dp))
+            BackupSection()
+            Spacer(Modifier.height(32.dp))
             Text(
                 stringResource(R.string.data_export_csv_heading),
                 style = MaterialTheme.typography.titleMedium,
