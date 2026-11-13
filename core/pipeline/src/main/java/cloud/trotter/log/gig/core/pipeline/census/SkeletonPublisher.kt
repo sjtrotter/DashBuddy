@@ -31,7 +31,7 @@ import timber.log.Timber
  * stamped `captureId` is the pairing key, before the terminal UNKNOWN filter.
  * Screens and notifications share one sink and server daily budget (ADR §10).
  * Clicks stay OUT until a reliable screen fingerprint is carried at click time.
- * Debug binds the opt-in HTTP spool sink; release binds `NoOpCensusSink` (#1182).
+ * Every build binds the HTTP spool sink behind the census consent (#1182, #1620).
  *
  * Each kind goes out in the NEWEST wire version the server's last policy lists in `acceptedSchemaIds`
  * ([SkeletonVersion.newestScreen] / [SkeletonVersion.newestNotification]; ADR-0011 §13): a server that does not
@@ -132,6 +132,7 @@ class SkeletonPublisher @Inject constructor(
                         skeletonJson = outcome.json,
                         itemBytes = outcome.itemBytes,
                         captureId = obs.captureId,
+                        presentFields = outcome.presentFields,
                     ))) stats.onCensusSinkRefused()
                 }
                 is NotificationSkeletonBuilder.Outcome.Refused -> stats.onCensusNotificationRefused(outcome.reason)

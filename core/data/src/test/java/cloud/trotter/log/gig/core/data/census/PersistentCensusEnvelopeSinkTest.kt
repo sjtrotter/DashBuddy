@@ -98,6 +98,25 @@ class PersistentCensusEnvelopeSinkTest {
         assertTrue(h.stats.summary().contains("envelopesSpooled=1"))
     }
 
+    @Test fun `with capture sharing on, a delivery app the census choices leave out queues no envelope`() = runTest {
+        val h = Harness(this)
+        h.enable()
+        h.preferences.setCensusPlatform(Platform.DoorDash, covered = false, readable = Platform.boundPlatforms)
+        runCurrent()
+        assertTrue(h.sink.isEnabled)
+        h.sink.hold("excluded", Platform.DoorDash, envelope())
+        assertTrue(h.sink.pair("excluded", fingerprint))
+        runCurrent()
+        assertTrue("no screen text from an unchosen app", h.records.isEmpty())
+        assertEquals(1L, h.stats.platformNotChosen.get())
+
+        h.preferences.setCensusPlatform(Platform.DoorDash, covered = true, readable = Platform.boundPlatforms)
+        h.sink.hold("covered", Platform.DoorDash, envelope())
+        assertTrue(h.sink.pair("covered", fingerprint))
+        runCurrent()
+        assertEquals("covered", h.records.single().captureId)
+    }
+
     @Test fun `oldest unpaired entry is silently evicted at sixteen`() = runTest {
         val h = Harness(this)
         h.enable()

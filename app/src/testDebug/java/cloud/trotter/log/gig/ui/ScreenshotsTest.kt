@@ -264,7 +264,7 @@ class ScreenshotsTest(private val theme: String) {
             state = CensusUiState(
                 consent = CensusConsent.ON,
                 platforms = listOf(CensusPlatformRow(Platform.DoorDash, true), CensusPlatformRow(Platform.Uber, false)),
-                wifiOnly = true, serverHost = "census.dashbuddy.trotter.cloud", sendsInThisBuild = true,
+                wifiOnly = true, serverHost = "census.dashbuddy.trotter.cloud", testBuild = true,
             ),
             onBack = {}, onAccept = {}, onDecline = {}, onWifiOnly = {}, onPlatform = { _, _ -> },
         )
@@ -495,7 +495,7 @@ class ScreenshotsTest(private val theme: String) {
         text(string(SettingsR.string.census_disclosure_heading)).assertExists()
     }) {
         CensusDisclosure(
-            serverHost = "census.dashbuddy.trotter.cloud", sendsInThisBuild = false, accepted = false,
+            serverHost = "census.dashbuddy.trotter.cloud", testBuild = false, accepted = false,
             onAccept = {}, onNotNow = {}, onClose = {},
         )
     }

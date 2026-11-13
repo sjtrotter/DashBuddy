@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #1620 (ADR-0011 §21): HTTPS only, for the whole app and every build. Cleartext is refused for every host, with no
+     domain exception; trust is the system's certificate store. NetworkSecurityConfigGuardTest pins this file and its
+     manifest reference, and HttpsEndpointGuardTest that every endpoint the app calls is https. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

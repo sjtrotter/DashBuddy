@@ -16,11 +16,11 @@ import cloud.trotter.log.gig.domain.model.event.EventMetadata
 import cloud.trotter.log.gig.log.StateAwareTree
 import cloud.trotter.log.gig.core.pipeline.rules.JsonRuleInterpreter
 import cloud.trotter.log.gig.core.state.StateManagerV2
+import cloud.trotter.log.gig.core.data.census.CensusUploadPlanner
 import cloud.trotter.log.gig.domain.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import cloud.trotter.log.gig.worker.DailyGasPriceWorker
-import cloud.trotter.log.gig.worker.CensusUploadWorker
 import cloud.trotter.log.gig.worker.WeeklyPlanWorker
 import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
@@ -54,6 +54,9 @@ class GigLogApplication : Application(), Configuration.Provider {
     // Needed for Hilt to inject repositories into WorkManager classes
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
+
+    @Inject
+    lateinit var censusUploadPlanner: CensusUploadPlanner
 
     @Inject
     lateinit var jsonRuleInterpreter: JsonRuleInterpreter
@@ -228,7 +231,8 @@ class GigLogApplication : Application(), Configuration.Provider {
         // #981 — the Sunday-evening Weekly Plan nudge. Re-anchored on every launch (the delay is
         // computed from the wall clock), which is also what corrects a DST drift in the 7-day period.
         WeeklyPlanWorker.schedule(this)
-        if (BuildConfig.DEBUG) CensusUploadWorker.schedule(this)
+        // #1620: the census's one daily run, in every build; the worker itself checks consent.
+        censusUploadPlanner.start(applicationScope)
 
         Timber.i("Background workers verified and scheduled.")
     }

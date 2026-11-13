@@ -455,7 +455,8 @@ frames the pipeline ever sees*:
   check). The ONE rule is `EventReceiptConsent.enforced(stored, offered)`: not offered ⇒ DECLINED whatever the
   store holds, offered ⇒ the stored value. The listener and the permission flow read through it; Settings hides the
   section on `offered` directly. The stored decision is never rewritten. Debug-only behaviour (event types, the
-  self-disable, the census) stays keyed on `BuildConfig.DEBUG`, never on `offered`.
+  self-disable, capture sharing) stays keyed on `BuildConfig.DEBUG`, never on `offered`; the census runs in every
+  build (#1620).
   **Bound and readable platforms (#170, #1413):** `Platform.bound` says the platform ships a ruleset (DoorDash,
   Uber). Which platforms a build READS is `Platform.readable(includeUnbound)`, keyed by the build table's
   `readsUnboundPlatforms` (`BuildConfig.READS_UNBOUND_PLATFORMS`, injected as `@ReadsUnboundPlatforms`): false in the
@@ -843,12 +844,23 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   switch turned off write a declined receipt. `CensusConsent.of` (`:domain`) is the one rule: ON only with the switch
   on and a granted receipt for exactly the current `censusBaseUrl`; no receipt (an install from before the disclosure)
   is OFF, another endpoint is `ENDPOINT_CHANGED`, which is off until the dasher accepts again. Every upload stage reads
-  `DevSettingsRepository.censusUploadEnabled` (`isDebug` AND ON), the worker's admission check included, so a changed
-  endpoint stops uploads in the debug build too. A server revoke turns the switch off and keeps the receipt. The
-  choices are stored data for #1620; the debug build's uploads ignore them, and its disclosure says so.
-- *Uploader (#1182)* — debug binds `HttpCensusSink` behind the census consent (#1621);
-  every non-debug build (Play, sideload) binds `NoOpCensusSink` and schedules no census work. `offer` only calls `trySend` on a
-  256-item drop-oldest channel; one IO consumer writes atomically to `filesDir/census/spool/`.
+  `DevSettingsRepository.censusUploadEnabled` (ON, in every build since #1620), the worker's admission check included,
+  so a changed endpoint stops uploads. A server revoke turns the switch off and keeps the receipt. The choices are read
+  by the uploads (#1620, below).
+- *Uploader (#1182; every build since #1620)* — every build binds `HttpCensusSink` (`:core:data` main
+  `CensusSinkModule`) behind the census consent (#1621); the capture bus and the envelope sink stay per build
+  (`NoOpCaptureBus`, `NoOpCensusEnvelopeSink` in the release variant the Play and sideload builds both resolve), so no
+  screen text leaves those phones. `NoOpCensusSink` is gone. `offer` only calls `trySend` on a
+  256-item drop-oldest channel; one IO consumer queues a record only for a platform the census choices cover
+  (`CensusChoices.platformsAmong`, else `platformNotChosen`) and only the UTC day's first skeleton of its variant
+  (`CensusDailySample` over `CensusSampleKey`, `:domain`; a repeat counts `sampledRepeat`), then writes atomically to
+  `filesDir/census/spool/`. **The sample key never reads words (#1620, ADR-0011 §8):** schema, platform, platform app
+  version, then for a screen the structural fingerprint, per-node flags and text-field names, and for a notification
+  the channel, kind and slot layout (never its fingerprint, which covers slot hashes and kinds), with per-slot
+  `shape:<template>` or `text`; a
+  hash, a `words:N` count, `digits`/`mixed` and `withheld` all read `text`, because each depends on the text on screen
+  (often a customer's or a store's) and would sample per customer. The per-day presence and a local count live in
+  `filesDir/census/sampled.json` (two days kept, never uploaded, inside the backup-excluded `census/`).
   Both skeleton schemas decode through `CensusSkeletonSchema` in the same spool; rejection codes derive from
   the contract enum. **Enrolment declares what the policy accepts (#1522):** a pending identity first reads
   `GET /v1/policy` and declares `SUPPORTED_SCHEMA_IDS` filtered to the policy's `acceptedSchemaIds`, in
@@ -860,8 +872,29 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   #1522 a new identity always declared both schemas and a screens-only server refused it with 422 forever. Screens and notifications share the
   server-authoritative 300/day ledger and common 429 deferral; no client daily counter is introduced.
   The spool retains at most 2,000 records / 20 MiB, dropping oldest first; corrupt and oversized
-  records are deleted and counted. Every 50 appends or at 100 queued items requests unique KEEP
-  work. Periodic work runs hourly with connected-network and battery-not-low constraints.
+  records are deleted and counted. **The daily window (#1620, ADR-0011 §21):** queueing never requests work (the
+  five-minute and every-50/100 triggers are gone, and `CensusUploadScheduler` has only `enqueueNow`, `scheduleDaily`
+  and `cancelManual`). `CensusUploadPlanner` (`:core:data`) draws `CensusUploadWindow.next` (a uniform `SecureRandom`
+  time in the next UTC day), stores it (`census_next_run_at_millis`), and schedules the unique periodic work
+  `census_daily` (24 h, `setNextScheduleTimeOverride`, UPDATE, tag `census_daily`) from the app's start, re-applying the
+  stored time when Wi-Fi only changes (`UNMETERED` when on, `CONNECTED` when off; battery-not-low either way) and
+  cancelling a waiting manual run, whose constraint is stale. The drawn time is a target: `beginDailyRun` (the start
+  of a tagged run) redraws and lets the run send only if it started between the stored target and `LATE_LIMIT_MILLIS`
+  (1 h) after it; a run held back longer by the network or battery constraint, one before its target (work a failed
+  schedule update left in place) or one with no target sends nothing that day. Within the hour a send can still start
+  when the phone reaches Wi-Fi or a charge, so the hour bounds, not removes, how far the send follows a shift's end
+  (a skip logs INFO `census skipped cause=off_schedule`). The target is stored only after the work is scheduled for
+  it, so a failed update never stores a target no work matches. A run consumes its target (removes it from the store)
+  before it may send, and sends nothing if the next day's time fails to schedule, so a WorkManager retry of a failed
+  upload inside the hour finds no target and sends nothing. Every run, manual included, then checks the current Wi-Fi only choice against
+  `CensusNetwork.isMetered()` before sending (INFO `census skipped cause=metered`, no status written). The
+  worker draws the next day's time at the start of a tagged run only, so the test build's Upload now (and the identity
+  reset's run), which keep to Wi-Fi only too (`enqueueNow(wifiOnly)`), never move it;
+  the override outranks backoff, so a failed run waits for the next day's time. The old `census_upload` (hourly) and
+  `census_upload_soon` names are cancelled on every schedule. The choices are checked again when sending: health rows
+  of a platform they leave out are not posted, and spooled skeletons and envelopes of an app unchecked after they were
+  queued are removed unsent (`dropUncovered`, counted `platformNotChosen`); the envelope sink also refuses to queue
+  them.
   A run selects at most three batches of 100 items / 900 KiB, preserving the builder's item bytes.
   A fresh `batchId = sha256Hex(sorted fingerprints joined by "\n").take(32)` and ordered spool IDs
   are atomically persisted in `filesDir/census/inflight.json` before sending. Retries send the same
@@ -872,8 +905,8 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   WARN. 400 removes the batch, counts one bad request and emits one item-count-only WARN.
   Upload 401 re-signs at most once per run, across all batches and split halves, unless
   the server Date differs by more than 300 seconds; revoked credentials are wiped and consent
-  switched off. 429 stores a deadline that gates the skeleton stage of every run (manual or periodic);
-  the hourly cadence itself is never postponed, so health keeps posting. 408 / 5xx /
+  switched off. 429 stores a deadline that gates the skeleton stage of every run (manual or daily);
+  the daily cadence itself is never postponed, so health keeps posting. 408 / 5xx /
   transport failures use WorkManager backoff. Concurrent manual and periodic runs share a mutex.
   Enrollment persists the returned policy and retries the same pending identity after a lost reply;
   enrol 401 uses WorkManager retry.
@@ -881,7 +914,9 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   constant `User-Agent: dashbuddy-census/1`, `Content-Type: application/json`, and the body:
   protocol-required `installId` / `appVersion` / `schemaIds` on enrol, `batchId` + items on upload.
   Enrol carries the bearer without timestamp/signature; the unauthenticated, bodyless policy GET
-  carries the same constant User-Agent. No other application metadata is sent.
+  carries the same constant User-Agent. No other application metadata is sent. Every connection is HTTPS (#1620): the app's
+  `network_security_config.xml`, referenced from the main manifest, refuses cleartext for every host with no domain
+  exception, and `HttpsEndpointGuardTest` pins it and checks every quoted URL in shipped source is `https`.
   A conflicting pending ID is replaced once. An unusable Keystore key triggers a new random UUID v4
   and secret and re-enrollment: the old install is orphaned server-side, not withdrawn.
   The install secret is AES-256-GCM sealed by Android Keystore; credentials and spool are excluded

@@ -71,7 +71,10 @@ class PrivacyExportE2ETest {
             val envelopes = h.records(h.envelopeRoot)
             // Vetted acceptance hypotheses: coordinator validation must explain any count change.
             assertEquals(6, h.captures().size)
-            assertEquals(4, skeletons.size)
+            // #1620: the customer lead-in push differs from the benign one only in its title's words, so it is the same
+            // variant that day and only the first is queued (NotificationSkeletonCorpusTest pins its withheld title).
+            assertEquals(3, skeletons.size)
+            assertEquals(1L, h.uploadStats.sampledRepeat.get())
             assertEquals(2, envelopes.size)
             assertEquals(2, h.forwarded.size)
             assertEquals(2L, h.stats.suppressedDuplicateCount)
@@ -79,7 +82,7 @@ class PrivacyExportE2ETest {
             assertEquals(2L, h.stats.scrubbedUnknownCaptureCount)
             assertEquals(1L, h.stats.censusRefusedCount(SkeletonBuilder.Refusal.SENSITIVE_FRAME))
             assertEquals(1L, h.stats.censusNotificationRefusedCount(NotificationSkeletonBuilder.Refusal.SENSITIVE_NOTIFICATION))
-            assertTrue("first spool append scheduled work", "soon" in h.scheduling.requests)
+            assertTrue("no frame schedules an upload (#1620)", h.scheduling.requests.isEmpty())
             recognized(h)
             captureControls(h)
             skeletonControls(skeletons)
@@ -213,11 +216,9 @@ class PrivacyExportE2ETest {
             uploads(h, queued, emptyList(), credential)
             safeSurfaces(h, credential.secret)
         }
-        // Combined disabled preferences, capture and no-op sinks; these switches are not isolated.
-        // Recognized screens return from SkeletonPublisher before consulting the census sink.
+        // A no-op census sink: recognized screens return from SkeletonPublisher before consulting it.
         replay(captures = false, census = false, debug = false).use { h ->
             h.start()
-            h.preferences.setCensusUploadEnabled(true)
             h.preferences.setCensusShareCaptures(true); h.settle()
             assertFalse(h.preferences.censusUploadEnabled.first())
             assertFalse(h.preferences.censusShareCaptures.first())
@@ -231,6 +232,28 @@ class PrivacyExportE2ETest {
             assertEquals(0, h.factoryCalls)
             assertTrue(h.requests.isEmpty())
             safeSurfaces(h)
+        }
+    }
+
+    @Test fun `a Play or sideload install with consent uploads skeletons and never screen text`() = runTest(timeout = 20.seconds) {
+        // #1620: the release graph's components (the real skeleton sink, NoOpCaptureBus, the no-op envelope sink) with
+        // the release repository; CensusVariantBindingTest pins that the release Hilt modules bind exactly these.
+        replay(captures = false, debug = false).use { h ->
+            h.start(); enroll(h)
+            h.preferences.setCensusShareCaptures(true); h.settle()
+            assertTrue(h.preferences.censusUploadEnabled.first())
+            assertFalse("no capture sharing outside the test build", h.preferences.censusShareCaptures.first())
+            h.manifest(repeatBenign = true)
+            val queued = h.records(h.skeletonRoot)
+            assertTrue("a skeleton reaches the queue", queued.isNotEmpty())
+            assertTrue(h.captures().isEmpty())
+            assertTrue(h.records(h.envelopeRoot).isEmpty())
+            assertTrue("no frame schedules an upload", h.scheduling.requests.isEmpty())
+            val credential = requireNotNull(h.credentials.current())
+            h.worker()
+            uploads(h, queued, emptyList(), credential)
+            assertTrue(h.requests.none { it.path == "/v1/envelopes" })
+            safeSurfaces(h, credential.secret)
         }
     }
 
@@ -318,9 +341,8 @@ class PrivacyExportE2ETest {
         assertEquals("android.widget.EditText", leaves.last().className)
         leaves.forEach { assertEquals(TextSlot.WITHHELD, it.text["text"]) }
         items.filterIsInstance<NotificationSkeletonDto>().takeIf { it.isNotEmpty() }?.let { notifications ->
-            assertEquals(2, notifications.size)
-            assertEquals(1, notifications.count { it.slots[NotifTextField.TITLE] == TextSlot.WITHHELD })
-            assertEquals(1, notifications.count { it.slots[NotifTextField.TITLE]?.h != null })
+            assertEquals("one push variant a day", 1, notifications.size)
+            assertTrue("the first (benign) push is the one kept", notifications.single().slots[NotifTextField.TITLE]?.h != null)
         }
         records.forEach { safe("skeleton/${it.name}", it.bytes.toByteArray(), Inputs.forbidden + listOf(Inputs.BENIGN, "Current dash", "Continue")) }
     }

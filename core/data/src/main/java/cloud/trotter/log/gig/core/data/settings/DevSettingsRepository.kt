@@ -52,10 +52,10 @@ class DevSettingsRepository @Inject constructor(
     }
 
     /**
-     * What every upload stage obeys: [censusConsent] ON, so no receipt or a receipt for another endpoint stops uploads.
-     * The debug build only, until #1620 wires the Play and sideload builds.
+     * What every upload stage obeys, in every build (#1620): [censusConsent] ON, so no receipt or a receipt for another
+     * endpoint stops uploads.
      */
-    val censusUploadEnabled: Flow<Boolean> = censusConsent.map { isDebug && it == CensusConsent.ON }
+    val censusUploadEnabled: Flow<Boolean> = censusConsent.map { it == CensusConsent.ON }
     override val enabled: Flow<Boolean> = censusUploadEnabled
     override val baseUrl: Flow<String> = censusBaseUrl
     val nextAllowedAtMillis = dataSource.nextAllowedAtMillis
@@ -63,13 +63,23 @@ class DevSettingsRepository @Inject constructor(
     override val acceptedSchemaIds: Flow<Set<String>> = dataSource.censusAcceptedSchemaIds.map {
         it ?: setOf(SkeletonSchema.SCHEMA_ID)
     }
-    /** Whether this build sends anything to the census: the debug build only, until #1620. */
-    val censusAvailable: Boolean get() = isDebug
+    /**
+     * The test (debug) build: its census also offers capture sharing and the developer tools (Upload now, the identity
+     * reset), and its disclosure carries the test build's note. The census itself runs the same in every build (#1620).
+     */
+    val censusTestBuild: Boolean get() = isDebug
 
-    /** #1621: the census choices, read by the uploads in #1620. */
+    /** #1621: the census choices; the sink queues only the platforms they cover and Wi-Fi only sets the network (#1620). */
     val censusChoices: Flow<CensusChoices> = combine(dataSource.censusPlatforms, dataSource.censusWifiOnly) { wires, wifiOnly ->
         CensusChoices(wires?.mapNotNull(Platform::fromWire)?.toSet(), wifiOnly)
     }
+    override val choices: Flow<CensusChoices> = censusChoices
+
+    /** #1620: when the daily census run is due, drawn by [cloud.trotter.log.gig.core.data.census.CensusUploadPlanner]. */
+    val censusNextRunAtMillis: Flow<Long?> = dataSource.censusNextRunAtMillis
+    suspend fun setCensusNextRunAtMillis(value: Long) = dataSource.setCensusNextRunAtMillis(value)
+    /** A daily run consumes its target before it sends, so no retry or left-over work matches it again. */
+    suspend fun clearCensusNextRunAtMillis() = dataSource.clearCensusNextRunAtMillis()
     val censusLastRun: Flow<CensusLastRun?> = dataSource.censusLastRun.map { raw ->
         raw?.let { (at, wire, detail, envelopes, reason) ->
             CensusLastRun(at, CensusRunOutcome.fromWire(wire), detail, envelopes, CensusEnrolRejectReason.fromWire(reason))

@@ -141,15 +141,16 @@ class CensusUploadPreferencesTest {
             assertFalse(repo.censusShareCaptures.first())
             repo.setCensusUploadEnabled(true)
             assertFalse(repo.censusShareCaptures.first())
+            // #1620: the Play and sideload builds send with the same consent; capture sharing stays the test build's.
             val release = DevSettingsRepository(DevSettingsDataSource(ds), false, io, "test")
-            assertFalse(release.enabled.first())
+            assertTrue(release.enabled.first())
             release.setCensusShareCaptures(true)
             assertFalse(release.censusShareCaptures.first())
-            // #1621: every build stores the choice; only the debug build sends, until #1620.
             release.declineCensus()
+            assertFalse(release.enabled.first())
             release.setCensusUploadEnabled(true)
             assertEquals(CensusConsent.ON, release.censusConsent.first())
-            assertFalse(release.enabled.first())
+            assertTrue(release.enabled.first())
         } finally {
             scope.cancel()
         }

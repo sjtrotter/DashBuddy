@@ -37,7 +37,14 @@ driver's own record of offers, deliveries, pay and costs on the phone.
 What the app does with it:
 
 - Recognition, offer evaluation and every pay calculation run on the phone. The Play build has no account, no
-  analytics SDK, no advertising identifier and no upload path for screen content.
+  analytics SDK and no advertising identifier, and it never uploads the text of a screen.
+- The census is the one upload that starts from what the service reads. It is off by default and turns on only after
+  the driver accepts its own disclosure in Settings > Data & privacy > Census. When on, at most once a day over HTTPS,
+  it sends gig.log's census server outlines of the screens and notifications gig.log does not recognize (the layout,
+  with each word replaced by a one-way code, figures replaced by their format such as `$#.##`, and words that look
+  like a name or an address left out) and daily counts of the screens it recognized, with a random ID for the
+  install. The driver chooses which delivery apps it covers and whether it may use mobile data, and can turn it off
+  at any time.
 - A screen recognized as showing the driver's banking, payment or identity-document details, or the ID-scan camera
   or the signature pad, is dropped before it is parsed or saved. A rule-independent text check drops screens the
   rules miss. These filters are written for the English-language layouts of these apps.

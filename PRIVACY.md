@@ -31,11 +31,11 @@ a release build with none of the debug extras) and the **debug** build (`cloud.t
 `giglog-debug-<version>.apk` (`.github/workflows/release.yml`), beside the sideload APK, so anyone can install it.
 It is meant for the developer and the testers the developer invites, not for other drivers. On top of everything
 the sideload build does, it keeps capture envelopes of UNKNOWN screens on the device under the app's files (§3, §7),
-writes a verbose on-device log, and sends the census (§6) once the tester accepts its disclosure in Settings > Data &
-privacy > Census; capture sharing is a separate switch in developer settings. Both are off until the tester turns them
-on. They send to gig.log's census server, whose address is built into the app
+writes a verbose on-device log, and offers capture sharing, a switch in developer settings that sends the text of
+UNKNOWN screens to the census server for a trusted install (§6). Capture sharing needs the census, which every build
+offers (§6), and is off until the tester turns it on. The census server's address is built into the app
 (`https://census.dashbuddy.trotter.cloud`, `DevSettingsDataSource.DEFAULT_CENSUS_BASE_URL`); turning the census on
-enrols the install there automatically. Nothing reaches a server before the tester turns a switch on.
+enrols the install there at the next daily run. Nothing reaches a server before the tester turns a switch on.
 
 - `android:isAccessibilityTool` — `false` in the Play build, `true` in the sideload and debug builds. Google Play
   allows `true` only for apps built for people with disabilities, so the Play build does not declare it. The flag
@@ -187,13 +187,18 @@ A tap you make yourself on the floating card (Accept / Decline) is your own acti
 
 There is no account, no analytics SDK, no advertising identifier. Gas-price refresh is off by default on new installs; an existing setting is kept. Setup vehicle lookup asks first and saves the choice; other app-managed network features require separate opt-in.
 
+Every connection the app makes is HTTPS (#1620). The app's network security config
+(`app/src/main/res/xml/network_security_config.xml`, referenced from the manifest of every build) refuses cleartext
+traffic for every host with no exception, and `HttpsEndpointGuardTest` checks that every URL in shipped source is
+`https`: the census server, `api.eia.gov` and `fueleconomy.gov`.
+
 | Feature | Default | Where it goes | What is sent |
 |---|---|---|---|
 | Gas-price refresh (`isGasPriceAuto`, `AppPreferencesDataSource`) | **off by default on new installs; an existing setting is kept**; tap the bubble gas price for manual mode, or disable daily updates in setup and save | the U.S. EIA public price API (`api.eia.gov`, `core/network/.../eia`), after Android's `Geocoder` resolves your state from your location rounded to about 11 km, never the exact fix (§2.4) | a request for the regional price for your fuel type; no account, no identifier. The API key is never logged (#348). |
 | Vehicle list in the setup wizard (`EpaVehicleDataSource`) | asks first (#1258): off until "Look up my vehicle" is tapped; choice is saved | the U.S. EPA public vehicle API (`fueleconomy.gov`) | vehicle-list request after opt-in, including on later setup visits; selected year, make, model and vehicle ID as the user chooses, to retrieve MPG; no account or install ID |
 | Google MPG search | manual button press | Google in the user's browser (`VehicleCard`) | entered vehicle year, make and model plus `mpg`; browser cookies/account settings apply |
 | Text-to-speech (`TtsEffectHandler`) | used for spoken offers | your phone's text-to-speech engine | the offer sentence; the engine may use the network under its own terms |
-| UNKNOWN screen/notification census (sends from the debug build only, the developer's and testers' build, §2.1; the opt-in is in every build, see "The census opt-in" below) | off | gig.log's census server, built into the app (§2.1); turning the census on enrols the install | a **skeleton** of an admitted UNKNOWN screen or platform notification: screen view classes/ids, or a grammar-bounded notification channel id and five filtered slots; text slots carry coarse kinds or hashes under a k-anonymity gate, never source text — see `docs/adr/ADR-0011-unknown-census-privacy-model.md` — plus daily recognition-health counts per platform and app version, sent with this install's ID. Once the server lists `uinode.skeleton.v2` (and `notification.skeleton.v2`) as accepted, a skeleton also carries: for a money figure, 12-hour clock time, distance, minute count or item count, its format with the digits removed, from a closed list (`$#.##`, `#:## AM/PM`, `#.# mi`, `# min(s)`, `# item(s)`; AM and PM are one class, and the value never leaves); each node's click and visibility flags; and a notification's action labels as filtered slots of the same kinds as any text slot (a hash of a short chrome-like label, a coarse kind such as `digits` or `mixed`, a format template, or `withheld`; never the label). The skeleton's day is the UTC day. Every other build (Play, sideload) binds a no-op sink (`NoOpCensusSink`) and cannot upload at all. |
+| UNKNOWN screen/notification census (every build: Play, sideload and debug, #1620; see "The census opt-in" and "When the census uploads" below) | off | gig.log's census server, built into the app (§2.1); turning the census on enrols the install | a **skeleton** of an admitted UNKNOWN screen or platform notification: screen view classes/ids, or a grammar-bounded notification channel id and five filtered slots; text slots carry coarse kinds or hashes under a k-anonymity gate, never source text — see `docs/adr/ADR-0011-unknown-census-privacy-model.md` — plus daily recognition-health counts per platform and app version, sent with this install's ID. Once the server lists `uinode.skeleton.v2` (and `notification.skeleton.v2`) as accepted, a skeleton also carries: for a money figure, 12-hour clock time, distance, minute count or item count, its format with the digits removed, from a closed list (`$#.##`, `#:## AM/PM`, `#.# mi`, `# min(s)`, `# item(s)`; AM and PM are one class, and the value never leaves); each node's click and visibility flags; and a notification's action labels as filtered slots of the same kinds as any text slot (a hash of a short chrome-like label, a coarse kind such as `digits` or `mixed`, a format template, or `withheld`; never the label). The skeleton's day is the UTC day. At most one skeleton of each layout and format is kept a UTC day, and only from the delivery apps the census choices cover (below). |
 | Share UNKNOWN captures (debug build only, §2.1; `censusShareCaptures`, trusted installs) | off | the same census server, only while its operator has marked this install trusted | the **text** of UNKNOWN screens (`CensusUploadWorker.uploadEnvelopes`). An UNKNOWN screen gets no rule redaction — only the marker and address-block backstops (§3) — so a capture can still contain customer details, and the operator can read them. The switch says exactly this (`developer_settings_census_share_captures_explainer`). |
 | Bug-report export | manual | a folder/provider the user chooses (`DataExportViewModel.exportLog`) | INFO+ milestones checked against known sensitive markers before writing; matches are replaced, but unknown sensitive details can escape filtering. Then the consent receipts (§8). A cloud provider may upload the file. gig.log does not deliver it to the developer. |
 | CSV export | manual | a folder/provider the user chooses (`DataExportViewModel` → `CsvExporter`) | all recorded sessions and deliveries, including merchant names and which saved vehicle drove each dash (its id and label — the dasher's own text), plus deductible miles per vehicle per tax year and logged expenses and fill-ups (amounts, categories, the dasher’s own labels, gallons and the app's tracked miles at the fill-up, plus the saved vehicle id and label for car-care and gas receipts), including voided entries. No customer data or customer/address hashes. A cloud provider may upload the files. |
@@ -206,36 +211,63 @@ and item counts as their format such as `$#.##`; words that look like a name or 
 with the limit that the filters can miss a name, which then goes only as a code; never the screen as the dasher sees
 it; daily recognition counts by delivery app and app version), why (delivery apps change screens in some areas
 before others), who receives it (gig.log's census server, by host name, which also sees the phone's IP address), when
-(once a day at a random time, on Wi-Fi only unless mobile data is allowed, over HTTPS), that it is not anonymous (the
+(at most once a day: a random time picked each day, a send that waits up to an hour for Wi-Fi, unless mobile data is
+allowed, and for enough battery, and is skipped that day if it cannot start by then; over HTTPS), that it is not anonymous (the
 server can tell one phone's uploads apart for 30 days, not after), that the census can be stopped and its data on the
 server and on the phone deleted from Settings, and that the dasher's agreement with a delivery company is between the
-dasher and that company. Those timing, 30-day and deletion statements describe the census the Play and sideload
-builds will send (#1620, #1622, census#79, census#85, census#86); the disclosure carries one line for the build it
-runs in: in the Play and sideload builds, "This version of gig.log sends nothing to the census, even with it on, and
-has no delete button yet" (they bind `NoOpCensusSink`, and `CensusUploadWorker` refuses outside debug); in the debug build, that it uploads
-within minutes of a screen gig.log doesn't recognize and about every hour after that (`HttpCensusSink` schedules a run
-about 5 minutes after the queue fills from empty and at once every 50 items or at 100 queued, beside the hourly run),
-on any network and from every delivery app whatever the choices, and that the 30-day limit and
-deleting from Settings do not apply to it yet. The census screen also holds the choices: which delivery apps
-(default: every app the build reads) and Wi-Fi only (default on), saved as they change; uploads do not read them yet
-(#1620). Accept records the switch, a consent receipt bound to the census endpoint (§8) and the choices in one write;
+dasher and that company. The timing, Wi-Fi and HTTPS statements are built in every build (#1620, below); the 30-day
+and deletion statements wait on #1622, census#79, census#85 and census#86, so the disclosure carries one line for the
+build it runs in: in the Play and sideload builds, "This version has no delete button yet. The 30-day limit takes
+effect with the census server's next update" (`census_note_release`); in the debug build, that it can also send the
+text of unrecognized screens from a phone the census server trusts, with capture sharing on in developer options, and
+that the 30-day limit and deleting from Settings do not apply to it yet (`census_note_test_build`). The census screen
+also holds the choices: which delivery apps (default: every app the build reads) and Wi-Fi only (default on), saved as
+they change and read by every upload (below). Accept records the switch, a consent receipt bound to the census endpoint (§8) and the choices in one write;
 Not now, or turning the switch off, records a decline, and only a later Accept turns the census back on. Every upload
 stage checks the consent (`DevSettingsRepository.censusUploadEnabled`, `CensusUploadWorker.canRun`): it is on only
 with the switch on and a granted receipt for exactly the endpoint the build sends to, so an install that turned the
 census on before the disclosure existed, a declined receipt, or a receipt for another endpoint uploads nothing, and the
 screen asks again. A server revoke turns the switch off and keeps the receipt.
 
+**When the census uploads** (#1620, ADR-0011 §8 and §21). The same in every build. Nothing a screen or a notification
+does asks for an upload: queueing a skeleton never schedules work (`HttpCensusSink`). The one scheduled run is daily
+(`CensusUploadPlanner`, `CensusWorkScheduler`): a random time in the next UTC day, drawn on the phone with
+`SecureRandom`, stored in the developer-settings store, and drawn again at the start of each daily run. Opening the app
+keeps the stored time. The drawn time is the target, not the send: with Wi-Fi only on (the default) the run waits for an
+unmetered network (`NetworkType.UNMETERED`), and with it off for any connection, and either way for a battery that is
+not low. A daily run sends only if it starts between its target and an hour after it
+(`CensusUploadPlanner.LATE_LIMIT_MILLIS`); a run that starts later, earlier, or with no stored target sends nothing
+and only draws the next day's time. So a send can be delayed by up to an hour, and within that hour it can start
+when the phone gets Wi-Fi or a charge, for example on reaching home; a send held back longer than that is skipped.
+Before sending, every run (manual ones included) checks the current Wi-Fi only choice against the active network
+(`CensusNetwork`): on a metered network with Wi-Fi only on it sends nothing, so nothing uploads over mobile data even
+for a run queued before the choice changed; changing the choice also cancels a waiting manual run. A failed run waits
+for the next day's time. Health
+reports ride the same run and the same consent. The run checks the consent first: without it, nothing is sent. The
+census choices filter every kind of data: a skeleton from a delivery app the choices leave out is not queued, one
+queued before the dasher unchecked the app is removed unsent, that app's health rows are not sent (they age out on the
+phone after 8 days), and in the test build its capture envelopes are neither queued nor sent. **Sampling:** at most one skeleton of each
+variant a UTC day is queued (`CensusDailySample`, `CensusSampleKey`). A variant is the skeleton's schema, platform and
+platform app version, then for a screen its structural fingerprint (classes, ids, nesting) and each node's flags and
+text fields, and for a notification its channel and which fields and actions it has; every value adds only its format
+template. It never includes a word hash, a word count, whether a filter withheld a word, or a notification's
+fingerprint (which covers its words), so frames that differ only in a
+customer's or a store's name are one variant. Later sightings of a variant that day add to a count in
+`filesDir/census/sampled.json`, which never leaves the phone and keeps two days. The test build's developer options
+keep Upload now for a manual run, which keeps to Wi-Fi only, is never skipped as late and does not move the daily time. Retention on the server follows ADR-0011's
+server-side commitments; deleting the server's census data from Settings is #1622.
+
 Exports replace existing files with the same names in the chosen folder. Exported files survive uninstall and remain until deleted through that provider. “No direct gig.log upload” does not mean that a selected cloud folder keeps the files on the phone.
 
 Notification census publication runs after admission, dedup and capture, before UNKNOWN rejection,
-independently of capture enablement. It scans the original five fields and all action labels with
+independently of capture enablement, in every build. It scans the original five fields and all action labels with
 `SensitiveMarkerScan`, including their whitespace-joined values, before the customer lead-in scrub and
 shared 40-character/value filters. Any sensitive marker refuses the entire item. Action labels leave the phone
 only in a v2 notification skeleton, each judged by the same filters as the five fields and sent as the same slot
 kinds (a hash, a coarse kind, a format template such as `$#.##`, or `withheld`), never as text; a v1 skeleton
-carries none, and a label never changes the five fields' slots. Channel ids must match `[A-Za-z0-9_.-]{1,64}` without repair. The debug screen and notification
-paths share one sink, spool, worker and server-authoritative 300/day budget, with common 429 deferral;
-there is no separate client daily allowance. Every non-debug build (Play, sideload) still binds `NoOpCensusSink` and builds nothing.
+carries none, and a label never changes the five fields' slots. Channel ids must match `[A-Za-z0-9_.-]{1,64}` without repair. The screen and notification
+paths share one sink, spool, daily sample, worker and server-authoritative 300/day budget, with common 429 deferral;
+there is no separate client daily allowance.
 Census failures leave recognition unaffected; INFO counters contain counts and reason/kind names,
 never notification text or channel ids. Trusted capture sharing remains screen-only. CLICK skeletons
 stay OUT until a reliable screen fingerprint can accompany clicks (ADR-0011 §10).
@@ -248,7 +280,7 @@ user: restoring history and vehicle/economy settings on a new phone is expected.
 store (`datastore/rule_capability_grants.preferences_pb`) and the Screen-events consent/receipt store
 (`datastore/consent_event_receipt.preferences_pb`) are excluded, so a new device re-asks consent. Debug logs
 (`app.log`, `shareable.log`, `shareable.log.1`, and rotations under `logs/`), captures, census files, census
-credentials, the developer-settings store (the census switch, its consent receipt and choices, capture sharing, and the server policy cache) and the recognition
+credentials, the developer-settings store (the census switch, its consent receipt and choices, capture sharing, the server policy cache and the next daily census time) and the recognition
 notice store (`datastore/recognition_notices.preferences_pb`, #1560) are also excluded from both backup and transfer (`app/src/main/res/xml/backup_rules.xml`,
 `data_extraction_rules.xml`; #1236, dev ruling 2026-10-07).
 
@@ -398,6 +430,18 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r21 (2026-11-13)** — §6: the census sends from every build, Play and sideload included, once the dasher accepts
+  its disclosure (#1620); the Play and sideload builds bind the census sink and keep the no-op capture bus and envelope
+  sink, so no screen text leaves those phones. New "When the census uploads": at most one send a day, at a random target
+  time drawn on the phone, never triggered by a screen or a notification, sent only within an hour after that target
+  (so it can still start when the phone gets Wi-Fi or a charge) and otherwise skipped that day, Wi-Fi only by default (unmetered network, checked again before sending), the census choices
+  filtering skeletons, envelopes and health rows, and at most one skeleton per variant a UTC day, keyed on layout and
+  formats, never on words. Every connection is HTTPS: a network security config refuses cleartext app-wide. The
+  disclosure's per-build lines change: the Play and sideload line says there is no delete button yet and that the
+  30-day limit takes effect with the server's next update; the debug line names capture sharing and keeps the 30-day
+  and deletion caveat. The Play and sideload accessibility texts say gig.log sends nothing it reads unless the census
+  is on. The in-app Privacy page's Census, storage and Test builds sections follow. Receipts created under r20 retain
+  that revision.
 - **r20 (2026-11-13)** — §6: the census opt-in moves from developer settings to Settings > Data & privacy > Census in
   every build, behind a full-screen disclosure with Accept and Not now (#1621); its consent receipt is bound to the
   census endpoint, and a missing receipt, a decline or another endpoint keeps every upload stage off, in the debug

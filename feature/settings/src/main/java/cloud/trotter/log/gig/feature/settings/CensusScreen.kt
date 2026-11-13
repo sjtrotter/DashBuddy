@@ -79,7 +79,7 @@ fun CensusContent(
         BackHandler { showDisclosure = false }
         CensusDisclosure(
             serverHost = state.serverHost,
-            sendsInThisBuild = state.sendsInThisBuild,
+            testBuild = state.testBuild,
             accepted = state.consent == CensusConsent.ON,
             onAccept = { onAccept(); showDisclosure = false },
             onNotNow = { onDecline(); showDisclosure = false },
@@ -116,7 +116,7 @@ fun CensusContent(
                 },
             )
             Text(
-                stringResource(buildNote(state.sendsInThisBuild)),
+                stringResource(buildNote(state.testBuild)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -151,10 +151,10 @@ fun CensusContent(
     }
 }
 
-/** What this build does where it differs from the disclosure: nothing sent, or the test build's census. */
+/** Where this build's census differs from the disclosure: what is not built yet, or the test build's extras. */
 @StringRes
-private fun buildNote(sendsInThisBuild: Boolean): Int =
-    if (sendsInThisBuild) R.string.census_note_test_build else R.string.census_note_sends_nothing
+private fun buildNote(testBuild: Boolean): Int =
+    if (testBuild) R.string.census_note_test_build else R.string.census_note_release
 
 /** The disclosure's sections in order: heading, body. */
 private val DISCLOSURE_SECTIONS: List<Pair<Int, Int>> = listOf(
@@ -175,7 +175,7 @@ private val DISCLOSURE_SECTIONS: List<Pair<Int, Int>> = listOf(
 @Composable
 fun CensusDisclosure(
     serverHost: String,
-    sendsInThisBuild: Boolean,
+    testBuild: Boolean,
     accepted: Boolean,
     onAccept: () -> Unit,
     onNotNow: () -> Unit,
@@ -224,7 +224,7 @@ fun CensusDisclosure(
             Text(stringResource(R.string.census_disclosure_intro), style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(8.dp))
             Text(
-                stringResource(buildNote(sendsInThisBuild)),
+                stringResource(buildNote(testBuild)),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary,
             )

@@ -113,13 +113,19 @@ class CensusConsentTest {
         assertEquals(accepted, storedReceipt())
     }
 
-    @Test fun `every build stores the choice and only the debug build sends`() = runTest {
-        val release = repo(debug = false)
-        release.setCensusUploadEnabled(true)
-        assertEquals(CensusConsent.ON, release.censusConsent.first())
-        assertFalse(release.enabled.first())
-        assertFalse(release.censusAvailable)
-        assertTrue(repo(debug = true).enabled.first())
+    @Test fun `every build sends with consent and none without it`() = runTest {
+        for (debug in listOf(false, true)) {
+            store.edit { it.clear() }
+            val repo = repo(debug = debug)
+            assertFalse("no consent, no upload (debug=$debug)", repo.enabled.first())
+            repo.setCensusUploadEnabled(true)
+            assertEquals(CensusConsent.ON, repo.censusConsent.first())
+            assertTrue("consent ON uploads (debug=$debug)", repo.enabled.first())
+            repo.declineCensus()
+            assertFalse(repo.enabled.first())
+        }
+        assertFalse(repo(debug = false).censusTestBuild)
+        assertTrue(repo(debug = true).censusTestBuild)
     }
 
     @Test fun `choices save on their own and unknown platform wires are dropped`() = runTest {

@@ -3,9 +3,10 @@ package cloud.trotter.log.gig.core.data.census
 import cloud.trotter.census.contract.SkeletonSchema
 import cloud.trotter.census.contract.NotificationSkeletonSchema
 import cloud.trotter.log.gig.domain.capture.CensusRecord
+import cloud.trotter.log.gig.domain.census.CensusChoices
 import cloud.trotter.log.gig.domain.census.CensusUploadPreferences
-import cloud.trotter.log.gig.domain.census.CensusUploadScheduler
 import cloud.trotter.log.gig.domain.census.CensusUploadStats
+import cloud.trotter.log.gig.domain.state.Platform
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,20 +28,23 @@ class HttpCensusSinkTest {
         override val enabled = MutableStateFlow(true)
         override val baseUrl = flowOf("https://example.test")
         override val acceptedSchemaIds = MutableStateFlow(setOf(SkeletonSchema.SCHEMA_ID))
+        override val choices = MutableStateFlow(CensusChoices(null, wifiOnly = true))
     }
-    private class Scheduler : CensusUploadScheduler {
-        var runs = 0
-        var soon = 0
-        override fun enqueueNow(replaceQueued: Boolean) { runs++ }
-        override fun enqueueSoon() { soon++ }
-        override fun deferUntil(epochMillis: Long) = Unit
-    }
+
+    private fun sample() = CensusDailySample(java.io.File(tmp.newFolder(), "sampled.json"), kotlinx.coroutines.Dispatchers.Unconfined)
+
+    private fun kotlinx.coroutines.test.TestScope.sink(
+        prefs: Preferences,
+        spool: CensusSpool,
+        stats: CensusUploadStats,
+        io: kotlinx.coroutines.CoroutineDispatcher,
+    ) = HttpCensusSink(prefs, spool, sample(), stats, backgroundScope, io, readsUnboundPlatforms = false)
 
     @Test fun `publisher schema snapshot follows policy including an empty accepted set`() = runTest {
         val io = StandardTestDispatcher(testScheduler)
         val stats = CensusUploadStats()
         val prefs = Preferences()
-        val sink = HttpCensusSink(prefs, CensusSpool(tmp.newFolder(), stats, io), Scheduler(), stats, backgroundScope, io)
+        val sink = sink(prefs, CensusSpool(tmp.newFolder(), stats, io), stats, io)
         assertFalse(sink.isEnabled)
         runCurrent()
         assertTrue(sink.isEnabled)
@@ -54,21 +58,46 @@ class HttpCensusSinkTest {
         assertEquals(emptySet<String>(), sink.acceptedSchemaIds)
     }
 
-    @Test fun `the first item of an empty spool schedules an upload soon and later items do not`() = runTest {
+    @Test fun `without consent nothing is queued`() = runTest {
         val io = StandardTestDispatcher(testScheduler)
         val stats = CensusUploadStats()
         val spool = CensusSpool(tmp.newFolder(), stats, io)
-        val scheduler = Scheduler()
-        val sink = HttpCensusSink(Preferences(), spool, scheduler, stats, backgroundScope, io)
+        val prefs = Preferences().apply { enabled.value = false }
+        val sink = sink(prefs, spool, stats, io)
         runCurrent()
-        sink.offer(censusRecord(0)); runCurrent()
-        assertEquals(1, scheduler.soon)
-        repeat(10) { sink.offer(censusRecord(it + 1)) }; runCurrent()
-        assertEquals(1, scheduler.soon)
-        assertEquals(0, scheduler.runs)
-        spool.remove(spool.take(100, 1_000_000).map { it.id }); runCurrent()
-        sink.offer(censusRecord(20)); runCurrent()
-        assertEquals(2, scheduler.soon)
+        assertFalse(sink.isEnabled)
+        repeat(5) { sink.offer(censusRecord(it)) }; runCurrent()
+        assertEquals(0, spool.count())
+        assertEquals(5L, stats.spoolDropped.get())
+    }
+
+    @Test fun `only the delivery apps the choices cover are queued`() = runTest {
+        val io = StandardTestDispatcher(testScheduler)
+        val stats = CensusUploadStats()
+        val spool = CensusSpool(tmp.newFolder(), stats, io)
+        val prefs = Preferences().apply { choices.value = CensusChoices(setOf(Platform.Uber), wifiOnly = true) }
+        val sink = sink(prefs, spool, stats, io)
+        runCurrent()
+        sink.offer(censusRecord(1)); runCurrent()
+        assertEquals("a DoorDash skeleton is left out", 0, spool.count())
+        assertEquals(1L, stats.platformNotChosen.get())
+        prefs.choices.value = CensusChoices(setOf(Platform.DoorDash), wifiOnly = true)
+        sink.offer(censusRecord(1)); runCurrent()
+        assertEquals(1, spool.count())
+    }
+
+    @Test fun `one skeleton per variant per UTC day`() = runTest {
+        val io = StandardTestDispatcher(testScheduler)
+        val stats = CensusUploadStats()
+        val spool = CensusSpool(tmp.newFolder(), stats, io)
+        val sink = sink(Preferences(), spool, stats, io)
+        runCurrent()
+        repeat(3) { sink.offer(censusRecord(7)) }
+        sink.offer(censusRecord(8))
+        sink.offer(censusRecord(7, day = "2026-10-03"))
+        runCurrent()
+        assertEquals("one of each variant a day, the next day again", 3, spool.count())
+        assertEquals(2L, stats.sampledRepeat.get())
     }
 
     @Test(timeout = 5000) fun `offer never waits for a stalled append and overflow drops oldest with counts`() = runTest {
@@ -83,7 +112,7 @@ class HttpCensusSinkTest {
             }
         }
         val prefs = Preferences()
-        val sink = HttpCensusSink(prefs, spool, Scheduler(), stats, backgroundScope, io)
+        val sink = sink(prefs, spool, stats, io)
         assertFalse(sink.isEnabled)
         runCurrent()
         assertTrue(sink.isEnabled)
@@ -99,41 +128,21 @@ class HttpCensusSinkTest {
         assertFalse(sink.isEnabled)
     }
 
-    @Test fun `every fifty appends and one hundred queued items request work`() = runTest {
+    @Test fun `both kinds enter one spool, sampled alike`() = runTest {
         val io = StandardTestDispatcher(testScheduler)
         val stats = CensusUploadStats()
         val spool = CensusSpool(tmp.newFolder(), stats, io)
-        val scheduler = Scheduler()
-        val sink = HttpCensusSink(Preferences(), spool, scheduler, stats, backgroundScope, io)
-        runCurrent()
-        repeat(99) { sink.offer(censusRecord(it)) }
-        runCurrent()
-        assertEquals(1, scheduler.runs)
-        sink.offer(censusRecord(99))
-        runCurrent()
-        assertEquals(100, spool.count())
-        assertEquals(2, scheduler.runs)
-        sink.offer(censusRecord(100))
-        runCurrent()
-        assertEquals(3, scheduler.runs)
-    }
-    @Test fun `both kinds enter one spool and share scheduler thresholds`() = runTest {
-        val io = StandardTestDispatcher(testScheduler)
-        val stats = CensusUploadStats()
-        val spool = CensusSpool(tmp.newFolder(), stats, io)
-        val scheduler = Scheduler()
-        val sink = HttpCensusSink(Preferences(), spool, scheduler, stats, backgroundScope, io)
+        val sink = sink(Preferences(), spool, stats, io)
         runCurrent()
         repeat(50) { index ->
             assertTrue(sink.offer(if (index % 2 == 0) notificationCensusRecord() else censusRecord(index)))
         }
         runCurrent()
         val items = spool.take(100, 1_000_000)
-        assertEquals(50, items.size)
-        assertEquals(25, items.count { it.itemJson == notificationCensusRecord().skeletonJson })
-        assertEquals(50L, stats.spooled.get())
-        assertEquals(1, scheduler.soon)
-        assertEquals(1, scheduler.runs)
+        assertEquals(26, items.size)
+        assertEquals(1, items.count { it.itemJson == notificationCensusRecord().skeletonJson })
+        assertEquals(26L, stats.spooled.get())
+        assertEquals(24L, stats.sampledRepeat.get())
     }
 
 }

@@ -8,6 +8,7 @@ import cloud.trotter.log.gig.domain.capture.CensusRecord
 import cloud.trotter.log.gig.domain.census.CensusUploadStats
 import cloud.trotter.log.gig.domain.census.EnvelopeProjection
 import cloud.trotter.log.gig.domain.di.IoDispatcher
+import cloud.trotter.log.gig.domain.di.ReadsUnboundPlatforms
 import cloud.trotter.log.gig.domain.state.Platform
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -17,6 +18,7 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -33,17 +35,21 @@ import javax.inject.Singleton
 /** Debug binding only. The sensing thread reads a snapshot; disk writes drain on the owned IO scope. */
 @Singleton
 class PersistentCensusEnvelopeSink internal constructor(
-    preferences: DevSettingsRepository,
+    private val preferences: DevSettingsRepository,
     private val spool: CensusSpool,
     private val stats: CensusUploadStats,
     scope: CoroutineScope,
+    readsUnboundPlatforms: Boolean = true,
 ) : CensusEnvelopeSink {
     @Inject constructor(
         preferences: DevSettingsRepository,
         @CensusEnvelopeSpool spool: CensusSpool,
         stats: CensusUploadStats,
         @IoDispatcher io: CoroutineDispatcher,
-    ) : this(preferences, spool, stats, CoroutineScope(SupervisorJob() + io))
+        @ReadsUnboundPlatforms readsUnboundPlatforms: Boolean,
+    ) : this(preferences, spool, stats, CoroutineScope(SupervisorJob() + io), readsUnboundPlatforms)
+
+    private val readable = Platform.readable(readsUnboundPlatforms)
 
     private class Held(val captureId: String, val platform: Platform, val json: String)
     private class Queued(val held: Held, val fingerprint: String, val generation: Long)
@@ -91,6 +97,11 @@ class PersistentCensusEnvelopeSink internal constructor(
                         mutex.withLock {
                             if (queued.generation != generation.get() || !isEnabled) {
                                 stats.envelopesDropped.incrementAndGet()
+                                return@withLock
+                            }
+                            // #1620: the census choices cover envelopes too; the uploader checks them again.
+                            if (queued.held.platform !in preferences.censusChoices.first().platformsAmong(readable)) {
+                                stats.platformNotChosen.incrementAndGet()
                                 return@withLock
                             }
                             val record = project(queued) ?: return@withLock

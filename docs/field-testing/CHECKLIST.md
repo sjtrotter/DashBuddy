@@ -90,6 +90,7 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 ### 0/2 or 1/2 younger than 6 weeks — newest first
 
+- [#1620 a Play-build install with the census on uploads once a day, on Wi-Fi only](checklist/open/1620-census-daily-upload-play-build.md)
 - [#1621 the census turns on only through its disclosure](checklist/open/1621-census-opt-in-disclosure.md)
 - [#1610 a one-chain shift links its offers](checklist/open/1610-one-chain-shift-links-its-offers.md)
 - [#1515 Recap is the week](checklist/open/1515-recap-week.md)

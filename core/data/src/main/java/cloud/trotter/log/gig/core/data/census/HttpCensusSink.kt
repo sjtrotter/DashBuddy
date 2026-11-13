@@ -1,34 +1,44 @@
 package cloud.trotter.log.gig.core.data.census
 
+import cloud.trotter.census.contract.CensusSkeletonSchema
 import cloud.trotter.log.gig.domain.capture.CensusRecord
 import cloud.trotter.log.gig.domain.capture.CensusSink
+import cloud.trotter.log.gig.domain.census.CensusSampleKey
 import cloud.trotter.log.gig.domain.census.CensusUploadPreferences
-import cloud.trotter.log.gig.domain.census.CensusUploadScheduler
 import cloud.trotter.log.gig.domain.census.CensusUploadStats
 import cloud.trotter.log.gig.domain.di.ApplicationScope
 import cloud.trotter.log.gig.domain.di.IoDispatcher
+import cloud.trotter.log.gig.domain.di.ReadsUnboundPlatforms
+import cloud.trotter.log.gig.domain.state.Platform
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Debug binding only. The pipeline collector only reads a snapshot and calls trySend. */
+/**
+ * The census sink of every build (#1620), behind the census consent. The pipeline collector only reads a snapshot and
+ * calls trySend; one IO consumer queues a record only for a platform the dasher's choices cover, and only the day's
+ * first skeleton of its variant ([CensusDailySample]). Queueing never asks for an upload: the daily window does.
+ */
 @Singleton
 class HttpCensusSink @Inject constructor(
-    preferences: CensusUploadPreferences,
+    private val preferences: CensusUploadPreferences,
     private val spool: CensusSpool,
-    private val scheduler: CensusUploadScheduler,
+    private val sample: CensusDailySample,
     private val stats: CensusUploadStats,
     @ApplicationScope scope: CoroutineScope,
     @IoDispatcher io: CoroutineDispatcher,
+    @ReadsUnboundPlatforms readsUnboundPlatforms: Boolean,
 ) : CensusSink {
+    private val readable = Platform.readable(readsUnboundPlatforms)
     private val enabled = preferences.enabled.stateIn(scope, SharingStarted.Eagerly, false)
     private val schemas = preferences.acceptedSchemaIds.stateIn(scope, SharingStarted.Eagerly, null)
     // Wait for the persisted policy snapshot before enabling publication after process restart.
@@ -42,7 +52,6 @@ class HttpCensusSink @Inject constructor(
 
     init {
         scope.launch(io) {
-            var appended = 0
             try {
                 for (record in channel) {
                     if (!isEnabled) {
@@ -50,13 +59,17 @@ class HttpCensusSink @Inject constructor(
                         continue
                     }
                     try {
-                        val wasEmpty = spool.count() == 0
+                        if (record.platform !in preferences.choices.first().platformsAmong(readable)) {
+                            stats.platformNotChosen.incrementAndGet()
+                            continue
+                        }
+                        val item = CensusSkeletonSchema.deserialize(record.skeletonJson)
+                        val key = requireNotNull(CensusSampleKey.of(item, record.presentFields))
+                        if (!sample.admit(item.day, key)) {
+                            stats.sampledRepeat.incrementAndGet()
+                            continue
+                        }
                         spool.append(record)
-                        appended++
-                        // Automatic delivery (dev ask 2026-10-03): the FIRST item of a non-empty spool schedules an upload
-                        // within ~5 minutes; 50 appends or 100 queued items still upload immediately; the hourly sweep remains.
-                        if (wasEmpty) scheduler.enqueueSoon()
-                        if (appended % 50 == 0 || spool.count() >= 100) scheduler.enqueueNow()
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {

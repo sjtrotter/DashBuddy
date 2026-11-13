@@ -145,7 +145,7 @@ highlights its thin row once, a tint that fades over 2 s on the frame clock (`An
 - **`:core:database`**: Room entities, DAOs and database setup. The data-safety posture and the schema
   release checklist are in [05-analytics-read-model.md](05-analytics-read-model.md) § Database safety posture.
 - **`:core:data`** — Repository implementations, mappers, data sources. Bridges domain interfaces to
-  concrete data layers; census Keystore credentials, bounded file spool, debug upload sink (#1182), trusted-envelope sink + spool (debug), and the identity reset + upload lock (#1185).
+  concrete data layers; census Keystore credentials, bounded file spool, census upload sink (#1182; every build since #1620), trusted-envelope sink + spool (debug), and the identity reset + upload lock (#1185).
 - **`:core:network`** — Retrofit clients, OkHttp interceptors, EIA gas price API integration, signed census transport (#1182).
 - **`:core:location`** — Play Services GPS tracking.
 - **`:core:datastore`** — Preferences DataStore (twelve single-concern stores behind Hilt

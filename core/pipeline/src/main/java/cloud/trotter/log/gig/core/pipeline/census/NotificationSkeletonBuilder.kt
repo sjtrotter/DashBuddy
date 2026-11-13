@@ -2,6 +2,7 @@ package cloud.trotter.log.gig.core.pipeline.census
 
 import cloud.trotter.census.contract.CensusFingerprint
 import cloud.trotter.census.contract.CensusHash
+import cloud.trotter.census.contract.NotifTextField
 import cloud.trotter.census.contract.NotificationSkeletonDto
 import cloud.trotter.census.contract.NotificationSkeletonSchema
 import cloud.trotter.census.contract.SensitiveMarkerScan
@@ -31,7 +32,17 @@ object NotificationSkeletonBuilder {
     }
 
     sealed interface Outcome {
-        data class Built(val skeleton: NotificationSkeletonDto, val json: String, val itemBytes: Int) : Outcome
+        /**
+         * [presentFields] are the fields that held a value (#1620): a layout fact the skeleton cannot carry, because an
+         * absent field and a withheld one are both `withheld` on the wire. It never leaves the phone; the daily sample
+         * key reads it.
+         */
+        data class Built(
+            val skeleton: NotificationSkeletonDto,
+            val json: String,
+            val itemBytes: Int,
+            val presentFields: Set<NotifTextField>,
+        ) : Outcome
         data class Refused(val reason: Refusal) : Outcome
     }
 
@@ -109,7 +120,7 @@ object NotificationSkeletonBuilder {
         }
         val measured = NotificationSkeletonSchema.measure(item)
         if (measured.bytes > SkeletonSchema.MAX_ITEM_BYTES) return Outcome.Refused(Refusal.OVERSIZE)
-        return Outcome.Built(item, measured.json, measured.bytes)
+        return Outcome.Built(item, measured.json, measured.bytes, pending.filter { it.second != null }.map { it.first }.toSet())
     }
 
     /**

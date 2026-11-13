@@ -162,7 +162,7 @@ Before changing a pipeline gate, capture, a redaction entry, a backstop or the c
   data; `ID_MARKERS` and the address backstop run on UNKNOWN envelopes only.
 - Recognize-only is not state-inert: it moves `FrameGate.lastIdentity`. Only a rule with no `state` block is
   lifecycle-neutral.
-- Release binds `NoOpCaptureBus` and `NoOpCensusSink`; UNKNOWN captures are the debug-only exception. A census
+- Release binds `NoOpCaptureBus`; UNKNOWN captures are the debug-only exception. A census
   failure never changes recognition.
 - Liveness diagnostics (`RecognitionHealth`, the `ParseShortfall` censuses, `PlatformAppVersions`) fail open: a
   diagnostic failure must never become a recognition gate.
