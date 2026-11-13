@@ -12,7 +12,9 @@ import cloud.trotter.log.gig.domain.census.CensusUploadStats
 import cloud.trotter.log.gig.domain.model.accessibility.UiNode
 import cloud.trotter.log.gig.domain.capture.ReplayMetadata
 import cloud.trotter.log.gig.domain.state.Platform
-import cloud.trotter.census.contract.SkeletonSchema
+import cloud.trotter.census.contract.CensusSkeletonSchema
+import cloud.trotter.log.gig.core.pipeline.census.NotificationSkeletonBuilder
+import cloud.trotter.log.gig.domain.model.notification.RawNotificationData
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -28,8 +30,8 @@ import org.robolectric.RuntimeEnvironment
 import java.time.LocalDate
 
 /**
- * #1620 (ADR-0011 §8, §21): end to end through the real skeleton builder and sink, two frames of one screen that
- * differ only in the customer's name and the pay are one sample: the census keeps one skeleton per layout and format a
+ * #1620 (ADR-0011 §8, §21): end to end through the real skeleton builders and sink, two frames of one screen that
+ * differ only in the customer's name and the pay, or two pushes that differ only in a name, are one sample: the census keeps one skeleton per layout and format a
  * UTC day, never one per customer.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -55,9 +57,28 @@ class CensusSamplingEndToEndTest {
         return CensusRecord(Platform.DoorDash, built.skeleton.fingerprint, built.json, built.itemBytes, null)
     }
 
+    private fun push(title: String, text: String): CensusRecord {
+        val raw = RawNotificationData(
+            title, text, null, null, packageName = requireNotNull(Platform.DoorDash.packageName),
+            postTime = 0, isClearable = true, channelId = "offers",
+        )
+        val built = NotificationSkeletonBuilder.outcome(raw, meta, Platform.DoorDash, day, SkeletonVersion.V2)
+            as NotificationSkeletonBuilder.Outcome.Built
+        return CensusRecord(Platform.DoorDash, built.skeleton.fingerprint, built.json, built.itemBytes, null)
+    }
+
     @Test fun `two frames that differ only in a customer's name and the pay are one sample`() = runTest {
-        val ann = record("Ann Lee", "$7.50")
-        val maria = record("Maria Elena Ruiz", "$12.25")
+        oneSample(record("Ann Lee", "$7.50"), record("Maria Elena Ruiz", "$12.25"))
+    }
+
+    @Test fun `two notifications that differ only in a customer's name are one sample`() = runTest {
+        val ann = push("Order from Ann", "Pickup ready")
+        val maria = push("Order from Maria", "Pickup ready")
+        assertNotEquals("the fingerprints differ, so the test is not vacuous", ann.fingerprint, maria.fingerprint)
+        oneSample(ann, maria)
+    }
+
+    private fun kotlinx.coroutines.test.TestScope.oneSample(ann: CensusRecord, maria: CensusRecord) {
         assertNotEquals("the skeletons differ, so the test is not vacuous", ann.skeletonJson, maria.skeletonJson)
 
         val io = StandardTestDispatcher(testScheduler)
@@ -67,7 +88,7 @@ class CensusSamplingEndToEndTest {
         val prefs = object : CensusUploadPreferences {
             override val enabled = MutableStateFlow(true)
             override val baseUrl = flowOf("https://census.example")
-            override val acceptedSchemaIds = MutableStateFlow(setOf(SkeletonSchema.SCHEMA_ID, SkeletonSchema.SCHEMA_ID_V2))
+            override val acceptedSchemaIds = MutableStateFlow(CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS.toSet())
             override val choices = MutableStateFlow(CensusChoices(null, wifiOnly = true))
         }
         val sink = HttpCensusSink(prefs, spool, CensusDailySample(context, io), stats, backgroundScope, io, readsUnboundPlatforms = false)

@@ -71,7 +71,10 @@ class PrivacyExportE2ETest {
             val envelopes = h.records(h.envelopeRoot)
             // Vetted acceptance hypotheses: coordinator validation must explain any count change.
             assertEquals(6, h.captures().size)
-            assertEquals(4, skeletons.size)
+            // #1620: the customer lead-in push differs from the benign one only in its title's words, so it is the same
+            // variant that day and only the first is queued (NotificationSkeletonCorpusTest pins its withheld title).
+            assertEquals(3, skeletons.size)
+            assertEquals(1L, h.uploadStats.sampledRepeat.get())
             assertEquals(2, envelopes.size)
             assertEquals(2, h.forwarded.size)
             assertEquals(2L, h.stats.suppressedDuplicateCount)
@@ -338,9 +341,8 @@ class PrivacyExportE2ETest {
         assertEquals("android.widget.EditText", leaves.last().className)
         leaves.forEach { assertEquals(TextSlot.WITHHELD, it.text["text"]) }
         items.filterIsInstance<NotificationSkeletonDto>().takeIf { it.isNotEmpty() }?.let { notifications ->
-            assertEquals(2, notifications.size)
-            assertEquals(1, notifications.count { it.slots[NotifTextField.TITLE] == TextSlot.WITHHELD })
-            assertEquals(1, notifications.count { it.slots[NotifTextField.TITLE]?.h != null })
+            assertEquals("one push variant a day", 1, notifications.size)
+            assertTrue("the first (benign) push is the one kept", notifications.single().slots[NotifTextField.TITLE]?.h != null)
         }
         records.forEach { safe("skeleton/${it.name}", it.bytes.toByteArray(), Inputs.forbidden + listOf(Inputs.BENIGN, "Current dash", "Continue")) }
     }

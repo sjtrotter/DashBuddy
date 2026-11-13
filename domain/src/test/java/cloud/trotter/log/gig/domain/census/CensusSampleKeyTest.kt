@@ -4,6 +4,9 @@ import cloud.trotter.census.contract.CensusFingerprint
 import cloud.trotter.census.contract.CensusHash
 import cloud.trotter.census.contract.CensusSkeletonSchema
 import cloud.trotter.census.contract.KindClassifier
+import cloud.trotter.census.contract.NotifTextField
+import cloud.trotter.census.contract.NotificationSkeletonDto
+import cloud.trotter.census.contract.SkeletonKind
 import cloud.trotter.census.contract.ShapeTemplate
 import cloud.trotter.census.contract.SkeletonVersion
 import cloud.trotter.census.contract.TextSlot
@@ -74,5 +77,32 @@ class CensusSampleKeyTest {
         val hashes = CensusSkeletonSchema.slots(item).mapNotNull { it.h }
         assertEquals(2, hashes.size)
         hashes.forEach { assertFalse("no hash in the key input", it in canonical) }
+    }
+
+    /** A push whose title is [title] and whose text carries a pay figure; the fingerprint covers the slots' words. */
+    private fun push(title: TextSlot, channel: String = "offers"): NotificationSkeletonDto {
+        val slots = NotifTextField.entries.associateWith { TextSlot.WITHHELD } +
+            mapOf(NotifTextField.entries[0] to title, NotifTextField.entries[1] to TextSlot.ofShape(ShapeTemplate.MONEY))
+        return NotificationSkeletonDto(
+            kind = SkeletonKind.NOTIFICATION, schemaId = SkeletonVersion.V2.notificationSchemaId,
+            hashDomain = CensusHash.HASH_DOMAIN, filterRev = 1,
+            fingerprint = requireNotNull(CensusFingerprint.of("doordash", channel, slots)), platform = "doordash",
+            platformAppVersion = "15.1", engineVersion = 1, day = "2026-11-13", channelId = channel, slots = slots,
+        )
+    }
+
+    @Test fun `two notifications that differ only in a customer's name are one variant`() {
+        val ann = push(words("Ann"))
+        val maria = push(words("Maria Elena Ruiz"))
+        assertNotEquals("the fingerprints differ, so the test is not vacuous", ann.fingerprint, maria.fingerprint)
+        assertEquals(CensusSampleKey.of(ann), CensusSampleKey.of(maria))
+        assertEquals(CensusSampleKey.of(ann), CensusSampleKey.of(push(TextSlot.WITHHELD)))
+        assertFalse("no fingerprint in a notification's key input", ann.fingerprint in CensusSampleKey.canonical(ann))
+    }
+
+    @Test fun `a notification's channel and formats are variants`() {
+        val base = CensusSampleKey.of(push(words("Ann")))
+        assertNotEquals(base, CensusSampleKey.of(push(words("Ann"), channel = "chat")))
+        assertNotEquals(base, CensusSampleKey.of(push(TextSlot.ofShape(ShapeTemplate.CLOCK_12H))))
     }
 }
