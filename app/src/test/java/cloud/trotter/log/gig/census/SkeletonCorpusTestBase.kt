@@ -9,6 +9,7 @@ import cloud.trotter.log.gig.domain.capture.schema.UiNodeSchema
 import cloud.trotter.census.contract.CensusHash
 import cloud.trotter.census.contract.ClassNameGrammar
 import cloud.trotter.census.contract.SkeletonSchema
+import cloud.trotter.census.contract.SkeletonVersion
 import cloud.trotter.census.contract.TextSlot
 import cloud.trotter.census.contract.UiSkeletonDto
 import cloud.trotter.census.contract.UiSkeletonNodeDto
@@ -60,10 +61,17 @@ abstract class SkeletonCorpusTestBase {
             platformAppVersion = "0.0.0",
         )
 
+        /**
+         * The wire version the corpus is built in: the newest (#1619), the one with the most fields. A v1 item is
+         * the same build projected (`toV1`), so every privacy check here covers it too.
+         */
+        val VERSION: SkeletonVersion = SkeletonVersion.V2
+
         /** The §7(a) allowlist — per node, per slot, per envelope (ReplayMetadata names + census-own). */
-        val NODE_KEYS = setOf("class", "id", "isClickable", "isEnabled", "isChecked", "text", "children")
+        val NODE_KEYS = setOf("class", "id", "isClickable", "isEnabled", "isChecked", "hasClickAction", "isVisibleToUser", "text", "children")
         val NODE_STRING_KEYS = setOf("class", "id")
-        val SLOT_KEYS = setOf("h", "kind")
+        /** `shape` is a closed-list template (ADR-0011 §13), checked by test (a). */
+        val SLOT_KEYS = setOf("h", "kind", "shape")
         val ENVELOPE_REPLAY_METADATA = setOf(
             "platformAppVersion", "appVersion", "rulesetReleaseTag", "engineVersion", "rulesetFormatVersion",
         )
@@ -130,7 +138,7 @@ abstract class SkeletonCorpusTestBase {
 
         /** ONE build per fixture (review EE5); [builtJson] reuses the JSON the builder already measured. */
         private val outcomes: List<Pair<Fixture, SkeletonBuilder.Outcome>> by lazy {
-            corpus.map { it to SkeletonBuilder.outcome(it.tree, null, META, platformOf(it.path), DAY) }
+            corpus.map { it to SkeletonBuilder.outcome(it.tree, null, META, platformOf(it.path), DAY, VERSION) }
         }
 
         private val built: List<Pair<Fixture, UiSkeletonDto?>> by lazy {
@@ -153,7 +161,7 @@ abstract class SkeletonCorpusTestBase {
     protected fun platformOf(path: String): Platform = Companion.platformOf(path)
 
     protected fun build(f: Fixture, tree: UiNode = f.tree): UiSkeletonDto? =
-        SkeletonBuilder.build(tree, null, META, platformOf(f.path), DAY)
+        SkeletonBuilder.build(tree, null, META, platformOf(f.path), DAY, VERSION)
 
     protected val outcomes: List<Pair<Fixture, SkeletonBuilder.Outcome>> get() = Companion.outcomes
 
@@ -163,7 +171,7 @@ abstract class SkeletonCorpusTestBase {
 
     /** One value's slot through the whole builder (a one-node frame); null when the frame is refused. */
     protected fun slotOf(value: String): TextSlot? =
-        SkeletonBuilder.build(UiNode(className = "android.widget.TextView", text = value), null, META, Platform.DoorDash, DAY)
+        SkeletonBuilder.build(UiNode(className = "android.widget.TextView", text = value), null, META, Platform.DoorDash, DAY, VERSION)
             ?.root?.text?.get("text")
 
     /**
@@ -210,9 +218,9 @@ abstract class SkeletonCorpusTestBase {
      * Anything else is chrome the rule over-withholds (the GG5 / LL1 class). Never records frame text.
      */
     protected fun frameFlips(path: String, platform: Platform, tree: UiNode): Pair<Int, List<String>> {
-        val on = (SkeletonBuilder.outcome(tree, null, META, platform, DAY) as? SkeletonBuilder.Outcome.Built)?.skeleton
+        val on = (SkeletonBuilder.outcome(tree, null, META, platform, DAY, VERSION) as? SkeletonBuilder.Outcome.Built)?.skeleton
             ?: return 0 to emptyList()
-        val off = (DiagnosticSkeletonBuilder.outcomeWithoutFrameRule(tree, null, META, platform, DAY) as? SkeletonBuilder.Outcome.Built)
+        val off = (DiagnosticSkeletonBuilder.outcomeWithoutFrameRule(tree, null, META, platform, DAY, VERSION) as? SkeletonBuilder.Outcome.Built)
             ?.skeleton ?: return 0 to emptyList()
         val seededExact = HashSet<String>()
         val nameRuns = HashSet<String>()
@@ -442,7 +450,8 @@ abstract class SkeletonCorpusTestBase {
     /** Envelope/slot vocabulary an input token may legitimately coincide with. */
     protected val vocab = ("schemaId hashDomain filterRev fingerprint platform platformAppVersion appVersion " +
         "rulesetReleaseTag engineVersion rulesetFormatVersion day windowTitle root isClickable isEnabled " +
-        "isChecked text children kind withheld digits mixed words uinode.skeleton.v1 doordash corpus test " +
+        "isChecked hasClickAction isVisibleToUser text children kind withheld digits mixed words shape " +
+        "uinode.skeleton.v1 uinode.skeleton.v2 doordash corpus test " +
         "clickLabel 2026-09-30")
 
     protected fun stripClassAndId(e: JsonElement): JsonElement = when (e) {

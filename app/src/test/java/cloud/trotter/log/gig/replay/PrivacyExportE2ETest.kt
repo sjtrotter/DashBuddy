@@ -262,8 +262,10 @@ class PrivacyExportE2ETest {
         h.preferences.setCensusUploadEnabled(true); h.settle()
         h.worker()
         assertNotNull(h.credentials.current())
-        assertEquals(CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS.toSet(), h.preferences.acceptedSchemaIds.first())
-        assertEquals(CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS, declaredSchemaIds(h))
+        // #1619: the app declares what it builds AND the server accepts (the harness serves today's v1-only policy).
+        val expected = CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS.filter { it in h.acceptedSchemaIds }
+        assertEquals(expected.toSet(), h.preferences.acceptedSchemaIds.first())
+        assertEquals(expected, declaredSchemaIds(h))
     }
     /** #1522: the schema ids the one enrol request declared, read from its transmitted bytes. */
     private fun declaredSchemaIds(h: PrivacyExportReplay): List<String> =

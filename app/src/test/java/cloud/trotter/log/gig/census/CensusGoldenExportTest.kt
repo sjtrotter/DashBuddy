@@ -2,6 +2,7 @@ package cloud.trotter.log.gig.census
 
 import cloud.trotter.census.contract.CensusFingerprint
 import cloud.trotter.census.contract.CensusSkeletonSchema
+import cloud.trotter.census.contract.SkeletonVersion
 import cloud.trotter.log.gig.core.pipeline.SensitiveTextMarkers
 import cloud.trotter.log.gig.core.pipeline.census.NotificationSkeletonBuilder
 import cloud.trotter.log.gig.core.pipeline.census.SkeletonBuilder
@@ -61,6 +62,10 @@ class CensusGoldenExportTest : SkeletonCorpusTestBase() {
                         // #1174 review (Astra): STRICT round-trip through the wire DTO — an unexpected key or a
                         // plaintext slot anywhere in the skeleton is a decode failure, not a grep blind spot.
                         CensusSkeletonSchema.deserialize(outcome.json)
+                        // #1619: the v1 wire form the publisher sends a v1-only server is this item projected,
+                        // and it equals what the builder makes when asked for v1 directly.
+                        val v1 = SkeletonBuilder.outcome(fixture.tree, null, META, platformOf(fixture.path), DAY, SkeletonVersion.V1)
+                        assertEquals("${fixture.path}: v1 is not the v2 projection", outcome.skeleton.toV1(), (v1 as SkeletonBuilder.Outcome.Built).skeleton)
                         put("skeleton", skeletonJson)
                     }
                     is SkeletonBuilder.Outcome.Refused -> put("refused", outcome.reason.name)
@@ -74,13 +79,13 @@ class CensusGoldenExportTest : SkeletonCorpusTestBase() {
             println("Notification field corpus is empty; exporting synthetic notification vectors only")
         }
         val notificationBuilderLines = NotificationCorpus.fixtures.map { fixture ->
-            val outcome = NotificationSkeletonBuilder.outcome(fixture.raw, META, fixture.platform, DAY)
+            val outcome = NotificationSkeletonBuilder.outcome(fixture.raw, META, fixture.platform, DAY, VERSION)
             buildJsonObject {
                 put("file", fixture.exportPath)
                 when (outcome) {
                     is NotificationSkeletonBuilder.Outcome.Built -> {
                         put("fingerprint", outcome.skeleton.fingerprint)
-                        put("hashes", JsonArray(outcome.skeleton.slots.values.mapNotNull { it.h }.distinct().sorted().map { JsonPrimitive(it) }))
+                        put("hashes", JsonArray(CensusSkeletonSchema.slots(outcome.skeleton).mapNotNull { it.h }.distinct().sorted().map { JsonPrimitive(it) }))
                         put("skeleton", Json.parseToJsonElement(outcome.json))
                     }
                     is NotificationSkeletonBuilder.Outcome.Refused -> put("refused", outcome.reason.name)
