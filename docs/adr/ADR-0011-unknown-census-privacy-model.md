@@ -713,7 +713,7 @@ vocabulary rows that lose eligibility.
 | Install records | deleted on "delete my census data", else 365 days after last activity; `enrolled_at` stored as a day; ingest ledger 7 days; server logs and alarms (counts and reason codes, no install id or prefix, never bodies) 14 days (amended 2026-11-13, sjtrotter/dashbuddy-census#79; logs carried an install-id prefix before). The `installs` table is the one place the install id stays (authentication, quotas, contributor grants, withdrawal; §21) |
 | Trusted-install envelopes | 30 days, earlier once a fixture/rule exists. None accepted by the official server after #1633 (amended 2026-11-13, §6) |
 | Per-install health rows | **30 days, then folded into fleet totals**; fleet rollups indefinitely without install ids (amended 2026-11-13: sjtrotter/dashbuddy-census#79 and sjtrotter/dashbuddy-census#64; was 180 days). Diagnostics only, no count that reads as work done (§21, #1571) |
-| Contributor grants, confirmations, role tags | a grant expires after 30 days and can be revoked; confirmations are stored as keyed hashes and role tags as role names, both under epoch pseudonyms, never an install id; all deleted on request (§15, sjtrotter/dashbuddy-census#81 and sjtrotter/dashbuddy-census#86) |
+| Contributor grants, confirmations, role tags | a grant expires after 30 days and can be revoked; confirmations are stored as keyed hashes and role tags as role names, both under epoch pseudonyms, never an install id; the rows of the two live epochs are deleted on request, and rows under a destroyed epoch pepper can no longer be tied to anyone (§15, §21, sjtrotter/dashbuddy-census#81 and sjtrotter/dashbuddy-census#86) |
 | "Ask the developer" quarantine | 72 hours, encrypted to the operator key, never backed up, invisible to clusters, counts, drafting and the agent until the operator approves a sanitized copy (§15, sjtrotter/dashbuddy-census#81) |
 | Click evidence | as the skeleton it points into: same retention, epoch pseudonyms and keyed hashes (§19, sjtrotter/dashbuddy-census#87) |
 | Backups | encrypted, **14 days** — shorter than the longest TTL, so the worst-case life of a purged sub-k row is TTL + 14 days |
@@ -1214,9 +1214,11 @@ tied to an install by whoever holds their peppers.
   confirmation, and works while an upload is still waiting. Stopping keeps anything new from leaving; deleting removes what the server holds that is tied to this install.
 - The server deletes every row it can tie to the install: the install record, sightings, health, confirmations, role
   tags, grants, quarantine items and trusted envelopes, and it re-applies deletions after a restore from backup.
-- What survives is stated on the same screen, because it can no longer be tied to the install: cluster samples
+- What survives is stated on the same screen. Data that can no longer be tied to the install: cluster samples
   (stored without an install id, §5), fleet totals, vocabulary already approved at k, rules and synthetic fixtures
-  already published, rows under destroyed epoch peppers, and the 14-day backups until they age out.
+  already published, and rows under destroyed epoch peppers. Data that can still be tied to it for a while: the
+  encrypted backups taken before the request keep the install's rows until they expire, at most 14 days later; a
+  restore from one of them re-applies the deletion before the server serves anything.
 - The on-phone wipe (#1579) sends the same deletion request when the install is enrolled, then clears everything
   gig.log keeps on the phone.
 
