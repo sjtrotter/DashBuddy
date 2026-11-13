@@ -9,6 +9,7 @@ import cloud.trotter.census.contract.CaseFold
 import cloud.trotter.census.contract.CensusHash
 import cloud.trotter.census.contract.ClassNameGrammar
 import cloud.trotter.census.contract.SkeletonSchema
+import cloud.trotter.census.contract.ShapeTemplate
 import cloud.trotter.census.contract.TextSlot
 import cloud.trotter.census.contract.UiSkeletonDto
 import cloud.trotter.census.contract.UiSkeletonNodeDto
@@ -67,6 +68,7 @@ class SkeletonCorpusTest : SkeletonCorpusTestBase() {
         fun slot(path: String, e: JsonElement) {
             val o = e as? JsonObject ?: return run { problems += "$path: slot is not an object" }
             if (!SLOT_KEYS.containsAll(o.keys)) problems += "$path: slot keys ${o.keys}"
+            (o["shape"] as? JsonPrimitive)?.let { if (!ShapeTemplate.isWire(it.content)) problems += "$path: shape '${it.content}' is not a template" }
         }
         fun node(path: String, e: JsonElement) {
             val o = e as JsonObject
@@ -313,7 +315,7 @@ class SkeletonCorpusTest : SkeletonCorpusTestBase() {
             // and look for every token of the input (tokens that are schema vocabulary are skipped).
             val item = SkeletonBuilder.build(
                 UiNode(className = "android.widget.TextView", text = value, contentDescription = value, hintText = value),
-                value, META, Platform.DoorDash, DAY,
+                value, META, Platform.DoorDash, DAY, VERSION,
             ) ?: return@checkAll
             val stripped = stripClassAndId(Json.parseToJsonElement(SkeletonSchema.serialize(item))).toString()
             val vocabulary = stripped.replace(Regex("\"h\":\"[0-9a-f]{16}\""), "")

@@ -6,7 +6,9 @@ import cloud.trotter.log.gig.domain.capture.ReplayMetadata
 import cloud.trotter.census.contract.CensusFingerprint
 import cloud.trotter.census.contract.CensusHash
 import cloud.trotter.census.contract.KindClassifier
+import cloud.trotter.census.contract.ShapeClassifier
 import cloud.trotter.census.contract.SkeletonSchema
+import cloud.trotter.census.contract.SkeletonVersion
 import cloud.trotter.census.contract.TextFold
 import cloud.trotter.census.contract.TextSlot
 import cloud.trotter.census.contract.UiSkeletonDto
@@ -34,6 +36,9 @@ import kotlin.coroutines.cancellation.CancellationException
  * - **The dasher's sensitive frames are never described.** A [SensitiveTextMarkers] hit on the raw
  *   tree or on the window title yields NO skeleton ([Refusal.SENSITIVE_FRAME] / [Refusal.SENSITIVE_TITLE]),
  *   scanned HERE regardless of the capture bus.
+ * - **Values go out as format templates only.** From v2, a `mixed` value no step withheld that fits the closed
+ *   [cloud.trotter.census.contract.ShapeTemplate] list goes out as its template (ADR-0011 §13); anything else keeps
+ *   its v1 kind. A v1 item is the v2 build projected through `UiSkeletonDto.toV1`.
  * - **Only chrome-likely tokens are hashed.** A field is withheld by its own node's PII id (step 1,
  *   [IdClass]) or by a value-judging step ([withholdingStep], steps 2–8), judged on the CANONICAL form
  *   ([CensusHash.canonical]) and — when the raw trimmed value is itself within the cap — also on the raw
@@ -141,12 +146,15 @@ object SkeletonBuilder {
         meta: ReplayMetadata,
         platform: Platform,
         day: LocalDate,
-    ): UiSkeletonDto? = (outcome(tree, windowTitle, meta, platform, day) as? Outcome.Built)?.skeleton
+        version: SkeletonVersion = SkeletonVersion.V1,
+    ): UiSkeletonDto? = (outcome(tree, windowTitle, meta, platform, day, version) as? Outcome.Built)?.skeleton
 
     /**
      * Build the skeleton of [tree] (+ [windowTitle]) for [platform] on [day], stamping the five
      * [ReplayMetadata] version fields. Typed at this API (review GG6); the contract DTO carries the wire
      * forms (`Platform.wire`, `yyyy-MM-dd`). Never throws; every refusal is a reason, never text.
+     * [version] is the wire version to emit; the default is v1, the one every census server accepts, and the
+     * publisher passes the newest one the server's policy lists.
      */
     fun outcome(
         tree: UiNode,
@@ -154,7 +162,8 @@ object SkeletonBuilder {
         meta: ReplayMetadata,
         platform: Platform,
         day: LocalDate,
-    ): Outcome = outcome(tree, windowTitle, meta, platform, day, sensitive = null)
+        version: SkeletonVersion = SkeletonVersion.V1,
+    ): Outcome = outcome(tree, windowTitle, meta, platform, day, sensitive = null, version = version)
 
     /**
      * [outcome] with the tree's sensitive-marker verdict the caller ALREADY computed (review PP8), so a
@@ -170,7 +179,8 @@ object SkeletonBuilder {
         platform: Platform,
         day: LocalDate,
         sensitive: SensitiveVerdict?,
-    ): Outcome = outcome(tree, windowTitle, meta, platform, day, FrameFilter(::withholdingStep), sensitive)
+        version: SkeletonVersion = SkeletonVersion.V1,
+    ): Outcome = outcome(tree, windowTitle, meta, platform, day, FrameFilter(::withholdingStep), sensitive, version)
 
     /**
      * A tree's sensitive-marker verdict, as `SensitiveTextMarkers.findMarker` reports it (reviews PP8, SS2).
@@ -219,8 +229,9 @@ object SkeletonBuilder {
         day: LocalDate,
         frame: FrameFilter,
         sensitive: SensitiveVerdict? = null,
+        version: SkeletonVersion = SkeletonVersion.V1,
     ): Outcome = try {
-        buildOutcome(tree, windowTitle, meta, platform, day, frame, sensitive)
+        buildOutcome(tree, windowTitle, meta, platform, day, frame, sensitive, version)
     } catch (e: CancellationException) {
         throw e
     } catch (_: InvalidTree) {
@@ -242,6 +253,7 @@ object SkeletonBuilder {
         day: LocalDate,
         frame: FrameFilter,
         sensitive: SensitiveVerdict?,
+        version: SkeletonVersion,
     ): Outcome {
         // The whole-frame drop runs on the RAW tree and the RAW title, before anything is built. A scan
         // that FAILED (the marker scan's own fail-closed sentinel) is a build failure, not a banking
@@ -267,7 +279,7 @@ object SkeletonBuilder {
         val fingerprint = CensusFingerprint.of(root) ?: return Outcome.Refused(Refusal.FINGERPRINT_FAILED)
         val item = try {
             UiSkeletonDto(
-                schemaId = SkeletonSchema.SCHEMA_ID,
+                schemaId = SkeletonSchema.SCHEMA_ID_V2,
                 hashDomain = CensusHash.HASH_DOMAIN,
                 filterRev = FILTER_REV,
                 fingerprint = fingerprint,
@@ -280,7 +292,7 @@ object SkeletonBuilder {
                 day = DAY_FORMAT.format(day),
                 windowTitle = title?.let { frame.slot(it) },
                 root = root,
-            )
+            ).let { if (version == SkeletonVersion.V1) it.toV1() else it }
         } catch (_: IllegalArgumentException) {
             return Outcome.Refused(Refusal.INVALID_ENVELOPE)
         }
@@ -375,12 +387,15 @@ object SkeletonBuilder {
 
     /**
      * Step 6 and the hash, for a value no withholding step caught: only `words:1..8` hash; a digest
-     * failure withholds. PRIVATE (review CC5): every caller goes through the frame-level rule.
+     * failure withholds. A `mixed` value that fits the closed template list goes out as its template
+     * (ADR-0011 §13; the v1 projection turns it back into `mixed`). PRIVATE (review CC5): every caller goes
+     * through the frame-level rule, so a value a PII step caught never reaches the template list.
      */
     internal fun unfilteredSlot(canonical: String): TextSlot = try {
         val shape = KindClassifier.shapeKind(canonical)
         if (!shape.hashable) {
-            TextSlot(kind = shape.wire)
+            val template = if (shape == KindClassifier.ShapeKind.Mixed) ShapeClassifier.classify(canonical) else null
+            template?.let { TextSlot.ofShape(it) } ?: TextSlot(kind = shape.wire)
         } else {
             // Review OO1: hash the canonical string the filter JUDGED — never re-canonicalize.
             CensusHash.ofCanonical(canonical)?.let { TextSlot(h = it, kind = shape.wire) } ?: TextSlot.WITHHELD

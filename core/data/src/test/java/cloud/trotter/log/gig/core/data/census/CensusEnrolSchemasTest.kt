@@ -23,9 +23,22 @@ class CensusEnrolSchemasTest {
     }
 
     @Test fun `a two schema policy declares both in the supported order`() {
-        assertEquals(CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS,
+        assertEquals(listOf(SkeletonSchema.SCHEMA_ID, NotificationSkeletonSchema.SCHEMA_ID),
             CensusEnrolSchemas.declared(policy("""{"acceptedSchemaIds":["notification.skeleton.v1","uinode.skeleton.v1"]}""")))
-        assertEquals(listOf(SkeletonSchema.SCHEMA_ID, NotificationSkeletonSchema.SCHEMA_ID), CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS)
+    }
+
+    @Test fun `a v2 policy declares all four in the supported order, never an id it does not list`() {
+        assertEquals(
+            listOf(SkeletonSchema.SCHEMA_ID, NotificationSkeletonSchema.SCHEMA_ID, SkeletonSchema.SCHEMA_ID_V2, NotificationSkeletonSchema.SCHEMA_ID_V2),
+            CensusEnrolSchemas.declared(policy(
+                """{"acceptedSchemaIds":["notification.skeleton.v2","uinode.skeleton.v2","notification.skeleton.v1","uinode.skeleton.v1"]}""",
+            )),
+        )
+        assertEquals(CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS, CensusEnrolSchemas.declared(policy(
+            """{"acceptedSchemaIds":${CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS.joinToString(",", "[", "]") { "\"$it\"" }}}""",
+        )))
+        assertEquals(listOf(SkeletonSchema.SCHEMA_ID, SkeletonSchema.SCHEMA_ID_V2),
+            CensusEnrolSchemas.declared(policy("""{"acceptedSchemaIds":["uinode.skeleton.v2","uinode.skeleton.v1"]}""")))
     }
 
     @Test fun `an empty policy declares nothing`() {

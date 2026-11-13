@@ -40,6 +40,7 @@ import cloud.trotter.log.gig.core.network.census.PolicyResult
 import cloud.trotter.log.gig.core.network.census.UploadResult
 import cloud.trotter.log.gig.domain.census.EnvelopeProjection
 import cloud.trotter.census.contract.CensusSkeletonSchema
+import cloud.trotter.census.contract.NotificationSkeletonSchema
 import cloud.trotter.census.contract.SkeletonSchema
 import cloud.trotter.log.gig.domain.census.CensusEnrolRejectReason
 import cloud.trotter.log.gig.domain.census.CensusLastRun
@@ -487,8 +488,9 @@ class CensusUploadWorkerTest {
         h.api.policyResult = PolicyResult.Available(both)
         h.api.enrollments += EnrolResult.ServerUnavailable(503)
         assertEquals(ListenableWorker.Result.retry(), h.worker().doWork())
-        assertEquals(listOf(CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS), h.api.declaredSchemaIds)
-        assertEquals(CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS.toSet(), h.preferences.acceptedSchemaIds.first())
+        // #1619: a v1-only policy declares the v1 ids; v2 waits until the server lists it.
+        assertEquals(listOf(listOf(SkeletonSchema.SCHEMA_ID, NotificationSkeletonSchema.SCHEMA_ID)), h.api.declaredSchemaIds)
+        assertEquals(listOf(SkeletonSchema.SCHEMA_ID, NotificationSkeletonSchema.SCHEMA_ID).toSet(), h.preferences.acceptedSchemaIds.first())
     }
 
     @Test fun `a failed policy read declares screens only and leaves the stored policy alone`() = runTest {
@@ -500,7 +502,7 @@ class CensusUploadWorkerTest {
             h.api.enrollments += EnrolResult.ServerUnavailable(503)
             assertEquals(ListenableWorker.Result.retry(), h.worker().doWork())
             assertEquals(listOf(listOf(SkeletonSchema.SCHEMA_ID)), h.api.declaredSchemaIds)
-            assertEquals(CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS.toSet(), h.preferences.acceptedSchemaIds.first())
+            assertEquals(listOf(SkeletonSchema.SCHEMA_ID, NotificationSkeletonSchema.SCHEMA_ID).toSet(), h.preferences.acceptedSchemaIds.first())
             assertEquals(mapOf("k" to 10), h.preferences.censusPolicy.first())
             verify(h.preferences, times(1)).setCensusPolicy(any())
         }

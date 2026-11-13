@@ -2,13 +2,15 @@ package cloud.trotter.log.gig.guard
 
 import cloud.trotter.census.contract.ClassNameGrammar
 import cloud.trotter.census.contract.ResourceIdGrammar
+import cloud.trotter.census.contract.ShapeClassifier
 import cloud.trotter.log.gig.domain.privacy.PiiShapes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * #1160 review CC4 — the ICU bare-`}` rule applied to every COMPILED regex `PiiShapes` exposes.
+ * #1160 review CC4 — the ICU bare-`}` rule applied to every COMPILED regex `PiiShapes` exposes (and the census
+ * contract's grammars and shape classifier, #1619).
  *
  * [IcuRegexGuardTest] scans source `Regex("literal")` sites, so it cannot see a pattern built from a
  * `const` reference (`FIRST_LAST_INITIAL*`) or a `+` concatenation (`STREET`, `CARD`). A bare `}` in
@@ -30,10 +32,14 @@ class PiiShapesIcuGuardTest {
     @Test
     fun `no compiled PiiShapes or census-grammar regex carries a bare closing brace`() {
         val patterns = regexFields(PiiShapes) + regexFields(ResourceIdGrammar) + regexFields(ClassNameGrammar) +
+            regexFields(ShapeClassifier) +
             PiiShapes.VALUE_SHAPES.associate { "VALUE_SHAPES.${it.name}" to it.regex }
         // Reflection must see the known constants (guards the guard).
         listOf("PHONE", "STREET", "CARD", "FIRST_LAST_INITIAL", "FIRST_LAST_INITIAL_EMBEDDED_REGEX").forEach {
             assertTrue("reflection missed PiiShapes.$it", "PiiShapes.$it" in patterns)
+        }
+        listOf("MONEY", "CLOCK_12H", "ITEMS").forEach {
+            assertTrue("reflection missed ShapeClassifier.$it", "ShapeClassifier.$it" in patterns)
         }
         val problems = patterns.mapNotNull { (name, regex) ->
             val at = checker.bareClosingBraceIndex(regex.pattern)

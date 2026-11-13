@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.core.pipeline.census.diagnostics
 
 import cloud.trotter.log.gig.core.pipeline.census.FrameFilter
+import cloud.trotter.census.contract.SkeletonVersion
 import cloud.trotter.log.gig.core.pipeline.census.SkeletonBuilder
 import cloud.trotter.log.gig.domain.capture.ReplayMetadata
 import cloud.trotter.log.gig.domain.model.accessibility.UiNode
@@ -26,8 +27,10 @@ object DiagnosticSkeletonBuilder {
         meta: ReplayMetadata,
         platform: Platform,
         day: LocalDate,
+        version: SkeletonVersion = SkeletonVersion.V1,
     ): SkeletonBuilder.Outcome = SkeletonBuilder.outcome(
         tree, windowTitle, meta, platform, day,
         FrameFilter(SkeletonBuilder::withholdingStep, frameLevel = false),
+        version = version,
     )
 }

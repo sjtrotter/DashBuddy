@@ -45,7 +45,10 @@ class CensusSkeletonSchemaTest {
         val wire = CensusSkeletonSchema.serialize(notification)
         assertEquals(notification, CensusSkeletonSchema.deserialize(wire))
         assertEquals(NotificationSkeletonSchema.measure(notification), CensusSkeletonSchema.measure(notification))
-        assertEquals(listOf(SkeletonSchema.SCHEMA_ID, NotificationSkeletonSchema.SCHEMA_ID), CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS)
+        assertEquals(
+            listOf(SkeletonSchema.SCHEMA_ID, NotificationSkeletonSchema.SCHEMA_ID, SkeletonSchema.SCHEMA_ID_V2, NotificationSkeletonSchema.SCHEMA_ID_V2),
+            CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS,
+        )
         listOf("{}", "[]", "null", "{\"schemaId\":1}", wire.replace("notification.skeleton.v1", "unknown"),
             wire.replace("\"kind\":\"notification\",", ""), wire.replace("\"kind\":\"notification\"", "\"kind\":\"screen\""),
             SkeletonSchema.serialize(screen()).replaceFirst("{", "{\"kind\":\"screen\","),

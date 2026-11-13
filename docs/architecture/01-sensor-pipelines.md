@@ -762,16 +762,52 @@ The UNKNOWN screen/notification census (Epic #1138, #1189) is specified by ADR-0
 ADR-0011's 2026-11-13 amendment (§12 to §21, #1618, epic #1617) records the decided next design: skeletons from the
 Play and sideload builds, opt-in; shape templates and click flags; the contributor tier and its word gate; probes in
 place of fragment hashes; shadow mode, canary and rollback; click evidence; no region data; and the dasher-privacy
-model (sampling, a daily upload window, Wi-Fi by default, HTTPS only, keyed storage, epoch pseudonyms, deletion). None
-of it is built yet; the bullets below describe what runs today, and each issue that builds a piece updates them.
+model (sampling, a daily upload window, Wi-Fi by default, HTTPS only, keyed storage, epoch pseudonyms, deletion). §13
+(shape templates and click flags) is built by #1619 as the v2 wire schemas, sent only once the server accepts them
+(*Wire versions* below); §13's local "this slot varied" flag is not: it needs per-variant state across frames, which
+arrives with #1620's once-per-variant-per-UTC-day sampling, so #1620 owns it (and the wire field it needs). The rest
+is not built yet; the bullets below describe what runs today, and each issue that builds a piece updates them.
 
-- *Publisher stage* — `census.SkeletonPublisher`, injected into `AccessibilityPipeline` and `NotificationPipeline`, runs post-admission/dedup after capture and before the UNKNOWN rejection on UNKNOWN platform screens and notifications when `CensusSink.isEnabled`; hands the sink `CensusRecord(platform, fingerprint, skeletonJson, itemBytes, captureId?)`; `PipelineStats` counts skeletons / hashed / withheld / sink refusals / failures / `refused{reason}` under `census{…}` (rendered only when non-zero); the day is the observation timestamp's device-local calendar date.
+- *Publisher stage* — `census.SkeletonPublisher`, injected into `AccessibilityPipeline` and `NotificationPipeline`, runs post-admission/dedup after capture and before the UNKNOWN rejection on UNKNOWN platform screens and notifications when `CensusSink.isEnabled`; hands the sink `CensusRecord(platform, fingerprint, skeletonJson, itemBytes, captureId?)`; `PipelineStats` counts skeletons / hashed / withheld / sink refusals / failures / `refused{reason}` under `census{…}` (rendered only when non-zero); the day is the observation timestamp's UTC calendar date (ADR-0011 §21, #1619; it was the device-local date before).
+- *Wire versions (#1619, ADR-0011 §13)* — `SkeletonVersion` (contract) names `V1` (`uinode.skeleton.v1` /
+  `notification.skeleton.v1`) and `V2` (`uinode.skeleton.v2` / `notification.skeleton.v2`). The publisher builds each
+  kind in the NEWEST version the cached server policy lists in `acceptedSchemaIds`
+  (`SkeletonVersion.newestScreen` / `newestNotification`); none listed counts `POLICY_UNSUPPORTED_SCHEMA` as before.
+  So the debug build keeps sending v1 to a server that does not accept v2 yet (census#78 ships the server half first),
+  and enrolment declares the v2 ids only when the policy lists them (`CensusEnrolSchemas.declared` filters
+  `SUPPORTED_SCHEMA_IDS`, which now holds all four ids, v1 first). Both builders always build v2 and project to v1 with
+  the DTO's `toV1()`: a shape reads `mixed`, the node flags take their defaults, notification actions drop. That is
+  byte-for-byte what v1 emitted before #1619 (checked against the pre-#1619 golden when the golden moved to v2).
+  The builders' `version` parameter defaults to `V1`, the one every server accepts; the publisher always passes it.
+- *Shape slots (v2)* — a field no withholding step caught whose grammar kind is `mixed` and whose canonical value
+  fits the closed `ShapeTemplate` list as a WHOLE value goes out as `{kind: "shape", shape: "<template>"}`, never a
+  hash: money (`$#.##`, `$#`, signed `±$#.##`, `±$#`), the 12-hour clock (`#:## AM/PM` and its no-space and
+  lowercase forms: one class for AM and PM), distance (`# mi`, `#.# mi`, `#.## mi`, the same in `km`), minutes
+  (`# min(s)`, `# minute(s)`) and item counts (`# item(s)`). `#` is an integer with its digit count dropped (bounded:
+  ≤ 3 digits for counts, the CurrencyShape ceiling for money); the sign's direction and a unit's plural are folded.
+  `ShapeClassifier` (contract) is the only producer: it refuses anything over 16 characters, any non-printable-ASCII
+  character (so a Unicode digit fits nothing and the JVM/ICU `\d` split cannot matter; fullwidth digits arrive as
+  ASCII through NFKC) and any value with no ASCII digit, then full-matches one pattern per template. Its money figure
+  is `CurrencyShape.FIGURE_CORE` byte for byte (`ShapeClassifierCurrencyPinTest`, `:core:pipeline`), so the census has
+  no second currency definition. Because every PII step runs first, a caught value (`Apt 12`, a phone number, a
+  PII id's text) stays `withheld`; a value outside the list keeps its v1 kind. `SkeletonShapePropertyTest` pins that
+  no generated customer name, address, phone number or code, and none of the dasher's own name, greeting, account
+  identifier or location-bearing label, becomes a shape in any text position.
+- *Node flags (v2)* — `hasClickAction` (the node advertises `ACTION_CLICK`; Compose often does without
+  `isClickable`) and `isVisibleToUser`, defaulting to `false` / `true` so a typical node serializes nothing new. A
+  click rule binds through `UiNode.takesClick` (either flag), which is why both travel.
 - *Notifications (#1189, ADR-0011 §10)* — `NotificationSkeletonBuilder` validates the platform via
   `Platform.fromPackage` and the original channel against the contract grammar. Its independent
   `SensitiveMarkerScan` scans all five original fields and actions, individually and whitespace-joined,
   before `CustomerTextMarkers.scrubNotif` and the shared two-pass `FrameFilter`; absent/blank, customer,
-  mask and over-40-character fields emit constant `withheld`. Actions participate only in refusal.
-  `notification.skeleton.v1` carries five enum-ordered slots and a domain-separated fingerprint.
+  mask and over-40-character fields emit constant `withheld`. `notification.skeleton.v1` carries five enum-ordered
+  slots and a domain-separated fingerprint, and actions participate only in refusal. `notification.skeleton.v2`
+  (#1619) adds `actions`: each non-blank scrubbed label, in order, cut at `NotificationSkeletonDto.MAX_ACTIONS` (8),
+  judged by the same filter as the five fields and emitted as a slot of the same kinds (a hash, a coarse kind, a
+  shape, or `withheld`); never the label. The labels are judged in a SECOND `FrameFilter` that first sees the five
+  fields: a value caught in a field withholds the same label, but a label never seeds the fields' frame, so it cannot
+  change their slots, the v1 bytes or the fingerprint (#1619 review S1, pinned by `SkeletonShapeTest`). The fingerprint
+  ignores the actions and writes a shape slot's kind as `mixed`, so a notification keeps its cluster across versions.
   Both kinds are published only when the cached server policy advertises their schema (before the first
   policy, screens only); unsupported kinds count `POLICY_UNSUPPORTED_SCHEMA` per kind and never enter
   the spool. Batches are per schema, so a notification `422 batch_quality` cannot delete valid screens (#1252).
@@ -884,9 +920,12 @@ of it is built yet; the bullets below describe what runs today, and each issue t
   is generation-scoped and cleared on identity reset, and excluded from cloud backup and device
   transfer; no PII: rule ids, platform wire, version strings, counts.
 - *Wire contract* — the Apache-2.0 package `cloud.trotter.census.contract` (the `census-contract/` build, #1173): `UiSkeletonDto` /
-  `UiSkeletonNodeDto` / `TextSlot` + `SkeletonSchema` (`uinode.skeleton.v1`, ADR §1 — no plaintext slot,
-  no bounds; a per-node `text` map keyed by `UiNodeTextField.wire`, each value `{h?, kind}`, `h` present
-  iff `kind` is `words:1..8`; invariants checked at construction AND on decode, incl. well-formed UTF-16
+  `UiSkeletonNodeDto` / `TextSlot` + `SkeletonSchema` (`uinode.skeleton.v1` and `.v2`, ADR §1 and §13 — no plaintext slot,
+  no bounds; a per-node `text` map keyed by `UiNodeTextField.wire`, each value `{h?, kind, shape?}`, `h` present
+  iff `kind` is `words:1..8`, `shape` present iff `kind` is `shape` and then a `ShapeTemplate` wire; a v1 item that
+  sets any v2 field is refused at construction, and a v1 item that merely CARRIES a v2 key (`hasClickAction`,
+  `isVisibleToUser`, `shape`, `actions`), even at its default value, is refused at decode (`V2WireKeys`, review S2); the contract adds the `bad_shape` rejection reason for
+  the server; invariants checked at construction AND on decode, incl. well-formed UTF-16
   without U+0000 for class/id/stamps (`WireStrings`) and a real calendar `day`; 64 KB item cap measured
   once by `SkeletonSchema.measure`); `CensusHash` (§3, `sha256("census.v1:" + canonical)` → 16 hex,
   fail-closed to `withheld`, where `CensusHash.canonical` — a fixed point — is the value after the census glyph

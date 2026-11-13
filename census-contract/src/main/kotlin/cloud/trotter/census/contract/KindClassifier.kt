@@ -33,7 +33,9 @@ package cloud.trotter.census.contract
  * supplementary-plane scripts count. Whitespace is `Character.isWhitespace || isSpaceChar` — the same
  * predicate Kotlin's `trim()`/`isBlank()` use, so the classifier and the trim agree on NBSP.
  *
- * Money and time are deliberately NOT classes (ADR §1): they are `mixed`.
+ * Money and time are deliberately NOT grammar classes (ADR §1): the grammar calls them `mixed`. From
+ * `uinode.skeleton.v2` the builder may refine a `mixed` value no withholding step caught into [SHAPE], through
+ * the closed [ShapeTemplate] list (ADR §13); the grammar itself never yields it.
  */
 object KindClassifier {
 
@@ -45,6 +47,12 @@ object KindClassifier {
 
     /** Row 4 — everything else (money, clock times, unit numbers, codes, symbols, emoji). */
     const val MIXED: String = "mixed"
+
+    /**
+     * ADR §13 (v2 only): a `mixed` value that fits a [ShapeTemplate]; the slot carries the template in
+     * [TextSlot.shape] and never a hash.
+     */
+    const val SHAPE: String = "shape"
 
     /** Row 3 — prefix of `words:N` (`N` in 1..8). */
     const val WORDS_PREFIX: String = "words:"
@@ -108,9 +116,9 @@ object KindClassifier {
         return if (words >= 1) ShapeKind.Words(words) else ShapeKind.Mixed
     }
 
-    /** True when [kind] is one of the wire kinds this grammar (plus [WITHHELD]) can emit. */
+    /** True when [kind] is one of the wire kinds this grammar (plus [WITHHELD] and the v2 [SHAPE]) can emit. */
     fun isWireKind(kind: String): Boolean = when {
-        kind == WITHHELD || kind == DIGITS || kind == MIXED || kind == WORDS_OVER -> true
+        kind == WITHHELD || kind == DIGITS || kind == MIXED || kind == WORDS_OVER || kind == SHAPE -> true
         kind.startsWith(WORDS_PREFIX) -> hashableWordCount(kind) != null
         else -> false
     }

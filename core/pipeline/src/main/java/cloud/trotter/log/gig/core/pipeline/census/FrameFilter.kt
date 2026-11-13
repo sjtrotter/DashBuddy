@@ -304,6 +304,9 @@ internal class FrameFilter(
             isClickable = p.node.isClickable,
             isEnabled = p.node.isEnabled,
             isChecked = p.node.isChecked,
+            // ADR-0011 §13 (v2; the v1 projection drops them): the click and visibility flags a click rule binds on.
+            hasClickAction = p.node.hasClickAction,
+            isVisibleToUser = p.node.isVisibleToUser,
             text = text,
             children = p.children.map { emit(it) },
         )

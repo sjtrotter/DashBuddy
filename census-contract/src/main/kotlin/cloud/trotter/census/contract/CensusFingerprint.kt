@@ -60,7 +60,11 @@ object CensusFingerprint {
     fun of(platform: String, channelId: String, slots: Map<NotifTextField, TextSlot>): String? =
         sha256OrNull(canonicalBytes(platform, channelId, slots))
 
-    /** N1 + LP(kind/platform/channel), then LP(field/kind) and N or H + LP(hash) per slot. */
+    /**
+     * N1 + LP(kind/platform/channel), then LP(field/kind) and N or H + LP(hash) per slot. A v2 `shape` slot is
+     * written as `mixed`, the kind v1 emitted for the same value, so a notification keeps its fingerprint across
+     * the versions (ADR-0011 §13); the v2 action slots are not part of identity.
+     */
     fun canonicalBytes(platform: String, channelId: String, slots: Map<NotifTextField, TextSlot>): ByteArray {
         require(slots.keys == NotifTextField.entries.toSet()) { "exactly five notification slots required" }
         val out = ByteArrayOutputStream()
@@ -71,7 +75,7 @@ object CensusFingerprint {
         NotifTextField.entries.forEach { field ->
             val slot = slots.getValue(field)
             writeLengthPrefixed(field.wire, out)
-            writeLengthPrefixed(slot.kind, out)
+            writeLengthPrefixed(slot.toV1().kind, out)
             val hash = slot.h
             out.write(if (hash == null) 'N'.code else 'H'.code)
             if (hash != null) writeLengthPrefixed(hash, out)

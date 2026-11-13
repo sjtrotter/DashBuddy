@@ -5,6 +5,7 @@ import cloud.trotter.log.gig.core.network.di.ClientProfile
 import cloud.trotter.log.gig.core.network.di.NetworkClientFactory
 import cloud.trotter.log.gig.domain.census.CensusEnrolRejectReason
 import cloud.trotter.census.contract.CensusSkeletonSchema
+import cloud.trotter.census.contract.NotificationSkeletonSchema
 import cloud.trotter.census.contract.SkeletonSchema
 import cloud.trotter.census.contract.auth.Bearer
 import cloud.trotter.census.contract.auth.CensusHeaders
@@ -70,7 +71,9 @@ class CensusApiTest {
 
     @Test fun `enrol is bearer only and policy remains available`() = runTest {
         respond(200, "{\"installIdPrefix\":\"12345678\",\"acceptedSchemaIds\":[\"uinode.skeleton.v1\"]}")
-        assertTrue(api.enrol(credential, "test", CensusSkeletonSchema.SUPPORTED_SCHEMA_IDS) is EnrolResult.Enrolled)
+        // The transport sends the list it is given; the worker passes `CensusEnrolSchemas.declared(policy)`.
+        val declared = listOf(SkeletonSchema.SCHEMA_ID, NotificationSkeletonSchema.SCHEMA_ID)
+        assertTrue(api.enrol(credential, "test", declared) is EnrolResult.Enrolled)
         val request = requireNotNull(server.takeRequest(1, TimeUnit.SECONDS))
         assertNull(request.headers[CensusHeaders.TIMESTAMP])
         assertNull(request.headers[CensusHeaders.SIGNATURE])
