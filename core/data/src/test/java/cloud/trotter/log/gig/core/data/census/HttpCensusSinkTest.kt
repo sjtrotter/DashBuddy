@@ -106,7 +106,7 @@ class HttpCensusSinkTest {
         val stats = CensusUploadStats()
         val io = StandardTestDispatcher(testScheduler)
         val spool = object : CensusSpool(tmp.newFolder(), stats, io) {
-            override suspend fun append(record: CensusRecord) {
+            override suspend fun append(record: CensusRecord, generation: Long) {
                 gate.await()
                 received += record.fingerprint
             }
@@ -145,4 +145,27 @@ class HttpCensusSinkTest {
         assertEquals(24L, stats.sampledRepeat.get())
     }
 
+    @Test fun `an outline offered before the queue is cleared is never written behind the clear`() = runTest {
+        // #1622: a deletion clears the spool while a record waits in the sink's channel or its consumer.
+        val io = StandardTestDispatcher(testScheduler)
+        val stats = CensusUploadStats()
+        val gate = CompletableDeferred<Unit>()
+        val spool = object : CensusSpool(tmp.newFolder(), stats, io) {
+            override suspend fun append(record: CensusRecord, generation: Long) {
+                gate.await()
+                super.append(record, generation)
+            }
+        }
+        val sink = sink(Preferences(), spool, stats, io)
+        runCurrent()
+        assertTrue(sink.offer(censusRecord(1)))
+        runCurrent() // The consumer holds the record, waiting to write it.
+        spool.clear()
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals("offered before the clear: dropped", 0, spool.count())
+        assertTrue(sink.offer(censusRecord(2)))
+        runCurrent()
+        assertEquals("offered after it: kept", 1, spool.count())
+    }
 }

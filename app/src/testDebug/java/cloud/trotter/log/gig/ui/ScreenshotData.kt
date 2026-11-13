@@ -412,12 +412,12 @@ internal object ScreenshotData {
     fun censusSent(): CensusSentUiState {
         val sentAt = at("2026-10-28T09:14:00Z")
         val dd = Platform.DoorDash.wire
-        val outlines = CensusSentBatch(sentAt, CensusSentBatch.SKELETONS, "sample", listOf(
+        val outlines = CensusSentBatch(sentAt, CensusSentBatch.SKELETONS, listOf(
             CensusSentItem(CensusSentKind.SCREEN, dd, "2026-10-28", nodes = 41, codes = 18, formats = 3, typeOnly = 2, withheld = 1),
             CensusSentItem(CensusSentKind.SCREEN, Platform.Uber.wire, "2026-10-28", nodes = 27, codes = 9, formats = 1),
             CensusSentItem(CensusSentKind.NOTIFICATION, dd, "2026-10-28", codes = 2, typeOnly = 1, withheld = 1),
         ))
-        val counts = CensusSentBatch(sentAt - 4_000, CensusSentBatch.HEALTH, null, listOf(
+        val counts = CensusSentBatch(sentAt - 4_000, CensusSentBatch.HEALTH, listOf(
             CensusSentItem(CensusSentKind.DAILY_COUNTS, dd, "2026-10-27"),
         ))
         return CensusSentUiState(

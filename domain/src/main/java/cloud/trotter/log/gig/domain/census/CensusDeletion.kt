@@ -14,6 +14,13 @@ data class CensusDeletion(
     val deletedDay: String? = null,
     /** False until the phone's census queue, envelopes and unsent daily counts are cleared for this request. */
     val localCleared: Boolean = false,
+    /**
+     * The census install ID the request was made for, bound at its first attempt. A pending request is only ever sent
+     * with that ID's credential; if the phone no longer holds it, the request cannot be sent ([State.NOT_POSSIBLE]).
+     */
+    val installId: String? = null,
+    /** Why a [State.PENDING] request has not gone through yet, for the screen; null before the first attempt. */
+    val waiting: Waiting? = null,
 ) {
     enum class State(val wire: String) {
         /** Asked, not yet confirmed: every census run sends this first and sends nothing else until it resolves. */
@@ -22,7 +29,7 @@ data class CensusDeletion(
         /** The server confirmed the deletion. */
         DELETED("deleted"),
 
-        /** The server holds nothing for this phone: it never enrolled, or the server no longer knows its ID. */
+        /** This phone never finished enrolling, so it uploaded nothing; no request is sent. */
         NOTHING_HELD("nothing_held"),
 
         /** This phone's census ID can no longer sign a request: the server revoked it, or its key was lost. */
@@ -34,5 +41,27 @@ data class CensusDeletion(
         }
     }
 
+    /** Why a pending request is still waiting; each says what gig.log keeps doing, never that it failed for good. */
+    enum class Waiting(val wire: String) {
+        /** No answer: offline, the server unreachable or busy. */
+        UNREACHABLE("unreachable"),
+
+        /** The census server does not take deletion requests yet (it answers 404 until its update). */
+        NOT_YET("not_yet"),
+
+        /** The server did not accept this phone's ID or signature; gig.log asks again, keeping the ID. */
+        UNCONFIRMED("unconfirmed");
+
+        companion object {
+            fun fromWire(wire: String?): Waiting? = entries.firstOrNull { it.wire == wire }
+        }
+    }
+
     val pending: Boolean get() = state == State.PENDING
+
+    /**
+     * Uploads stay blocked until the server answered AND the phone's queue is cleared: a request whose clear failed
+     * keeps blocking after the server's confirmation, until a retry clears it.
+     */
+    val resolved: Boolean get() = !pending && localCleared
 }

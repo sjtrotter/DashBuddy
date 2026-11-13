@@ -78,7 +78,13 @@ private fun deletionStatus(deletion: CensusDeletion?, deleting: Boolean): String
     deleting -> stringResource(R.string.census_delete_status_running)
     deletion == null -> stringResource(R.string.census_delete_supporting)
     else -> when (deletion.state) {
-        CensusDeletion.State.PENDING -> stringResource(R.string.census_delete_status_pending)
+        CensusDeletion.State.PENDING -> stringResource(
+            when (deletion.waiting) {
+                CensusDeletion.Waiting.NOT_YET -> R.string.census_delete_status_not_yet
+                CensusDeletion.Waiting.UNCONFIRMED -> R.string.census_delete_status_unconfirmed
+                CensusDeletion.Waiting.UNREACHABLE, null -> R.string.census_delete_status_pending
+            },
+        )
         CensusDeletion.State.DELETED -> {
             val rows = deletion.rows ?: 0
             val day = deletion.deletedDay?.let { runCatching { formatMonthDayYear(LocalDate.parse(it)) }.getOrNull() }

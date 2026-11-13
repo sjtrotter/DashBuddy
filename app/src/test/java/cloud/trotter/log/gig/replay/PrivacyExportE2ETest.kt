@@ -388,14 +388,17 @@ class PrivacyExportE2ETest {
         val wire = h.requests.filter { it.path in paths }
             .map { requireNotNull(CensusSentBatch.read(it.path, it.body.toByteArray(), 0L)) }
         assertTrue("the run sent outlines", wire.any { it.path == CensusSentBatch.SKELETONS && it.items.isNotEmpty() })
-        val key: (CensusSentBatch) -> String = { "${it.path} ${it.batchId} ${it.items}" }
+        val key: (CensusSentBatch) -> String = { "${it.path} ${it.items}" }
         assertEquals(wire.map(key).sorted(), h.sentLog.batches.first().map(key).sorted())
         val record = h.sentFile.readText(Charsets.UTF_8)
-        val codes = h.requests.filter { it.path == CensusSentBatch.SKELETONS }.flatMap { request ->
-            Regex("\"h\":\"([0-9a-f]{16})\"").findAll(request.body.utf8()).map { it.groupValues[1] }.toList()
-        }
-        assertTrue("the outlines carried word codes", codes.isNotEmpty())
-        codes.forEach { assertFalse("the sent record keeps no word code", record.contains(it)) }
+        // Every hex token of the requests: word codes (16), batch ids (32) and fingerprints (64).
+        val tokens = h.requests.filter { it.path in paths }.flatMap { request ->
+            Regex("[0-9a-f]{16,}").findAll(request.body.utf8()).map { it.value }.toList()
+        }.toSet()
+        assertTrue("the requests carried codes, batch ids and fingerprints", tokens.any { it.length == 16 } &&
+            tokens.any { it.length == 32 } && tokens.any { it.length == 64 })
+        tokens.forEach { assertFalse("the sent record keeps no hex token from the wire", record.contains(it)) }
+        assertFalse(Regex("[0-9a-f]{16,}").containsMatchIn(record))
     }
 
     private fun uploads(h: PrivacyExportReplay, skeletons: List<Stored>, envelopes: List<Stored>, credential: CensusCredentialStore.Credential) {

@@ -196,6 +196,24 @@ class CensusDataScreensTest {
         compose.onNodeWithText(string(SettingsR.string.census_delete_status_pending)).assertExists()
     }
 
+    @Test fun `before the server takes deletions, the row says the request waits, not that it failed`() {
+        runBlocking { whenever(credentials.current()).thenReturn(ENROLLED) }
+        transport.result = DeleteResult.NotAvailable(404)
+        showCensus()
+        compose.onNodeWithText(string(SettingsR.string.census_delete_label)).performClick()
+        compose.onNodeWithText(string(SettingsR.string.census_delete_dialog_confirm)).performClick()
+        compose.waitForIdle()
+
+        compose.onNodeWithText(string(SettingsR.string.census_delete_status_not_yet)).assertExists()
+    }
+
+    @Test fun `the confirmation says what the server keeps`() {
+        showCensus()
+        compose.onNodeWithText(string(SettingsR.string.census_delete_label)).performClick()
+        compose.onNodeWithText("keeps this phone's census ID", substring = true).assertExists()
+        compose.onNodeWithText("which it keeps for 7 days", substring = true).assertExists()
+    }
+
     @Test fun `the sent screen shows each item's kind, app and counts from the sent bytes, and the next upload ticks`() {
         val sentLog = CensusSentLog(context, Dispatchers.Unconfined)
         val body = CensusApi.batchBody("batch-1", listOf(screenJson(), notificationJson()))

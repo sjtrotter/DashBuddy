@@ -16,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
@@ -66,6 +67,10 @@ fun CensusSentContent(state: CensusSentUiState?, onBack: () -> Unit) {
         },
     ) { padding ->
         if (state == null) return@Scaffold
+        // Records leave the list as they pass 7 days, while it is on screen (the store prunes them on its next read).
+        val now by rememberNow(tickMs = 60_000L)
+        val days = remember(state.days, now / 60_000L) { state.days.keptAt(now) }
+        val lastUploadAtMillis = days.firstOrNull()?.batches?.firstOrNull()?.sentAtMillis
         LazyColumn(Modifier.padding(padding).fillMaxSize()) {
             item {
                 Text(
@@ -79,12 +84,12 @@ fun CensusSentContent(state: CensusSentUiState?, onBack: () -> Unit) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.census_sent_last)) },
                     supportingContent = {
-                        Text(state.lastUploadAtMillis?.let { dateTime(it) } ?: stringResource(R.string.census_sent_none))
+                        Text(lastUploadAtMillis?.let { dateTime(it) } ?: stringResource(R.string.census_sent_none))
                     },
                 )
             }
             item { NextUpload(state) }
-            if (state.days.isEmpty()) {
+            if (days.isEmpty()) {
                 item {
                     Text(
                         stringResource(R.string.census_sent_empty),
@@ -93,15 +98,21 @@ fun CensusSentContent(state: CensusSentUiState?, onBack: () -> Unit) {
                     )
                 }
             }
-            state.days.forEach { day ->
-                item(key = "day-${day.date}") { DayHeader(day) }
+            days.forEach { day ->
+                item { DayHeader(day) }
                 day.batches.forEach { batch ->
-                    item(key = "batch-${batch.sentAtMillis}-${batch.path}-${batch.batchId}") { BatchHeader(batch) }
+                    item { BatchHeader(batch) }
                     items(batch.items) { SentItemRow(it) }
                 }
             }
         }
     }
+}
+
+/** The days and requests still within [CensusSentBatch.KEEP_MILLIS] of [now]. */
+private fun List<CensusSentDay>.keptAt(now: Long): List<CensusSentDay> = mapNotNull { day ->
+    day.batches.filter { it.sentAtMillis >= now - CensusSentBatch.KEEP_MILLIS }
+        .takeIf { it.isNotEmpty() }?.let { day.copy(batches = it) }
 }
 
 /** The stored target of the next daily run and the time left to it, ticking; "due" once it has passed. */

@@ -50,8 +50,7 @@ class CensusSentLog internal constructor(
         val batch = CensusSentBatch.read(path, body, now()) ?: return
         withContext(io) {
             mutex.withLock {
-                val kept = load().filterNot { it.batchId != null && it.path == batch.path && it.batchId == batch.batchId }
-                write(listOf(batch) + kept)
+                write(listOf(batch) + load())
             }
         }
     }
@@ -64,12 +63,19 @@ class CensusSentLog internal constructor(
         }
     }
 
+    /**
+     * The kept records, pruned to [MAX_AGE_MILLIS]: an expired record is dropped from the file and from [batches] on
+     * every read (each collection of [batches] reads first), not only on the next write. A failed rewrite keeps the
+     * pruned view; the next read or write tries again.
+     */
     private fun load(): List<CensusSentBatch> {
-        state.value?.let { return pruned(it) }
-        val loaded = runCatching {
+        val loaded = state.value ?: runCatching {
             if (file.isFile) JSON.decodeFromString(SERIALIZER, file.readText(Charsets.UTF_8)) else emptyList()
         }.getOrElse { emptyList() }
-        return pruned(loaded).also { state.value = it }
+        val kept = pruned(loaded)
+        if (kept.size != loaded.size) runCatching { write(kept) }
+        state.value = kept
+        return kept
     }
 
     private fun pruned(batches: List<CensusSentBatch>): List<CensusSentBatch> {
@@ -95,7 +101,7 @@ class CensusSentLog internal constructor(
     }
 
     companion object {
-        const val MAX_AGE_MILLIS: Long = 7L * 24 * 60 * 60 * 1000
+        const val MAX_AGE_MILLIS: Long = CensusSentBatch.KEEP_MILLIS
         const val MAX_BATCHES: Int = 60
         private val JSON = Json { ignoreUnknownKeys = true }
         private val SERIALIZER = ListSerializer(CensusSentBatch.serializer())

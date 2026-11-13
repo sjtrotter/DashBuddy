@@ -36,20 +36,22 @@ data class CensusSentItem(
 
 /**
  * #1622: one census request the server read (it answered 200, 400 or 422), summarized from the exact bytes the
- * transport put on the wire. [batchId] is the request's own batch id (skeletons and envelopes), so a batch sent again
- * after a lost reply is one entry. Kept on the phone only; never uploaded.
+ * transport put on the wire: counts only. The request's batch id (a hash of the items) is not kept. Kept on the phone
+ * only; never uploaded.
  */
 @Serializable
 data class CensusSentBatch(
     val sentAtMillis: Long,
     val path: String,
-    val batchId: String? = null,
     val items: List<CensusSentItem>,
 ) {
     companion object {
         const val SKELETONS = "/v1/skeletons"
         const val HEALTH = "/v1/health"
         const val ENVELOPES = "/v1/envelopes"
+
+        /** How long the phone keeps a sent record, and how far back "What gig.log sent" shows. */
+        const val KEEP_MILLIS: Long = 7L * 24 * 60 * 60 * 1000
 
         private val json = Json { ignoreUnknownKeys = true }
 
@@ -60,14 +62,13 @@ data class CensusSentBatch(
         fun read(path: String, body: ByteArray, sentAtMillis: Long): CensusSentBatch? {
             val root = runCatching { json.parseToJsonElement(body.toString(Charsets.UTF_8)) as? JsonObject }.getOrNull()
                 ?: return null
-            val batchId = (root["batchId"] as? JsonPrimitive)?.takeIf { it.isString }?.content
             val items = when (path) {
                 SKELETONS -> root.objects("items").map(::skeleton)
                 HEALTH -> root.objects("reports").map { CensusSentItem(CensusSentKind.DAILY_COUNTS, it.string("platform"), it.stringOrNull("day")) }
                 ENVELOPES -> root.objects("items").map { CensusSentItem(CensusSentKind.SCREEN_TEXT, it.string("platform")) }
                 else -> return null
             }
-            return CensusSentBatch(sentAtMillis, path, batchId.takeIf { path != HEALTH }, items)
+            return CensusSentBatch(sentAtMillis, path, items)
         }
 
         private fun skeleton(item: JsonObject): CensusSentItem {

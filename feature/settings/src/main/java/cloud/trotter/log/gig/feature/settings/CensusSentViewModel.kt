@@ -28,10 +28,7 @@ data class CensusSentUiState(
     val days: List<CensusSentDay>,
     val censusOn: Boolean,
     val nextUploadAtMillis: Long?,
-) {
-    /** The newest request the server read, or null when none is kept. */
-    val lastUploadAtMillis: Long? get() = days.firstOrNull()?.batches?.firstOrNull()?.sentAtMillis
-}
+)
 
 /** Groups [batches] by the local day they were sent, newest day and newest request first. */
 fun groupSentByDay(batches: List<CensusSentBatch>, zone: ZoneId): List<CensusSentDay> =

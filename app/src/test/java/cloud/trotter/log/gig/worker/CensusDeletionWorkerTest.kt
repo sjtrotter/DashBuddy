@@ -14,6 +14,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
@@ -46,7 +47,8 @@ class CensusDeletionWorkerTest {
         assertEquals(listOf(h.credential.installId), h.api.deletedIds)
         assertTrue("no unsent daily count survives", h.healthSink.snapshot().rows.isEmpty())
         assertEquals("a waiting manual run is cancelled", 1, h.scheduler.cancelled)
-        assertEquals("nothing is left to retry", 0, h.scheduler.deletions)
+        assertEquals("its retry run was queued before the first attempt", 1, h.scheduler.deletions)
+        assertTrue(result.resolved)
         assertEquals("stopping is the switch; deleting leaves consent alone", CensusConsent.ON, h.preferences.censusConsent.first())
     }
 
@@ -76,6 +78,7 @@ class CensusDeletionWorkerTest {
 
         assertEquals(State.PENDING, h.deletion.delete().state)
         assertEquals("its own retry run is queued", 1, h.scheduler.deletions)
+        assertEquals(CensusDeletion.Waiting.UNREACHABLE, h.preferences.censusDeletion.first()?.waiting)
         assertTrue(h.queued.isEmpty())
 
         // Queued after the request, while it is pending.
@@ -122,7 +125,7 @@ class CensusDeletionWorkerTest {
         assertEquals(listOf("delete"), h.api.stages)
     }
 
-    @Test fun `not enrolled - the server holds nothing, and no request is made`() = runTest {
+    @Test fun `not enrolled - the phone uploaded nothing, and no request is made`() = runTest {
         val h = harness()
         h.initialize()
         whenever(h.credentials.current()).thenReturn(null)
@@ -132,20 +135,80 @@ class CensusDeletionWorkerTest {
         assertTrue("the queue is cleared all the same", h.queued.isEmpty())
     }
 
-    @Test fun `a 401 means the server no longer knows this ID - nothing held, and the next run enrols a fresh one`() = runTest {
+    @Test fun `a 401 never counts as deleted or nothing held - the ID is kept and the request retried`() = runTest {
         val h = harness()
         h.initialize()
-        h.api.deletions += DeleteResult.Unauthorized(System.currentTimeMillis())
-        assertEquals(State.NOTHING_HELD, h.deletion.delete().state)
-        verify(h.credentials).wipe()
-        assertEquals(CensusConsent.ON, h.preferences.censusConsent.first())
+        for (date in listOf(System.currentTimeMillis(), null, System.currentTimeMillis() + 600_000)) {
+            h.api.deletions += DeleteResult.Unauthorized(date)
+            val result = h.deletion.delete()
+            assertEquals(State.PENDING, result.state)
+            assertEquals(CensusDeletion.Waiting.UNCONFIRMED, result.waiting)
+            assertEquals(h.credential.installId, result.installId)
+        }
+        verify(h.credentials, never()).wipe()
+        assertEquals("a pending request blocks uploads", ListenableWorker.Result.success(), run {
+            h.queueBatch(1)
+            h.api.deletions += DeleteResult.Unauthorized(System.currentTimeMillis())
+            h.worker().doWork()
+        })
+        assertTrue(h.api.bodies.isEmpty())
+
+        h.api.deletions += deleted
+        assertEquals(ListenableWorker.Result.success(), h.worker(listOf(CensusWorkScheduler.DELETION_TAG)).doWork())
+        assertEquals(State.DELETED, h.preferences.censusDeletion.first()?.state)
     }
 
-    @Test fun `a 401 from a skewed clock keeps the request pending`() = runTest {
+    @Test fun `a server without the endpoint yet keeps the request waiting, with the reason the screen shows`() = runTest {
         val h = harness()
         h.initialize()
-        h.api.deletions += DeleteResult.Unauthorized(System.currentTimeMillis() + 600_000)
-        assertEquals(State.PENDING, h.deletion.delete().state)
+        h.api.deletions += DeleteResult.NotAvailable(404)
+        val result = h.deletion.delete()
+        assertEquals(State.PENDING, result.state)
+        assertEquals(CensusDeletion.Waiting.NOT_YET, result.waiting)
+        verify(h.credentials, never()).wipe()
+    }
+
+    @Test fun `a pending request is only ever sent with the ID it was made for`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.api.deletions += DeleteResult.TransportFailure("IOException")
+        assertEquals(h.credential.installId, h.deletion.delete().installId)
+
+        val other = h.credential.copy(installId = "87654321-1234-4123-8123-123456789abc")
+        whenever(h.credentials.current()).thenReturn(other)
+        assertEquals(ListenableWorker.Result.success(), h.worker(listOf(CensusWorkScheduler.DELETION_TAG)).doWork())
+        assertEquals("never sent under another ID", listOf(h.credential.installId), h.api.deletedIds)
+        assertEquals(State.NOT_POSSIBLE, h.preferences.censusDeletion.first()?.state)
+    }
+
+    @Test fun `a failed clear keeps uploads blocked after the server's confirmation until a retry clears the queue`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.queue()
+        whenever(h.spool.clear()).thenAnswer { throw java.io.IOException("disk") }
+            .thenAnswer { h.queued.clear(); h.pending = null; Unit }
+        h.api.deletions += deleted
+        val result = h.deletion.delete()
+        assertEquals(State.DELETED, result.state)
+        assertFalse("not resolved: the queue is still there", result.resolved)
+
+        // The next run clears it first, sends no second deletion and uploads nothing queued before the request.
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertTrue(h.queued.isEmpty())
+        assertTrue(h.api.bodies.isEmpty())
+        assertEquals(listOf("delete"), h.api.stages)
+        assertTrue(h.preferences.censusDeletion.first()!!.resolved)
+    }
+
+    @Test fun `app start queues the retry run again for an unresolved request, and not for a resolved one`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.preferences.setCensusDeletion(CensusDeletion(1L, State.PENDING))
+        h.deletion.reconcile().join()
+        assertEquals(1, h.scheduler.deletions)
+        h.preferences.setCensusDeletion(CensusDeletion(1L, State.DELETED, localCleared = true))
+        h.deletion.reconcile().join()
+        assertEquals(1, h.scheduler.deletions)
     }
 
     @Test fun `a revoked ID cannot delete - the census goes off and the screen says so`() = runTest {

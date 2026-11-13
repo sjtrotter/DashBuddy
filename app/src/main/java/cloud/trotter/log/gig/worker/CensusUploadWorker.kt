@@ -94,6 +94,11 @@ class CensusUploadWorker @AssistedInject constructor(
         var healthFailed = 0
         /** #1622: the server answered 401 for this enrolled ID with the clock right; [run] enrols a fresh one. */
         var identityUnknown = false
+        /**
+         * #1622: the server authenticated this run's credential at some stage (an answer it gives only after checking
+         * the signature): a later 401 in any stage is then not an unknown identity.
+         */
+        var authorized = false
         fun set(outcome: CensusRunOutcome, detail: Int? = null, reason: CensusEnrolRejectReason? = null) {
             this.outcome = outcome; this.detail = detail; this.reason = reason
         }
@@ -191,6 +196,7 @@ class CensusUploadWorker @AssistedInject constructor(
      */
     private suspend fun reenrol(api: CensusTransport, record: RunRecord): Result {
         record.identityUnknown = false
+        record.authorized = false
         Timber.tag(TAG).w("census unauthorized: identity unknown to server, enrolling a new one")
         return when (val enrolled = enrol(api, freshIdentity(), record)) {
             is Enrollment.Ready -> send(api, enrolled.credential, record)
@@ -340,7 +346,11 @@ class CensusUploadWorker @AssistedInject constructor(
                 Timber.tag(TAG).w("census health oversized day=%s", key.day)
                 continue
             }
-            val reasons = when (val result = api.postHealth(credential.bearer(), listOf(json))) {
+            val result = api.postHealth(credential.bearer(), listOf(json))
+            if (result is HealthResult.Accepted || result is HealthResult.BatchQuality || result is HealthResult.BudgetExhausted) {
+                record.authorized = true
+            }
+            val reasons = when (result) {
                 is HealthResult.Accepted -> {
                     if (result.accepted != 1) result.rejected else {
                         healthSink.apply { if (it.generation == ledger.generation) it.markPosted(key, row.revision) else it }
@@ -368,7 +378,7 @@ class CensusUploadWorker @AssistedInject constructor(
                     stats.healthFailed.incrementAndGet()
                     record.healthFailed++
                     // #1622: an enrolled ID the server does not know, with the clock right, re-enrols (run).
-                    if (credential.enrolled && !clockSkew(result.serverDateMillis)) {
+                    if (credential.enrolled && !record.authorized && !clockSkew(result.serverDateMillis)) {
                         record.identityUnknown = true
                         return Result.success()
                     }
@@ -476,8 +486,6 @@ class CensusUploadWorker @AssistedInject constructor(
     private class UploadRun {
         var resigned = false
         var clockSkew = false
-        /** The server took a request from this credential this run: a later 401 is not an unknown identity. */
-        var authorized = false
     }
 
     /** Null means this batch is resolved and the run can continue, including remaining split halves. */
@@ -510,7 +518,7 @@ class CensusUploadWorker @AssistedInject constructor(
                 return Result.success()
             }
         }
-        when (val result = uploadWithResign(api, credential, items, batchId, run, envelopes)) {
+        when (val result = uploadWithResign(api, credential, items, batchId, run, envelopes, record)) {
             is UploadResult.Accepted -> {
                 removeBatch(ids, spool)
                 if (envelopes) {
@@ -592,7 +600,7 @@ class CensusUploadWorker @AssistedInject constructor(
                 if (credential.enrolled && run.resigned && !run.clockSkew) {
                     stats.unauthorized.incrementAndGet()
                     // #1622: run() enrols a fresh ID and sends again; this batch stays queued for it.
-                    if (!run.authorized) record.identityUnknown = true
+                    if (!record.authorized) record.identityUnknown = true
                 }
                 return Result.success()
             }
@@ -622,12 +630,13 @@ class CensusUploadWorker @AssistedInject constructor(
         batchId: String,
         run: UploadRun,
         envelopes: Boolean,
+        record: RunRecord,
     ): UploadResult {
         val json = items.map { it.itemJson }
         suspend fun post(): UploadResult = if (envelopes) api.uploadEnvelopes(credential.bearer(), batchId, json)
             else api.uploadSkeletons(credential.bearer(), batchId, json)
         var result = post()
-        if (result !is UploadResult.Unauthorized) run.authorized = true
+        if (result.provesAuthentication()) record.authorized = true
         if (result is UploadResult.Unauthorized) {
             stats.uploadFailures.incrementAndGet()
             run.clockSkew = clockSkew(result.serverDateMillis)
@@ -638,10 +647,14 @@ class CensusUploadWorker @AssistedInject constructor(
             if (result is UploadResult.Unauthorized) {
                 stats.uploadFailures.incrementAndGet()
                 run.clockSkew = clockSkew(result.serverDateMillis)
-            } else run.authorized = true
+            } else if (result.provesAuthentication()) record.authorized = true
         }
         return result
     }
+
+    /** Answers the server gives only after it verified the signature (census API.md: auth runs before ingest). */
+    private fun UploadResult.provesAuthentication(): Boolean = this is UploadResult.Accepted || this == UploadResult.Duplicate ||
+        this is UploadResult.BatchQuality || this is UploadResult.BudgetExhausted || this == UploadResult.NotTrusted
 
     private fun clockSkew(serverDateMillis: Long?): Boolean {
         val date = serverDateMillis ?: return false

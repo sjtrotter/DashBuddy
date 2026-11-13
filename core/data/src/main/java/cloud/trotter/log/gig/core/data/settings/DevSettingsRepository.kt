@@ -84,12 +84,14 @@ class DevSettingsRepository @Inject constructor(
     /** #1622: the last census deletion request; an unreadable state decodes as pending (fail closed). */
     val censusDeletion: Flow<CensusDeletion?> = dataSource.censusDeletion.map { raw ->
         raw?.let {
-            CensusDeletion(it.requestedAtMillis, CensusDeletion.State.fromWire(it.stateWire), it.rows, it.deletedDay, it.localCleared)
+            CensusDeletion(it.requestedAtMillis, CensusDeletion.State.fromWire(it.stateWire), it.rows, it.deletedDay,
+                it.localCleared, it.installId, CensusDeletion.Waiting.fromWire(it.waitingWire))
         }
     }
     suspend fun setCensusDeletion(value: CensusDeletion) = dataSource.setCensusDeletion(
         DevSettingsDataSource.RawCensusDeletion(
             value.requestedAtMillis, value.state.wire, value.rows, value.deletedDay, value.localCleared,
+            value.installId, value.waiting?.wire,
         ),
     )
     val censusLastRun: Flow<CensusLastRun?> = dataSource.censusLastRun.map { raw ->

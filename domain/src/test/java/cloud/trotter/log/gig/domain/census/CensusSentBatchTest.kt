@@ -13,7 +13,6 @@ class CensusSentBatchTest {
             """"platform":"uber","day":"2026-11-13","windowTitle":{"kind":"withheld"},"root":{"text":{""" +
             """"text":{"h":"0123456789abcdef","kind":"words:2"},"desc":{"kind":"digits"}},"children":[""" +
             """{"text":{"text":{"kind":"shape","shape":"$#.##"}}},{"children":[{"text":{"text":{"kind":"words:8+"}}}]}]}}]}""")!!
-        assertEquals("b", batch.batchId)
         assertEquals(7L, batch.sentAtMillis)
         assertEquals(
             CensusSentItem(CensusSentKind.SCREEN, "uber", "2026-11-13", nodes = 4, codes = 1, formats = 1, typeOnly = 2, withheld = 1),
@@ -34,9 +33,8 @@ class CensusSentBatchTest {
         )
     }
 
-    @Test fun `daily counts and screen text keep the app and no batch id for health`() {
+    @Test fun `daily counts and screen text keep the app`() {
         val health = read(CensusSentBatch.HEALTH, """{"reports":[{"day":"2026-11-12","platform":"doordash","admitted":3}]}""")!!
-        assertNull(health.batchId)
         assertEquals(listOf(CensusSentItem(CensusSentKind.DAILY_COUNTS, "doordash", "2026-11-12")), health.items)
         val text = read(CensusSentBatch.ENVELOPES, """{"batchId":"env-1","items":[{"platform":"doordash","payload":{}}]}""")!!
         assertEquals(listOf(CensusSentItem(CensusSentKind.SCREEN_TEXT, "doordash")), text.items)

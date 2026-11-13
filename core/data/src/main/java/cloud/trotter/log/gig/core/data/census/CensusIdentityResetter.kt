@@ -26,6 +26,9 @@ import javax.inject.Singleton
  * Consent is left as it is; capture sharing is switched off — the new install must be trusted again.
  * A server-imposed deferral deadline is left as it is. [resetAsync] runs on the application scope so leaving the
  * screen cannot cancel it half-done.
+ *
+ * #1622: an unresolved "Delete my census data" request is bound to this identity, so the reset sends it first and is
+ * refused (recorded as `failure`, the identity kept) while it stays unresolved.
  */
 @Singleton
 class CensusIdentityResetter internal constructor(
@@ -38,6 +41,7 @@ class CensusIdentityResetter internal constructor(
     private val healthSink: PersistentHealthSink,
     private val now: () -> Long,
     private val envelopeSink: CensusEnvelopeSink,
+    private val deletion: CensusDataDeletion,
 ) {
     @Inject constructor(
         credentials: CensusCredentialStore,
@@ -48,7 +52,8 @@ class CensusIdentityResetter internal constructor(
         @ApplicationScope scope: CoroutineScope,
         healthSink: PersistentHealthSink,
         envelopeSink: CensusEnvelopeSink,
-    ) : this(credentials, spool, preferences, scheduler, lock, scope, healthSink, System::currentTimeMillis, envelopeSink)
+        deletion: CensusDataDeletion,
+    ) : this(credentials, spool, preferences, scheduler, lock, scope, healthSink, System::currentTimeMillis, envelopeSink, deletion)
 
     /** The UI entry point: never cancelled by the caller's lifecycle. */
     fun resetAsync(): Job = scope.launch { reset() }
@@ -62,6 +67,11 @@ class CensusIdentityResetter internal constructor(
         val done = lock.mutex.withLock {
             withContext(NonCancellable) {
                 try {
+                    if (!deletion.resumePending()) {
+                        Timber.tag(TAG).w("census identity reset refused: deletion pending")
+                        runCatching { preferences.setCensusLastRun(CensusLastRun(now(), CensusRunOutcome.FAILURE)) }
+                        return@withContext false
+                    }
                     spool.clear()
                     envelopeSink.invalidate()
                     preferences.setCensusShareCaptures(false)

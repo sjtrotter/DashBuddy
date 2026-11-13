@@ -58,11 +58,15 @@ class CensusIdentityResetterTest {
     private val preferences = spy(DevSettingsRepository(DevSettingsDataSource(MemoryPreferences()), true, Dispatchers.Unconfined, "test"))
     private val scheduler = Scheduler()
     private val lock = CensusUploadLock()
+    private val deletion: CensusDataDeletion = mock()
+    private var deletionClear = true
 
     private suspend fun TestScope.resetter(scope: CoroutineScope = backgroundScope): CensusIdentityResetter {
         whenever(healthStore.load()).thenReturn(HealthLedger())
         val sink = PersistentHealthSink(healthStore, CensusUploadStats(), scope, StandardTestDispatcher(testScheduler))
-        return CensusIdentityResetter(credentials, spool, preferences, scheduler, lock, scope, sink, now = { 123L }, envelopeSink = envelopeSink)
+        whenever(deletion.resumePending()).thenReturn(deletionClear)
+        return CensusIdentityResetter(credentials, spool, preferences, scheduler, lock, scope, sink, now = { 123L },
+            envelopeSink = envelopeSink, deletion = deletion)
     }
 
     @Test fun `reset clears spool and health before wiping credentials keeps the deadline records RESET and replaces queued work when enabled`() = runTest {
@@ -88,6 +92,18 @@ class CensusIdentityResetterTest {
         assertEquals(CensusLastRun(123L, CensusRunOutcome.RESET), preferences.censusLastRun.first())
         assertEquals(listOf(true), scheduler.enqueued)
         assertTrue(preferences.censusUploadEnabled.first())
+    }
+
+    @Test fun `an unresolved deletion request is sent first and, while it stays unresolved, the reset is refused`() = runTest {
+        // #1622: the request is bound to this identity; wiping it would send the request under another ID.
+        preferences.setCensusUploadEnabled(true)
+        deletionClear = false
+        assertFalse(resetter().reset())
+        verify(deletion).resumePending()
+        verify(spool, never()).clear()
+        verify(credentials, never()).wipe()
+        assertEquals(CensusRunOutcome.FAILURE, preferences.censusLastRun.first()?.outcome)
+        assertTrue(scheduler.enqueued.isEmpty())
     }
 
     @Test fun `reset does not enqueue when consent is off`() = runTest {

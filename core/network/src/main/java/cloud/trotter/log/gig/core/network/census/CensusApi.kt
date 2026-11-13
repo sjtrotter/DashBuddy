@@ -64,6 +64,8 @@ sealed interface DeleteResult {
     data class Unauthorized(val serverDateMillis: Long?) : DeleteResult
     data object Revoked : DeleteResult
     data class RateLimited(val retryAfter: Long) : DeleteResult
+    /** 404 or 405: the server does not serve the endpoint yet (census#79 not deployed). */
+    data class NotAvailable(val status: Int) : DeleteResult
     data class ServerUnavailable(val status: Int) : DeleteResult
     data class TransportFailure(val failureClass: String) : DeleteResult
 }
@@ -269,6 +271,7 @@ class CensusApi(
             }
             401 -> if (response.isRevoked()) DeleteResult.Revoked else DeleteResult.Unauthorized(response.dateMillis)
             429 -> DeleteResult.RateLimited(response.retryAfter)
+            404, 405 -> DeleteResult.NotAvailable(response.status)
             else -> DeleteResult.ServerUnavailable(response.status)
         }
     } catch (e: CancellationException) {
