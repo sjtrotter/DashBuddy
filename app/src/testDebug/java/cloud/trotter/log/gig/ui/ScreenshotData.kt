@@ -40,6 +40,11 @@ import cloud.trotter.log.gig.ui.main.dashboard.DashboardUiState
 import cloud.trotter.log.gig.ui.main.playbook.PlaybookUiState
 import cloud.trotter.log.gig.R
 import java.time.Clock
+import cloud.trotter.log.gig.domain.census.CensusSentBatch
+import cloud.trotter.log.gig.domain.census.CensusSentItem
+import cloud.trotter.log.gig.domain.census.CensusSentKind
+import cloud.trotter.log.gig.feature.settings.CensusSentUiState
+import cloud.trotter.log.gig.feature.settings.groupSentByDay
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -402,4 +407,23 @@ internal object ScreenshotData {
     private val car = Vehicle("car", "Sample car", 1L, GasCar(year = "2020", make = "Honda", model = "Civic"))
     val garage = Garage(listOf(car), car.id, readable = true)
     val userEconomy = UserEconomy()
+
+    /** #1622: today's upload, two outlines, a notification and a day's counts; the next upload this evening. */
+    fun censusSent(): CensusSentUiState {
+        val sentAt = at("2026-10-28T09:14:00Z")
+        val dd = Platform.DoorDash.wire
+        val outlines = CensusSentBatch(sentAt, CensusSentBatch.SKELETONS, "sample", listOf(
+            CensusSentItem(CensusSentKind.SCREEN, dd, "2026-10-28", nodes = 41, codes = 18, formats = 3, typeOnly = 2, withheld = 1),
+            CensusSentItem(CensusSentKind.SCREEN, Platform.Uber.wire, "2026-10-28", nodes = 27, codes = 9, formats = 1),
+            CensusSentItem(CensusSentKind.NOTIFICATION, dd, "2026-10-28", codes = 2, typeOnly = 1, withheld = 1),
+        ))
+        val counts = CensusSentBatch(sentAt - 4_000, CensusSentBatch.HEALTH, null, listOf(
+            CensusSentItem(CensusSentKind.DAILY_COUNTS, dd, "2026-10-27"),
+        ))
+        return CensusSentUiState(
+            days = groupSentByDay(listOf(outlines, counts), ZoneOffset.UTC),
+            censusOn = true,
+            nextUploadAtMillis = at("2026-10-28T21:40:00Z"),
+        )
+    }
 }

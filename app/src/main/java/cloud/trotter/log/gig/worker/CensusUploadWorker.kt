@@ -7,6 +7,7 @@ import androidx.work.WorkerParameters
 import cloud.trotter.log.gig.BuildConfig
 import cloud.trotter.log.gig.core.data.census.CensusCredentialStore
 import cloud.trotter.log.gig.core.data.census.CensusCredentialStore.Credential
+import cloud.trotter.log.gig.core.data.census.CensusDataDeletion
 import cloud.trotter.log.gig.core.data.census.CensusEnrolSchemas
 import cloud.trotter.log.gig.core.data.di.CensusEnvelopeSpool
 import cloud.trotter.log.gig.core.data.census.CensusSpool
@@ -42,7 +43,6 @@ import timber.log.Timber
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.abs
 
 @HiltWorker
@@ -61,6 +61,7 @@ class CensusUploadWorker @AssistedInject constructor(
     private val metadataProvider: ReplayMetadataProvider,
     @param:CensusEnvelopeSpool private val envelopeSpool: CensusSpool,
     private val envelopeSink: CensusEnvelopeSink,
+    private val deletion: CensusDataDeletion,
 ) : CoroutineWorker(appContext, workerParams) {
     private enum class DeferCause(val token: String) {
         BUDGET("budget"),
@@ -91,6 +92,8 @@ class CensusUploadWorker @AssistedInject constructor(
         var healthPosted = 0
         var healthRejected = 0
         var healthFailed = 0
+        /** #1622: the server answered 401 for this enrolled ID with the clock right; [run] enrols a fresh one. */
+        var identityUnknown = false
         fun set(outcome: CensusRunOutcome, detail: Int? = null, reason: CensusEnrolRejectReason? = null) {
             this.outcome = outcome; this.detail = detail; this.reason = reason
         }
@@ -99,11 +102,30 @@ class CensusUploadWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
         // #1620: the daily run draws the next day's time first, whatever this run then does; a manual run never does.
         // A daily run that starts more than an hour after its target, before it, or with none, sends nothing.
-        if (CensusWorkScheduler.DAILY_TAG in tags && !planner.beginDailyRun()) {
-            Timber.tag(TAG).i("census skipped cause=off_schedule")
-            return Result.success()
+        val onSchedule = CensusWorkScheduler.DAILY_TAG !in tags || planner.beginDailyRun()
+        return uploadLock.mutex.withLock {
+            // #1622: a pending deletion request goes first in every run, whatever the consent; until it resolves,
+            // nothing else is sent. Fail closed: a request whose state cannot be read sends nothing else either.
+            val clear = try {
+                deletion.resumePending()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                false
+            }
+            when {
+                !clear -> {
+                    Timber.tag(TAG).i("census skipped cause=deletion_pending")
+                    if (CensusWorkScheduler.DELETION_TAG in tags) Result.retry() else Result.success()
+                }
+                CensusWorkScheduler.DELETION_TAG in tags -> Result.success()
+                !onSchedule -> {
+                    Timber.tag(TAG).i("census skipped cause=off_schedule")
+                    Result.success()
+                }
+                else -> run()
+            }
         }
-        return uploadLock.mutex.withLock { run() }
     }
 
     private suspend fun run(): Result {
@@ -122,13 +144,8 @@ class CensusUploadWorker @AssistedInject constructor(
                 } else enrol(api, credential, record)
                 when (enrolled) {
                     is Enrollment.Ready -> {
-                        val stopped = postHealth(api, enrolled.credential, record)
-                        if (stopped != null) stopped else {
-                            val result = uploadBatches(api, enrolled.credential, record)
-                            if (record.skeletonSpoolEmpty && preferences.censusShareCaptures.first()) {
-                                uploadEnvelopes(api, enrolled.credential, record)
-                            } else result
-                        }
+                        val result = send(api, enrolled.credential, record)
+                        if (record.identityUnknown) reenrol(api, record) else result
                     }
                     is Enrollment.Stop -> enrolled.result
                 }
@@ -155,6 +172,38 @@ class CensusUploadWorker @AssistedInject constructor(
             }
         }
         return result
+    }
+
+    /** Health first, then the outlines, then (test build, trusted) the envelopes. */
+    private suspend fun send(api: CensusTransport, credential: Credential, record: RunRecord): Result {
+        val stopped = postHealth(api, credential, record)
+        if (stopped != null) return stopped
+        val result = uploadBatches(api, credential, record)
+        return if (record.skeletonSpoolEmpty && preferences.censusShareCaptures.first()) {
+            uploadEnvelopes(api, credential, record)
+        } else result
+    }
+
+    /**
+     * #1622: the server no longer knows this enrolled ID (after a restore from a backup older than a deletion, it erases
+     * the install whole, census#88). The phone enrols a fresh ID, consent kept, and sends once more under it; the
+     * queued outlines stay, the old ID's unsent daily counts and capture sharing do not (as any new identity).
+     */
+    private suspend fun reenrol(api: CensusTransport, record: RunRecord): Result {
+        record.identityUnknown = false
+        Timber.tag(TAG).w("census unauthorized: identity unknown to server, enrolling a new one")
+        return when (val enrolled = enrol(api, freshIdentity(), record)) {
+            is Enrollment.Ready -> send(api, enrolled.credential, record)
+            is Enrollment.Stop -> enrolled.result
+        }
+    }
+
+    /** A new identity drops what belonged to the old one: the envelopes, capture sharing and the health ledger. */
+    private suspend fun freshIdentity(): Credential {
+        envelopeSink.invalidate()
+        preferences.setCensusShareCaptures(false)
+        healthSink.reset()
+        return credentials.mint()
     }
 
     /**
@@ -203,10 +252,7 @@ class CensusUploadWorker @AssistedInject constructor(
         credentials.current() ?: credentials.pending() ?: credentials.mint()
     } catch (_: CensusCredentialStore.Unusable) {
         Timber.tag(TAG).i("census unusable credentials=1")
-        envelopeSink.invalidate()
-        preferences.setCensusShareCaptures(false)
-        healthSink.reset()
-        credentials.mint()
+        freshIdentity()
     }
 
     private sealed interface Enrollment {
@@ -256,10 +302,7 @@ class CensusUploadWorker @AssistedInject constructor(
                 EnrolResult.InstallExists -> {
                     // Only a locally pending identity can reach here; never replace an enrolled one.
                     if (attempt == 0) {
-                        envelopeSink.invalidate()
-                        preferences.setCensusShareCaptures(false)
-                        healthSink.reset()
-                        credential = credentials.mint()
+                        credential = freshIdentity()
                     } else {
                         val stopped = failure(record)
                         record.set(CensusRunOutcome.ENROL_CONFLICT)
@@ -321,8 +364,17 @@ class CensusUploadWorker @AssistedInject constructor(
                     logDeferral(DeferCause.HEALTH_BUDGET, seconds)
                     return Result.success()
                 }
-                is HealthResult.Unauthorized, is HealthResult.ServerUnavailable,
-                is HealthResult.TransportFailure -> {
+                is HealthResult.Unauthorized -> {
+                    stats.healthFailed.incrementAndGet()
+                    record.healthFailed++
+                    // #1622: an enrolled ID the server does not know, with the clock right, re-enrols (run).
+                    if (credential.enrolled && !clockSkew(result.serverDateMillis)) {
+                        record.identityUnknown = true
+                        return Result.success()
+                    }
+                    return null
+                }
+                is HealthResult.ServerUnavailable, is HealthResult.TransportFailure -> {
                     stats.healthFailed.incrementAndGet()
                     record.healthFailed++
                     return null
@@ -424,6 +476,8 @@ class CensusUploadWorker @AssistedInject constructor(
     private class UploadRun {
         var resigned = false
         var clockSkew = false
+        /** The server took a request from this credential this run: a later 401 is not an unknown identity. */
+        var authorized = false
     }
 
     /** Null means this batch is resolved and the run can continue, including remaining split halves. */
@@ -537,9 +591,8 @@ class CensusUploadWorker @AssistedInject constructor(
                 })
                 if (credential.enrolled && run.resigned && !run.clockSkew) {
                     stats.unauthorized.incrementAndGet()
-                    if (unauthorizedWarnedFor.getAndSet(credential.installId) != credential.installId) {
-                        Timber.tag(TAG).w("census unauthorized: identity unknown to server")
-                    }
+                    // #1622: run() enrols a fresh ID and sends again; this batch stays queued for it.
+                    if (!run.authorized) record.identityUnknown = true
                 }
                 return Result.success()
             }
@@ -574,23 +627,24 @@ class CensusUploadWorker @AssistedInject constructor(
         suspend fun post(): UploadResult = if (envelopes) api.uploadEnvelopes(credential.bearer(), batchId, json)
             else api.uploadSkeletons(credential.bearer(), batchId, json)
         var result = post()
+        if (result !is UploadResult.Unauthorized) run.authorized = true
         if (result is UploadResult.Unauthorized) {
             stats.uploadFailures.incrementAndGet()
-            run.clockSkew = clockSkew(result)
+            run.clockSkew = clockSkew(result.serverDateMillis)
             if (run.clockSkew || run.resigned) return result
             if (!preferences.censusUploadEnabled.first() || (envelopes && !preferences.censusShareCaptures.first())) return result
             run.resigned = true
             result = post()
             if (result is UploadResult.Unauthorized) {
                 stats.uploadFailures.incrementAndGet()
-                run.clockSkew = clockSkew(result)
-            }
+                run.clockSkew = clockSkew(result.serverDateMillis)
+            } else run.authorized = true
         }
         return result
     }
 
-    private fun clockSkew(result: UploadResult.Unauthorized): Boolean {
-        val date = result.serverDateMillis ?: return false
+    private fun clockSkew(serverDateMillis: Long?): Boolean {
+        val date = serverDateMillis ?: return false
         if (abs(date / 1000 - System.currentTimeMillis() / 1000) <= 300) return false
         Timber.tag(TAG).w("census clock skew")
         return true
@@ -644,6 +698,5 @@ class CensusUploadWorker @AssistedInject constructor(
         private const val TAG = "Census"
         private const val MAX_SPLIT_DEPTH = 7
         internal val enrolRejectedWarned = AtomicBoolean()
-        internal val unauthorizedWarnedFor = AtomicReference<String?>()
     }
 }

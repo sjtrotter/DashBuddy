@@ -49,9 +49,10 @@ import cloud.trotter.log.gig.domain.state.Platform
 /**
  * #1621: the census opt-in, Settings > Data & privacy > Census, in every build. The switch turns on only through
  * [CensusDisclosure]'s Accept; turning it off, or Not now, records a decline. The choices save as they change.
+ * #1622: "What gig.log sent" ([onOpenSent]) and "Delete my census data" sit below the choices.
  */
 @Composable
-fun CensusScreen(onBack: () -> Unit, viewModel: CensusViewModel = hiltViewModel()) {
+fun CensusScreen(onBack: () -> Unit, onOpenSent: () -> Unit, viewModel: CensusViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     CensusContent(
         state = state,
@@ -60,6 +61,8 @@ fun CensusScreen(onBack: () -> Unit, viewModel: CensusViewModel = hiltViewModel(
         onDecline = viewModel::decline,
         onWifiOnly = viewModel::setWifiOnly,
         onPlatform = viewModel::setPlatform,
+        onOpenSent = onOpenSent,
+        onDelete = viewModel::deleteServerData,
     )
 }
 
@@ -73,6 +76,8 @@ fun CensusContent(
     onDecline: () -> Unit,
     onWifiOnly: (Boolean) -> Unit,
     onPlatform: (Platform, Boolean) -> Unit,
+    onOpenSent: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     var showDisclosure by rememberSaveable { mutableStateOf(false) }
     if (showDisclosure && state != null) {
@@ -146,6 +151,12 @@ fun CensusContent(
             TextButton(onClick = { showDisclosure = true }, modifier = Modifier.padding(horizontal = 8.dp)) {
                 Text(stringResource(R.string.census_read_disclosure))
             }
+            CensusDataSection(
+                deletion = state.deletion,
+                deleting = state.deleting,
+                onOpenSent = onOpenSent,
+                onDelete = onDelete,
+            )
             Spacer(Modifier.height(32.dp))
         }
     }

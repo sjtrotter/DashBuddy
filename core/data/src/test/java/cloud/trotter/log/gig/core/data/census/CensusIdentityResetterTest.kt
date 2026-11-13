@@ -48,6 +48,7 @@ class CensusIdentityResetterTest {
         override fun enqueueNow(wifiOnly: Boolean, replaceQueued: Boolean) { enqueued += replaceQueued }
         override fun scheduleDaily(runAtMillis: Long, wifiOnly: Boolean) = Unit
         override fun cancelManual() = Unit
+        override fun enqueueDeletion() = Unit
     }
 
     private val credentials: CensusCredentialStore = mock()

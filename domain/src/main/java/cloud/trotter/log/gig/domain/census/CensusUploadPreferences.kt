@@ -31,4 +31,10 @@ interface CensusUploadScheduler {
 
     /** Cancels a waiting manual run (the Wi-Fi only choice changed, so its network constraint is stale). */
     fun cancelManual()
+
+    /**
+     * #1622: a run that only retries a pending deletion request, on any network, with backoff until the request
+     * resolves. It sends no census data.
+     */
+    fun enqueueDeletion()
 }

@@ -4,7 +4,7 @@
 <resources>
     <string name="consent_front_door_not_now">Ahora no</string>
     <string name="privacy_census_title">Censo</string>
-    <string name="privacy_census_body">Desactivado a menos que lo aceptes en Ajustes > Datos y privacidad > Censo, que primero muestra lo que envía. Cuando está activado, envía al servidor del censo de gig.log, como mucho una vez al día, esquemas de las pantallas y notificaciones que gig.log no reconoce, como mucho uno de cada diseño al día, y recuentos diarios de las pantallas que reconoció, de las apps de reparto que elijas, con el identificador de esta instalación, por HTTPS. Cada día elige una hora aleatoria para enviar; el envío espera hasta una hora a tener Wi-Fi (a menos que permitas datos móviles) y batería, y ese día se omite si no puede empezar antes. La elección se guarda en este teléfono con su fecha, la versión de la app, la versión del aviso de privacidad y la dirección del servidor del censo, junto con las apps de reparto y el ajuste de Wi-Fi que elijas. Ese registro sale del teléfono solo en un informe de errores que exportes. Si la dirección del servidor cambia, el censo sigue desactivado hasta que aceptes de nuevo. Todavía no hay botón para borrar.</string>
+    <string name="privacy_census_body">Desactivado a menos que lo aceptes en Ajustes > Datos y privacidad > Censo, que primero muestra lo que envía. Cuando está activado, envía al servidor del censo de gig.log, como mucho una vez al día, esquemas de las pantallas y notificaciones que gig.log no reconoce, como mucho uno de cada diseño al día, y recuentos diarios de las pantallas que reconoció, de las apps de reparto que elijas, con el identificador de esta instalación, por HTTPS. Cada día elige una hora aleatoria para enviar; el envío espera hasta una hora a tener Wi-Fi (a menos que permitas datos móviles) y batería, y ese día se omite si no puede empezar antes. La elección se guarda en este teléfono con su fecha, la versión de la app, la versión del aviso de privacidad y la dirección del servidor del censo, junto con las apps de reparto y el ajuste de Wi-Fi que elijas. Ese registro sale del teléfono solo en un informe de errores que exportes. Si la dirección del servidor cambia, el censo sigue desactivado hasta que aceptes de nuevo. La pantalla del censo muestra lo que envió gig.log en los últimos 7 días, una lista que solo se guarda en este teléfono, y puede pedir al servidor que borre lo que guarda de este teléfono. Los datos que el servidor no puede vincular a este teléfono se quedan, y las copias de seguridad del servidor guardan el resto hasta 14 días.</string>
     <string name="census_title">Censo</string>
     <string name="census_settings_subtitle">Esquemas de pantallas no reconocidas, desactivado por defecto</string>
     <string name="census_switch_label">Envíos al censo</string>
@@ -13,8 +13,8 @@
     <string name="census_wifi_only_label">Solo Wi-Fi</string>
     <string name="census_wifi_only_supporting">Si está desactivado, los envíos pueden usar datos móviles</string>
     <string name="census_read_disclosure">Qué envía el censo</string>
-    <string name="census_note_release">Esta versión todavía no tiene botón para borrar. El límite de 30 días se aplica con la próxima actualización del servidor del censo.</string>
-    <string name="census_note_test_build">Esta versión de prueba también puede enviar el texto de las pantallas no reconocidas desde un teléfono en el que confía el servidor del censo, con el envío de capturas activado en las opciones de desarrollador. El límite de 30 días y el borrado desde Ajustes todavía no se aplican a ella.</string>
+    <string name="census_note_release">Borrar lo que gig.log guarda en el teléfono todavía no está en esta versión; borrar el almacenamiento de la app o desinstalarla lo elimina. El límite de 30 días se aplica con la próxima actualización del servidor del censo.</string>
+    <string name="census_note_test_build">Esta versión de prueba también puede enviar el texto de las pantallas no reconocidas desde un teléfono en el que confía el servidor del censo, con el envío de capturas activado en las opciones de desarrollador. El límite de 30 días todavía no se aplica a ella. Borrar lo que gig.log guarda en el teléfono todavía no está en esta versión; borrar el almacenamiento de la app o desinstalarla lo elimina.</string>
     <string name="census_disclosure_heading">Antes de activar el censo</string>
     <string name="census_disclosure_intro">El censo está desactivado a menos que aceptes. gig.log funciona igual sin él.</string>
     <string name="census_disclosure_what_title">Qué envía</string>
@@ -32,4 +32,50 @@
     <string name="census_disclosure_agreement">Tu acuerdo con una empresa de reparto es entre tú y esa empresa.</string>
     <string name="census_disclosure_accept">Aceptar</string>
     <string name="census_disclosure_close">Cerrar</string>
+    <string name="census_data_title">Tus datos del censo</string>
+    <string name="census_sent_title">Lo que envió gig.log</string>
+    <string name="census_sent_entry_supporting">Envíos de los últimos 7 días</string>
+    <string name="census_sent_intro">Cada envío que recibió el servidor del censo en los últimos 7 días, leído de lo que envió gig.log. Esta lista se queda en este teléfono. Códigos son palabras enviadas como códigos de un solo sentido. Formatos son valores enviados como su formato, por ejemplo $#.##. Solo tipo es un número o un texto largo enviado solo como su tipo. Omitido es lo que los filtros retuvieron.</string>
+    <string name="census_sent_last">Último envío</string>
+    <string name="census_sent_none">Ninguno en los últimos 7 días</string>
+    <string name="census_sent_next">Próximo envío</string>
+    <string name="census_sent_next_off">Censo desactivado</string>
+    <string name="census_sent_next_unset">Aún sin programar</string>
+    <string name="census_sent_next_in">%1$s, dentro de %2$s</string>
+    <string name="census_sent_next_due">%1$s, pendiente</string>
+    <string name="census_sent_date_time">%1$s, %2$s</string>
+    <string name="census_sent_empty">Nada enviado en los últimos 7 días.</string>
+    <string name="census_sent_day_summary">Pantallas %1$d, notificaciones %2$d, recuentos diarios %3$d</string>
+    <string name="census_sent_day_summary_text">Pantallas %1$d, notificaciones %2$d, recuentos diarios %3$d, texto de pantalla %4$d</string>
+    <string name="census_sent_batch">Enviado %1$s, elementos %2$d</string>
+    <string name="census_sent_item_screen">Pantalla, %1$s</string>
+    <string name="census_sent_item_notification">Notificación, %1$s</string>
+    <string name="census_sent_item_counts">Recuentos diarios, %1$s</string>
+    <string name="census_sent_item_text">Texto de pantalla, %1$s</string>
+    <string name="census_sent_values_screen">Partes %1$d, códigos %2$d, formatos %3$d, solo tipo %4$d, omitidos %5$d</string>
+    <string name="census_sent_values_notification">Códigos %1$d, formatos %2$d, solo tipo %3$d, omitidos %4$d</string>
+    <string name="census_sent_counts_day">Del %1$s</string>
+    <string name="census_sent_text_supporting">El texto de la pantalla, desde una instalación de prueba de confianza</string>
+    <string name="census_delete_label">Borrar mis datos del censo</string>
+    <string name="census_delete_supporting">Pide al servidor del censo que borre lo que guarda de este teléfono</string>
+    <string name="census_delete_status_running">Borrando</string>
+    <string name="census_delete_status_pending">Solicitado. gig.log envía la solicitud cuando el teléfono tenga conexión, antes de cualquier envío.</string>
+    <plurals name="census_delete_status_done">
+        <item quantity="one">El servidor del censo borró %1$d registro el %2$s.</item>
+        <item quantity="many">El servidor del censo borró %1$d registros el %2$s.</item>
+        <item quantity="other">El servidor del censo borró %1$d registros el %2$s.</item>
+    </plurals>
+    <plurals name="census_delete_status_done_no_day">
+        <item quantity="one">El servidor del censo borró %1$d registro.</item>
+        <item quantity="many">El servidor del censo borró %1$d registros.</item>
+        <item quantity="other">El servidor del censo borró %1$d registros.</item>
+    </plurals>
+    <string name="census_delete_status_nothing">El servidor del censo no guarda nada de este teléfono.</string>
+    <string name="census_delete_status_not_possible">El identificador del censo de este teléfono ya no se puede usar, así que gig.log no pudo enviar la solicitud.</string>
+    <string name="census_delete_dialog_title">¿Borrar los datos del censo?</string>
+    <string name="census_delete_dialog_deleted">gig.log borra los esquemas y recuentos diarios que esperan en este teléfono y luego pide al servidor del censo que borre todo lo que puede vincular a este teléfono. Esto no desactiva el censo; desactívalo para detener los envíos posteriores.</string>
+    <string name="census_delete_dialog_survives">El servidor no puede vincular algunos datos a este teléfono, así que se quedan: muestras de esquemas guardadas sin el identificador de este teléfono, totales de todos los teléfonos, palabras ya aprobadas porque muchos teléfonos las enviaron, reglas y pantallas de prueba inventadas ya publicadas, y registros antiguos cuyo vínculo con cualquier teléfono se destruyó.</string>
+    <string name="census_delete_dialog_backups">Las copias de seguridad del servidor hechas antes de tu solicitud guardan los registros de este teléfono hasta que caducan, como mucho 14 días después. Si el servidor se restaura desde una, vuelve a borrarlos antes de servir nada.</string>
+    <string name="census_delete_dialog_confirm">Borrar</string>
+    <string name="census_delete_dialog_cancel">Cancelar</string>
 </resources>

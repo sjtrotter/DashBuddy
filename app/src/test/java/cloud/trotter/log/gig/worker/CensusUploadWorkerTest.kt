@@ -35,6 +35,9 @@ import cloud.trotter.log.gig.core.network.census.CensusApiFactory
 import cloud.trotter.log.gig.core.network.census.CensusApi
 import cloud.trotter.log.gig.core.network.census.CensusBudget
 import cloud.trotter.log.gig.core.network.census.CensusTransport
+import cloud.trotter.log.gig.core.network.census.CensusSentObserver
+import cloud.trotter.log.gig.core.network.census.DeleteResult
+import cloud.trotter.log.gig.core.data.census.CensusDataDeletion
 import cloud.trotter.log.gig.core.network.census.EnrolResult
 import cloud.trotter.log.gig.core.network.census.PolicyResult
 import cloud.trotter.log.gig.core.network.census.UploadResult
@@ -102,241 +105,8 @@ class CensusUploadWorkerTest {
 
     @Before fun resetProcessWarnings() {
         CensusUploadWorker.enrolRejectedWarned.set(false)
-        CensusUploadWorker.unauthorizedWarnedFor.set(null)
     }
 
-    private class MemoryPreferences : DataStore<Preferences> {
-        override val data = MutableStateFlow(emptyPreferences())
-        override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
-            transform(data.value).also { data.value = it }
-    }
-
-    private class FakeApi : CensusTransport {
-        val envelopeResults = ArrayDeque<UploadResult>()
-        val envelopeBodies = mutableListOf<List<String>>()
-        val envelopeBatches = mutableListOf<String>()
-        val stages = mutableListOf<String>()
-        var beforeEnvelope: (String, List<String>) -> Unit = { _, _ -> }
-        override suspend fun uploadEnvelopes(cred: Bearer.Credential, batchId: String, itemsJson: List<String>): UploadResult {
-            beforeEnvelope(batchId, itemsJson)
-            stages += "envelopes"
-            envelopeBodies += itemsJson
-            envelopeBatches += batchId
-            return envelopeResults.removeFirst()
-        }
-        val healthResults = ArrayDeque<HealthResult>()
-        val healthBodies = mutableListOf<List<String>>()
-        var beforeHealth: suspend () -> Unit = {}
-        override suspend fun postHealth(cred: Bearer.Credential, reportsJson: List<String>): HealthResult {
-            healthBodies += reportsJson
-            beforeHealth()
-            return healthResults.removeFirst()
-        }
-        val enrollments = ArrayDeque<EnrolResult>()
-        val uploads = ArrayDeque<UploadResult>()
-        val enrolledIds = mutableListOf<String>()
-        val declaredSchemaIds = mutableListOf<List<String>>()
-        val batches = mutableListOf<String>()
-        val bodies = mutableListOf<List<String>>()
-        var beforeUpload: (String, List<String>) -> Unit = { _, _ -> }
-        override suspend fun enrol(cred: Bearer.Credential, appVersion: String, schemaIds: List<String>): EnrolResult {
-            enrolledIds += cred.installId
-            declaredSchemaIds += schemaIds
-            return enrollments.removeFirst()
-        }
-        var policyResult: PolicyResult = PolicyResult.Unavailable(503)
-        var policyCalls = 0
-        override suspend fun policy(): PolicyResult = policyResult.also { policyCalls++ }
-        override suspend fun uploadSkeletons(cred: Bearer.Credential, batchId: String, itemsJson: List<String>): UploadResult {
-            stages += "skeletons"
-            beforeUpload(batchId, itemsJson)
-            batches += batchId
-            bodies += itemsJson
-            return uploads.removeFirst()
-        }
-    }
-
-    private class Scheduler : CensusUploadScheduler {
-        val daily = mutableListOf<Pair<Long, Boolean>>()
-        override fun enqueueNow(wifiOnly: Boolean, replaceQueued: Boolean) = Unit
-        override fun scheduleDaily(runAtMillis: Long, wifiOnly: Boolean) { daily += runAtMillis to wifiOnly }
-        override fun cancelManual() = Unit
-    }
-
-    private class Harness(scope: CoroutineScope, io: CoroutineDispatcher) {
-        private val memory = MemoryPreferences()
-        val preferences = spy(DevSettingsRepository(DevSettingsDataSource(memory), true, Dispatchers.Unconfined, "test"))
-        val credentials: CensusCredentialStore = mock()
-        val spool: CensusSpool = mock()
-        val envelopeSpool: CensusSpool = mock()
-        val envelopeSink: CensusEnvelopeSink = mock()
-        val envelopes = mutableListOf<CensusSpool.Spooled>()
-        var envelopePending: CensusSpool.InFlight? = null
-        val api = FakeApi()
-        val scheduler = Scheduler()
-        val planner = CensusUploadPlanner(preferences, scheduler, java.time.Clock.systemUTC())
-        var metered = false
-        val network = object : CensusNetwork(RuntimeEnvironment.getApplication()) {
-            override fun isMetered() = metered
-        }
-        val stats = CensusUploadStats()
-        val healthMemory = MemoryPreferences()
-        val healthStore = HealthLedgerStore(healthMemory, stats)
-        val healthSink = PersistentHealthSink(healthStore, stats, scope, io)
-        var rulesetReleaseTag: String? = "dev"
-        val metadataProvider = object : ReplayMetadataProvider {
-            override fun current() = ReplayMetadata(engineVersion = 1, rulesetReleaseTag = rulesetReleaseTag)
-        }
-
-        suspend fun health(day: LocalDate = LocalDate.now(ZoneOffset.UTC).minusDays(1), version: String = "7.1"): HealthKey {
-            val key = HealthKey(day.toString(), "doordash", version)
-            healthSink.apply { it.record(key, "doordash.screen.offer").record(key, null).trip(key) }
-            return key
-        }
-        val queued = mutableListOf<List<CensusSpool.Spooled>>()
-        var pending: CensusSpool.InFlight? = null
-        private var sequence = 0
-        var factoryCalls = 0
-        val credential = Credential("12345678-1234-4123-8123-123456789abc", InstallSecret.encode(ByteArray(32)), true)
-        private val factory = object : CensusApiFactory() {
-            override fun create(baseUrl: String): CensusTransport {
-                factoryCalls++
-                return api
-            }
-        }
-        private val lock = CensusUploadLock()
-
-        suspend fun initialize(enabled: Boolean = true) {
-            preferences.setCensusUploadEnabled(enabled)
-            whenever(credentials.current()).thenReturn(credential)
-            whenever(spool.take(100, 900 * 1024)).thenAnswer {
-                val retained = pending?.ids?.mapNotNull { id -> queued.flatten().find { it.id == id } }
-                if (!retained.isNullOrEmpty()) retained else {
-                    pending = null
-                    queued.firstOrNull() ?: emptyList<CensusSpool.Spooled>()
-                }
-            }
-            whenever(spool.inFlight()).thenAnswer { pending }
-            whenever(spool.markInFlight(any(), any())).thenAnswer {
-                pending = CensusSpool.InFlight(it.getArgument(1), it.getArgument<Collection<String>>(0).toList())
-                Unit
-            }
-            whenever(spool.clearInFlight()).thenAnswer { pending = null; Unit }
-            whenever(spool.remove(any())).thenAnswer {
-                val ids = it.getArgument<Collection<String>>(0)
-                val remaining = queued.map { batch -> batch.filterNot { item -> item.id in ids } }.filter { batch -> batch.isNotEmpty() }
-                queued.clear()
-                queued.addAll(remaining)
-                Unit
-            }
-            whenever(envelopeSpool.take(20, 900 * 1024)).thenAnswer {
-                val retained = envelopePending?.ids?.mapNotNull { id -> envelopes.find { it.id == id } }
-                if (!retained.isNullOrEmpty()) retained else { envelopePending = null; envelopes.take(20) }
-            }
-            whenever(envelopeSpool.inFlight()).thenAnswer { envelopePending }
-            whenever(envelopeSpool.markInFlight(any(), any())).thenAnswer {
-                envelopePending = CensusSpool.InFlight(it.getArgument(1), it.getArgument<Collection<String>>(0).toList())
-                Unit
-            }
-            whenever(envelopeSpool.remove(any())).thenAnswer {
-                val ids = it.getArgument<Collection<String>>(0)
-                envelopes.removeAll { item -> item.id in ids }
-                Unit
-            }
-            whenever(envelopeSpool.clearInFlight()).thenAnswer { envelopePending = null; Unit }
-            whenever(envelopeSink.invalidate()).thenAnswer { envelopes.clear(); envelopePending = null; Unit }
-            api.beforeEnvelope = { batchId, json ->
-                val persisted = requireNotNull(envelopePending)
-                assertEquals(batchId, persisted.batchId)
-                assertEquals(json, persisted.ids.map { id -> envelopes.single { it.id == id }.itemJson })
-            }
-            api.beforeUpload = { batchId, json ->
-                val persisted = requireNotNull(pending)
-                assertEquals(batchId, persisted.batchId)
-                assertEquals(json, persisted.ids.map { id -> queued.flatten().single { it.id == id }.itemJson })
-            }
-        }
-
-        fun consentEnabled(): Boolean? = memory.data.value[
-            androidx.datastore.preferences.core.booleanPreferencesKey("census_upload_enabled")
-        ]
-
-        fun persistedHealth(): HealthLedger = healthMemory.data.value[
-            androidx.datastore.preferences.core.stringPreferencesKey("ledger_json")
-        ]?.let { Json.decodeFromString<HealthLedger>(it) } ?: HealthLedger()
-
-        /** Flip consent from inside a non-suspending transport hook (the in-memory store completes synchronously). */
-        fun setConsentSync(enabled: Boolean) {
-            memory.data.value = memory.data.value.toMutablePreferences().apply {
-                this[androidx.datastore.preferences.core.booleanPreferencesKey("census_upload_enabled")] = enabled
-            }
-        }
-
-        /** #1621: replace the stored receipt with one accepted for [endpoint], as a build with another server would find it. */
-        fun setReceiptEndpointSync(endpoint: String) {
-            val receipt = CensusConsentReceipt(ConsentReceipt(1L, "test", PrivacyDisclosure.REVISION, granted = true), endpoint)
-            memory.data.value = memory.data.value.toMutablePreferences().apply {
-                this[androidx.datastore.preferences.core.stringPreferencesKey("census_consent_receipt_json")] =
-                    Json.encodeToString(CensusConsentReceipt.serializer(), receipt)
-            }
-        }
-
-        fun setShareSync(enabled: Boolean) {
-            memory.data.value = memory.data.value.toMutablePreferences().apply {
-                this[androidx.datastore.preferences.core.booleanPreferencesKey("census_share_captures")] = enabled
-            }
-        }
-
-        fun queue(count: Int = 1) {
-            repeat(count) { queueBatch(1) }
-        }
-
-        fun queueBatch(count: Int, day: LocalDate = LocalDate.now(ZoneOffset.UTC), platform: String = "doordash"): List<CensusSpool.Spooled> {
-            val items = List(count) {
-                val index = ++sequence
-                CensusSpool.Spooled("1-$index.json", index.toString().padStart(64, '0'), "{\"item\":$index,\"platform\":\"$platform\",\"day\":\"$day\"}")
-            }
-            queued += items
-            return items
-        }
-
-        fun queueMixedBatch(): List<CensusSpool.Spooled> {
-            val day = LocalDate.now(ZoneOffset.UTC)
-            val meta = ReplayMetadata(engineVersion = 1)
-            val screen = cloud.trotter.log.gig.core.pipeline.census.SkeletonBuilder.outcome(
-                cloud.trotter.log.gig.domain.model.accessibility.UiNode(text = "Continue"), null,
-                meta, cloud.trotter.log.gig.domain.state.Platform.DoorDash, day,
-            ) as cloud.trotter.log.gig.core.pipeline.census.SkeletonBuilder.Outcome.Built
-            val notification = cloud.trotter.log.gig.core.pipeline.census.NotificationSkeletonBuilder.outcome(
-                cloud.trotter.log.gig.domain.model.notification.RawNotificationData(
-                    "Continue", null, null, null, packageName = cloud.trotter.log.gig.domain.state.Platform.DoorDash.packageName!!,
-                    postTime = 0, isClearable = true, channelId = "synthetic",
-                ), meta, cloud.trotter.log.gig.domain.state.Platform.DoorDash, day,
-            ) as cloud.trotter.log.gig.core.pipeline.census.NotificationSkeletonBuilder.Outcome.Built
-            return listOf(screen.skeleton.fingerprint to screen.json, notification.skeleton.fingerprint to notification.json)
-                .map { (fingerprint, json) -> CensusSpool.Spooled("1-${++sequence}.json", fingerprint, json) }
-                .also { queued += it }
-        }
-
-        suspend fun queueEnvelopes(count: Int = 1): List<CensusSpool.Spooled> {
-            preferences.setCensusShareCaptures(true)
-            return List(count) {
-                val index = ++sequence
-                val fingerprint = index.toString().padStart(64, '0')
-                val json = requireNotNull(EnvelopeProjection.project(
-                    """{"schemaId":"uinode.v1","timestamp":7200123,"platform":"doordash","metadata":{"deviceFingerprint":"removed","rulesetSignature":"removed"},"payload":{"text":"Continue $index"}}""", fingerprint))
-                CensusSpool.Spooled("2-$index.json", fingerprint, json)
-            }.also { envelopes += it }
-        }
-
-        fun worker(tags: List<String> = emptyList()): CensusUploadWorker = TestListenableWorkerBuilder<CensusUploadWorker>(RuntimeEnvironment.getApplication())
-            .setWorkerFactory(object : WorkerFactory() {
-                override fun createWorker(appContext: Context, workerClassName: String, workerParameters: WorkerParameters): ListenableWorker =
-                    CensusUploadWorker(appContext, workerParameters, preferences, credentials, spool, factory, planner, network, stats, lock, healthSink, metadataProvider, envelopeSpool, envelopeSink)
-            }).setTags(tags).build()
-    }
-
-    private fun TestScope.harness() = Harness(backgroundScope, StandardTestDispatcher(testScheduler))
 
     @Test fun `disabled does not create API read credentials or drain spool`() = runTest {
         val h = harness()
@@ -647,7 +417,7 @@ class CensusUploadWorkerTest {
 
     private fun policyOf(json: String) = Json.parseToJsonElement(json).jsonObject
 
-    private suspend fun Harness.pendingIdentity() {
+    private suspend fun CensusWorkerHarness.pendingIdentity() {
         initialize()
         whenever(credentials.current()).thenReturn(null)
         whenever(credentials.pending()).thenReturn(credential.copy(enrolled = false))
@@ -927,6 +697,9 @@ class CensusUploadWorkerTest {
         val h = harness()
         h.initialize()
         h.queue()
+        // #1622: the unknown ID re-enrols; a rate-limited enrolment sends nothing more this run.
+        whenever(h.credentials.mint()).thenReturn(h.credential.copy(installId = "87654321-1234-4123-8123-123456789abc", enrolled = false))
+        h.api.enrollments += EnrolResult.RateLimited(60)
         h.api.uploads.addAll(listOf(
             UploadResult.Unauthorized(System.currentTimeMillis()),
             UploadResult.Unauthorized(System.currentTimeMillis()),
@@ -942,57 +715,44 @@ class CensusUploadWorkerTest {
         verify(h.spool, never()).clearInFlight()
     }
 
-    @Test fun `unknown enrolled identity warns once per process and never remints`() = runTest {
-        val warnings = mutableListOf<String>()
-        val tree = warningTree(warnings)
-        Timber.plant(tree)
-        try {
-            repeat(2) {
-                val h = harness()
-                h.initialize()
-                h.queue()
-                h.api.uploads.addAll(List(2) { UploadResult.Unauthorized(System.currentTimeMillis()) })
-                assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
-                assertEquals(2, h.api.batches.size)
-                assertEquals(CensusRunOutcome.UNAUTHORIZED, h.preferences.censusLastRun.first()?.outcome)
-                assertEquals(1L, h.stats.unauthorized.get())
-                assertEquals(1, h.queued.size)
-                verify(h.credentials, never()).mint()
-                verify(h.credentials, never()).wipe()
-                assertTrue(h.api.enrolledIds.isEmpty())
-            }
-            assertEquals(listOf("census unauthorized: identity unknown to server"), warnings)
-        } finally {
-            Timber.uproot(tree)
-        }
+    @Test fun `an unknown enrolled identity enrols a fresh one, consent kept, and sends the batch again`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.queue()
+        val fresh = h.credential.copy(installId = "87654321-1234-4123-8123-123456789abc", enrolled = false)
+        whenever(h.credentials.mint()).thenReturn(fresh)
+        h.api.uploads.addAll(List(2) { UploadResult.Unauthorized(System.currentTimeMillis()) })
+        h.api.enrollments += EnrolResult.Enrolled(JsonObject(emptyMap()))
+        h.api.uploads += UploadResult.Accepted(1, 0, emptyMap(), CensusBudget(299, 1000, 39, 300))
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+
+        assertEquals("the restored server forgot the old ID: a fresh one enrols", listOf(fresh.installId), h.api.enrolledIds)
+        verify(h.credentials).mint()
+        verify(h.credentials).markEnrolled()
+        assertEquals("the same batch, twice under the old ID, once under the new", 3, h.api.batches.size)
+        assertTrue(h.queued.isEmpty())
+        assertEquals(CensusConsent.ON, h.preferences.censusConsent.first())
+        assertEquals(CensusRunOutcome.UPLOADED, h.preferences.censusLastRun.first()?.outcome)
+        assertEquals(1L, h.stats.unauthorized.get())
+        assertTrue(logs.any { it.message == "census unauthorized: identity unknown to server, enrolling a new one" })
     }
 
-    @Test fun `unknown identity warns again after the identity changes`() = runTest {
-        val warnings = mutableListOf<String>()
-        val tree = warningTree(warnings)
-        Timber.plant(tree)
-        try {
-            val first = harness()
-            first.initialize()
-            first.queue()
-            first.api.uploads.addAll(List(2) { UploadResult.Unauthorized(System.currentTimeMillis()) })
-            assertEquals(ListenableWorker.Result.success(), first.worker().doWork())
+    @Test fun `an unknown identity found by the health report enrols a fresh one before the outlines`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.health()
+        h.queue()
+        val fresh = h.credential.copy(installId = "87654321-1234-4123-8123-123456789abc", enrolled = false)
+        whenever(h.credentials.mint()).thenReturn(fresh)
+        h.api.healthResults += HealthResult.Unauthorized(System.currentTimeMillis())
+        h.api.enrollments += EnrolResult.Enrolled(JsonObject(emptyMap()))
+        h.api.uploads += UploadResult.Duplicate
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
 
-            val second = harness()
-            second.initialize()
-            val replacement = second.credential.copy(installId = "87654321-1234-4123-8123-123456789abc")
-            whenever(second.credentials.current()).thenReturn(replacement)
-            second.queue()
-            second.api.uploads.addAll(List(2) { UploadResult.Unauthorized(System.currentTimeMillis()) })
-            assertEquals(ListenableWorker.Result.success(), second.worker().doWork())
-            assertEquals(List(2) { "census unauthorized: identity unknown to server" }, warnings)
-
-            second.api.uploads.addAll(List(2) { UploadResult.Unauthorized(System.currentTimeMillis()) })
-            assertEquals(ListenableWorker.Result.success(), second.worker().doWork())
-            assertEquals(List(2) { "census unauthorized: identity unknown to server" }, warnings)
-        } finally {
-            Timber.uproot(tree)
-        }
+        assertEquals(listOf(fresh.installId), h.api.enrolledIds)
+        assertEquals("the old ID's unsent counts go with it", 1, h.api.healthBodies.size)
+        assertEquals("no outline went under the unknown ID", 1, h.api.batches.size)
+        assertTrue(h.queued.isEmpty())
     }
 
     @Test fun `three all-stale batches with fresh work remaining record stale_removed never spool_empty`() = runTest {
@@ -1049,6 +809,9 @@ class CensusUploadWorkerTest {
             val h = harness()
             h.initialize()
             h.queue()
+            // #1622: without skew the unknown ID re-enrols; a rate-limited enrolment sends nothing more this run.
+            whenever(h.credentials.mint()).thenReturn(h.credential.copy(installId = "87654321-1234-4123-8123-123456789abc", enrolled = false))
+            h.api.enrollments += EnrolResult.RateLimited(60)
             val date = System.currentTimeMillis() + if (skew) 600_000 else 0
             h.api.uploads.addAll(listOf(UploadResult.Unauthorized(date), UploadResult.Unauthorized(date)))
             assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
@@ -1449,7 +1212,7 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `health failures with an empty spool remain visible`() = runTest {
-        for (result in listOf(HealthResult.Unauthorized(null), HealthResult.ServerUnavailable(503),
+        for (result in listOf(HealthResult.ServerUnavailable(503),
             HealthResult.TransportFailure("IOException"))) {
             val h = harness()
             h.initialize()
@@ -1478,7 +1241,7 @@ class CensusUploadWorkerTest {
     }
 
     @Test fun `health transient failures do not defer skeletons or refuse rows`() = runTest {
-        for (result in listOf(HealthResult.Unauthorized(null), HealthResult.ServerUnavailable(503),
+        for (result in listOf(HealthResult.ServerUnavailable(503),
             HealthResult.TransportFailure("IOException"))) {
             val h = harness()
             h.initialize()

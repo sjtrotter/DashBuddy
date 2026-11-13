@@ -11,6 +11,7 @@ import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import cloud.trotter.log.gig.core.data.census.CensusDataDeletion
 import cloud.trotter.log.gig.core.data.settings.DevSettingsRepository
 import cloud.trotter.log.gig.core.datastore.settings.DevSettingsDataSource
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
@@ -33,6 +34,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
@@ -59,8 +62,10 @@ class CensusDisclosureTest {
     private fun string(id: Int) = context.getString(id)
 
     private fun show() {
-        val vm = CensusViewModel(repo, readsUnboundPlatforms = false)
-        compose.setContent { GigLogTheme { CensusScreen(onBack = {}, viewModel = vm) } }
+        val deletion = mock<CensusDataDeletion>()
+        whenever(deletion.inProgress).thenReturn(MutableStateFlow(false))
+        val vm = CensusViewModel(repo, deletion, readsUnboundPlatforms = false)
+        compose.setContent { GigLogTheme { CensusScreen(onBack = {}, onOpenSent = {}, viewModel = vm) } }
         compose.waitForIdle()
     }
 
