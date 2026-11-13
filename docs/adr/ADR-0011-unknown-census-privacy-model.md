@@ -1166,8 +1166,9 @@ once §12 to §21 ship.
 | A network observer on the Wi-Fi or cellular path | content hidden by TLS; the census host, request sizes, and upload times that track shift starts, on any network | HTTPS only, cleartext refused app-wide; one upload a day at a random time, on Wi-Fi by default, so a cellular observer sees no census traffic by default |
 
 **Diagnostics, not work history** (#1571, census#64). No count of shifts, deliveries or active days leaves the phone;
-contributor eligibility is a yes or no (§15). The health report drops `trips` (today the count of recognition-alarm
-trips, `HealthLedger.kt:36`) and any other count that reads as work done. It carries per-rule shortfall counts and
+contributor eligibility is a yes or no (§15). The health report carries no count that reads as work done. Its `trips`
+field stays: it counts recognition-health alarm trips (`HealthLedger.kt:36`, `RecognitionHealthMonitor.kt:155-157`),
+not deliveries. It carries per-rule shortfall counts and
 their denominators, clipped to fixed bounds, with the rules generation. Skeletons are sampled once per layout variant
 per UTC day, as presence (§8).
 
