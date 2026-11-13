@@ -1208,8 +1208,7 @@ per UTC day, as presence (§8).
   fast a fix ships.
 - Wi-Fi only, on by default.
 - HTTPS only: an explicit network security config refuses cleartext for the whole app, and a test checks that every
-  endpoint the app calls is `https`. Today cleartext is off only through the target SDK's default; the app has no
-  network security config.
+  endpoint the app calls is `https` (built by #1620: `res/xml/network_security_config.xml`, `HttpsEndpointGuardTest`).
 
 **Keyed storage** (census#85). At ingest the server replaces every word hash with `HMAC(pepper, h)` before writing it
 anywhere. The pepper lives in SSM beside the TOTP seed, never in the database, its backups or the logs, and is backed
