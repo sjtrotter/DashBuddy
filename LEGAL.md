@@ -5,8 +5,8 @@
 > Agreement (ICA) and the operating discipline gig.log applies to stay within it.
 > Pending review by qualified counsel before public launch.
 >
-> **Document version:** v1.0
-> **Last updated:** 2026-04-26
+> **Document version:** v1.1
+> **Last updated:** 2026-11-13
 > **Attorney review:** _pending_
 
 ## Purpose
@@ -146,6 +146,9 @@ terminate the relationship.
 - Optionally records per-session and per-delivery data on the contractor's own device.
 - Optionally (opt-in, k=10, DP-budgeted, PII-scrubbed) contributes anonymized
   observations to an academic federation.
+- Optionally (opt-in, off by default) sends the layouts of screens it did not recognize
+  to the project's census server, so the recognition rules can be kept working. See
+  "The opt-in census" below.
 
 ## What gig.log Does Not Do
 
@@ -159,10 +162,65 @@ terminate the relationship.
   systems.
 - Does not spoof location, manipulate promotion eligibility, or enable
   multi-accounting.
-- Does not store driver-level data on infrastructure the project controls. Per-driver
-  data lives on the driver's own device.
-- Does not transmit screens or accessibility events off-device. Sensitive screens
-  (banking, identity, payment) are blocked at the matcher layer.
+- Does not store a driver's work records (shifts, deliveries, offers, pay, costs,
+  locations) on infrastructure the project controls. They live on the driver's own
+  device. The one exception to "nothing on project infrastructure" is the opt-in census
+  below, which keeps recognition data per install, under a pseudonym, for a limited time.
+- Does not send screens as the driver sees them, or accessibility events, off the
+  device. The maintainer's own test phone is the one exception, described below.
+  Sensitive screens (banking, identity, payment) are blocked at the matcher layer and are
+  not described to the census either.
+
+## The opt-in census
+
+gig.log recognizes screens with rules written from the screens the maintainer and the
+testers see. DoorDash changes its screens in some areas before others, so a rule can stop
+working for drivers elsewhere while nobody on the project sees the new screen. The census
+exists to keep recognition working on the screens drivers see.
+
+A driver who opts in sends the layout of screens gig.log did not recognize: the kinds of
+views on the screen, the app's own view names, how they nest, a few flags such as
+"clickable", and each piece of text replaced by a one-way hash. A hash is a fingerprint:
+the server cannot read the words back from it, but it can recognize a common word by
+hashing a guess and comparing, which is how the app's own labels are matched. The phone
+withholds the names, addresses and codes it detects before anything is hashed, and today
+it withholds amounts and times too. A planned change (#1619) sends those as their format
+instead (`$##.##` for an amount, never the amount). The census never sends a screen as the driver sees it. It also sends a daily
+recognition health report: counts of recognized and unrecognized screens, per rule and
+per delivery-app version. A planned contributor tier lets a driver confirm that a word on
+a screen is the app's own wording (a button label, a heading), never a customer's
+details; that word is sent only after other drivers have confirmed it too.
+
+Uploads are off by default and can be stopped at any time. Today only the maintainer's
+test build sends census data. On the maintainer's own phone that build can also send its
+own screen captures, with the detected customer details masked, so a new screen can be
+debugged; the server accepts these from no other install, and stops accepting them once
+the first rule drafted from Play and sideload data ships (#1633). The Play and sideload
+builds gain the same opt-in for layouts only, together with a button that deletes what the
+server holds about the install (#1617). What each build sends, how long
+the server keeps it, and who can see it are stated in `PRIVACY.md` and in ADR-0011
+(`docs/adr/ADR-0011-unknown-census-privacy-model.md`, §12 to §21).
+
+The census stays inside these limits:
+
+- Recognition only. Its data is used to write, test and repair recognition rules and
+  their privacy masks, and for nothing else.
+- No rollout mapping. It collects no location or region. The project does not use it to
+  map where, when or to whom DoorDash shows a screen, or to study DoorDash's tests and
+  rollouts. "Installs on DoorDash app version V that saw screen layout C" is as far as it
+  goes.
+- Nothing from feature-testing sessions. Information a driver learns in a feature-testing
+  session DoorDash invites them to is protected by ICA §2.14. The census is not a channel
+  for it, and the project does not ask for it or use it.
+- No binary or network analysis. The census reads only what the accessibility service
+  already reads on the driver's own screen. The §15.4 discipline above applies to it in
+  full.
+
+The ICA is between each driver and DoorDash. A driver who contributes to the census makes
+that choice under their own agreement, and the Play and sideload opt-in screen will say so
+(#1621).
+Counsel has not reviewed the census (#246); the open questions are listed below, and this
+section may change after that review.
 
 ## Framing Discipline (Cross-Reference)
 
@@ -187,7 +245,17 @@ The following are flagged for attorney review before public launch:
    change the analysis above for drivers in those jurisdictions?
 5. What disclosure/consent language is required in the in-app onboarding flow to make
    the §15.4 discipline above legally meaningful from the driver's perspective?
+6. The opt-in census (#246, #1617): are DoorDash's on-screen labels and view names
+   confidential under any agreement a driver accepts; does collecting screen layouts from
+   many drivers count as deriving "structure or organization" under §15.4; does a driver
+   who sends census data or confirms a label risk breaching their own ICA; can synthetic
+   test screens built from census layouts be published; may an AI agent draft rules from
+   census data; and how should a driver keep a feature-testing session (§2.14) out of the
+   census?
 
 ## Version History
 
 - **v1.0 (2026-04-26):** Initial draft. Maintainer-authored. Pending counsel review.
+- **v1.1 (2026-11-13):** The opt-in census (#1618): the two "Does Not Do" lines about
+  screens and project infrastructure rewritten, a census section with its limits, and
+  counsel question 6. Pending counsel review.

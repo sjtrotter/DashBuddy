@@ -2,6 +2,9 @@
 
 **Status:** Accepted — design record for Epic #1138; the invariants below are the specification the
 M1 builders (#1145, #1146) and the server (#1157) implement. Nothing leaves the phone until M3.
+**Amended 2026-11-13 (#1618, epic #1617):** skeletons from the Play and sideload builds, a contributor tier, shape
+templates, probes, shadow and canary, and a dasher-privacy model. The decisions are in §12 to §21 at the end; the
+sections they change carry an "Amended 2026-11-13" note in place. Decided, not built, on that date.
 **Issue:** #1144 (census M0), sub-issue of #1138
 **Date:** 2026-09-30
 **Builds on:** ADR-0003 (versioning and API contracts), ADR-0004 (canonical pipeline architecture),
@@ -140,6 +143,12 @@ verifies `kind` where it has text — on trusted envelopes (paired plaintext) an
 cannot re-classify a community skeleton, which carries no text. A skeleton item is capped at **65 536
 uncompressed UTF-8 bytes of its serialized JSON** (the whole item, metadata included); over the cap
 → no skeleton, counted.
+
+> **Amended 2026-11-13 (#1618).** Money, clock times, distances, minutes and item counts gain a `shape` slot kind
+> from a closed list (§13, #1619); a value outside the list goes out as it does above. The objection to a second
+> currency regex still holds, so the shape classifier reuses the one money definition or is pinned to it. Nodes gain
+> click and visibility flags (§13). The skeleton type still has no plaintext slot; §15 adds the one path by which a
+> community install sends a word in plaintext, a contributor's confirmed word on a constant slot after its gate opens.
 
 ### 2. The **chrome-likely filter** decides whether a token may even be hashed (D2)
 
@@ -355,6 +364,15 @@ holding both can enumerate candidate strings, hash them in every domain and link
 through that dictionary, including after unblinding. That is residual risk 1, and it is why the
 filter withholds low-entropy PII shapes before hashing rather than relying on the hash.
 
+**Amended 2026-11-13 (#1618): keyed at rest.** The phone's hash is unchanged: unsalted, so every install agrees. The
+server replaces every word hash with `HMAC(pepper, h)` at ingest, before it writes it anywhere (token sightings,
+stored skeleton samples, constancy tables, confirmations); see §21 (sjtrotter/dashbuddy-census#85). Values derived
+from word hashes are keyed the same way wherever they are stored: today the notification fingerprint folds the title and
+text hashes into a public digest (`CensusFingerprint.kt:63`), so a stored notification fingerprint, and every reference
+to it, is keyed at rest too. Only when every stored text-derived value is keyed can a stolen database or backup no
+longer be guessed against offline. The live operator holds the pepper, so residual risks 1 and 7
+stand against the operator.
+
 ### 4. **k-anonymity on strings** is a read-time gate on the server (D3)
 
 A token one install rendered may be somebody's customer; a token many installs rendered is a
@@ -401,6 +419,12 @@ by construction). An operator-attestation route into the shipped list is rejecte
 k); #1157's plan §4.3 is superseded where it differs. Trusted drafting reads use `k_unblind`;
 community observation reads (dashboard, export) require the live community threshold.
 
+**Amended 2026-11-13 (#1618).** "Never by asking a contributor" is superseded. A hash may also be resolved to text
+by the contributor word gate (§15): a contributor's confirmed word on a constant slot, sent only after at least 2
+independent confirmations and k installs. A word that passes the gate joins the working vocabulary ("approved
+chrome", #1628); it does not enter the shipped vocabulary, which still needs `k_ship` and a human classification. The
+trusted-envelope source of `k_unblind` closes on the official server once #1633 ships (§6, §12).
+
 ### 5. Consent is a per-feature switch, default OFF, with a ledger (D4)
 
 Census upload is its own feature consent (the #1151 pattern — a preference, never a capability
@@ -418,6 +442,15 @@ id and cannot be attributed back, and the 14-day encrypted backups age out on th
 re-runs the deletion log before serving. The disclosure copy, the LEGAL.md paragraph and the Data Safety form
 delta are written in M3 against the screen they belong to (moved out of M0 by dev decision
 2026-09-29) — nothing leaves the phone before then, so nothing is disclosed before then.
+
+**Amended 2026-11-13 (#1618).** The Wi-Fi-only option was promised here and never built: the upload worker's only
+network constraint is `NetworkType.CONNECTED` (`CensusWorkScheduler.kt:59-62`). #1620 builds it, on by default.
+"Delete my census data" was not built either: the phone sends no deletion request today, and resetting the census
+identity orphans the old server install (`CensusIdentityResetter.kt:25`). It is built as its own button, separate
+from stopping, by #1622 (server: sjtrotter/dashbuddy-census#79), and the on-phone wipe calls it (#1579). The local
+viewer is #1622's "What gig.log sent" screen. The disclosure for the Play and sideload builds is #1621, the LEGAL.md
+paragraph is written by #1618, and the Data safety answers are #1623. The deletion contract above extends to
+confirmations, grants, the quarantine and epoch-tagged rows (§15, §21).
 
 ### 6. **Trusted installs** are the unblinding source (dev amendment 2026-09-29)
 
@@ -465,6 +498,15 @@ is the one the project already accepts on disk (a marker backstop can miss an UN
 so trusted envelopes are swept manually and stored under the same retention the pull directories get
 (30 days, earlier once a fixture or rule exists).
 
+**Amendment 2026-11-13 (#1618, #1633).** The trusted tier stays the operator's own phone on the debug build, and it
+keeps the envelope path above for bring-up only until #1633 ships the first rule drafted from release-build evidence.
+After that the official server accepts no plaintext envelope from any build, so all three builds (Play, sideload,
+debug) share one collection floor, and the developer's own diagnosis of the debug build stays local, over adb.
+"The whole loop runs on one phone" then no longer holds on the official server: drafting reads skeletons, approved
+chrome, shapes and role tags (§13 to §15). A self-hoster's own server is not bound by this. The contributor tier
+(§15) is separate from trusted: a contributor never sends an envelope or screen text, and contributor status never
+grants either. "Community installs never carry plaintext" now has one exception, the gated contributor word (§15).
+
 ### 7. **Pseudonym invariance** is the structural property the tests pin
 
 For every fixture with a hand-pseudonymized twin, `skeleton(raw) == skeleton(pseudonymized)`: a PII
@@ -498,6 +540,12 @@ skeletons), a per-cluster cap, a bounded on-disk queue (drop-oldest), batch uplo
 (the click envelope is the #919 leak class; a notification body is free text) — §10 (amendment
 2026-10-06, #1189) brings NOTIFICATIONS in under the same grammar and keeps clicks out until a reliable
 screen-fingerprint association exists.
+
+**Amended 2026-11-13 (#1618).** On top of the budgets above: one skeleton per layout and format variant per UTC day,
+kept as presence, with a local count that never leaves the phone, and never de-duplicated by text hashes, which
+would sample per customer (#1620). The skeleton `day` becomes a UTC day; today it is the phone's local date
+(`SkeletonPublisher.kt:67`), a slow time-zone signal (#1619). Uploads run once a day at a random time, never on a
+recognition trigger (§21). Clicks come in as references into a screen's skeleton (§19, #1634).
 
 **Cluster fingerprint** (`CensusFingerprint`) is a NEW function in the contract module, not
 today's `stableHash`: `stableHash` is a 32-bit `Int` (`31 * h + child`, collidable, and the type of
@@ -629,11 +677,15 @@ not rely on `CaptureWriter`, which skips a sensitive UNKNOWN capture without ret
 rejection — the same slot `SkeletonPublisher.publish` occupies on the screen path; UNKNOWN platform
 notifications only; fail-open to the pipeline; debug `HttpCensusSink` only; release `NoOpCensusSink`
 (inert by construction). The 300-per-day budget is SHARED with screens (one budget, one spool).
+Amended 2026-11-13: release and sideload bind the real sink once #1620 ships (§12); #1619 adds the action list to
+notification skeletons, and nothing in it travels in clear.
 
 **Clicks stay OUT.** A click skeleton must cluster under the SCREEN it happened on, which needs the
 screen's census fingerprint at click time; today `Observation.Click` carries only `screenRuleId`, and the
 classifier caches rule/target per platform — not a fingerprint — so an association could be stale across
 a window change. Clicks return as their own amendment once the app computes and carries that fingerprint.
+Superseded 2026-11-13 by §19: click evidence travels with the skeleton of the screen it happened on, as a reference
+into it (#1634).
 
 **Residuals (added to the list below).** A channel id is read in clear: a platform could, in principle,
 encode a per-user value in a channel id — the grammar bound and the k-gate (a singleton channel never
@@ -655,15 +707,18 @@ vocabulary rows that lose eligibility.
 
 | Data | Retention |
 |---|---|
-| Sub-k token hash | 30 days after last sighting, then deleted from EVERY persisted copy — the sightings table, the `h` values inside stored cluster samples (replaced by the SERVER-ONLY value `expired`, distinct from the client's `withheld`; the server rejects `expired` inbound), and rejected vocabulary rows (which keep neither hash nor text past the TTL); never listed, exported or logged in bulk. A community sample is rendered or exported only with its sub-k hashes suppressed |
+| Sub-k token hash | 30 days after last sighting, then deleted from EVERY persisted copy — the sightings table, the `h` values inside stored cluster samples (replaced by the SERVER-ONLY value `expired`, distinct from the client's `withheld`; the server rejects `expired` inbound), and rejected vocabulary rows (which keep neither hash nor text past the TTL); never listed, exported or logged in bulk. A community sample is rendered or exported only with its sub-k hashes suppressed. Amended 2026-11-13: every stored word hash is keyed, `HMAC(pepper, h)` (§3, sjtrotter/dashbuddy-census#85) |
 | Cluster samples | at most 5 skeleton bodies per (cluster, app version), no install id; an UNRESOLVED cluster's samples expire 90 days after the cluster's last sighting; purged 30 days after the cluster resolves |
-| Per-install cluster sightings | 90 days rolling (distinct from the 30-day TOKEN sightings above) |
-| Install records | deleted on "delete my census data", else 365 days after last activity; ingest ledger 7 days; server logs (install-id PREFIX, counts, reason codes — never bodies) 14 days |
-| Trusted-install envelopes | 30 days, earlier once a fixture/rule exists |
-| Per-install health rows | 180 days; fleet rollups indefinitely without install ids |
+| Per-install cluster sightings | **30 days, presence only** (no counts per install), keyed by a 30-day epoch pseudonym (amended 2026-11-13: sjtrotter/dashbuddy-census#79 and sjtrotter/dashbuddy-census#86; was 90 days rolling with counts) |
+| Install records | deleted on "delete my census data", else 365 days after last activity; `enrolled_at` stored as a day; ingest ledger 7 days; server logs and alarms (counts and reason codes, no install id or prefix, never bodies) 14 days (amended 2026-11-13, sjtrotter/dashbuddy-census#79; logs carried an install-id prefix before). The `installs` table is the one place the install id stays (authentication, quotas, contributor grants, withdrawal; §21) |
+| Trusted-install envelopes | 30 days, earlier once a fixture/rule exists. None accepted by the official server after #1633 (amended 2026-11-13, §6) |
+| Per-install health rows | **30 days, then folded into fleet totals**; fleet rollups indefinitely without install ids (amended 2026-11-13: sjtrotter/dashbuddy-census#79 and sjtrotter/dashbuddy-census#64; was 180 days). Diagnostics only, no count that reads as work done (§21, #1571) |
+| Contributor grants, confirmations, role tags | a grant expires after 30 days and can be revoked; confirmations are stored as keyed hashes and role tags as role names, both under epoch pseudonyms, never an install id; the rows of the two live epochs are deleted on request, and rows under a destroyed epoch pepper can no longer be tied to anyone (§15, §21, sjtrotter/dashbuddy-census#81 and sjtrotter/dashbuddy-census#86) |
+| "Ask the developer" quarantine | 72 hours, encrypted to the operator key, never backed up, invisible to clusters, counts, drafting and the agent until the operator approves a sanitized copy (§15, sjtrotter/dashbuddy-census#81) |
+| Click evidence | as the skeleton it points into: same retention, epoch pseudonyms and keyed hashes (§19, sjtrotter/dashbuddy-census#87) |
 | Backups | encrypted, **14 days** — shorter than the longest TTL, so the worst-case life of a purged sub-k row is TTL + 14 days |
-| Text | a community skeleton has no text field to store; the ONE exception is a trusted install's redacted envelope (§6), which can carry text the redact layers missed, kept 30 days |
-| Precise timestamps, device identifiers, location | never stored (hour bucket in flight, day at rest; a coarse metro cell only under the #1137 dual opt-in); request bodies are never logged on either side, not even on a parse failure |
+| Text | a community skeleton has no text field to store; the ONE exception is a trusted install's redacted envelope (§6), which can carry text the redact layers missed, kept 30 days. Amended 2026-11-13: a contributor's gated word (§15) is text, the app's own wording on a constant slot, and is kept as working vocabulary under §4 |
+| Precise timestamps, device identifiers, location | never stored (hour bucket in flight, day at rest); the census stores no location or region of any kind (amended 2026-11-13, §20: the earlier "coarse metro cell only under the #1137 dual opt-in" clause is withdrawn for the census); request bodies are never logged on either side, not even on a parse failure |
 | IP addresses | **never stored and never logged — no exception** (#1180, 2026-10-05: the earlier "72 h abuse log, advertised as `ipLogging`" clause is withdrawn; the server never implemented it and `GET /v1/policy` has no such field). The Caddy edge rate limiter retains the peer address only in process memory for a single window (no access log, forwarded-IP headers stripped); client IPs are never persisted or logged |
 
 The **operator-trust statement** (the residual no design removes): the official server is one
@@ -674,6 +729,12 @@ a token entered the shipped chrome vocabulary by one of §4's two routes — tha
 operator cannot see what the dasher typed, whom they delivered to, or what they earned, subject to
 the dictionary-linkage residual on low-entropy hashes (risk 1). "Only credential digests are stored" is true of CLIENT bearers (`installs.key_hash`); the host itself holds RECOVERABLE operator secrets — the TOTP seed and the database password — as an SSM SecureString rendered into a root-only `.env` (encrypted at rest, not hashed), which the operator-trust statement discloses rather than papers over (#1180). The endpoint is user-selectable
 (the #193 pattern), so a dasher can point the app at any server running this code.
+
+**Amended 2026-11-13 (#1618).** The operator also sees contributor role tags and, once a slot's gate opens, the
+contributor's confirmed word (§15). A shape template shows a value's format, never its digits (§13). The census is
+pseudonymous, not anonymous: until #1635 the operator sees each request's install credential and IP address in
+flight, and holds the peppers that make the at-rest protections of §21 work, so those protect against a stolen
+database or backup, never against the operator. §21's threat model states what each party can learn about one dasher.
 
 ## Lifecycle: schema, filter and identity evolution
 
@@ -750,7 +811,9 @@ so they cannot drift. The skeleton enumerates the scrub contract, so #1147's fie
 are covered without a census change. Client and server share `CensusFingerprint`; `FrameGate`'s and the librarian's identities are unchanged.
 
 **Negative / tradeoffs.** Chrome that is rare (a screen only one market sees) never crosses k from
-community installs alone — the trusted install must see it. The filter over-withholds by design
+community installs alone — the trusted install must see it. (Amended 2026-11-13: once the trusted path closes, §12,
+such a screen is drafted from ids, structure, shapes and role tags, and its wording is checked on phones by probes,
+§17.) The filter over-withholds by design
 (`mixed` never hashes, so "Order #1234" contributes only a kind; a symbol-only run is dropped
 before counting so `Pickup & delivery` still hashes as `words:2`). The two hash domains (census vs parse)
 never produce equal digests, so nothing in the system joins a census cluster to a customer hash by
@@ -825,12 +888,37 @@ must stay green.
     Uber sheet title included — is scrubbed too. Accepted, not scoped by a chat ancestor: the path is
     debug-only (release binds `NoOpCaptureBus`) and the cost is triage text, never privacy.
 
+Added 2026-11-13 (#1618), for §12 to §21:
+
+12. **Constant is not chrome.** A common first name, a store or a local word can carry the same hash on k installs.
+    Controls: the regional class (§14), the chrome filter on candidates, two independent confirmations (§15), and the
+    human gates of §18. A wrongly gated word reaches the working vocabulary only; the shipped vocabulary still needs
+    `k_ship` and a human classification (§4).
+13. **Contributor Sybils.** One party with several eligible installs can supply both confirmations. Eligibility is a
+    yes/no the phone reports, so it is evidence, not proof. Controls: the k-install requirement on top of the two
+    confirmations, expiring and revocable grants, and the human gates. Play Integrity may later weight k; it is never
+    a gate, because it would exclude the sideload build.
+14. **The anchor check is a dictionary oracle.** Its limits (§16) bind the workbench, the agent token and the
+    dashboard. The live operator holds the database and the pepper and can run any lookup outside the tool, which is
+    risk 7.
+15. **The live operator can link one phone's requests.** Until #1635, every request arrives with the install
+    credential and an IP address; within an epoch, stored rows join; the daily upload and the health report show
+    which days a phone saw a platform app, for 30 days (§21).
+16. **A shape says what a slot holds.** A template tells the server a slot is money, a time, a distance, minutes or
+    a count, and its format. Classes leave out what parsing does not need (§13), and a property test proves no name,
+    address, phone number or code becomes a shape (#1619).
+17. **A probe literal is chosen by the operator.** The phone's chrome filter, no per-install targeting, expiry and a
+    client-side budget limit what a probe can ask (§17), but they do not stop it: a common first name can pass the
+    filter, and each install's answer arrives in its own health report, readable within the epoch. Answers are
+    attributable until they are aggregated before the operator sees them.
+
 ## Open questions (dev decisions; the same items appear in #1157's plan §10 under its own numbering — this list is the ADR's reference)
 
 1. **RESOLVED 2026-10-01:** the Apache-2.0 `census-contract/` included build (#1173).
 2. Whether trusted installs are excluded from `k_ship` (this ADR assumes yes).
 3. Backup retention of 14 days.
 4. What "contributing" means for the #1137 promo (decides whether the server keeps a metro cell at all).
+   Amended 2026-11-13: the census keeps none (§20); the question remains open only for the aggregation pulse (#193).
 
 ## References
 
@@ -838,6 +926,9 @@ must stay green.
 - `~/dashbuddy/design/2026-09-30-census-server/PLAN.md` (server plan; outside the repo)
 - CLAUDE.md § Pledges, § Development Principles 6–7, §1 Redaction invariants / Backstops
 - ADR-0009 amendment (same PR): authoring model — drafted and reviewed, not hand-authored
+- 2026-11-13 amendment (§12 to §21): epic #1617, #1618; council rounds 2 and 3 (Claude, Sol, Fable, Astra),
+  `~/dashbuddy/design/2026-11-12-census-contributor/synthesis-r2.md` and `synthesis-r3.md` (outside the repo);
+  server issues in `sjtrotter/dashbuddy-census` (#64, #69, #78 to #87)
 
 ## §11 Region cell (#1194)
 
@@ -876,3 +967,270 @@ Suppression is enforced server-side with the pulse. Enrolment alone never
 counts as contributing; observations must come from activity. For Sybil
 purposes the cell is a self-reported field, not proof of location, and the
 cohort count uses the pulse's attestation weighting (#194).
+
+## Amendment 2026-11-13: skeletons from every build (#1618, epic #1617)
+
+Decided by council rounds 2 and 3 (Claude, Sol, Fable, Astra; `synthesis-r2.md` and `synthesis-r3.md` in
+`~/dashbuddy/design/2026-11-12-census-contributor/`) and by the developer on 2026-11-13. The census moves from the
+developer's debug build to opted-in Play and sideload installs, and the census server becomes the place where rules
+are drafted from what those installs send. No customer text leaves a Play or sideload phone, and the Pledges do not
+change.
+`census#N` below is an issue in `sjtrotter/dashbuddy-census`. On 2026-11-13 none of §12 to §21 is built: the debug
+build's census runs as §1 to §11 describe.
+
+| Section | Mechanism | Built by |
+|---|---|---|
+| §12 | skeletons from the Play and sideload builds, opt-in | #1620, #1621; census#79, census#85 |
+| §13 | shape templates and click flags | #1619; census#78 |
+| §14 | per-slot constancy with a regional class | census#80 |
+| §15 | the contributor tier and its word gate | #1625, #1626, #1627; census#81 |
+| §16 | the anchor check | census#82 |
+| §17 | probe rules | #1630 |
+| §18 | skeleton drafting, shadow mode, canary, rollback | #1628, #1629, #1630, #1631, #1573, #1632, #1633; census#69, census#83, census#84 |
+| §19 | click evidence | #1634; census#87 |
+| §20 | no region data | a limit; nothing to build |
+| §21 | the dasher's privacy | #1571, #1579, #1620, #1622; census#64, census#79, census#85, census#86; later #1635 |
+
+### §12 Every build may send skeletons, opt-in
+
+- The Play (`release`) and sideload builds bind the real census sink and the health reporter (#1620). Today they
+  bind `NoOpCensusSink` (`core/data/src/release/.../di/CensusSinkModule.kt:27`), and the upload worker refuses to
+  run outside debug (`CensusUploadWorker.kt:148`).
+- Nothing is sent until the dasher opts in through a prominent disclosure (#1621): what a skeleton is, why it is
+  sent, who receives it, and how to stop. Off by default, per platform, Wi-Fi only by default. The consent receipt is
+  bound to the server endpoint, so a new endpoint asks again. Health reports ride the same consent: no consent, no
+  upload of any kind.
+- The capture bus stays `NoOpCaptureBus` in the Play and sideload builds. Only skeletons, health counts and, from a
+  contributor, the role tags and gated words of §15 leave those phones.
+- The debug build keeps the trusted-envelope path until #1633; after that the official server accepts no plaintext
+  envelope from any build (§6), and all three builds follow one collection floor (checked by #1624).
+- The server goes first: no Play or sideload install uploads before the retention and log cuts, quotas, pause switch
+  and deletion (census#79) and keyed storage (census#85) are live. Testers are recruited only after the whole chain
+  works end to end, the contributor tier and #1633 included (#1624).
+- Counsel (#246) reviews the disclosure wording before recruiting. The disclosure tells the dasher that the delivery
+  company's agreement is between them and that company (#1621).
+- A census failure never changes recognition (unchanged).
+
+### §13 Shape templates and click flags (#1619, census#78)
+
+A money, time or distance slot goes out today as `mixed` with no hash (§1), so a pay field that moves or re-renders
+cannot be studied from census data. A new `shape` slot kind carries a value's format with the digits removed, from a
+closed list: money (`$##.##`), a 12-hour clock time, distance (`#.# mi`), minutes (`## min`) and item counts
+(`# items`).
+
+- A shape is filled only from the list, through `PiiShapes`. Free text never becomes a shape, and a value that fits no
+  template goes out as it does today.
+- A class leaves out what parsing does not need: one 12-hour clock class covers AM and PM.
+- The phone keeps a local "this slot varied" flag per variant instead of sending every differing hash.
+- The server validates shapes against the same list and rejects anything else as `bad_request`. Fingerprints ignore
+  the new fields, so existing clusters do not split.
+- Property tests: no generated customer name, address, phone number or code produces a shape, and neither does the
+  dasher's own name, greeting, account identifier or location-bearing label.
+- Screen nodes gain `clickable`, `hasClickAction` and the missing visibility flags. Notification skeletons gain their
+  action list; #1619 settles its form, and nothing in it travels in clear.
+
+On the workbench, a shape test runs generated boundary values through the draft's real regex and transforms. A regex
+run against a literal `#` proves nothing (census#83).
+
+### §14 Per-slot constancy (census#80)
+
+The server classifies each text slot of a cluster from the hashes it already holds:
+
+- constant: the same hash on many installs, reported as candidate chrome, never as proof;
+- varying: a different hash per frame, which is a value (a customer, a store, a time);
+- regional: several values, each on several installs (zone and store names); never confirmable and never
+  anchor-checked;
+- withheld: a backstop fired;
+- unknown: fewer than k installs, where k is the live community threshold of §4.
+
+Support is counted per variant and slot within one epoch (§21), not from global token sightings. The phone reads a
+slot's class from an endpoint that returns classes only, never another install's hash, and greys varying and regional
+slots on the review screen (#1626).
+
+### §15 The contributor tier (#1625, #1626, #1627, census#81)
+
+A contributor is an opted-in dasher, invited after real use, who reviews a screen before it is sent and adds what a
+hash cannot give: the app's own words on constant slots, and what a field means. The tier is separate from trusted
+(§6). A contributor never sends an envelope or screen text, and contributor status never grants either.
+
+- Eligibility is computed on the phone: census opt-in, an install at least 7 days old, active on at least 3 of the
+  last 7 days, at least 2 recorded shifts. Only yes or no is sent. Eligibility never requires a high recognition
+  ratio. The invitation comes after a shift ends, never during one; accepting shows a second disclosure and then
+  requests a grant; a decline is durable.
+- A grant expires after 30 days, can be revoked, and is checked at upload in the same transaction. Expiry, revocation
+  or withdrawal stops contributor uploads and clears pending reviews.
+- Review happens after the shift, at most 3 screens a day, de-duplicated by layout. Raw text is held in memory only
+  and is lost on process death; only the sanitized result is stored. Customer data the app can detect (names,
+  addresses, codes, notes, every backstop hit) is masked before the contributor sees the screen, so a careless Send
+  is still masked. The dasher's own name, greeting, account details and location-bearing labels are masked the same
+  way. Varying and regional slots are greyed and cannot be unmasked. A constant slot shows its word, and the
+  contributor may confirm it as the app's own wording. Any field may get a role tag ("total pay", "tip", "deadline",
+  "customer info", "store name"), which carries no value.
+- **The word gate.** A confirmation is sent as a hash. The confirmed word leaves the phone only after the server
+  reports at least 2 confirmations from independent installs and k installs seeing the slot; two confirmations from
+  one install count once. The phone holds the word back until then, and the server refuses a plaintext word for a slot
+  whose gate is closed; the gate is never only a dashboard filter. A word that passes joins the working vocabulary as
+  approved chrome (§4). Two confirmations and k installs are necessary, not sufficient (risk 12).
+- Confirmations and role tags are keyed by epoch pseudonyms (§21), never the install id.
+- "Ask the developer" sends the outbound artifact the review screen described (byte-identical), with an optional note
+  from a fixed list, to a quarantine: encrypted to the operator key, expiring in 72 hours, never backed up, and kept
+  out of clusters, counts, drafting and the agent's view until the operator approves a sanitized copy. It never
+  sends unmasked text, and it is not a way around the word gate: a word the review screen shows on a constant slot is
+  a local display, and in the outbound artifact that slot stays a hash unless its gate has opened.
+- Contributor review is evidence. It is never permission to send customer text.
+
+### §16 The anchor check is a dictionary lookup (census#82)
+
+When the developer or an agent drafts an anchor, the workbench checks whether a word is what a constant slot holds by
+hashing the candidate and comparing. That is a dictionary lookup, the same operation an attacker would run against
+the hashes, so it runs only inside these limits:
+
+- a candidate must pass the chrome filter (no name, address or code shape), and a failing one is refused before it is
+  hashed;
+- only constant slots seen by at least k installs answer; a regional or below-threshold slot returns "no answer",
+  never "no match";
+- exact `hasText` only, with the case variants `hasText` accepts, because `hasText` compares case-insensitively and
+  the census hash keeps case; "contains" and pattern candidates are answered on phones by probes (§17);
+- the candidate is hashed, then keyed with the pepper (§21), then compared;
+- each caller has a daily rate limit, and an audit log records every query (caller, slot, candidate, result), from the
+  agent and the operator alike.
+
+These limits bind the tool. They do not bind the live operator, who holds the database and the pepper (risk 14).
+
+### §17 Probes, never fragment hashes (#1630)
+
+No word fragment is ever hashed or sent: n-gram, prefix or suffix hashes would put a name inside a phrase on the wire.
+A whole-slot hash cannot verify a "contains" or pattern arm, so those arms, and long notification bodies, are checked
+on phones by probes. A probe is a shadow rule (§18) with no `state` block, published only to be counted.
+
+- Probes are signed, expire, are common to all phones (no per-install targeting), and run under a client-side budget.
+- The phone checks every literal before it evaluates a probe. A literal that fails the chrome filter (a name, address
+  or code shape, a mask marker) is refused and counted as `probe_refused`, never evaluated. Like redaction, this
+  fails closed.
+- Only counts reach the health report. Those counts arrive in the install's own health report, so within an epoch the
+  operator can read one install's answer; publishing a probe to every phone does not prevent that. The literal filter,
+  no targeting, expiry and the budget limit what a probe can ask; a common first name can still pass the filter
+  (risk 17). Answers stay attributable until a mechanism aggregates them before the operator sees them.
+
+### §18 Drafting from skeletons, shadow mode, canary, rollback
+
+§9 stands: every drafted rule reaches `matchers/` as a pull request through app CI and review, and the developer
+approves the signing. Drafting from skeletons adds:
+
+- Skeleton mode in `RuleDraft`: anchors come from ids, approved chrome and structure; parse fields from role tags and
+  shapes. A slot with no approved word stays unknown and is never shown as observed text. Synthetic fixtures carry
+  approved chrome and fictional values in every other slot, several per variant, with independent expected values
+  (#1628, census#83).
+- Masking obligations that do not come from the drafted rule: role tags, every varying slot, and the rules-independent
+  backstops. Deleting any one `redact` entry fails the test, and a node with no stable selector gets a wider mask or no
+  draft (#1629). Today `CensusDraftRoundTripTest` takes its obligations from the production redaction, which cannot
+  see a new node.
+- An agent token reads only approved evidence and writes only a pull request (census#84).
+- **Shadow mode** (#1630). A signed rule marked `shadow` is compiled and evaluated beside the live rules, and its result
+  never reaches the state machine, a capture, a tap or any effect. The phone counts matches, ties with a live rule,
+  empty parse fields, and frames where a name-shaped value survived the masks; only those counts reach the health
+  report. Shadow rules are bounded in number and evaluation time, and a failure counts as no match.
+- **Canary** (#1631). The signed manifest carries a share per rule. Each phone draws its own bucket once, locally; the
+  server never assigns it. Health reports carry the rules generation and whether the phone was in the canary.
+  Promotion to every phone is a new signed generation the developer approves.
+- **Rollback** is a newer generation with a higher sequence that restores the last good rules; a phone never accepts
+  a lower sequence (#1631).
+- Matched skeletons (#1573, census#69): while a rule is in a parse-rot incident, the skeleton of a frame it matched,
+  at most 1 per rule per day and 10 a day, inside the shared budgets.
+- A drafted click rule goes to shadow mode first, and an automated tap still needs the no-auto-grant capability
+  consent.
+- Proof: #1632 redrafts a shipped id-less rule blind and compares it on the real corpus; #1633 ships a rule through
+  shadow and canary to every phone, then closes the trusted path (§6).
+
+### §19 Click evidence as references into skeletons (#1634, census#87)
+
+This supersedes §10's "Clicks stay OUT". When a tap lands on a node no click rule recognizes, or a click rule is in an
+incident, the phone records which node of that screen's skeleton was tapped: its path in the tree, its class, id and
+click flags, and its word hash or shape, with the screen's fingerprint and the rules generation. The target and its
+clickable owner are resolved the way `UiInteractionHandler` resolves them, so the evidence names the node a rule would
+bind. It travels with that screen's skeleton under the same caps, sampling, upload window and consent, and carries no
+text, no sequence of taps and no time finer than the day. A tap on a blocked screen sends nothing.
+
+### §20 No region data
+
+The census collects no location, region or metro cell. "Installs on platform version V landing in cluster C" stands
+in for a market. §11 is unchanged and belongs to the aggregation pulse (#193); a census enrolment or upload carries
+no region field.
+
+### §21 The dasher's privacy (council round 3)
+
+Rounds 1 and 2 protected the customer. Round 3 found the dasher was the weak side: every census table joins on a
+permanent install id (`V1__census_schema.sql` in the server repository), so the server keeps a months-long
+diary of one dasher's work that rule authoring never needs. Rule authoring needs to know that k phones saw something;
+it does not need to follow one phone over time. Most of the fix is keeping less.
+
+**Threat model.** What each party can learn about one dasher from the census: today (the debug build, 2026-11-13) and
+once §12 to §21 ship.
+
+| Party | Today | After |
+|---|---|---|
+| The live operator, or whoever controls the running server | each request's install credential and IP address in flight; every table joined on the install id: daily health rows with frame counts for 180 days, cluster sightings for 90 days, token sightings for 30 days, an install-id prefix in request logs for 14 days; upload arrival about 5 minutes after the first unrecognized frame (`HttpCensusSink.kt:53-58`, `CensusWorkScheduler.kt:29-38`), which tracks shift starts; dictionary guesses against stored word hashes | the credential and IP in flight, until #1635; rows from the two live epochs can be tied to an install by recomputing pseudonyms, and dictionary lookups still work with the pepper; older rows cannot be tied to any install; per-install health for 30 days, then fleet totals; which days a phone uploaded, but not when its shifts start |
+| A thief with a database dump or a backup, without the server's peppers | the same joins at rest, and offline guesses (place, store and first names) against the unsalted word hashes, per install | content rows carry epoch pseudonyms, not install ids; stored word hashes are keyed, so a guess list matches nothing; the `installs` table still holds install ids, enrolment days and grants |
+| A network observer on the Wi-Fi or cellular path | content hidden by TLS; the census host, request sizes, and upload times that track shift starts, on any network | HTTPS only, cleartext refused app-wide; one upload a day at a random time, on Wi-Fi by default, so a cellular observer sees no census traffic by default |
+
+**Diagnostics, not work history** (#1571, census#64). No count of shifts, deliveries or active days leaves the phone;
+contributor eligibility is a yes or no (§15). The health report carries no count that reads as work done. Its `trips`
+field stays: it counts recognition-health alarm trips (`HealthLedger.kt:36`, `RecognitionHealthMonitor.kt:155-157`),
+not deliveries. It carries per-rule shortfall counts and
+their denominators, clipped to fixed bounds, with the rules generation. Skeletons are sampled once per layout variant
+per UTC day, as presence (§8).
+
+**Upload timing and transport** (#1620).
+
+- No upload is triggered by recognition activity. The phone uploads once a day at a random time, independent of shift
+  starts and ends. Fable dissented (arrival times are not persisted, and an hourly cadence speeds fixes); the window
+  was adopted because the live operator and a network observer see timing, and drafting, not upload latency, sets how
+  fast a fix ships.
+- Wi-Fi only, on by default.
+- HTTPS only: an explicit network security config refuses cleartext for the whole app, and a test checks that every
+  endpoint the app calls is `https`. Today cleartext is off only through the target SDK's default; the app has no
+  network security config.
+
+**Keyed storage** (census#85). At ingest the server replaces every word hash with `HMAC(pepper, h)` before writing it
+anywhere. The pepper lives in SSM beside the TOTP seed, never in the database, its backups or the logs, and is backed
+up like the TOTP seed. It is not rotated: a new pepper is a new hash domain and needs a migration plan. Equality is
+unchanged, so constancy, k counting and the anchor check (hash, key, compare) work as before. The limit: this protects
+a stolen database or backup. It does not protect against the live operator, who holds the pepper.
+
+**Epoch pseudonyms at rest** (census#86). Content rows (token and cluster sightings, per-install health, confirmations,
+role tags, click evidence) are keyed by an epoch tag computed at ingest, `HMAC(epoch pepper, install id | purpose |
+object)`, where an epoch is 30 days. One phone gets the same tag within an epoch and an unrelated tag in the next. The
+`installs` table keeps the install id only for authentication, quotas, contributor grants and withdrawal. The server
+holds the current and previous epoch peppers and destroys older ones, after which those rows cannot be tied to any
+install. k is counted within one epoch, never across two. Deletion recomputes the tags under the live peppers and
+deletes those rows; a restore replay skips rows under destroyed peppers. The limit: rows in the two live epochs can be
+tied to an install by whoever holds their peppers.
+
+**Retention** (census#79). The Server-side commitments table above holds the numbers, amended in place on this date.
+
+**Deletion** (#1622, #1579, census#79).
+
+- "Delete my census data" is its own button, separate from stopping. It sends a deletion request, shows the server's
+  confirmation, and works while an upload is still waiting. Stopping keeps anything new from leaving; deleting removes what the server holds that is tied to this install.
+- The server deletes every row it can tie to the install: the install record, sightings, health, confirmations, role
+  tags, grants, quarantine items and trusted envelopes, and it re-applies deletions after a restore from backup.
+- What survives is stated on the same screen. Data that can no longer be tied to the install: cluster samples
+  (stored without an install id, §5), fleet totals, vocabulary already approved at k, rules and synthetic fixtures
+  already published, and rows under destroyed epoch peppers. Data that can still be tied to it for a while: the
+  encrypted backups taken before the request keep the install's rows until they expire, at most 14 days later; a
+  restore from one of them re-applies the deletion before the server serves anything.
+- The on-phone wipe (#1579) sends the same deletion request when the install is enrolled, then clears everything
+  gig.log keeps on the phone.
+
+**Later: an independent relay and anonymous credentials** (#1635). Needed before any wide rollout, not before the first
+testers. Collection requests go through an Oblivious HTTP relay (RFC 9458) run by an independent operator (a
+university host under the academic pillar is the candidate; a relay the census operator runs does not count), and
+carry epoch-limited anonymous tokens (Privacy Pass, RFC 9576) instead of the permanent credential. The relay sees the
+IP address and not the content; the server sees the content and not the IP address. Until it ships, the records say
+the census is pseudonymous.
+
+**Rejected.** An OPRF key service (one operator would hold both halves); phone-side rotating or shared keys (they
+break cross-install equality, and a key in the APK is public); STAR or Poplar (frequency is not chrome, Sybils, and it
+needs a non-colluding party); local differential privacy now (with a dozen testers the noise swamps the signal);
+mandatory Play Integrity (it excludes the sideload build; at most a k-weight later); pull-only collection in place of
+uploads (it cannot discover unknown screens); n-gram hashes (§17).

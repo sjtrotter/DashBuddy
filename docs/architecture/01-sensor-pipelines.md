@@ -759,6 +759,11 @@ Not in #1148: `notificationTimeout` (stays 100 ms), TalkBack's subtree-only / fo
 
 **Census skeleton (M1a, #1145; hardened over four review rounds of PR #1160) — wired behind a NoOp sink (M1b, #1146).**
 The UNKNOWN screen/notification census (Epic #1138, #1189) is specified by ADR-0011; this layer builds hash-only skeletons and publishes them to the opt-in debug uploader (#1182).
+ADR-0011's 2026-11-13 amendment (§12 to §21, #1618, epic #1617) records the decided next design: skeletons from the
+Play and sideload builds, opt-in; shape templates and click flags; the contributor tier and its word gate; probes in
+place of fragment hashes; shadow mode, canary and rollback; click evidence; no region data; and the dasher-privacy
+model (sampling, a daily upload window, Wi-Fi by default, HTTPS only, keyed storage, epoch pseudonyms, deletion). None
+of it is built yet; the bullets below describe what runs today, and each issue that builds a piece updates them.
 
 - *Publisher stage* — `census.SkeletonPublisher`, injected into `AccessibilityPipeline` and `NotificationPipeline`, runs post-admission/dedup after capture and before the UNKNOWN rejection on UNKNOWN platform screens and notifications when `CensusSink.isEnabled`; hands the sink `CensusRecord(platform, fingerprint, skeletonJson, itemBytes, captureId?)`; `PipelineStats` counts skeletons / hashed / withheld / sink refusals / failures / `refused{reason}` under `census{…}` (rendered only when non-zero); the day is the observation timestamp's device-local calendar date.
 - *Notifications (#1189, ADR-0011 §10)* — `NotificationSkeletonBuilder` validates the platform via
