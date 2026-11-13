@@ -60,7 +60,6 @@ class RestoreSwapTest {
         var moves = 0
         RestoreSwap.applyPending(context) { from, to -> if (++moves == 3) false else from.renameTo(to) }
 
-        assertEquals(3, moves)
         assertCurrentUnchanged()
         assertEquals("nothing left in previous", emptyList<File>(), previous.walkTopDown().filter { it.isFile }.toList())
         assertFalse("the stage is deleted", staging.exists())
@@ -168,6 +167,55 @@ class RestoreSwapTest {
             RestoreSwap.applyPending(context)
             assertBackupState("death after move $killAt")
             assertEquals("death after move $killAt", RestoreOutcome.Restored(123L), BackupRestorer(context).takeResult())
+        }
+    }
+
+    private fun assertPreRestoreState(label: String) {
+        assertArrayEquals(label, db, dbFile.readBytes())
+        assertArrayEquals(label, wal, walFile.readBytes())
+        assertArrayEquals(label, vehicles, BackupTestFiles.readStore(context, DataStoreFiles.VEHICLES))
+        assertArrayEquals(label, byteArrayOf(31), BackupTestFiles.readStore(context, DataStoreFiles.APP_PREFS))
+        assertArrayEquals(label, byteArrayOf(32), BackupTestFiles.readStore(context, DataStoreFiles.WEEKLY_PLAN))
+        assertNull(label, BackupTestFiles.readStore(context, DataStoreFiles.STRATEGY_PREFS))
+        assertFalse(label, staging.exists())
+        assertEquals(label, emptyList<File>(), previous.walkTopDown().filter { it.isFile }.toList())
+    }
+
+    @Test
+    fun `a failed install rolls back to the pre-restore files`() = runBlocking {
+        stageThreeStores()
+        var moves = 0
+        RestoreSwap.applyPending(context) { from, to -> if (++moves == 9) false else from.renameTo(to) }
+        assertPreRestoreState("rolled back")
+        assertEquals(RestoreOutcome.Failed, BackupRestorer(context).takeResult())
+    }
+
+    @Test
+    fun `a death at any step of the rollback finishes it at the next start`() = runBlocking {
+        // Moves 1-5 empty the live paths, 6-8 install, 9 fails, 10-14 put the five originals back.
+        for (killAt in 10..14) {
+            for (afterMove in listOf(false, true)) {
+                val label = "death ${if (afterMove) "after" else "before"} move $killAt"
+                BackupTestFiles.clean(context)
+                setUp()
+                stageThreeStores()
+                var moves = 0
+                try {
+                    RestoreSwap.applyPending(context) { from, to ->
+                        moves++
+                        when {
+                            moves == 9 -> false
+                            moves == killAt && !afterMove -> throw Kill()
+                            else -> from.renameTo(to).also { if (moves == killAt) throw Kill() }
+                        }
+                    }
+                    error("$label: the rollback finished without dying")
+                } catch (_: Kill) {
+                }
+                RestoreSwap.applyPending(context)
+                assertPreRestoreState(label)
+                assertEquals(label, RestoreOutcome.Failed, BackupRestorer(context).takeResult())
+            }
         }
     }
 

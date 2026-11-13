@@ -13,24 +13,28 @@ import java.io.IOException
  *
  * With a `restore-staging/ready` marker the swap runs in two phases, each opened by a synced marker in the stage so a
  * process death at any point resumes at the next start:
- * 1. `swapping`: the current database files (`giglog.db`, `-wal`, `-shm`, `-journal`) and each backed-up DataStore
- *    file move to `restore-previous/`. That one copy is cleared only on the first attempt, before the marker.
+ * 1. `swapping`: holds the names of the live files present before the restore (the database's `giglog.db`, `-wal`,
+ *    `-shm`, `-journal` and each backed-up DataStore file), written once on the first attempt and read on every
+ *    retry. Those files move to `restore-previous/`. That one copy is cleared only on a fresh first attempt.
  * 2. `installing`: the staged files move into place. A store the backup lacks stays absent, so the install matches the
  *    backup.
- * Each move is a rename on one filesystem, so a file is always in exactly one place; a resumed phase moves only the
- * files still waiting. An in-process move failure undoes both phases and the app starts on its old data. Without the
- * marker any leftover stage is deleted and nothing moves.
+ * Each move is a rename on one filesystem; a resumed phase moves only the files still waiting.
  *
- * It never touches the consent, grant, developer, notice or census stores, logs or captures. Room opens the result as
- * usual: the pre-open snapshot and migrations handle an older backup, and a projector version change refolds the
- * read model. An [Exception] never escapes; an [Error] does, as the crash it is, and the next start resumes the swap.
- * Logging (tag `Backup`): INFO on a swap, WARN on a failed one; counts and class names only.
+ * A failed move starts a rollback, opened by a synced `rolling-back` marker that takes precedence at every later
+ * start until the rollback finishes. The rollback is idempotent: each original still in `restore-previous/` replaces
+ * whatever is live at its path, an original already moved back is left alone, and a live file at a path with no
+ * original came from the backup and is deleted. Then `failed` is written and the stage deleted.
+ *
+ * Without the `ready` marker any leftover stage is deleted and nothing moves. It never touches the consent, grant,
+ * developer, notice or census stores, logs or captures. An [Exception] never escapes; an [Error] does, as the crash it
+ * is, and the next start resumes. Logging (tag `Backup`): INFO on a swap, WARN on a rollback; counts and class names.
  */
 object RestoreSwap {
 
     private const val TAG = "Backup"
     private const val SWAPPING = "swapping"
     private const val INSTALLING = "installing"
+    private const val ROLLING_BACK = "rolling-back"
     private val DB_SUFFIXES = listOf("", "-wal", "-shm", "-journal")
 
     fun applyPending(context: Context) = applyPending(context) { from, to -> from.renameTo(to) }
@@ -46,70 +50,113 @@ object RestoreSwap {
                 return
             }
             val createdAt = runCatching { ready.readText().trim().toLong() }.getOrNull()
-            swap(context, staging, move)
-            staging.deleteRecursively()
-            writeResult(filesDir, "${BackupFormat.RESULT_OK} ${createdAt ?: ""}".trim())
-            Timber.tag(TAG).i("restore swapped")
+            val swap = Swap(context, staging, move)
+            if (!swap.rollingBack.exists()) {
+                val swapped = try {
+                    swap.run()
+                    true
+                } catch (e: Exception) {
+                    Timber.tag(TAG).w("restore swap failed (%s), rolling back", e.javaClass.simpleName)
+                    false
+                }
+                if (swapped) {
+                    runCatching { writeResult(filesDir, "${BackupFormat.RESULT_OK} ${createdAt ?: ""}".trim()) }
+                    finish(staging)
+                    Timber.tag(TAG).i("restore swapped")
+                    return
+                }
+            }
+            swap.rollBack()
+            runCatching { writeResult(filesDir, BackupFormat.RESULT_FAILED) }
+            finish(staging)
+            Timber.tag(TAG).w("restore rolled back, old data kept")
         } catch (e: Exception) {
-            val failed = e as? SwapFailed
-            Timber.tag(TAG).w(
-                "restore swap failed (%s), %d file(s) not put back",
-                (failed?.cause ?: e).javaClass.simpleName, failed?.notPutBack ?: 0,
-            )
-            runCatching { staging.deleteRecursively() }
+            // The rollback could not finish. The stage stays, so the next start retries it.
+            Timber.tag(TAG).w("restore rollback incomplete (%s), retried at the next start", e.javaClass.simpleName)
             runCatching { writeResult(filesDir, BackupFormat.RESULT_FAILED) }
         }
     }
 
-    private fun swap(context: Context, staging: File, move: (File, File) -> Boolean) {
-        val previous = File(context.filesDir, BackupFormat.PREVIOUS_DIR)
-        val dbFile = context.getDatabasePath(GigLogDatabase.NAME)
-        // (live file, its place in restore-previous/)
-        val toPrevious = DB_SUFFIXES.map { File(dbFile.path + it) to File(previous, GigLogDatabase.NAME + it) } +
-            DataStoreFiles.BACKED_UP.sorted().map {
-                BackupFormat.datastoreFile(context, it) to File(previous, BackupFormat.datastoreEntry(it))
-            }
-        // (staged file, its live place)
-        val toLive = listOf(File(staging, BackupFormat.DB_ENTRY) to dbFile) +
-            DataStoreFiles.BACKED_UP.sorted().map {
-                File(staging, BackupFormat.datastoreEntry(it)) to BackupFormat.datastoreFile(context, it)
-            }
-        val swapping = File(staging, SWAPPING)
-        val installing = File(staging, INSTALLING)
-        try {
+    /** One restore's file plan. Keys are the names under `restore-previous/`, which double as the originals list. */
+    private class Swap(context: Context, staging: File, private val move: (File, File) -> Boolean) {
+        private val previous = File(context.filesDir, BackupFormat.PREVIOUS_DIR)
+        private val swapping = File(staging, SWAPPING)
+        private val installing = File(staging, INSTALLING)
+        val rollingBack = File(staging, ROLLING_BACK)
+
+        /** Every live path a restore may replace, by key. */
+        private val live: Map<String, File> = run {
+            val dbFile = context.getDatabasePath(GigLogDatabase.NAME)
+            DB_SUFFIXES.associate { GigLogDatabase.NAME + it to File(dbFile.path + it) } +
+                DataStoreFiles.BACKED_UP.sorted().associate {
+                    BackupFormat.datastoreEntry(it) to BackupFormat.datastoreFile(context, it)
+                }
+        }
+
+        /** Each staged file and the key of the live path it replaces (the staged database is `giglog.db`). */
+        private val staged: List<Pair<File, String>> = listOf(File(staging, BackupFormat.DB_ENTRY) to GigLogDatabase.NAME) +
+            DataStoreFiles.BACKED_UP.sorted().map { BackupFormat.datastoreEntry(it) }.map { File(staging, it) to it }
+
+        fun run() {
             if (!installing.exists()) {
                 if (!swapping.exists()) {
                     previous.deleteRecursively()
-                    BackupFormat.writeSynced(swapping, ByteArray(0))
+                    val originals = live.filterValues { it.exists() }.keys
+                    writeMarker(swapping, originals.joinToString("\n"))
                 }
-                moveWaiting(toPrevious, move)
-                BackupFormat.writeSynced(installing, ByteArray(0))
+                for (key in originals()) moveIfWaiting(live.getValue(key), File(previous, key))
+                writeMarker(installing, "")
             }
-            moveWaiting(toLive, move)
-        } catch (e: Exception) {
-            // Undo phase 2, then phase 1: each file goes back to where it was before the swap began. Phase 2 starts
-            // only once every live place is empty, so a live file there is an installed one; before that, none is.
-            val notPutBack = (if (installing.exists()) undo(toLive) else 0) + undo(toPrevious)
-            throw SwapFailed(notPutBack, e)
+            for ((from, key) in staged) moveIfWaiting(from, live.getValue(key))
         }
-    }
 
-    /** Moves each pair whose source still exists; a source already moved by an earlier attempt is skipped. */
-    private fun moveWaiting(pairs: List<Pair<File, File>>, move: (File, File) -> Boolean) {
-        for ((from, to) in pairs) {
-            if (!from.exists()) continue
+        /** Puts every original back; idempotent, so a death part way finishes at the next start. */
+        fun rollBack() {
+            if (!rollingBack.exists()) writeMarker(rollingBack, "")
+            // No swapping marker: phase 1 never began and nothing moved.
+            if (!swapping.exists()) return
+            val originals = originals()
+            var notPutBack = 0
+            for ((key, path) in live) {
+                val kept = File(previous, key)
+                when {
+                    key in originals && kept.exists() -> {
+                        if (path.exists()) path.delete()
+                        if (!move(kept, path)) notPutBack++
+                    }
+                    key !in originals && path.exists() -> if (!path.delete()) notPutBack++
+                }
+            }
+            if (notPutBack > 0) throw IOException("$notPutBack file(s) not put back")
+        }
+
+        private fun originals(): Set<String> =
+            swapping.readLines().map { it.trim() }.filter { it in live.keys }.toSet()
+
+        private fun moveIfWaiting(from: File, to: File) {
+            if (!from.exists()) return
             to.parentFile?.mkdirs()
             if (to.exists() || !move(from, to)) throw IOException("a restore move failed")
         }
+
+        /** Writes a marker whole or not at all: a synced temp file renamed into place. */
+        private fun writeMarker(marker: File, text: String) {
+            val tmp = File(marker.path + ".tmp")
+            BackupFormat.writeSynced(tmp, text.toByteArray(Charsets.UTF_8))
+            if (!tmp.renameTo(marker)) throw IOException("could not write a restore marker")
+        }
     }
 
-    /** Moves each pair's file back from its destination when its source is empty. Returns the moves that failed. */
-    private fun undo(pairs: List<Pair<File, File>>): Int =
-        pairs.count { (from, to) -> to.exists() && !from.exists() && !to.renameTo(from) }
+    /**
+     * Ends a stage: `ready` goes first, in one delete, so a death while the rest is deleted leaves an inert stage that
+     * the next start removes, never a half-deleted one it would act on.
+     */
+    private fun finish(staging: File) {
+        File(staging, BackupFormat.READY_FILE).delete()
+        staging.deleteRecursively()
+    }
 
     private fun writeResult(filesDir: File, text: String) {
         File(filesDir, BackupFormat.RESULT_FILE).writeText(text)
     }
-
-    private class SwapFailed(val notPutBack: Int, cause: Throwable) : Exception(cause)
 }
