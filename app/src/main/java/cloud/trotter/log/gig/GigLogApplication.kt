@@ -9,6 +9,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import cloud.trotter.log.gig.core.data.backup.RestoreSwap
 import cloud.trotter.log.gig.core.data.location.OdometerRepository
 import cloud.trotter.log.gig.core.data.log.LogRepository
 import cloud.trotter.log.gig.core.data.settings.DevSettingsRepository
@@ -121,6 +122,11 @@ class GigLogApplication : Application(), Configuration.Provider {
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }
+
+        // #1615: a confirmed restore swaps its files in here, before super.onCreate() where Hilt opens the database
+        // and the DataStores. A failed swap rolls back to the old data; a rollback that cannot finish throws, so the app
+        // never starts on partial files, and the next start retries it.
+        RestoreSwap.applyPending(this)
 
         super.onCreate()
         instance = this

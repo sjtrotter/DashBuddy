@@ -90,6 +90,7 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 
 ### 0/2 or 1/2 younger than 6 weeks — newest first
 
+- [#1615 a full backup moves the test build's history into the Play build](checklist/open/1615-backup-restore-debug-to-play.md)
 - [#1610 a one-chain shift links its offers](checklist/open/1610-one-chain-shift-links-its-offers.md)
 - [#1515 Recap is the week](checklist/open/1515-recap-week.md)
 - [#1517 an accepted offer with no delivery is checked on its shift page](checklist/open/1517-shift-checks.md)

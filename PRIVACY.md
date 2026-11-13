@@ -196,6 +196,7 @@ There is no account, no analytics SDK, no advertising identifier. Gas-price refr
 | Share UNKNOWN captures (debug build only, §2.1; `censusShareCaptures`, trusted installs) | off | the same census server, only while its operator has marked this install trusted | the **text** of UNKNOWN screens (`CensusUploadWorker.uploadEnvelopes`). An UNKNOWN screen gets no rule redaction — only the marker and address-block backstops (§3) — so a capture can still contain customer details, and the operator can read them. The switch says exactly this (`developer_settings_census_share_captures_explainer`). |
 | Bug-report export | manual | a folder/provider the user chooses (`DataExportViewModel.exportLog`) | INFO+ milestones checked against known sensitive markers before writing; matches are replaced, but unknown sensitive details can escape filtering. Then the consent receipts (§8). A cloud provider may upload the file. gig.log does not deliver it to the developer. |
 | CSV export | manual | a folder/provider the user chooses (`DataExportViewModel` → `CsvExporter`) | all recorded sessions and deliveries, including merchant names and which saved vehicle drove each dash (its id and label — the dasher's own text), plus deductible miles per vehicle per tax year and logged expenses and fill-ups (amounts, categories, the dasher’s own labels, gallons and the app's tracked miles at the fill-up, plus the saved vehicle id and label for car-care and gas receipts), including voided entries. No customer data or customer/address hashes. A cloud provider may upload the files. |
+| Full backup (#1615) | manual | a file the user chooses (`BackupViewModel` → `BackupWriter`) | the whole event log (`app_events`, including merchant names and the hashed customer and address codes), the analytics tables, and the vehicle, app/economy, app-state, odometer, strategy, platform and weekly-plan settings (`DataStoreFiles.BACKED_UP`). Not consents, automation grants, developer settings, recognition notices, census files or credentials, logs or captures; the crash-recovery snapshot and observation journal are emptied. A plain zip, not encrypted: anyone with the file can read it. A cloud provider may upload it. |
 
 Exports replace existing files with the same names in the chosen folder. Exported files survive uninstall and remain until deleted through that provider. “No direct gig.log upload” does not mean that a selected cloud folder keeps the files on the phone.
 
@@ -221,6 +222,15 @@ store (`datastore/rule_capability_grants.preferences_pb`) and the Screen-events 
 credentials, the developer-settings store (census upload/share toggles + the server policy cache) and the recognition
 notice store (`datastore/recognition_notices.preferences_pb`, #1560) are also excluded from both backup and transfer (`app/src/main/res/xml/backup_rules.xml`,
 `data_extraction_rules.xml`; #1236, dev ruling 2026-10-07).
+
+**Full backup file (#1615).** Export data → Full backup writes the file described in the table above, and Restore
+reads one back on any install, including another app id (the test build into the Play build). The file is checked as
+untrusted input (allowed entry names only, size caps, an integrity check, a schema version no newer than the
+build's) and staged; after the driver confirms, the next start swaps it in before the database opens. A restore
+replaces the history and the backed-up settings and keeps one copy of the replaced files in private storage
+(`restore-previous/`, overwritten by the next restore). It never carries or grants consent: the consent and grant
+stores are neither in the file nor touched, so the restored install asks again. The staging and previous-copy
+directories are excluded from Android backup and transfer.
 
 ## 7. Where your data lives, and how long
 
@@ -363,6 +373,11 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r19 (2026-11-12)** — §6: the full backup file (#1615): what it holds (the whole event log with merchant names and
+  the hashed customer and address codes, vehicles and the backed-up settings), what it leaves out (consents, grants,
+  developer settings, census, logs, captures), that it is a plain zip, and that a restore replaces the data and keeps
+  one previous copy in `restore-previous/`. The Privacy page's "What leaves your phone" (`privacy_leaves_body`) and
+  "Backup and new phones" (`privacy_backup_body`) say so.
 - **r18 (2026-11-09)** — §2.4 and §6: the gas-price lookup gives Android's `Geocoder` the location rounded to one
   decimal place of a degree (about 11 km, `GeocoderInput`), never the exact fix; the Privacy page's "What leaves
   your phone" (`privacy_leaves_body`), the location permission card (`perm_body_location`) and setup's gas-price
