@@ -53,7 +53,7 @@ random daily upload, short retention, keyed hashes and 30-day pseudonyms on the 
 app. The three builds stay: Play, sideload (Uber drivers; `isAccessibilityTool` true) and debug (the developer's).
 **Testers are recruited only after the whole chain works** (developer, 2026-11-13); the gate is #1624.
 
-1. **Records:** #1618 (ADR-0011 amendment, `LEGAL.md`). In progress.
+1. **Records:** #1618 (ADR-0011 amendment §12-§21, `LEGAL.md` v1.1), merged 2026-11-13.
 2. **Server ready for public installs:** dashbuddy-census#79 (pause, quotas, deletion, short retention, no install
    ids in logs), #85 (keyed hash storage), #78 (the new skeleton fields), with **#1193** admission limits and
    **#1530** the lost batch of 30.
