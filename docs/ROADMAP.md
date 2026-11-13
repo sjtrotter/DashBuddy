@@ -1,17 +1,20 @@
 # gig.log Roadmap (living doc)
 
-**Updated:** 2026-11-10, from a review of all 164 open issues against master `dfb9a52eb`. When an issue's state
+**Updated:** 2026-11-13 (§1 re-planned around the census in Play, #1617); the rest from the 2026-11-10 review of all
+164 open issues against master `dfb9a52eb`. When an issue's state
 changes, move it here in the same PR. Companions: `CLAUDE.md` (architecture summary), `docs/architecture/0N-*.md`,
 `docs/field-testing/CHECKLIST.md`, `docs/RELEASE.md`.
 
 ## Where the project is
 
-gig.log is on Google Play: the internal-testing track is live and the closed (alpha) track is in Google review.
+gig.log is on Google Play: v0.233.1 is on the internal-testing track and the closed (alpha) track exists; testers
+are recruited after #1624.
 `PLAY_PUBLISH` is on, so a `v*` tag on master builds and uploads to internal testing by itself. The app reads
 DoorDash (fielded daily) and Uber (thin: accepts are not detected, #826). The look-back redesign (#1510) is half
 built: Recap is the week, with a date picker, a Month screen, the Shifts list, the shift timeline and store search;
-the per-figure screens and Plan remain. The signed-feeds epic (#1559) is approved and not started. Every open issue
-was triaged on 2026-11-10; the order below was reviewed by the council (Claude, Sol, Fable) the same day.
+the per-figure screens and Plan remain. The signed-feeds epic (#1559) is approved and not started; the census-in-Play epic (#1617) now leads it. Every open issue
+was triaged on 2026-11-10; the order below was reviewed by the council (Claude, Sol, Fable) the same day, and §1 was replaced on 2026-11-13
+after v0.232.0-v0.233.1 shipped its contents.
 
 **Dated:** #1580 the Play precise-location declaration is due **2027-01-27** (about an hour of Console work). #1506
 (the July 1 IRS rate change) must ship **before 2027-01-01**, so the year-end CSV export a dasher hands to an
@@ -35,36 +38,53 @@ collapse the others.
    returned. AGPL-3.0 aggregator. RFCs #193 (aggregation) and #194 (academic federation).
 
 Related: the UNKNOWN-screen census epic #1138 (privacy model ADR-0011: hash-only skeletons, k-anonymous vocabulary,
-trusted installs; server #1157). The cloud-data-platform RFC #141 was closed 2026-07-12 with its un-built cloud half
+trusted installs; server #1157), with its release-build sub-epic #1617 (§1). The cloud-data-platform RFC #141 was closed 2026-07-12 with its un-built cloud half
 folded into the pillar epics.
 
 
-## 1. Now: release v0.232.0 to testers
+## 1. Now: the census in Play and sideload, before recruiting testers (#1617)
 
-The Play build changes who a bug can hurt. This milestone is what a tester's install needs; tag right after it.
-Each line is one PR unless noted.
+Play needs 12 closed-track testers for 14 days before production. DoorDash rolls new screens out area by area and one
+phone sees one area, so the census ships in the Play and sideload builds **before** testers are recruited: their 14
+days are the first evidence from other markets. The census server becomes where rules are drafted (by the developer or
+an agent), from screen skeletons, value shapes and contributor labels; no customer text leaves a phone and the Pledges
+do not change. Council round 2 (Claude, Sol, Fable, Astra) adopted it on 2026-11-12. The three builds stay: Play,
+sideload (Uber drivers; `isAccessibilityTool` true) and debug (the developer's build). Rule authoring stops depending
+on debug captures once #1633 ships a rule end to end.
 
-1. **Privacy, one PR (`pickup.json5` + Uber sensitive rules):** **#1396** a pickup frame rendered customer-card-first
-   saves the customer's name as `storeName` in `app_events` (release builds too; the fix is a parse change that moves
-   the parse golden) · **#1397** a merchant instruction naming the customer (debug captures) · **#1402 rule half**
-   Uber's Driver's License screens have no sensitive rule (the block side of the Pledge; a text-anchored rule and a
-   hand-built SENSITIVE fixture carrying the license text, no new capture needed; over-blocking is
-   the safe direction).
-2. **Gas prices on Play: #1478.** Release builds read `EIA_API_KEY` only from `local.properties`, so every CI-built
-   APK (v0.231.0 included) has a blank key and the automatic gas price fails for every tester. Decided 11-10: no key
-   in CI, because a key in the Play APK is readable by anyone who unpacks it. #1478 makes the failed lookup say so
-   (and keep the last real figure, dated) instead of showing the old figure as "Regional average"; testers type a
-   price until #1566 serves prices from the signed feed with no key in the app.
-3. **Offers lost, one PR (`offer.json5` + `chrome.json5`):** **#1343** a "Very busy" boost badge drops the whole card
-   to UNKNOWN and the accepted offer is lost, with **#1342** the drawer rule that copies the same reject and claims
-   every closed-drawer frame (one byte-pin edit, not two; council default: option 1, `hasClickAction`). Confirm a real
-   add-on card fixture exists for the negative corpus first.
-4. **#1528** a two-order shop offer is scored as a quick pickup (11-01 and 11-05 captures).
-5. **#1473** setup says "saved" before it saves, so first-install answers can be lost.
-6. **Decision checkpoint (yours, no build):** #1326 receipt-to-offer identity and #1119 linking an offer to its job by
-   evidence. Both lose real pay today (#1119: two accepts recorded as timeouts, $21.40, on 10-26; #1326: a receipt
-   split that under-recorded $28.51 on 09-20); a choice here ranks their build ahead of the later look-back screens.
-7. **Tag v0.232.0**, the first release that uploads itself.
+**Before recruiting (the gate is #1624):**
+
+1. **#1618 records** (ADR-0011 amendment, `LEGAL.md`:162-165 rewritten, PRIVACY.md, the in-app privacy page). First.
+2. **Server first:** dashbuddy-census#78 (accept the new skeleton fields) and #79 (pause switch, quotas, deletion,
+   no IP logs), with **#1193** admission limits and **#1530** the lost batch of 30.
+3. **#1619** value shapes (`$##.##`, `##:## PM`) and click flags in skeletons. Without them the window's data cannot
+   answer a moved-pay-field question.
+4. **#1621** the opt-in disclosure and endpoint-bound consent → **#1620** the census in release builds → **#1622**
+   "What gig.log sent" and withdrawal.
+5. **#1571** per-rule health (with dashbuddy-census#64), moved ahead from §5.
+6. **#1623** Play Console: Data safety and the accessibility declaration (developer; Google review).
+7. **#246** counsel: questions Q6-Q9 added 2026-11-13 (labels confidential? §15.4 aggregation? the driver's own
+   exposure? public synthetic fixtures and agent access?). The developer's to arrange.
+8. The UX persona round (`~/dashbuddy/design/2026-11-12-ux-personas/plan.md`, paused until now) runs before recruiting
+   and covers the opt-in.
+9. **#1624** rehearse it end to end on the internal track, then recruit.
+
+**During the 14 days:** the contributor tier (#1625 eligibility and grant, #1626 the review screen, #1627 "Ask the
+developer"; server dashbuddy-census#80 constancy and #81 grants and the word gate) and the workbench (#1628
+skeleton-mode drafting, #1629 independent masking obligations; server #82 anchor check, #83 skeleton drafting, #84
+the agent's read-only token). The UX plan gains a contributor persona for #1626.
+
+**After:** #1630 shadow mode and #1631 canary with rollback, on top of §5's #1568, #640 and #641; #1573 matched
+skeletons (now skeleton-only, with dashbuddy-census#69); then **#1632** a blind redraft of a shipped rule and **#1633**
+the first rule shipped from release-build evidence.
+
+**Money, alongside:** **#1611** leaving the drop page for 10 s logs the drop early and loses its drive miles (bug,
+11-12 dash) · the #1119 offer-pool follow-ups **#1600** add-ons inside a running job, **#1606** the dasher picks a
+tied offer, **#1601** settle whole jobs on proof, **#1602** correct three historical losses · the #1326 receipt
+identity decision (§6). **#1342** the drawer rule still claims every closed-drawer frame. **#1402** click half (§6).
+
+**On hold:** #1615 backup and restore (draft PR #1616); the council suggests reshaping it into a versioned manual
+database export first. Developer's call.
 
 ## 2. Next: the look-back redesign (#1510), heaviest last
 
@@ -115,17 +135,18 @@ choices. #1579 one-tap wipe (not a Play requirement; also the blunt answer to #1
 Feeds: #1561 ADRs → #1562 accounts and keys (developer) → #1563 feed-contract → #1564 fuel publisher and #1565
 transport → #1566 fuel prices from the feed (the EIA key leaves the app) → #1567 custom feed. Rules: #1568 batch
 loader → #640 phone fetch and #641 tag-sign publishing → #695 constants feed → #1569/#1570. Census editor and health:
-#1571, #1572, #1573 (each blocked by a census-repo issue), #1209; #1530 a census batch of 30 lost to `bad_request`
+#1572, #1573 (now skeleton-only), #1209; #1571 moved to §1; #1630/#1631 (shadow and canary, §1) follow #640/#641; #1530 a census batch of 30 lost to `bad_request`
 (needs the server log). #192 stays the rules epic, nested under #1559. #1561's ADR-0009 update also retires the
 pinned-artifact production path.
 
 ## 6. Needs a developer decision first
 
-- **#1326** and **#1119** (the §1 checkpoint). #1120 (under-recorded pay) waits on #1326; #1101 and #1398 ride along.
+- **#1326** receipt-to-offer identity (#1119 shipped as the offer pool). #1120 (under-recorded pay) waits on #1326;
+  #1101 and #1398 ride along.
 - **Privacy, two separate paths:** **#1320** a rule-independent belt for RECOGNIZED combined frames (you leaned to
   option 1) and **#1309 slice 2** rules for three UNKNOWN sheets (a belt for recognized frames does not reach them);
   #985's remaining "Switch to pick up at" sheet is one of #1309's three (10-09 pull). #1402's click half (a tap on a
-  blocked screen reaching capture as an UNKNOWN click). Decide with #1397 so they ship close behind §1.
+  blocked screen reaching capture as an UNKNOWN click). Decide them before recruiting testers (§1).
 - #1507 (b) with #1140, in §2 · #1330 item 2 recovery · #1400 store an additional tip (and trace the double run) ·
   #1401 vs #1529 Mark-as-delivered timing · #1316 does an unassigned accept count · #1354 correcting a typed
   odometer reading (then #1386) · #1076 restored offer re-arm or time out · #1081 deferred completion · #1337 TTS
@@ -149,7 +170,7 @@ pinned-artifact production path.
 
 #193/#194 academic RFCs → #1137 and #1194 · #1113 evaluator redesign and auto-accept (#1238, #1239; months of labelled
 data) · #528 per-drop GPS $/mi · #579 voice accept · #1338 Android Auto · #1504 measured offer rate · #883
-pixel-redacted screenshots · #1386/#1389 fuel economy and EV charging · #1138 census community half · #214 DSL
+pixel-redacted screenshots · #1386/#1389 fuel economy and EV charging · #214 DSL
 onboarding · #505 replay frontier · #590 phase 2 (after #1568) · #245 re-scope to the `contains("pay")` heuristic ·
 #428 es/fr consent strings and tap labels · #246 counsel review (external) · #1271/#1272/#1276 test-suite tail (four
 of #1272's five missing journeys can be built from existing captures; the Uber one waits on #826) · #1221 the
@@ -164,7 +185,11 @@ wanted). Folded: #921 into #1051. Rewritten: #1135 (weekly total the dasher type
 pill read moved to #1035), #1441 (checklist mapped to its issues), #1333 (now the S4 cleanup; no longer blocks #1347
 and #1351), #1364 (PR 2, unblocked). Kept: #1272, #1289 (developer's call), #192 (nested under #1559).
 
-## Recently resolved (2026-10-05 → 2026-11-10)
+## Recently resolved (2026-10-05 → 2026-11-12)
+
+- **2026-11-10 → 11-12:** v0.232.0, v0.233.0, v0.233.1 shipped the old §1: #1396/#1397 and #1402's rule half
+  (capture privacy), #1478 gas price source, #1343 boost badge, #1528 two-order shop, #1473 setup saves first, #1119
+  the offer pool, #1598/#1599 receipt evidence and matching, #1604 `$27.35+` pay, #1610 one-chain pool.
 
 - **Play:** #1411 rename to gig.log; #1413/#170 non-tool disclosure; #1414 build types; #1415 release pipeline;
   #1416 listing; #1582 privacy policy site; v0.231.0; internal track live 2026-11-10.
