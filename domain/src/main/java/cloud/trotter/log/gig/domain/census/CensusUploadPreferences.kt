@@ -28,4 +28,7 @@ interface CensusUploadScheduler {
      * with [wifiOnly] it waits for an unmetered network. Nothing a screen or a notification does asks for a run.
      */
     fun scheduleDaily(runAtMillis: Long, wifiOnly: Boolean)
+
+    /** Cancels a waiting manual run (the Wi-Fi only choice changed, so its network constraint is stale). */
+    fun cancelManual()
 }

@@ -25,10 +25,11 @@ class CensusWorkSchedulerTest {
     }
 
     @Test fun `nothing a frame does can ask for an upload`() {
-        // The scheduler's whole surface: the test build's manual run and the daily window. The five-minute and
+        // The scheduler's whole surface: the test build's manual run, the daily window and cancelling a stale manual
+        // run. The five-minute and
         // every-fifty-items requests a queued skeleton used to make are gone (#1620).
         assertEquals(
-            setOf("enqueueNow", "scheduleDaily"),
+            setOf("enqueueNow", "scheduleDaily", "cancelManual"),
             CensusUploadScheduler::class.java.declaredMethods.map { it.name }.filterNot { it.contains('$') }.toSet(),
         )
     }

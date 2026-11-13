@@ -51,6 +51,7 @@ import cloud.trotter.log.gig.domain.census.CensusLastRun
 import cloud.trotter.log.gig.domain.census.CensusRunOutcome
 import cloud.trotter.log.gig.domain.census.CensusUploadScheduler
 import cloud.trotter.log.gig.domain.state.Platform
+import cloud.trotter.log.gig.core.data.census.CensusNetwork
 import cloud.trotter.log.gig.core.data.census.CensusUploadPlanner
 import cloud.trotter.log.gig.domain.census.CensusUploadStats
 import kotlinx.coroutines.Dispatchers
@@ -159,6 +160,7 @@ class CensusUploadWorkerTest {
         val daily = mutableListOf<Pair<Long, Boolean>>()
         override fun enqueueNow(wifiOnly: Boolean, replaceQueued: Boolean) = Unit
         override fun scheduleDaily(runAtMillis: Long, wifiOnly: Boolean) { daily += runAtMillis to wifiOnly }
+        override fun cancelManual() = Unit
     }
 
     private class Harness(scope: CoroutineScope, io: CoroutineDispatcher) {
@@ -173,6 +175,10 @@ class CensusUploadWorkerTest {
         val api = FakeApi()
         val scheduler = Scheduler()
         val planner = CensusUploadPlanner(preferences, scheduler, java.time.Clock.systemUTC())
+        var metered = false
+        val network = object : CensusNetwork(RuntimeEnvironment.getApplication()) {
+            override fun isMetered() = metered
+        }
         val stats = CensusUploadStats()
         val healthMemory = MemoryPreferences()
         val healthStore = HealthLedgerStore(healthMemory, stats)
@@ -285,10 +291,10 @@ class CensusUploadWorkerTest {
             repeat(count) { queueBatch(1) }
         }
 
-        fun queueBatch(count: Int, day: LocalDate = LocalDate.now(ZoneOffset.UTC)): List<CensusSpool.Spooled> {
+        fun queueBatch(count: Int, day: LocalDate = LocalDate.now(ZoneOffset.UTC), platform: String = "doordash"): List<CensusSpool.Spooled> {
             val items = List(count) {
                 val index = ++sequence
-                CensusSpool.Spooled("1-$index.json", index.toString().padStart(64, '0'), "{\"item\":$index,\"day\":\"$day\"}")
+                CensusSpool.Spooled("1-$index.json", index.toString().padStart(64, '0'), "{\"item\":$index,\"platform\":\"$platform\",\"day\":\"$day\"}")
             }
             queued += items
             return items
@@ -326,7 +332,7 @@ class CensusUploadWorkerTest {
         fun worker(tags: List<String> = emptyList()): CensusUploadWorker = TestListenableWorkerBuilder<CensusUploadWorker>(RuntimeEnvironment.getApplication())
             .setWorkerFactory(object : WorkerFactory() {
                 override fun createWorker(appContext: Context, workerClassName: String, workerParameters: WorkerParameters): ListenableWorker =
-                    CensusUploadWorker(appContext, workerParameters, preferences, credentials, spool, factory, planner, stats, lock, healthSink, metadataProvider, envelopeSpool, envelopeSink)
+                    CensusUploadWorker(appContext, workerParameters, preferences, credentials, spool, factory, planner, network, stats, lock, healthSink, metadataProvider, envelopeSpool, envelopeSink)
             }).setTags(tags).build()
     }
 
@@ -418,6 +424,77 @@ class CensusUploadWorkerTest {
         h.api.healthResults += HealthResult.Accepted(1, emptyMap())
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
         assertEquals(1, h.api.healthBodies.size)
+    }
+
+    @Test fun `a daily run that starts over an hour after its drawn time sends nothing and draws the next`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.queue()
+        h.health()
+        val daily = listOf(CensusWorkScheduler.DAILY_TAG)
+        h.preferences.setCensusNextRunAtMillis(System.currentTimeMillis() - CensusUploadPlanner.LATE_LIMIT_MILLIS - 60_000)
+        assertEquals(ListenableWorker.Result.success(), h.worker(daily).doWork())
+        assertEquals("nothing sent", 0, h.factoryCalls)
+        assertEquals(1, h.queued.size)
+        assertEquals("the next day's time is drawn", 1, h.scheduler.daily.size)
+        assertTrue(logs.any { it.message == "census skipped cause=late" })
+
+        // The redrawn target lies ahead; a run that starts on time sends.
+        h.preferences.setCensusNextRunAtMillis(System.currentTimeMillis() - 60_000)
+        h.api.healthResults += HealthResult.Accepted(1, emptyMap())
+        h.api.uploads += UploadResult.Duplicate
+        assertEquals(ListenableWorker.Result.success(), h.worker(daily).doWork())
+        assertTrue(h.queued.isEmpty())
+        assertEquals(1, h.api.healthBodies.size)
+    }
+
+    @Test fun `a manual run is never skipped as late`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.queue()
+        h.preferences.setCensusNextRunAtMillis(0L)
+        h.api.uploads += UploadResult.Duplicate
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertTrue(h.queued.isEmpty())
+    }
+
+    @Test fun `with Wi-Fi only on, a run on a metered network sends nothing, whatever it was queued with`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.queue()
+        h.health()
+        h.metered = true
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(0, h.factoryCalls)
+        assertEquals(1, h.queued.size)
+        assertNull("a skipped run writes no status", h.preferences.censusLastRun.first())
+
+        h.preferences.setCensusWifiOnly(false)
+        h.api.healthResults += HealthResult.Accepted(1, emptyMap())
+        h.api.uploads += UploadResult.Duplicate
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertTrue(h.queued.isEmpty())
+    }
+
+    @Test fun `items of a delivery app unchecked after they were queued are removed, never sent`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.queueBatch(1, platform = "uber")
+        val kept = h.queueBatch(1)
+        h.queueEnvelopes(1)
+        h.envelopes += h.envelopes.single().let { envelope ->
+            CensusSpool.Spooled("2-99.json", envelope.fingerprint, envelope.itemJson.replace("\"doordash\"", "\"uber\""))
+        }
+        h.preferences.setCensusPlatform(Platform.Uber, covered = false, readable = Platform.readable(BuildConfig.READS_UNBOUND_PLATFORMS))
+        h.api.uploads += UploadResult.Accepted(1, 0, emptyMap(), CensusBudget(299, 1000, 39, 300))
+        h.api.envelopeResults += UploadResult.Accepted(1, 0, emptyMap(), CensusBudget(299, 1000, 39, 300))
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals("only the covered skeleton is sent", listOf(kept.map { it.itemJson }), h.api.bodies)
+        assertEquals("only the covered envelope is sent", 1, h.api.envelopeBodies.single().size)
+        assertFalse(h.api.envelopeBodies.single().single().contains("\"uber\""))
+        assertTrue(h.queued.isEmpty())
+        assertTrue(h.envelopes.isEmpty())
+        assertEquals(2L, h.stats.platformNotChosen.get())
     }
 
     @Test fun `fresh enrollment is persisted before upload and lost replies reuse pending identity`() = runTest {

@@ -115,7 +115,8 @@ class PrivacyExportReplay(
     val scheduling = RecordingScheduler()
     // As built: only the debug build binds the trusted-envelope sink; every build binds the skeleton sink (#1620).
     private val envelopeSink: CensusEnvelopeSink = if (census && debug)
-        PersistentCensusEnvelopeSink(preferences, envelopeSpool, uploadStats, io) else NoOpCensusEnvelopeSink
+        PersistentCensusEnvelopeSink(preferences, envelopeSpool, uploadStats, io, readsUnboundPlatforms = true)
+        else NoOpCensusEnvelopeSink
     private val sink: CensusSink = if (census)
         HttpCensusSink(preferences, skeletonSpool, CensusDailySample(context, io), uploadStats, backgroundScope, io,
             readsUnboundPlatforms = true) else object : CensusSink {
@@ -269,7 +270,8 @@ class PrivacyExportReplay(
             .setWorkerFactory(object : WorkerFactory() {
                 override fun createWorker(appContext: Context, workerClassName: String, workerParameters: WorkerParameters): ListenableWorker =
                     CensusUploadWorker(appContext, workerParameters, preferences, credentials, skeletonSpool, apiFactory,
-                        CensusUploadPlanner(preferences, scheduling, Clock.systemUTC()), uploadStats, lock, health, metadata,
+                        CensusUploadPlanner(preferences, scheduling, Clock.systemUTC()), unmetered, uploadStats, lock, health,
+                        metadata,
                         envelopeSpool, envelopeSink)
             }).build()
         assertEquals("worker completes", ListenableWorker.Result.success(), worker.doWork())
@@ -295,10 +297,16 @@ class PrivacyExportReplay(
         .filter { it.isFile && it.name.matches(Regex("[0-9]{1,19}-[0-9]{1,19}\\.json")) }
         .sortedBy { it.name }.map { Stored(it.name, it.readBytes().toByteString()) }
 
+    /** The replay's network is Wi-Fi: the census's Wi-Fi only check passes. */
+    private val unmetered = object : CensusNetwork(context) {
+        override fun isMetered() = false
+    }
+
     class RecordingScheduler : CensusUploadScheduler {
         val requests = mutableListOf<String>()
         override fun enqueueNow(wifiOnly: Boolean, replaceQueued: Boolean) { requests += "now:$wifiOnly:$replaceQueued" }
         override fun scheduleDaily(runAtMillis: Long, wifiOnly: Boolean) { requests += "daily:$runAtMillis:$wifiOnly" }
+        override fun cancelManual() { requests += "cancel" }
     }
 
     /** Drain writes before cancellation, including private production IO consumers, then release HTTP. */

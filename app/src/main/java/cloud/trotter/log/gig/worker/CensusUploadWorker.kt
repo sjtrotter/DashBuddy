@@ -14,6 +14,7 @@ import cloud.trotter.log.gig.core.data.census.PersistentHealthSink
 import cloud.trotter.log.gig.domain.census.HealthLedger
 import cloud.trotter.log.gig.core.network.census.HealthResult
 import cloud.trotter.log.gig.core.data.census.CensusUploadLock
+import cloud.trotter.log.gig.core.data.census.CensusNetwork
 import cloud.trotter.log.gig.core.data.census.CensusUploadPlanner
 import cloud.trotter.log.gig.core.data.settings.DevSettingsRepository
 import cloud.trotter.log.gig.core.network.census.CensusApi
@@ -53,6 +54,7 @@ class CensusUploadWorker @AssistedInject constructor(
     private val spool: CensusSpool,
     private val apis: CensusApiFactory,
     private val planner: CensusUploadPlanner,
+    private val network: CensusNetwork,
     private val stats: CensusUploadStats,
     private val uploadLock: CensusUploadLock,
     private val healthSink: PersistentHealthSink,
@@ -96,7 +98,11 @@ class CensusUploadWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         // #1620: the daily run draws the next day's time first, whatever this run then does; a manual run never does.
-        if (CensusWorkScheduler.DAILY_TAG in tags) planner.advance()
+        // A daily run that starts over an hour late waited for Wi-Fi or a charge, and sends nothing.
+        if (CensusWorkScheduler.DAILY_TAG in tags && !planner.beginDailyRun()) {
+            Timber.tag(TAG).i("census skipped cause=late")
+            return Result.success()
+        }
         return uploadLock.mutex.withLock { run() }
     }
 
@@ -162,7 +168,35 @@ class CensusUploadWorker @AssistedInject constructor(
             Timber.tag(TAG).d("census disabled runs=1")
             return false
         }
+        // #1620: the current Wi-Fi only choice, whatever constraint the run was queued with. Writes no status, as a
+        // consent-off no-op does.
+        if (preferences.censusChoices.first().wifiOnly && network.isMetered()) {
+            record.set(CensusRunOutcome.DISABLED)
+            Timber.tag(TAG).i("census skipped cause=metered")
+            return false
+        }
         return true
+    }
+
+    /** #1620: the platforms the census choices cover, as wire ids; every upload stage sends only these. */
+    private suspend fun coveredPlatforms(): List<String> = preferences.censusChoices.first()
+        .platformsAmong(Platform.readable(BuildConfig.READS_UNBOUND_PLATFORMS)).map { it.wire }
+
+    /**
+     * Removes the items of a platform the choices no longer cover, queued before the dasher unchecked it; a removal
+     * also drops the in-flight marker, so the rest goes in a new batch. Returns the items to send.
+     */
+    private suspend fun dropUncovered(spool: CensusSpool, items: List<CensusSpool.Spooled>): List<CensusSpool.Spooled> {
+        val covered = coveredPlatforms()
+        val (keep, drop) = items.partition {
+            Json.parseToJsonElement(it.itemJson).jsonObject["platform"]?.jsonPrimitive?.content in covered
+        }
+        if (drop.isNotEmpty()) {
+            spool.remove(drop.map { it.id })
+            spool.clearInFlight()
+            stats.platformNotChosen.addAndGet(drop.size.toLong())
+        }
+        return keep
     }
 
     private suspend fun loadCredential(): Credential = try {
@@ -247,8 +281,7 @@ class CensusUploadWorker @AssistedInject constructor(
         val ledger = healthSink.snapshot()
         val todayUtc = LocalDate.now(ZoneOffset.UTC)
         // #1620: a delivery app the census choices leave out sends no health rows either; its rows age out locally.
-        val covered = preferences.censusChoices.first()
-            .platformsAmong(Platform.readable(BuildConfig.READS_UNBOUND_PLATFORMS)).map { it.wire }
+        val covered = coveredPlatforms()
         val candidates = ledger.closedRowsToPost(todayUtc.toString(), todayUtc.minusDays(7).toString())
             .filter { (key, _) -> key.platform in covered }.take(3)
         for ((key, row) in candidates) {
@@ -323,8 +356,9 @@ class CensusUploadWorker @AssistedInject constructor(
                 record.set(CensusRunOutcome.DISABLED)
                 return Result.success()
             }
-            val pending = spool.take(100, 900 * 1024)
-            if (pending.isEmpty()) {
+            val taken = spool.take(100, 900 * 1024)
+            val pending = dropUncovered(spool, taken)
+            if (taken.isEmpty()) {
                 record.skeletonSpoolEmpty = true
                 summarize(record, spoolEmpty = true)
                 return Result.success()
@@ -359,7 +393,7 @@ class CensusUploadWorker @AssistedInject constructor(
 
     private suspend fun uploadEnvelopes(api: CensusTransport, credential: Credential, record: RunRecord): Result {
         if (!preferences.censusUploadEnabled.first() || !preferences.censusShareCaptures.first()) return Result.success()
-        val items = envelopeSpool.take(20, 900 * 1024)
+        val items = dropUncovered(envelopeSpool, envelopeSpool.take(20, 900 * 1024))
         if (items.isNotEmpty()) {
             val batchId = envelopeSpool.inFlight()?.batchId ?: CensusApi.envelopeBatchId(items.map { it.itemJson })
             uploadBatch(api, credential, items, batchId, UploadRun(), record, depth = 0, envelopes = true)?.let { return it }

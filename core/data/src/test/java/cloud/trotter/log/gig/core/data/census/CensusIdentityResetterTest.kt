@@ -47,6 +47,7 @@ class CensusIdentityResetterTest {
         val enqueued = mutableListOf<Boolean>()
         override fun enqueueNow(wifiOnly: Boolean, replaceQueued: Boolean) { enqueued += replaceQueued }
         override fun scheduleDaily(runAtMillis: Long, wifiOnly: Boolean) = Unit
+        override fun cancelManual() = Unit
     }
 
     private val credentials: CensusCredentialStore = mock()

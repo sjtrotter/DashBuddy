@@ -36,6 +36,8 @@ class CensusUploadPlannerTest {
         var now = 0
         override fun enqueueNow(wifiOnly: Boolean, replaceQueued: Boolean) { now++ }
         override fun scheduleDaily(runAtMillis: Long, wifiOnly: Boolean) { daily += runAtMillis to wifiOnly }
+        var cancelled = 0
+        override fun cancelManual() { cancelled++ }
     }
 
     private val settings = DevSettingsRepository(DevSettingsDataSource(MemoryPreferences()), false, Dispatchers.Unconfined, "test")
@@ -61,7 +63,9 @@ class CensusUploadPlannerTest {
     @Test fun `turning Wi-Fi only off keeps the time and lets the run use any network`() = runTest {
         val planner = CensusUploadPlanner(settings, scheduler, clock, Random(1))
         planner.start(backgroundScope); runCurrent()
+        assertEquals("app start leaves a manual run alone", 0, scheduler.cancelled)
         settings.setCensusWifiOnly(false); runCurrent()
+        assertEquals("a waiting manual run under the old choice is cancelled", 1, scheduler.cancelled)
         assertEquals(2, scheduler.daily.size)
         assertEquals(scheduler.daily[0].first, scheduler.daily[1].first)
         assertEquals(false, scheduler.daily[1].second)
@@ -81,5 +85,21 @@ class CensusUploadPlannerTest {
         assertNotEquals("redrawn, not the same time of day", first % DAY_MILLIS, second % DAY_MILLIS)
         assertEquals(second, settings.censusNextRunAtMillis.first())
         assertEquals("a daily run never asks for a manual run", 0, scheduler.now)
+    }
+
+    @Test fun `a daily run more than an hour after its drawn time may not send, and both redraw`() = runTest {
+        val target = now.toEpochMilli()
+        settings.setCensusNextRunAtMillis(target)
+        val limit = CensusUploadPlanner.LATE_LIMIT_MILLIS
+        fun at(millis: Long) = CensusUploadPlanner(settings, scheduler, Clock.fixed(Instant.ofEpochMilli(millis), ZoneOffset.UTC), Random(2))
+
+        assertTrue("on time", at(target + limit).beginDailyRun())
+        assertNotEquals("redrawn", target, settings.censusNextRunAtMillis.first())
+
+        settings.setCensusNextRunAtMillis(target)
+        assertEquals("waited past the limit", false, at(target + limit + 1).beginDailyRun())
+        val next = settings.censusNextRunAtMillis.first()!!
+        assertTrue("redrawn into the next UTC day", next in dayStart until dayStart + DAY_MILLIS)
+        assertEquals(2, scheduler.daily.size)
     }
 }

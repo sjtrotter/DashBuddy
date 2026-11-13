@@ -37,6 +37,10 @@ class CensusWorkScheduler @Inject constructor(@param:ApplicationContext private 
         workManager.enqueueUniquePeriodicWork(DAILY_NAME, ExistingPeriodicWorkPolicy.UPDATE, dailyRequest(runAtMillis, wifiOnly))
     }
 
+    override fun cancelManual() {
+        WorkManager.getInstance(context).cancelUniqueWork(NOW_NAME)
+    }
+
     companion object {
         const val DAILY_NAME = "census_daily"
         /** The daily run's tag: the worker draws the next day's time only on this run, never on a manual one. */
