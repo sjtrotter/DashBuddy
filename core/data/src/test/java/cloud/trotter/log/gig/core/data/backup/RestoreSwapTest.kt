@@ -8,7 +8,9 @@ import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -217,6 +219,30 @@ class RestoreSwapTest {
                 assertEquals(label, RestoreOutcome.Failed, BackupRestorer(context).takeResult())
             }
         }
+    }
+
+    @Test
+    fun `a rollback that cannot finish fails loud and keeps every recovery file`() = runBlocking {
+        stageThreeStores()
+        var moves = 0
+        // Move 9 (an install) fails; move 10 (putting the original database back) fails too.
+        val thrown = try {
+            RestoreSwap.applyPending(context) { from, to -> if (++moves == 9 || moves == 10) false else from.renameTo(to) }
+            null
+        } catch (e: IllegalStateException) {
+            e
+        }
+        assertNotNull("an incomplete rollback throws", thrown)
+        assertFalse("no live database for Room to open", dbFile.exists())
+        assertArrayEquals(db, File(previous, GigLogDatabase.NAME).readBytes())
+        for (marker in listOf(BackupFormat.READY_FILE, "swapping", "installing", "rolling-back")) {
+            assertTrue(marker, File(staging, marker).isFile)
+        }
+        assertNull(BackupRestorer(context).takeResult())
+
+        RestoreSwap.applyPending(context)
+        assertPreRestoreState("retried rollback")
+        assertEquals(RestoreOutcome.Failed, BackupRestorer(context).takeResult())
     }
 
     @Test

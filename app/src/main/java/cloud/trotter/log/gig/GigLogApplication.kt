@@ -124,7 +124,8 @@ class GigLogApplication : Application(), Configuration.Provider {
         }
 
         // #1615: a confirmed restore swaps its files in here, before super.onCreate() where Hilt opens the database
-        // and the DataStores. Never throws; a failure keeps the old data.
+        // and the DataStores. A failed swap rolls back to the old data; a rollback that cannot finish throws, so the app
+        // never starts on partial files, and the next start retries it.
         RestoreSwap.applyPending(this)
 
         super.onCreate()

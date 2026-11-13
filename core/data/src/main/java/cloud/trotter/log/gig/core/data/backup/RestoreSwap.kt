@@ -26,8 +26,10 @@ import java.io.IOException
  * original came from the backup and is deleted. Then `failed` is written and the stage deleted.
  *
  * Without the `ready` marker any leftover stage is deleted and nothing moves. It never touches the consent, grant,
- * developer, notice or census stores, logs or captures. An [Exception] never escapes; an [Error] does, as the crash it
- * is, and the next start resumes. Logging (tag `Backup`): INFO on a swap, WARN on a rollback; counts and class names.
+ * developer, notice or census stores, logs or captures. A clean swap or rollback returns normally. A rollback that
+ * cannot finish keeps every recovery file and throws [IllegalStateException]: the app must not start on partial files,
+ * and the next start retries the rollback. No other [Exception] escapes; an [Error] does, as the crash it is, and the
+ * next start resumes. Logging (tag `Backup`): INFO on a swap, WARN on a rollback; counts and class names.
  */
 object RestoreSwap {
 
@@ -66,16 +68,27 @@ object RestoreSwap {
                     return
                 }
             }
-            swap.rollBack()
+            try {
+                swap.rollBack()
+            } catch (e: Exception) {
+                throw RollbackIncomplete(e)
+            }
             runCatching { writeResult(filesDir, BackupFormat.RESULT_FAILED) }
             finish(staging)
             Timber.tag(TAG).w("restore rolled back, old data kept")
+        } catch (e: RollbackIncomplete) {
+            // Every recovery file stays (the stage, its markers, restore-previous/). Starting now would let Room open
+            // or create a database over the partial files the next attempt needs, so fail loud (#690's posture) and
+            // let the next start retry the rollback before anything opens storage.
+            Timber.tag(TAG).e("restore rollback incomplete (%s), retried at the next start", e.cause?.javaClass?.simpleName)
+            throw IllegalStateException("restore rollback incomplete; retried at the next start", e.cause)
         } catch (e: Exception) {
-            // The rollback could not finish. The stage stays, so the next start retries it.
-            Timber.tag(TAG).w("restore rollback incomplete (%s), retried at the next start", e.javaClass.simpleName)
+            Timber.tag(TAG).w("restore swap check failed (%s)", e.javaClass.simpleName)
             runCatching { writeResult(filesDir, BackupFormat.RESULT_FAILED) }
         }
     }
+
+    private class RollbackIncomplete(cause: Exception) : Exception(cause)
 
     /** One restore's file plan. Keys are the names under `restore-previous/`, which double as the originals list. */
     private class Swap(context: Context, staging: File, private val move: (File, File) -> Boolean) {
