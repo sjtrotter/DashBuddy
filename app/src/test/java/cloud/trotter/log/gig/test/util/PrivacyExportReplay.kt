@@ -12,7 +12,6 @@ import androidx.work.testing.TestListenableWorkerBuilder
 import cloud.trotter.log.gig.core.data.capability.RuleCapabilityRepository
 import cloud.trotter.log.gig.core.data.capture.DiskCaptureBus
 import cloud.trotter.log.gig.core.data.capture.NoOpCaptureBus
-import cloud.trotter.log.gig.core.data.capture.NoOpCensusSink
 import cloud.trotter.log.gig.core.data.census.*
 import cloud.trotter.log.gig.core.data.di.CensusCredentialsModule
 import cloud.trotter.log.gig.core.data.log.LogRepository
@@ -114,10 +113,15 @@ class PrivacyExportReplay(
         private fun xor(bytes: ByteArray) = bytes.map { (it.toInt() xor 85).toByte() }.toByteArray()
     })
     val scheduling = RecordingScheduler()
-    private val envelopeSink: CensusEnvelopeSink = if (census)
+    // As built: only the debug build binds the trusted-envelope sink; every build binds the skeleton sink (#1620).
+    private val envelopeSink: CensusEnvelopeSink = if (census && debug)
         PersistentCensusEnvelopeSink(preferences, envelopeSpool, uploadStats, io) else NoOpCensusEnvelopeSink
     private val sink: CensusSink = if (census)
-        HttpCensusSink(preferences, skeletonSpool, scheduling, uploadStats, backgroundScope, io) else NoOpCensusSink()
+        HttpCensusSink(preferences, skeletonSpool, CensusDailySample(context, io), uploadStats, backgroundScope, io,
+            readsUnboundPlatforms = true) else object : CensusSink {
+            override val isEnabled = false
+            override fun offer(record: CensusRecord) = false
+        }
     private val bus: CaptureBus = if (captures) DiskCaptureBus(context, io, envelopeSink, uploadStats) else NoOpCaptureBus()
     private val health = PersistentHealthSink(HealthLedgerStore(ReplayEdges.MemoryPreferences(), uploadStats), uploadStats, backgroundScope, io)
     private val metadata = object : ReplayMetadataProvider {
@@ -265,7 +269,8 @@ class PrivacyExportReplay(
             .setWorkerFactory(object : WorkerFactory() {
                 override fun createWorker(appContext: Context, workerClassName: String, workerParameters: WorkerParameters): ListenableWorker =
                     CensusUploadWorker(appContext, workerParameters, preferences, credentials, skeletonSpool, apiFactory,
-                        scheduling, uploadStats, lock, health, metadata, envelopeSpool, envelopeSink)
+                        CensusUploadPlanner(preferences, scheduling, Clock.systemUTC()), uploadStats, lock, health, metadata,
+                        envelopeSpool, envelopeSink)
             }).build()
         assertEquals("worker completes", ListenableWorker.Result.success(), worker.doWork())
         settle()
@@ -292,9 +297,8 @@ class PrivacyExportReplay(
 
     class RecordingScheduler : CensusUploadScheduler {
         val requests = mutableListOf<String>()
-        override fun enqueueNow(replaceQueued: Boolean) { requests += "now:$replaceQueued" }
-        override fun enqueueSoon() { requests += "soon" }
-        override fun deferUntil(epochMillis: Long) { requests += "defer:$epochMillis" }
+        override fun enqueueNow(wifiOnly: Boolean, replaceQueued: Boolean) { requests += "now:$wifiOnly:$replaceQueued" }
+        override fun scheduleDaily(runAtMillis: Long, wifiOnly: Boolean) { requests += "daily:$runAtMillis:$wifiOnly" }
     }
 
     /** Drain writes before cancellation, including private production IO consumers, then release HTTP. */

@@ -14,6 +14,7 @@ import cloud.trotter.log.gig.core.data.census.PersistentHealthSink
 import cloud.trotter.log.gig.domain.census.HealthLedger
 import cloud.trotter.log.gig.core.network.census.HealthResult
 import cloud.trotter.log.gig.core.data.census.CensusUploadLock
+import cloud.trotter.log.gig.core.data.census.CensusUploadPlanner
 import cloud.trotter.log.gig.core.data.settings.DevSettingsRepository
 import cloud.trotter.log.gig.core.network.census.CensusApi
 import cloud.trotter.log.gig.core.network.census.CensusApiFactory
@@ -26,8 +27,8 @@ import cloud.trotter.log.gig.domain.capture.ReplayMetadataProvider
 import cloud.trotter.log.gig.domain.census.CensusEnrolRejectReason
 import cloud.trotter.log.gig.domain.census.CensusLastRun
 import cloud.trotter.log.gig.domain.census.CensusRunOutcome
-import cloud.trotter.log.gig.domain.census.CensusUploadScheduler
 import cloud.trotter.log.gig.domain.census.CensusUploadStats
+import cloud.trotter.log.gig.domain.state.Platform
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
@@ -51,7 +52,7 @@ class CensusUploadWorker @AssistedInject constructor(
     private val credentials: CensusCredentialStore,
     private val spool: CensusSpool,
     private val apis: CensusApiFactory,
-    private val scheduler: CensusUploadScheduler,
+    private val planner: CensusUploadPlanner,
     private val stats: CensusUploadStats,
     private val uploadLock: CensusUploadLock,
     private val healthSink: PersistentHealthSink,
@@ -93,7 +94,13 @@ class CensusUploadWorker @AssistedInject constructor(
         }
     }
 
-    override suspend fun doWork(): Result = uploadLock.mutex.withLock {
+    override suspend fun doWork(): Result {
+        // #1620: the daily run draws the next day's time first, whatever this run then does; a manual run never does.
+        if (CensusWorkScheduler.DAILY_TAG in tags) planner.advance()
+        return uploadLock.mutex.withLock { run() }
+    }
+
+    private suspend fun run(): Result {
         val record = RunRecord()
         val result = try {
             if (!canRun(record)) {
@@ -141,15 +148,16 @@ class CensusUploadWorker @AssistedInject constructor(
                 Timber.tag(TAG).w("census status write failed")
             }
         }
-        result
+        return result
     }
 
     /**
-     * The admission check. [DevSettingsRepository.censusUploadEnabled] is on only with the switch on AND an accepted
-     * disclosure's receipt for this build's endpoint (#1621), so no receipt, a decline or a changed endpoint runs nothing.
+     * The admission check, the same in every build (#1620). [DevSettingsRepository.censusUploadEnabled] is on only with
+     * the switch on AND an accepted disclosure's receipt for this build's endpoint (#1621), so no receipt, a decline or a
+     * changed endpoint runs nothing, health reports included.
      */
     private suspend fun canRun(record: RunRecord): Boolean {
-        if (!BuildConfig.DEBUG || !preferences.censusUploadEnabled.first()) {
+        if (!preferences.censusUploadEnabled.first()) {
             record.set(CensusRunOutcome.DISABLED)
             Timber.tag(TAG).d("census disabled runs=1")
             return false
@@ -238,7 +246,11 @@ class CensusUploadWorker @AssistedInject constructor(
     private suspend fun postHealth(api: CensusTransport, credential: Credential, record: RunRecord): Result? {
         val ledger = healthSink.snapshot()
         val todayUtc = LocalDate.now(ZoneOffset.UTC)
-        val candidates = ledger.closedRowsToPost(todayUtc.toString(), todayUtc.minusDays(7).toString()).take(3)
+        // #1620: a delivery app the census choices leave out sends no health rows either; its rows age out locally.
+        val covered = preferences.censusChoices.first()
+            .platformsAmong(Platform.readable(BuildConfig.READS_UNBOUND_PLATFORMS)).map { it.wire }
+        val candidates = ledger.closedRowsToPost(todayUtc.toString(), todayUtc.minusDays(7).toString())
+            .filter { (key, _) -> key.platform in covered }.take(3)
         for ((key, row) in candidates) {
             if (!preferences.censusUploadEnabled.first()) {
                 record.set(CensusRunOutcome.DISABLED)
@@ -599,6 +611,5 @@ class CensusUploadWorker @AssistedInject constructor(
         private const val MAX_SPLIT_DEPTH = 7
         internal val enrolRejectedWarned = AtomicBoolean()
         internal val unauthorizedWarnedFor = AtomicReference<String?>()
-        fun schedule(context: Context) = CensusWorkScheduler.schedule(context)
     }
 }

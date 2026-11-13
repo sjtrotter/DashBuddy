@@ -6,68 +6,55 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequest
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import cloud.trotter.log.gig.BuildConfig
 import cloud.trotter.log.gig.domain.census.CensusUploadScheduler
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * The census's WorkManager half, in every build (#1620). The one scheduled run is the daily window
+ * ([cloud.trotter.log.gig.core.data.census.CensusUploadPlanner]); a manual run is the test build's Upload now.
+ */
 @Singleton
 class CensusWorkScheduler @Inject constructor(@param:ApplicationContext private val context: Context) : CensusUploadScheduler {
-    override fun enqueueNow(replaceQueued: Boolean) {
-        if (!BuildConfig.DEBUG) return
+    override fun enqueueNow(wifiOnly: Boolean, replaceQueued: Boolean) {
         // KEEP would let a manual run parked in backoff swallow the request; a reset wants the fresh identity enrolled now.
         WorkManager.getInstance(context).enqueueUniqueWork(
             NOW_NAME, if (replaceQueued) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP,
-            OneTimeWorkRequestBuilder<CensusUploadWorker>().setConstraints(constraints()).build(),
+            OneTimeWorkRequestBuilder<CensusUploadWorker>().setConstraints(constraints(wifiOnly)).build(),
         )
     }
 
-    override fun enqueueSoon() {
-        if (!BuildConfig.DEBUG) return
-        // KEEP: the first spooled item sets the five-minute deadline; later items never push it out.
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            SOON_NAME, ExistingWorkPolicy.KEEP,
-            OneTimeWorkRequestBuilder<CensusUploadWorker>()
-                .setConstraints(constraints())
-                .setInitialDelay(SOON_DELAY_MINUTES, TimeUnit.MINUTES)
-                .build(),
-        )
-    }
-
-    override fun deferUntil(epochMillis: Long) {
-        if (!BuildConfig.DEBUG) return
-        // UPDATE preserves a running periodic worker. The persisted deadline also gates manual runs.
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            PERIODIC_NAME, ExistingPeriodicWorkPolicy.UPDATE,
-            PeriodicWorkRequestBuilder<CensusUploadWorker>(60, TimeUnit.MINUTES)
-                .setConstraints(constraints())
-                .setNextScheduleTimeOverride(epochMillis)
-                .build(),
-        )
+    override fun scheduleDaily(runAtMillis: Long, wifiOnly: Boolean) {
+        val workManager = WorkManager.getInstance(context)
+        // The hourly and five-minute runs from before #1620; cancelling a name that is not queued does nothing.
+        LEGACY_NAMES.forEach { workManager.cancelUniqueWork(it) }
+        // UPDATE keeps a running worker and replaces only the next run's time and constraints.
+        workManager.enqueueUniquePeriodicWork(DAILY_NAME, ExistingPeriodicWorkPolicy.UPDATE, dailyRequest(runAtMillis, wifiOnly))
     }
 
     companion object {
-        const val PERIODIC_NAME = "census_upload"
+        const val DAILY_NAME = "census_daily"
+        /** The daily run's tag: the worker draws the next day's time only on this run, never on a manual one. */
+        const val DAILY_TAG = "census_daily"
         const val NOW_NAME = "census_upload_now"
-        const val SOON_NAME = "census_upload_soon"
-        const val SOON_DELAY_MINUTES = 5L
+        private val LEGACY_NAMES = listOf("census_upload", "census_upload_soon")
 
-        private fun constraints(): Constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
+        /** Wi-Fi only waits for an unmetered network; otherwise any connection will do. */
+        internal fun constraints(wifiOnly: Boolean): Constraints = Constraints.Builder()
+            .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
             .setRequiresBatteryNotLow(true)
             .build()
 
-        fun schedule(context: Context) {
-            if (!BuildConfig.DEBUG) return
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                PERIODIC_NAME, ExistingPeriodicWorkPolicy.KEEP,
-                PeriodicWorkRequestBuilder<CensusUploadWorker>(60, TimeUnit.MINUTES)
-                    .setConstraints(constraints()).build(),
-            )
-        }
+        internal fun dailyRequest(runAtMillis: Long, wifiOnly: Boolean): PeriodicWorkRequest =
+            PeriodicWorkRequestBuilder<CensusUploadWorker>(24, TimeUnit.HOURS)
+                .setConstraints(constraints(wifiOnly))
+                .setNextScheduleTimeOverride(runAtMillis)
+                .addTag(DAILY_TAG)
+                .build()
     }
 }

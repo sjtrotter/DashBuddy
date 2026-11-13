@@ -50,6 +50,8 @@ import cloud.trotter.log.gig.domain.census.CensusEnrolRejectReason
 import cloud.trotter.log.gig.domain.census.CensusLastRun
 import cloud.trotter.log.gig.domain.census.CensusRunOutcome
 import cloud.trotter.log.gig.domain.census.CensusUploadScheduler
+import cloud.trotter.log.gig.domain.state.Platform
+import cloud.trotter.log.gig.core.data.census.CensusUploadPlanner
 import cloud.trotter.log.gig.domain.census.CensusUploadStats
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -154,10 +156,9 @@ class CensusUploadWorkerTest {
     }
 
     private class Scheduler : CensusUploadScheduler {
-        var deadline = 0L
-        override fun enqueueNow(replaceQueued: Boolean) = Unit
-        override fun enqueueSoon() = Unit
-        override fun deferUntil(epochMillis: Long) { deadline = epochMillis }
+        val daily = mutableListOf<Pair<Long, Boolean>>()
+        override fun enqueueNow(wifiOnly: Boolean, replaceQueued: Boolean) = Unit
+        override fun scheduleDaily(runAtMillis: Long, wifiOnly: Boolean) { daily += runAtMillis to wifiOnly }
     }
 
     private class Harness(scope: CoroutineScope, io: CoroutineDispatcher) {
@@ -171,6 +172,7 @@ class CensusUploadWorkerTest {
         var envelopePending: CensusSpool.InFlight? = null
         val api = FakeApi()
         val scheduler = Scheduler()
+        val planner = CensusUploadPlanner(preferences, scheduler, java.time.Clock.systemUTC())
         val stats = CensusUploadStats()
         val healthMemory = MemoryPreferences()
         val healthStore = HealthLedgerStore(healthMemory, stats)
@@ -321,11 +323,11 @@ class CensusUploadWorkerTest {
             }.also { envelopes += it }
         }
 
-        fun worker(): CensusUploadWorker = TestListenableWorkerBuilder<CensusUploadWorker>(RuntimeEnvironment.getApplication())
+        fun worker(tags: List<String> = emptyList()): CensusUploadWorker = TestListenableWorkerBuilder<CensusUploadWorker>(RuntimeEnvironment.getApplication())
             .setWorkerFactory(object : WorkerFactory() {
                 override fun createWorker(appContext: Context, workerClassName: String, workerParameters: WorkerParameters): ListenableWorker =
-                    CensusUploadWorker(appContext, workerParameters, preferences, credentials, spool, factory, scheduler, stats, lock, healthSink, metadataProvider, envelopeSpool, envelopeSink)
-            }).build()
+                    CensusUploadWorker(appContext, workerParameters, preferences, credentials, spool, factory, planner, stats, lock, healthSink, metadataProvider, envelopeSpool, envelopeSink)
+            }).setTags(tags).build()
     }
 
     private fun TestScope.harness() = Harness(backgroundScope, StandardTestDispatcher(testScheduler))
@@ -388,6 +390,34 @@ class CensusUploadWorkerTest {
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
         assertEquals(0, h.factoryCalls)
         assertEquals(1, h.queued.size)
+    }
+
+    @Test fun `the daily run draws the next day's time, with or without consent, and a manual run never does`() = runTest {
+        val h = harness()
+        h.initialize(enabled = false)
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertTrue(h.scheduler.daily.isEmpty())
+        assertEquals(ListenableWorker.Result.success(), h.worker(listOf(CensusWorkScheduler.DAILY_TAG)).doWork())
+        val (at, wifiOnly) = h.scheduler.daily.single()
+        val tomorrow = LocalDate.now(ZoneOffset.UTC).plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        assertTrue("a time in the next UTC day", at in tomorrow until tomorrow + 86_400_000L)
+        assertTrue("Wi-Fi only by default", wifiOnly)
+        assertEquals(0, h.factoryCalls)
+    }
+
+    @Test fun `a delivery app the census choices leave out sends no health rows`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.health()
+        val readable = Platform.readable(BuildConfig.READS_UNBOUND_PLATFORMS)
+        h.preferences.setCensusPlatform(Platform.DoorDash, covered = false, readable = readable)
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertTrue(h.api.healthBodies.isEmpty())
+
+        h.preferences.setCensusPlatform(Platform.DoorDash, covered = true, readable = readable)
+        h.api.healthResults += HealthResult.Accepted(1, emptyMap())
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(1, h.api.healthBodies.size)
     }
 
     @Test fun `fresh enrollment is persisted before upload and lost replies reuse pending identity`() = runTest {
@@ -675,12 +705,12 @@ class CensusUploadWorkerTest {
             assertEquals(CensusRunOutcome.DEFERRED, h.preferences.censusLastRun.first()?.outcome)
             val deadline = h.preferences.nextAllowedAtMillis.first()
             assertTrue(deadline > System.currentTimeMillis())
-            assertEquals(0L, h.scheduler.deadline)
+            assertTrue("a manual run never moves the daily window", h.scheduler.daily.isEmpty())
             assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
             assertEquals(CensusRunOutcome.DEFERRED, h.preferences.censusLastRun.first()?.outcome)
             assertEquals(2, h.factoryCalls)
             assertEquals(deadline, h.preferences.nextAllowedAtMillis.first())
-            assertEquals(0L, h.scheduler.deadline)
+            assertTrue("a manual run never moves the daily window", h.scheduler.daily.isEmpty())
             assertEquals(1, h.api.batches.size)
             assertEquals(1, h.queued.size)
             h.preferences.setNextAllowedAtMillis(System.currentTimeMillis() - 1)
@@ -710,7 +740,7 @@ class CensusUploadWorkerTest {
             assertEquals(listOf(LogEntry(Log.INFO, "Census", "census deferred cause=$cause seconds=86400")), deferrals())
             assertTrue(h.preferences.nextAllowedAtMillis.first() >= before + 86_400_000)
             assertTrue(h.preferences.nextAllowedAtMillis.first() <= System.currentTimeMillis() + 86_460_000)
-            assertEquals(0L, h.scheduler.deadline)
+            assertTrue("a manual run never moves the daily window", h.scheduler.daily.isEmpty())
             h.preferences.setCensusUploadEnabled(false)
             assertEquals(0L, h.preferences.nextAllowedAtMillis.first())
             h.preferences.setNextAllowedAtMillis(Long.MAX_VALUE)
@@ -741,7 +771,7 @@ class CensusUploadWorkerTest {
         assertEquals(CensusRunOutcome.DEFERRED, h.preferences.censusLastRun.first()?.outcome)
         assertEquals(1, h.api.enrolledIds.size)
         assertEquals(deadline, h.preferences.nextAllowedAtMillis.first())
-        assertEquals(0L, h.scheduler.deadline)
+        assertTrue("a manual run never moves the daily window", h.scheduler.daily.isEmpty())
         h.preferences.setNextAllowedAtMillis(System.currentTimeMillis() - 1)
         h.api.enrollments += EnrolResult.Enrolled(JsonObject(emptyMap()))
         h.api.uploads += UploadResult.Duplicate
@@ -1251,7 +1281,7 @@ class CensusUploadWorkerTest {
             assertTrue(h.api.bodies.isEmpty())
             assertEquals(1, h.queued.size)
             assertEquals(0L, h.preferences.nextAllowedAtMillis.first())
-            assertEquals(0L, h.scheduler.deadline)
+            assertTrue("a manual run never moves the daily window", h.scheduler.daily.isEmpty())
             assertEquals("deferred 3600", h.preferences.censusLastRun.first()?.token())
             assertEquals(-1L, h.healthStore.load().rows.getValue(key.toString()).refusedRevision)
             h.api.healthResults.addAll(List(2) { HealthResult.Accepted(1, emptyMap()) })
@@ -1273,7 +1303,7 @@ class CensusUploadWorkerTest {
                 assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
                 assertEquals("deferred ${seconds.coerceIn(1, 86_400)}", h.preferences.censusLastRun.first()?.token())
                 assertEquals(0L, h.preferences.nextAllowedAtMillis.first())
-                assertEquals(0L, h.scheduler.deadline)
+                assertTrue("a manual run never moves the daily window", h.scheduler.daily.isEmpty())
             }
         }
     }
@@ -1292,7 +1322,7 @@ class CensusUploadWorkerTest {
             assertEquals(token, h.preferences.censusLastRun.first()?.token())
             assertTrue(h.api.bodies.isEmpty())
             assertEquals(deadline, h.preferences.nextAllowedAtMillis.first())
-            assertEquals(0L, h.scheduler.deadline)
+            assertTrue("a manual run never moves the daily window", h.scheduler.daily.isEmpty())
         }
     }
 
@@ -1309,7 +1339,7 @@ class CensusUploadWorkerTest {
         assertEquals(1, h.api.bodies.size)
         val deadline = h.preferences.nextAllowedAtMillis.first()
         assertTrue(deadline > System.currentTimeMillis())
-        assertEquals(0L, h.scheduler.deadline)
+        assertTrue("a manual run never moves the daily window", h.scheduler.daily.isEmpty())
 
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
         assertEquals(4, h.api.healthBodies.size)
@@ -1320,7 +1350,7 @@ class CensusUploadWorkerTest {
         assertEquals(1, h.api.bodies.size)
         assertEquals(1, h.queued.size)
         assertEquals(deadline, h.preferences.nextAllowedAtMillis.first())
-        assertEquals(0L, h.scheduler.deadline)
+        assertTrue("a manual run never moves the daily window", h.scheduler.daily.isEmpty())
     }
 
     @Test fun `health failures with an empty spool remain visible`() = runTest {

@@ -41,6 +41,10 @@ class CensusUploadStats @Inject constructor() {
     val envelopesPosted = AtomicLong()
     val envelopesRejected = AtomicLong()
     val envelopesNotTrusted = AtomicLong()
+    /** #1620: a skeleton of a variant already kept today ([CensusSampleKey]), counted and not queued. */
+    val sampledRepeat = AtomicLong()
+    /** #1620: a skeleton from a delivery app the dasher's census choices leave out. */
+    val platformNotChosen = AtomicLong()
     private val rejected = ConcurrentHashMap<String, AtomicLong>()
 
     fun reject(reasons: Map<String, Int>) {
@@ -70,14 +74,16 @@ class CensusUploadStats @Inject constructor() {
             "envelopesRejected" to envelopesRejected,
             "envelopesNotTrusted" to envelopesNotTrusted,
         ).mapValues { it.value.get() }.filterValues { it != 0L }
+        val sampling = linkedMapOf("sampledRepeat" to sampledRepeat, "platformNotChosen" to platformNotChosen)
+            .mapValues { it.value.get() }.filterValues { it != 0L }
         val reasons = rejectedCounts()
-        if (envelopes.isEmpty() && health.isEmpty() && values.all { it == 0L } && reasons.isEmpty() &&
+        if (sampling.isEmpty() && envelopes.isEmpty() && health.isEmpty() && values.all { it == 0L } && reasons.isEmpty() &&
             listOf(keystoreTransient, inflightCorrupt, enrolRejected, unauthorized, stale).all { it.get() == 0L }) return ""
         return ",spooled=${values[0]},spoolDropped=${values[1]},corrupt=${values[2]},spoolOversized=${values[3]}," +
             "uploaded=${values[4]},duplicate=${values[5]},uploadFailures=${values[6]},rejected=$reasons," +
             "keystoreTransient=${keystoreTransient.get()},inflightCorrupt=${inflightCorrupt.get()}," +
             "enrolRejected=${enrolRejected.get()},unauthorized=${unauthorized.get()},stale=${stale.get()}," +
             "oversized=${values[7]},badRequest=${values[8]}" +
-            (health + envelopes).entries.joinToString("") { ",${it.key}=${it.value}" }
+            (health + envelopes + sampling).entries.joinToString("") { ",${it.key}=${it.value}" }
     }
 }

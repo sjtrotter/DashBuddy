@@ -6,6 +6,7 @@ import cloud.trotter.log.gig.core.data.census.CensusIdentityResetter
 import cloud.trotter.log.gig.core.data.di.CensusEnvelopeSpool
 import cloud.trotter.log.gig.core.data.census.CensusSpool
 import cloud.trotter.log.gig.domain.census.CensusUploadScheduler
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -34,7 +35,7 @@ class SettingsMenuViewModel @Inject constructor(
 
     val garage = garageRepository.garage
 
-    val censusAvailable = devSettingsRepository.censusAvailable
+    val censusTestBuild = devSettingsRepository.censusTestBuild
     val censusUploadEnabled = devSettingsRepository.censusUploadEnabled
     val censusHost = devSettingsRepository.censusBaseUrl.map { it.removePrefix("https://") }
     val censusInstallIdPrefix = credentials.installIdPrefix
@@ -48,7 +49,10 @@ class SettingsMenuViewModel @Inject constructor(
         devSettingsRepository.setCensusShareCaptures(enabled)
     }
 
-    fun uploadCensusNow() = censusScheduler.enqueueNow()
+    /** The test build's Upload now; it keeps to the Wi-Fi only choice like the daily run. */
+    fun uploadCensusNow() = viewModelScope.launch {
+        censusScheduler.enqueueNow(devSettingsRepository.censusChoices.first().wifiOnly)
+    }
 
     /** #1185 — forget this phone's census identity; runs on the application scope so Back cannot cancel it half-done. */
     fun resetCensusIdentity() {

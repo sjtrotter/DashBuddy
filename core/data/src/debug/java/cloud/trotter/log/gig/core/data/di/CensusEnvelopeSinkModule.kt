@@ -1,25 +1,19 @@
 package cloud.trotter.log.gig.core.data.di
 
-import cloud.trotter.log.gig.domain.capture.CensusEnvelopeSink
-import cloud.trotter.log.gig.domain.capture.CensusSink
-import cloud.trotter.log.gig.core.data.census.HttpCensusSink
 import cloud.trotter.log.gig.core.data.census.PersistentCensusEnvelopeSink
+import cloud.trotter.log.gig.domain.capture.CensusEnvelopeSink
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
-/** Debug uploader is opt-in through developer settings. Release binds NoOpCensusSink and stays inert by construction. */
+/** The test build's trusted-envelope path (capture sharing, off by default). Release binds the no-op until #1633. */
 @Module
 @InstallIn(SingletonComponent::class)
-abstract class CensusSinkModule {
+abstract class CensusEnvelopeSinkModule {
 
     @Binds
     @Singleton
     abstract fun bindCensusEnvelopeSink(impl: PersistentCensusEnvelopeSink): CensusEnvelopeSink
-
-    @Binds
-    @Singleton
-    abstract fun bindCensusSink(impl: HttpCensusSink): CensusSink
 }

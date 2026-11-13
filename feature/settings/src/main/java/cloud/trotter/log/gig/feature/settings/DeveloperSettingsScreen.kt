@@ -151,7 +151,7 @@ fun DeveloperSettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp, bottom = 24.dp),
             )
-            if (viewModel.censusAvailable) {
+            if (viewModel.censusTestBuild) {
                 val installId by viewModel.censusInstallId.collectAsStateWithLifecycle(initialValue = null)
                 val lastRun by viewModel.censusLastRun.collectAsStateWithLifecycle(initialValue = null)
                 val shareCaptures by viewModel.censusShareCaptures.collectAsStateWithLifecycle(initialValue = false)

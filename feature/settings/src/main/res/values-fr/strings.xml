@@ -4,7 +4,7 @@
 <resources>
     <string name="consent_front_door_not_now">Plus tard</string>
     <string name="privacy_census_title">Recensement</string>
-    <string name="privacy_census_body">Désactivé tant que vous ne l\'acceptez pas dans Paramètres > Données et confidentialité > Recensement, qui montre d\'abord ce qu\'il envoie. Le choix est enregistré sur ce téléphone avec sa date, la version de l\'app, la version de l\'avis de confidentialité et l\'adresse du serveur du recensement, avec les apps de livraison et le réglage Wi-Fi que vous choisissez. Cet enregistrement ne quitte le téléphone que dans un rapport de bug que vous exportez. Si l\'adresse du serveur change, le recensement reste désactivé jusqu\'à ce que vous acceptiez à nouveau. Les versions Play et installées hors Play de gig.log n\'envoient rien au recensement, même activé.</string>
+    <string name="privacy_census_body">Désactivé tant que vous ne l\'acceptez pas dans Paramètres > Données et confidentialité > Recensement, qui montre d\'abord ce qu\'il envoie. Une fois activé, il envoie une fois par jour, à une heure aléatoire, au serveur du recensement de gig.log les schémas des écrans et des notifications que gig.log ne reconnaît pas, au plus un par mise en page et par jour, et les décomptes quotidiens des écrans reconnus, depuis les apps de livraison que vous choisissez, avec l\'identifiant de cette installation, en HTTPS et en Wi-Fi uniquement sauf si vous autorisez les données mobiles. Le choix est enregistré sur ce téléphone avec sa date, la version de l\'app, la version de l\'avis de confidentialité et l\'adresse du serveur du recensement, avec les apps de livraison et le réglage Wi-Fi que vous choisissez. Cet enregistrement ne quitte le téléphone que dans un rapport de bug que vous exportez. Si l\'adresse du serveur change, le recensement reste désactivé jusqu\'à ce que vous acceptiez à nouveau. Il n\'y a pas encore de bouton de suppression.</string>
     <string name="census_title">Recensement</string>
     <string name="census_settings_subtitle">Schémas des écrans non reconnus, désactivé par défaut</string>
     <string name="census_switch_label">Envois au recensement</string>
@@ -13,8 +13,8 @@
     <string name="census_wifi_only_label">Wi-Fi uniquement</string>
     <string name="census_wifi_only_supporting">Si désactivé, les envois peuvent utiliser les données mobiles</string>
     <string name="census_read_disclosure">Ce que le recensement envoie</string>
-    <string name="census_note_sends_nothing">Cette version de gig.log n\'envoie rien au recensement, même activé, et n\'a pas encore de bouton de suppression.</string>
-    <string name="census_note_test_build">Cette version de test envoie quelques minutes après un écran que gig.log ne reconnaît pas, puis environ toutes les heures, sur n\'importe quel réseau et depuis toutes les apps de livraison, quels que soient les choix du recensement. La limite de 30 jours et la suppression depuis les Paramètres ne s\'y appliquent pas encore.</string>
+    <string name="census_note_release">Cette version n\'a pas encore de bouton de suppression. La limite de 30 jours s\'appliquera avec la prochaine mise à jour du serveur du recensement.</string>
+    <string name="census_note_test_build">Cette version de test peut aussi envoyer le texte des écrans non reconnus depuis un téléphone auquel le serveur du recensement fait confiance, avec le partage des captures activé dans les options pour les développeurs. La limite de 30 jours et la suppression depuis les Paramètres ne s\'y appliquent pas encore.</string>
     <string name="census_disclosure_heading">Avant d\'activer le recensement</string>
     <string name="census_disclosure_intro">Le recensement reste désactivé tant que vous n\'acceptez pas. gig.log fonctionne de la même façon sans lui.</string>
     <string name="census_disclosure_what_title">Ce qui est envoyé</string>

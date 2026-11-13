@@ -16,7 +16,8 @@ import javax.xml.parsers.DocumentBuilderFactory
  * #170 (Sol F2) — the screen reading card each build shows, read the way that build merges its strings (its
  * build-type `values/strings.xml` over main's) with that build's own facts from the build table. Screenshots render
  * the debug build's resources only, so this is what pins the Play card: it names DoorDash and Uber Driver and says
- * which offer pop-up it can't read, and it carries no Screen events sentence and no test-build or census text.
+ * which offer pop-up it can't read, and it carries no Screen events sentence and no test-build text. Every build's card
+ * says the census, once turned on, sends outlines (#1620: the census runs in every build).
  */
 class AccessibilityDisclosureCompositionTest {
 
@@ -61,9 +62,10 @@ class AccessibilityDisclosureCompositionTest {
         assertTrue(text, play.first().contains("read the screens of DoorDash and Uber Driver, when you turn them on in gig.log."))
         assertTrue(text, play.any { it == "This version of gig.log can't read the offer pop-up in Uber Driver. It reads the other screens in Uber Driver." })
         assertFalse(text, text.contains("Screen events"))
-        for (forbidden in listOf("test build", "census", "Instacart", "Walmart")) {
+        for (forbidden in listOf("test build", "Instacart", "Walmart")) {
             assertFalse("Play card must not say \"$forbidden\"", text.lowercase().contains(forbidden.lowercase()))
         }
+        assertTrue(text, text.contains(CENSUS_CLAUSE))
     }
 
     @Test
@@ -72,7 +74,8 @@ class AccessibilityDisclosureCompositionTest {
         assertTrue(text, text.contains("read the screens of DoorDash and Uber Driver, when you turn them on in gig.log."))
         assertTrue(text, text.contains("With Screen events on, it also sees which other app is open."))
         assertFalse(text, text.contains("offer pop-up"))
-        for (forbidden in listOf("test build", "census")) assertFalse(text, text.lowercase().contains(forbidden))
+        assertFalse(text, text.lowercase().contains("test build"))
+        assertTrue(text, text.contains(CENSUS_CLAUSE))
     }
 
     @Test
@@ -97,5 +100,9 @@ class AccessibilityDisclosureCompositionTest {
                 .paragraphs().map { it.res }
             assertEquals(build, core, ids - setOf(R.string.perm_a11y_overlay_limit, R.string.perm_a11y_screen_events))
         }
+    }
+
+    private companion object {
+        const val CENSUS_CLAUSE = "gig.log itself sends nothing it reads off your phone unless you turn on the census"
     }
 }

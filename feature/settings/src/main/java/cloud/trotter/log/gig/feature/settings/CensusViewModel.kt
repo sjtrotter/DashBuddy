@@ -19,15 +19,15 @@ import kotlinx.coroutines.launch
 data class CensusPlatformRow(val platform: Platform, val checked: Boolean)
 
 /**
- * #1621: the census screen. [consent] is the stored decision bound to the endpoint; [sendsInThisBuild] picks the
- * build note (only the debug build sends, until #1620).
+ * #1621: the census screen. [consent] is the stored decision bound to the endpoint; [testBuild] picks the
+ * build note (the test build's census differs from the Play and sideload builds', #1620).
  */
 data class CensusUiState(
     val consent: CensusConsent,
     val platforms: List<CensusPlatformRow>,
     val wifiOnly: Boolean,
     val serverHost: String,
-    val sendsInThisBuild: Boolean,
+    val testBuild: Boolean,
 ) {
     val choices: CensusChoices
         get() = CensusChoices(platforms.filter { it.checked }.map { it.platform }.toSet(), wifiOnly)
@@ -51,7 +51,7 @@ class CensusViewModel @Inject constructor(
                 platforms = readable.map { CensusPlatformRow(it, it in covered) },
                 wifiOnly = choices.wifiOnly,
                 serverHost = url.removePrefix("https://"),
-                sendsInThisBuild = settings.censusAvailable,
+                testBuild = settings.censusTestBuild,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 

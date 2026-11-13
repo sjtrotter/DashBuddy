@@ -79,7 +79,7 @@ class PrivacyExportE2ETest {
             assertEquals(2L, h.stats.scrubbedUnknownCaptureCount)
             assertEquals(1L, h.stats.censusRefusedCount(SkeletonBuilder.Refusal.SENSITIVE_FRAME))
             assertEquals(1L, h.stats.censusNotificationRefusedCount(NotificationSkeletonBuilder.Refusal.SENSITIVE_NOTIFICATION))
-            assertTrue("first spool append scheduled work", "soon" in h.scheduling.requests)
+            assertTrue("no frame schedules an upload (#1620)", h.scheduling.requests.isEmpty())
             recognized(h)
             captureControls(h)
             skeletonControls(skeletons)
@@ -213,11 +213,9 @@ class PrivacyExportE2ETest {
             uploads(h, queued, emptyList(), credential)
             safeSurfaces(h, credential.secret)
         }
-        // Combined disabled preferences, capture and no-op sinks; these switches are not isolated.
-        // Recognized screens return from SkeletonPublisher before consulting the census sink.
+        // A no-op census sink: recognized screens return from SkeletonPublisher before consulting it.
         replay(captures = false, census = false, debug = false).use { h ->
             h.start()
-            h.preferences.setCensusUploadEnabled(true)
             h.preferences.setCensusShareCaptures(true); h.settle()
             assertFalse(h.preferences.censusUploadEnabled.first())
             assertFalse(h.preferences.censusShareCaptures.first())
@@ -231,6 +229,28 @@ class PrivacyExportE2ETest {
             assertEquals(0, h.factoryCalls)
             assertTrue(h.requests.isEmpty())
             safeSurfaces(h)
+        }
+    }
+
+    @Test fun `a Play or sideload install with consent uploads skeletons and never screen text`() = runTest(timeout = 20.seconds) {
+        // #1620: the release graph's components (the real skeleton sink, NoOpCaptureBus, the no-op envelope sink) with
+        // the release repository; CensusVariantBindingTest pins that the release Hilt modules bind exactly these.
+        replay(captures = false, debug = false).use { h ->
+            h.start(); enroll(h)
+            h.preferences.setCensusShareCaptures(true); h.settle()
+            assertTrue(h.preferences.censusUploadEnabled.first())
+            assertFalse("no capture sharing outside the test build", h.preferences.censusShareCaptures.first())
+            h.manifest(repeatBenign = true)
+            val queued = h.records(h.skeletonRoot)
+            assertTrue("a skeleton reaches the queue", queued.isNotEmpty())
+            assertTrue(h.captures().isEmpty())
+            assertTrue(h.records(h.envelopeRoot).isEmpty())
+            assertTrue("no frame schedules an upload", h.scheduling.requests.isEmpty())
+            val credential = requireNotNull(h.credentials.current())
+            h.worker()
+            uploads(h, queued, emptyList(), credential)
+            assertTrue(h.requests.none { it.path == "/v1/envelopes" })
+            safeSurfaces(h, credential.secret)
         }
     }
 

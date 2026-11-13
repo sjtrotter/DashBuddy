@@ -33,6 +33,7 @@ class DevSettingsDataSource @Inject constructor(
         val CENSUS_WIFI_ONLY = booleanPreferencesKey("census_wifi_only")
         val CENSUS_PLATFORMS = stringSetPreferencesKey("census_platforms")
         val CENSUS_NEXT_ALLOWED_AT = longPreferencesKey("census_next_allowed_at_millis")
+        val CENSUS_NEXT_RUN_AT = longPreferencesKey("census_next_run_at_millis")
         val CENSUS_LAST_RUN_AT = longPreferencesKey("census_last_run_at_millis")
         val CENSUS_LAST_RUN_OUTCOME = stringPreferencesKey("census_last_run_outcome")
         val CENSUS_LAST_RUN_ENVELOPES = intPreferencesKey("census_last_run_envelopes")
@@ -178,6 +179,13 @@ class DevSettingsDataSource @Inject constructor(
 
     suspend fun setNextAllowedAtMillis(value: Long) {
         ds.edit { it[Keys.CENSUS_NEXT_ALLOWED_AT] = value }
+    }
+
+    /** #1620: the drawn time of the next daily census run; null until the first draw. */
+    val censusNextRunAtMillis: Flow<Long?> = ds.data.map { it[Keys.CENSUS_NEXT_RUN_AT] }
+
+    suspend fun setCensusNextRunAtMillis(value: Long) {
+        ds.edit { it[Keys.CENSUS_NEXT_RUN_AT] = value }
     }
 
     suspend fun setCensusPolicy(value: Map<String, Int>, acceptedSchemaIds: Set<String>) {

@@ -6,22 +6,33 @@ import org.junit.Test
 import java.io.File
 
 class CensusVariantBindingTest {
-    @Test fun `only debug binds the HTTP sink and release is structurally inert`() {
+    @Test fun `every build binds the census sink and only debug binds capture text`() {
         val root = RepoRoot.locate()
-        val path = "java/cloud/trotter/log/gig/core/data/di/CensusSinkModule.kt"
-        val debug = File(root, "core/data/src/debug/$path").readText()
-        val release = File(root, "core/data/src/release/$path").readText()
-        assertTrue(debug.contains("bindCensusSink(impl: HttpCensusSink): CensusSink"))
-        assertTrue(release.contains("bindCensusSink(impl: NoOpCensusSink): CensusSink"))
-        assertFalse(release.contains("impl: HttpCensusSink"))
-        assertTrue(debug.contains("bindCensusEnvelopeSink(impl: PersistentCensusEnvelopeSink): CensusEnvelopeSink"))
-        assertTrue(release.contains("fun provideCensusEnvelopeSink(): CensusEnvelopeSink = NoOpCensusEnvelopeSink"))
-        assertFalse(release.contains("PersistentCensusEnvelopeSink"))
-        val capture = File(root, "core/data/src/release/java/cloud/trotter/log/gig/core/data/di/CaptureBusModule.kt")
-        assertTrue(capture.readText().contains("NoOpCaptureBus"))
-        assertFalse(File(root, "core/data/src/main/$path").exists())
+        val di = "java/cloud/trotter/log/gig/core/data/di"
+        // #1620: one binding for every build (Play, sideload, debug); the consent decides whether it queues anything.
+        val census = File(root, "core/data/src/main/$di/CensusSinkModule.kt").readText()
+        assertTrue(census.contains("bindCensusSink(impl: HttpCensusSink): CensusSink"))
+        for (variant in listOf("debug", "release")) {
+            assertFalse("$variant binds no second census sink", File(root, "core/data/src/$variant/$di/CensusSinkModule.kt").exists())
+        }
+        assertFalse(File(root, "core/data/src/main/java/cloud/trotter/log/gig/core/data/capture/NoOpCensusSink.kt").exists())
+        // No screen text leaves a Play or sideload phone: the release variant (which the sideload build also gets,
+        // `matchingFallbacks`) binds the no-op capture bus and the no-op envelope sink.
+        val debugEnvelope = File(root, "core/data/src/debug/$di/CensusEnvelopeSinkModule.kt").readText()
+        val releaseEnvelope = File(root, "core/data/src/release/$di/CensusEnvelopeSinkModule.kt").readText()
+        assertTrue(debugEnvelope.contains("bindCensusEnvelopeSink(impl: PersistentCensusEnvelopeSink): CensusEnvelopeSink"))
+        assertTrue(releaseEnvelope.contains("fun provideCensusEnvelopeSink(): CensusEnvelopeSink = NoOpCensusEnvelopeSink"))
+        assertFalse(releaseEnvelope.contains("PersistentCensusEnvelopeSink"))
+        val releaseCapture = File(root, "core/data/src/release/$di/CaptureBusModule.kt").readText()
+        assertTrue(releaseCapture.contains("bindCaptureBus(impl: NoOpCaptureBus): CaptureBus"))
+        assertFalse(releaseCapture.contains("impl: DiskCaptureBus"))
+        assertTrue(File(root, "app/build.gradle.kts").readText().contains("matchingFallbacks += listOf(\"release\")"))
+        // The daily window is scheduled in every build; no BuildConfig.DEBUG gate is left on the census path.
         val application = File(root, "app/src/main/java/cloud/trotter/log/gig/GigLogApplication.kt").readText()
-        assertTrue(application.contains("if (BuildConfig.DEBUG) CensusUploadWorker.schedule(this)"))
+        assertTrue(application.contains("censusUploadPlanner.start(applicationScope)"))
+        for (path in listOf("worker/CensusUploadWorker.kt", "worker/CensusWorkScheduler.kt")) {
+            assertFalse(path, File(root, "app/src/main/java/cloud/trotter/log/gig/$path").readText().contains("BuildConfig.DEBUG"))
+        }
     }
 
     @Test fun `capture bus uses the domain registry screen source and envelope provider has bounded storage`() {
@@ -59,10 +70,8 @@ class CensusVariantBindingTest {
             assertTrue(extraction.substringAfter("<device-transfer>").substringBefore("</device-transfer>").contains(exclusion))
         }
     }
-    @Test fun `notification publisher is structurally disabled by release sink and never pairs trusted captures`() {
+    @Test fun `notification publisher checks the sink first and never pairs trusted captures`() {
         val root = RepoRoot.locate()
-        val noOp = File(root, "core/data/src/main/java/cloud/trotter/log/gig/core/data/capture/NoOpCensusSink.kt").readText()
-        assertTrue(noOp.contains("isEnabled: Boolean = false"))
         val publisher = File(root, "core/pipeline/src/main/java/cloud/trotter/log/gig/core/pipeline/census/SkeletonPublisher.kt").readText()
         val notification = publisher.substringAfter("fun publish(obs: Observation.Notification")
         assertTrue(notification.indexOf("if (!sink.isEnabled) return") < notification.indexOf("NotificationSkeletonBuilder.outcome"))

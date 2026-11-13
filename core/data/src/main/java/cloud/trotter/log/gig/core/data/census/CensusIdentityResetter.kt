@@ -79,7 +79,9 @@ class CensusIdentityResetter internal constructor(
                 }
             }
         }
-        if (done && preferences.censusUploadEnabled.first()) scheduler.enqueueNow(replaceQueued = true)
+        if (done && preferences.censusUploadEnabled.first()) {
+            scheduler.enqueueNow(preferences.censusChoices.first().wifiOnly, replaceQueued = true)
+        }
         return done
     }
 
