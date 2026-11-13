@@ -6,6 +6,7 @@ import cloud.trotter.log.gig.core.database.GigLogDatabase
 import cloud.trotter.log.gig.core.datastore.DataStoreFiles
 import kotlinx.serialization.Serializable
 import java.io.File
+import java.io.FileOutputStream
 
 /**
  * The full backup file (#1615): one zip holding [MANIFEST_ENTRY], [DB_ENTRY] and a `datastore/<name>.preferences_pb`
@@ -20,6 +21,19 @@ internal object BackupFormat {
      * migration (`SchemaVersionGuardTest` chains them), so a backup from `27..GigLogDatabase.VERSION` always opens.
      */
     const val FIRST_BACKUP_DB_VERSION = 27
+
+    /**
+     * Room's `identity_hash` for each schema a backup may carry, from the exported schema JSON
+     * (`core/database/schemas/`). A staged database must carry the hash of its own `user_version`, so a file that
+     * only claims gig.log's version number is refused. `KnownIdentityHashesTest` fails until a schema bump adds its
+     * version here.
+     */
+    val KNOWN_IDENTITY_HASHES: Map<Int, String> = mapOf(
+        27 to "feedfd7bd8b830b57349761c791d8829",
+    )
+
+    /** The manifest's `appVersion`, shown in the confirm dialog: a bounded version string or the file is refused. */
+    val APP_VERSION_SHAPE = Regex("[0-9A-Za-z.+_-]{1,64}")
 
     const val MANIFEST_ENTRY = "manifest.json"
     const val DB_ENTRY = GigLogDatabase.NAME
@@ -54,6 +68,15 @@ internal object BackupFormat {
     /** The backed-up store [entry] names, or null when [entry] is not `datastore/<BACKED_UP name>.preferences_pb`. */
     fun datastoreName(entry: String): String? =
         DataStoreFiles.BACKED_UP.firstOrNull { datastoreEntry(it) == entry }
+
+    /** Writes [bytes] to [file] and syncs it to disk before returning. */
+    fun writeSynced(file: File, bytes: ByteArray) {
+        FileOutputStream(file).use { out ->
+            out.write(bytes)
+            out.flush()
+            out.fd.sync()
+        }
+    }
 
     /** The live file of the backed-up store [name]. */
     fun datastoreFile(context: Context, name: String): File = context.preferencesDataStoreFile(name)

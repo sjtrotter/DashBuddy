@@ -31,8 +31,8 @@ import java.util.zip.ZipInputStream
 class BackupRoundTripTest {
 
     private lateinit var context: Context
-    private val vehiclesAtBackup = byteArrayOf(1, 2, 3)
-    private val appPrefsAtBackup = byteArrayOf(4, 5, 6, 7)
+    private val vehiclesAtBackup = BackupTestFiles.prefsBytes("vehicles at backup")
+    private val appPrefsAtBackup = BackupTestFiles.prefsBytes("app prefs at backup")
     private val consent = byteArrayOf(9, 9, 9)
 
     @Before

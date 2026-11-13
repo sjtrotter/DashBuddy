@@ -91,8 +91,12 @@ class RestoreSwapTest {
 
     @Test
     fun `a ready stage swaps in and the old files move to previous`() = runBlocking {
+        val journal = File(dbFile.path + "-journal").apply { writeBytes(byteArrayOf(6)) }
         File(staging, BackupFormat.READY_FILE).writeText("123")
         RestoreSwap.applyPending(context)
+
+        assertFalse("a rollback journal never meets the restored file", journal.exists())
+        assertArrayEquals(byteArrayOf(6), File(previous, GigLogDatabase.NAME + "-journal").readBytes())
 
         assertArrayEquals(stagedDb, dbFile.readBytes())
         assertFalse("the old WAL never meets the restored file", walFile.exists())
@@ -102,6 +106,69 @@ class RestoreSwapTest {
         assertArrayEquals(vehicles, File(previous, BackupFormat.datastoreEntry(DataStoreFiles.VEHICLES)).readBytes())
         assertFalse(staging.exists())
         assertEquals(RestoreOutcome.Restored(123L), BackupRestorer(context).takeResult())
+    }
+
+    /** Stands in for the process dying: an [Error] escapes the swap, as a real crash would. */
+    private class Kill : Error()
+
+    /**
+     * Current: the database, its WAL and three stores. Backup: the database and three stores, one of them new and one
+     * of the current ones missing. Nine moves: five to `restore-previous/`, four into place.
+     */
+    private fun stageThreeStores() {
+        BackupTestFiles.writeStore(context, DataStoreFiles.APP_PREFS, byteArrayOf(31))
+        BackupTestFiles.writeStore(context, DataStoreFiles.WEEKLY_PLAN, byteArrayOf(32))
+        File(staging, BackupFormat.datastoreEntry(DataStoreFiles.APP_PREFS)).writeBytes(byteArrayOf(41))
+        File(staging, BackupFormat.datastoreEntry(DataStoreFiles.STRATEGY_PREFS)).writeBytes(byteArrayOf(42))
+        File(staging, BackupFormat.READY_FILE).writeText("123")
+    }
+
+    private fun assertBackupState(label: String) {
+        assertArrayEquals(label, stagedDb, dbFile.readBytes())
+        assertFalse(label, walFile.exists())
+        assertArrayEquals(label, stagedVehicles, BackupTestFiles.readStore(context, DataStoreFiles.VEHICLES))
+        assertArrayEquals(label, byteArrayOf(41), BackupTestFiles.readStore(context, DataStoreFiles.APP_PREFS))
+        assertArrayEquals(label, byteArrayOf(42), BackupTestFiles.readStore(context, DataStoreFiles.STRATEGY_PREFS))
+        assertNull(label, BackupTestFiles.readStore(context, DataStoreFiles.WEEKLY_PLAN))
+        assertArrayEquals(label, db, File(previous, GigLogDatabase.NAME).readBytes())
+        assertArrayEquals(label, wal, File(previous, GigLogDatabase.NAME + "-wal").readBytes())
+        assertArrayEquals(label, vehicles, File(previous, BackupFormat.datastoreEntry(DataStoreFiles.VEHICLES)).readBytes())
+        assertArrayEquals(label, byteArrayOf(31), File(previous, BackupFormat.datastoreEntry(DataStoreFiles.APP_PREFS)).readBytes())
+        assertArrayEquals(label, byteArrayOf(32), File(previous, BackupFormat.datastoreEntry(DataStoreFiles.WEEKLY_PLAN)).readBytes())
+        assertFalse(label, File(previous, BackupFormat.datastoreEntry(DataStoreFiles.STRATEGY_PREFS)).exists())
+        assertFalse(label, staging.exists())
+    }
+
+    @Test
+    fun `the uninterrupted three-store plan makes nine moves`() = runBlocking {
+        stageThreeStores()
+        var moves = 0
+        RestoreSwap.applyPending(context) { from, to -> moves++; from.renameTo(to) }
+        assertEquals(9, moves)
+        assertBackupState("uninterrupted")
+    }
+
+    @Test
+    fun `a death after any move resumes at the next start`() = runBlocking {
+        for (killAt in 0..9) {
+            BackupTestFiles.clean(context)
+            setUp()
+            stageThreeStores()
+            var moves = 0
+            try {
+                RestoreSwap.applyPending(context) { from, to ->
+                    if (killAt == 0) throw Kill()
+                    val moved = from.renameTo(to)
+                    if (++moves == killAt) throw Kill()
+                    moved
+                }
+                error("the swap finished without dying at move $killAt")
+            } catch (_: Kill) {
+            }
+            RestoreSwap.applyPending(context)
+            assertBackupState("death after move $killAt")
+            assertEquals("death after move $killAt", RestoreOutcome.Restored(123L), BackupRestorer(context).takeResult())
+        }
     }
 
     @Test

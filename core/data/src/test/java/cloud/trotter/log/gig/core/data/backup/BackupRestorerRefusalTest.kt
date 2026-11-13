@@ -46,7 +46,7 @@ class BackupRestorerRefusalTest {
     @After
     fun tearDown() = BackupTestFiles.clean(context)
 
-    private val validDb by lazy { BackupTestFiles.sqliteBytes(context, GigLogDatabase.VERSION) }
+    private val validDb by lazy { BackupTestFiles.roomDbBytes(context) }
 
     private fun assertRefused(reason: RestoreRefusal, file: ByteArray, freeBytes: Long = Long.MAX_VALUE) =
         assertRefused(reason, ByteArrayInputStream(file), freeBytes)
@@ -187,7 +187,7 @@ class BackupRestorerRefusalTest {
             RestoreRefusal.NEWER_APP,
             BackupTestFiles.zip(
                 BackupFormat.MANIFEST_ENTRY to BackupTestFiles.manifest(dbVersion = newer),
-                BackupFormat.DB_ENTRY to BackupTestFiles.sqliteBytes(context, newer),
+                BackupFormat.DB_ENTRY to BackupTestFiles.roomDbBytes(context, version = newer),
             ),
         )
     }
@@ -197,7 +197,7 @@ class BackupRestorerRefusalTest {
         RestoreRefusal.NOT_A_BACKUP,
         BackupTestFiles.zip(
             BackupFormat.MANIFEST_ENTRY to BackupTestFiles.manifest(dbVersion = 26),
-            BackupFormat.DB_ENTRY to BackupTestFiles.sqliteBytes(context, 26),
+            BackupFormat.DB_ENTRY to BackupTestFiles.roomDbBytes(context, version = 26),
         ),
     )
 
@@ -206,7 +206,7 @@ class BackupRestorerRefusalTest {
         RestoreRefusal.NOT_A_BACKUP,
         BackupTestFiles.zip(
             BackupFormat.MANIFEST_ENTRY to BackupTestFiles.manifest(dbVersion = GigLogDatabase.VERSION),
-            BackupFormat.DB_ENTRY to BackupTestFiles.sqliteBytes(context, GigLogDatabase.VERSION - 1),
+            BackupFormat.DB_ENTRY to BackupTestFiles.roomDbBytes(context, version = GigLogDatabase.VERSION - 1),
         ),
     )
 
@@ -227,6 +227,62 @@ class BackupRestorerRefusalTest {
             BackupFormat.DB_ENTRY to BackupTestFiles.sqliteBytes(context, GigLogDatabase.VERSION, withEvents = false),
         ),
     )
+
+    @Test
+    fun `a Room identity hash that is not this schema's`() = assertRefused(
+        RestoreRefusal.NOT_A_BACKUP,
+        BackupTestFiles.zip(
+            BackupFormat.MANIFEST_ENTRY to BackupTestFiles.manifest(),
+            BackupFormat.DB_ENTRY to BackupTestFiles.roomDbBytes(context, identityHash = "0123456789abcdef0123456789abcdef"),
+        ),
+    )
+
+    @Test
+    fun `a database with app_events but no Room schema`() = assertRefused(
+        RestoreRefusal.NOT_A_BACKUP,
+        BackupTestFiles.zip(
+            BackupFormat.MANIFEST_ENTRY to BackupTestFiles.manifest(),
+            BackupFormat.DB_ENTRY to BackupTestFiles.sqliteBytes(context, GigLogDatabase.VERSION),
+        ),
+    )
+
+    @Test
+    fun `a settings file that is not a Preferences store`() {
+        val store = BackupFormat.datastoreEntry(DataStoreFiles.ODOMETER_PREFS)
+        assertRefused(
+            RestoreRefusal.NOT_A_BACKUP,
+            BackupTestFiles.zip(
+                BackupFormat.MANIFEST_ENTRY to BackupTestFiles.manifest(files = listOf(BackupFormat.DB_ENTRY, store)),
+                BackupFormat.DB_ENTRY to validDb,
+                store to ByteArray(16) { 0xFF.toByte() },
+            ),
+        )
+    }
+
+    @Test
+    fun `a valid settings file stages`() = runBlocking {
+        val store = BackupFormat.datastoreEntry(DataStoreFiles.ODOMETER_PREFS)
+        val result = BackupRestorer(context) { Long.MAX_VALUE }.stage(
+            ByteArrayInputStream(
+                BackupTestFiles.zip(
+                    BackupFormat.MANIFEST_ENTRY to BackupTestFiles.manifest(files = listOf(BackupFormat.DB_ENTRY, store)),
+                    BackupFormat.DB_ENTRY to validDb,
+                    store to BackupTestFiles.prefsBytes("odometer"),
+                ),
+            ),
+        )
+        assertTrue(result.toString(), result is StageResult.Staged)
+    }
+
+    @Test
+    fun `an app version that is not a short version string`() {
+        for (version in listOf("", "1.0 beta", "a".repeat(65), "1.0\n2")) {
+            assertRefused(
+                RestoreRefusal.NOT_A_BACKUP,
+                BackupTestFiles.zip(BackupFormat.MANIFEST_ENTRY to BackupTestFiles.manifest(appVersion = version), BackupFormat.DB_ENTRY to validDb),
+            )
+        }
+    }
 
     @Test
     fun `a file that is not a zip`() = assertRefused(

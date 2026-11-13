@@ -18,6 +18,7 @@ class BackupRulesGuardTest {
         "file" to "datastore/recognition_notices.preferences_pb",
         "file" to "census/",
         "file" to "restore-staging/",
+        "file" to "restore-staging.tmp/",
         "file" to "restore-previous/",
     ) + listOf("file", "external").flatMap { domain ->
         listOf("captures/", "app.log", "shareable.log", "shareable.log.1", "logs/")

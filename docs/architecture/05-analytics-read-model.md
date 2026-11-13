@@ -1493,8 +1493,12 @@ and do NOT gate the unit-only PR CI.
 **Full backup file (#1615).** `BackupWriter` takes the database copy with `VACUUM INTO` on Room's own connection
 (consistent, WAL folded in), empties `app_state_snapshots` and `observations` in the copy, and zips it with the
 `DataStoreFiles.BACKED_UP` stores and a manifest. `BackupRestorer` treats the file as untrusted (allowed names, byte
-caps, `quick_check`, `app_events`, manifest version = `user_version`) and stages it; the stage is applied only after
-the driver confirms, by `RestoreSwap` in `GigLogApplication.onCreate` **before `super.onCreate()`**, so nothing
-holds the files while they are renamed, and a failed move puts every file back. A backup's schema must lie in
-`FIRST_BACKUP_DB_VERSION` (27) `..GigLogDatabase.VERSION`: every bump after 27 carries a migration, so an older
-backup opens through `DatabaseBackup` and Room's migrations, and a `PROJECTOR_VERSION` difference refolds.
+caps, `quick_check`, `app_events`, manifest version = `user_version`, Room's identity hash for that version, each
+settings file decodes) and stages it; the stage is applied only after the driver confirms, by `RestoreSwap` in
+`GigLogApplication.onCreate` **before `super.onCreate()`**, so nothing holds the files while they are renamed. The
+swap's two phases are opened by synced markers, so a process death resumes it at the next start, and an in-process
+move failure puts every file back. A backup's schema must lie in `FIRST_BACKUP_DB_VERSION` (27)
+`..GigLogDatabase.VERSION`: every bump after 27 carries a migration, so an older backup opens through `DatabaseBackup`
+and Room's migrations, and a `PROJECTOR_VERSION` difference refolds. **A schema bump adds its identity hash to
+`BackupFormat.KNOWN_IDENTITY_HASHES`** (`KnownIdentityHashesTest` fails until it does), or restores of that version are
+refused.

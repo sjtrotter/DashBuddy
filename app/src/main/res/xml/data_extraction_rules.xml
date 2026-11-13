@@ -23,8 +23,9 @@
         <exclude domain="file" path="shareable.log" />
         <exclude domain="file" path="shareable.log.1" />
         <exclude domain="file" path="logs/" />
-        <!-- #1615: a staged restore and the copy it replaced are this install's own files, never a second copy in a backup. -->
+        <!-- #1615: a staged restore, the stage being checked and the copy a restore replaced are this install's own files, never a second copy in a backup. -->
         <exclude domain="file" path="restore-staging/" />
+        <exclude domain="file" path="restore-staging.tmp/" />
         <exclude domain="file" path="restore-previous/" />
     </cloud-backup>
     <device-transfer>
@@ -50,8 +51,9 @@
         <exclude domain="file" path="shareable.log" />
         <exclude domain="file" path="shareable.log.1" />
         <exclude domain="file" path="logs/" />
-        <!-- #1615: a staged restore and the copy it replaced are this install's own files, never a second copy in a backup. -->
+        <!-- #1615: a staged restore, the stage being checked and the copy a restore replaced are this install's own files, never a second copy in a backup. -->
         <exclude domain="file" path="restore-staging/" />
+        <exclude domain="file" path="restore-staging.tmp/" />
         <exclude domain="file" path="restore-previous/" />
     </device-transfer>
 </data-extraction-rules>
