@@ -63,9 +63,10 @@ app. The three builds stay: Play, sideload (Uber drivers; `isAccessibilityTool` 
    click evidence.
 4. **Contributor tier:** #1625, #1626, #1627; server #80 (constancy, regional class), #81 (grants, word gate), #86
    (30-day pseudonyms). The UX plan (`~/dashbuddy/design/2026-11-12-ux-personas/plan.md`) gains a contributor persona.
-5. **Workbench:** #1628, #1629; server #82 anchor check, #83 skeleton drafting, #84 agent token, #87 click and
+5. **Workbench:** #1572 the PENDING corpus folder and shared fixture privacy checker (from §5) → #1628, #1629; server #82 anchor check, #83 skeleton drafting, #84 agent token, #87 click and
    notification drafting.
-6. **Rollout:** #1630 shadow mode and probe rules, #1631 canary, on §5's #1568, #640 and #641; #1573 matched skeletons.
+6. **Rollout:** #1630 shadow mode and probe rules, #1631 canary, on §5's #1568, #640 and #641; dashbuddy-census#69 (a rule id on matched
+   skeletons) → #1573 matched skeletons.
 7. **Proof:** #1632 a blind redraft of a shipped rule, #1633 the first rule shipped from release-build evidence.
 8. **Then:** #246 counsel (Q6-Q9; the developer's to arrange), #1623 Play Console forms, the UX persona round,
    #1624 the end-to-end rehearsal, and recruiting.
@@ -129,7 +130,7 @@ choices. #1579 one-tap wipe (not a Play requirement; also the blunt answer to #1
 Feeds: #1561 ADRs → #1562 accounts and keys (developer) → #1563 feed-contract → #1564 fuel publisher and #1565
 transport → #1566 fuel prices from the feed (the EIA key leaves the app) → #1567 custom feed. Rules: #1568 batch
 loader → #640 phone fetch and #641 tag-sign publishing → #695 constants feed → #1569/#1570. Census editor and health:
-#1572, #1573 (now skeleton-only), #1209; #1571 moved to §1; #1630/#1631 (shadow and canary, §1) follow #640/#641; #1530 a census batch of 30 lost to `bad_request`
+#1572 and #1573 (now skeleton-only) moved to §1, #1209; #1571 moved to §1; #1630/#1631 (shadow and canary, §1) follow #640/#641; #1530 a census batch of 30 lost to `bad_request`
 (needs the server log). #192 stays the rules epic, nested under #1559. #1561's ADR-0009 update also retires the
 pinned-artifact production path.
 
@@ -166,7 +167,7 @@ pinned-artifact production path.
 data) · #528 per-drop GPS $/mi · #579 voice accept · #1338 Android Auto · #1504 measured offer rate · #883
 pixel-redacted screenshots · #1386/#1389 fuel economy and EV charging · #214 DSL
 onboarding · #505 replay frontier · #590 phase 2 (after #1568) · #245 re-scope to the `contains("pay")` heuristic ·
-#428 es/fr consent strings and tap labels · #246 counsel review (external) · #1271/#1272/#1276 test-suite tail (four
+#428 es/fr consent strings and tap labels · #246 counsel (now in §1, before #1624) · #1271/#1272/#1276 test-suite tail (four
 of #1272's five missing journeys can be built from existing captures; the Uber one waits on #826) · #1221 the
 restaurant-wait replay fixture.
 
