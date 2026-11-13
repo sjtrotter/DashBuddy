@@ -180,10 +180,12 @@ exists to keep recognition working on the screens drivers see.
 
 A driver who opts in sends the layout of screens gig.log did not recognize: the kinds of
 views on the screen, the app's own view names, how they nest, a few flags such as
-"clickable", and each piece of text replaced by a one-way hash (a fingerprint that cannot
-be turned back into the words) or by its format (`$##.##` for an amount, never the
-amount). The phone withholds the names, addresses and codes it detects before anything is
-hashed. The census never sends a screen as the driver sees it. It also sends a daily
+"clickable", and each piece of text replaced by a one-way hash. A hash is a fingerprint:
+the server cannot read the words back from it, but it can recognize a common word by
+hashing a guess and comparing, which is how the app's own labels are matched. The phone
+withholds the names, addresses and codes it detects before anything is hashed, and today
+it withholds amounts and times too. A planned change (#1619) sends those as their format
+instead (`$##.##` for an amount, never the amount). The census never sends a screen as the driver sees it. It also sends a daily
 recognition health report: counts of recognized and unrecognized screens, per rule and
 per delivery-app version. A planned contributor tier lets a driver confirm that a word on
 a screen is the app's own wording (a button label, a heading), never a customer's
@@ -194,8 +196,8 @@ test build sends census data. On the maintainer's own phone that build can also 
 own screen captures, with the detected customer details masked, so a new screen can be
 debugged; the server accepts these from no other install, and stops accepting them once
 the first rule drafted from Play and sideload data ships (#1633). The Play and sideload
-builds gain the same opt-in for layouts only, together with a button that deletes what
-the server holds (#1617). What each build sends, how long
+builds gain the same opt-in for layouts only, together with a button that deletes what the
+server holds about the install (#1617). What each build sends, how long
 the server keeps it, and who can see it are stated in `PRIVACY.md` and in ADR-0011
 (`docs/adr/ADR-0011-unknown-census-privacy-model.md`, §12 to §21).
 
@@ -215,7 +217,8 @@ The census stays inside these limits:
   full.
 
 The ICA is between each driver and DoorDash. A driver who contributes to the census makes
-that choice under their own agreement, and the Play and sideload opt-in screen says so.
+that choice under their own agreement, and the Play and sideload opt-in screen will say so
+(#1621).
 Counsel has not reviewed the census (#246); the open questions are listed below, and this
 section may change after that review.
 

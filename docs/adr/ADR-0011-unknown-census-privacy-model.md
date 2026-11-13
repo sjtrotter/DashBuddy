@@ -366,8 +366,11 @@ filter withholds low-entropy PII shapes before hashing rather than relying on th
 
 **Amended 2026-11-13 (#1618): keyed at rest.** The phone's hash is unchanged: unsalted, so every install agrees. The
 server replaces every word hash with `HMAC(pepper, h)` at ingest, before it writes it anywhere (token sightings,
-stored skeleton samples, constancy tables, confirmations); see §21 (sjtrotter/dashbuddy-census#85). A stolen database
-or backup can then no longer be guessed against offline. The live operator holds the pepper, so residual risks 1 and 7
+stored skeleton samples, constancy tables, confirmations); see §21 (sjtrotter/dashbuddy-census#85). Values derived
+from word hashes are keyed the same way wherever they are stored: today the notification fingerprint folds the title and
+text hashes into a public digest (`CensusFingerprint.kt:63`), so a stored notification fingerprint, and every reference
+to it, is keyed at rest too. Only when every stored text-derived value is keyed can a stolen database or backup no
+longer be guessed against offline. The live operator holds the pepper, so residual risks 1 and 7
 stand against the operator.
 
 ### 4. **k-anonymity on strings** is a read-time gate on the server (D3)
@@ -905,8 +908,9 @@ Added 2026-11-13 (#1618), for §12 to §21:
     a count, and its format. Classes leave out what parsing does not need (§13), and a property test proves no name,
     address, phone number or code becomes a shape (#1619).
 17. **A probe literal is chosen by the operator.** The phone's chrome filter, no per-install targeting, expiry and a
-    client-side budget keep a probe from searching for one dasher's value (§17). A probe for a common word that
-    passes the filter still returns fleet counts.
+    client-side budget limit what a probe can ask (§17), but they do not stop it: a common first name can pass the
+    filter, and each install's answer arrives in its own health report, readable within the epoch. Answers are
+    attributable until they are aggregated before the operator sees them.
 
 ## Open questions (dev decisions; the same items appear in #1157's plan §10 under its own numbering — this list is the ADR's reference)
 
@@ -1068,10 +1072,11 @@ hash cannot give: the app's own words on constant slots, and what a field means.
   whose gate is closed; the gate is never only a dashboard filter. A word that passes joins the working vocabulary as
   approved chrome (§4). Two confirmations and k installs are necessary, not sufficient (risk 12).
 - Confirmations and role tags are keyed by epoch pseudonyms (§21), never the install id.
-- "Ask the developer" sends the exact masked artifact the review screen showed (byte-identical), with an optional note
+- "Ask the developer" sends the outbound artifact the review screen described (byte-identical), with an optional note
   from a fixed list, to a quarantine: encrypted to the operator key, expiring in 72 hours, never backed up, and kept
   out of clusters, counts, drafting and the agent's view until the operator approves a sanitized copy. It never
-  sends unmasked text.
+  sends unmasked text, and it is not a way around the word gate: a word the review screen shows on a constant slot is
+  a local display, and in the outbound artifact that slot stays a hash unless its gate has opened.
 - Contributor review is evidence. It is never permission to send customer text.
 
 ### §16 The anchor check is a dictionary lookup (census#82)
@@ -1102,7 +1107,10 @@ on phones by probes. A probe is a shadow rule (§18) with no `state` block, publ
 - The phone checks every literal before it evaluates a probe. A literal that fails the chrome filter (a name, address
   or code shape, a mask marker) is refused and counted as `probe_refused`, never evaluated. Like redaction, this
   fails closed.
-- Only counts reach the health report.
+- Only counts reach the health report. Those counts arrive in the install's own health report, so within an epoch the
+  operator can read one install's answer; publishing a probe to every phone does not prevent that. The literal filter,
+  no targeting, expiry and the budget limit what a probe can ask; a common first name can still pass the filter
+  (risk 17). Answers stay attributable until a mechanism aggregates them before the operator sees them.
 
 ### §18 Drafting from skeletons, shadow mode, canary, rollback
 
@@ -1203,10 +1211,12 @@ tied to an install by whoever holds their peppers.
 **Deletion** (#1622, #1579, census#79).
 
 - "Delete my census data" is its own button, separate from stopping. It sends a deletion request, shows the server's
-  confirmation, and works while an upload is still waiting. Stopping keeps anything new from leaving; deleting removes
-  what the server holds.
-- The server deletes samples, sightings, health, confirmations, grants and the quarantine, and re-applies deletions
-  after a restore from backup.
+  confirmation, and works while an upload is still waiting. Stopping keeps anything new from leaving; deleting removes what the server holds that is tied to this install.
+- The server deletes every row it can tie to the install: the install record, sightings, health, confirmations, role
+  tags, grants, quarantine items and trusted envelopes, and it re-applies deletions after a restore from backup.
+- What survives is stated on the same screen, because it can no longer be tied to the install: cluster samples
+  (stored without an install id, §5), fleet totals, vocabulary already approved at k, rules and synthetic fixtures
+  already published, rows under destroyed epoch peppers, and the 14-day backups until they age out.
 - The on-phone wipe (#1579) sends the same deletion request when the install is enrolled, then clears everything
   gig.log keeps on the phone.
 
