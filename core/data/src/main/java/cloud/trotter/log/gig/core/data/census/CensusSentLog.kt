@@ -39,6 +39,9 @@ class CensusSentLog internal constructor(
     private val mutex = Mutex()
     private val state = MutableStateFlow<List<CensusSentBatch>?>(null)
 
+    /** The file still holds records the shown list has pruned; cleared only by a successful write. */
+    private var rewriteNeeded = false
+
     /** Newest first. Fail-open: an unreadable file reads as empty, never as an error on the screen. */
     val batches: Flow<List<CensusSentBatch>> = flow {
         withContext(io) { mutex.withLock { load() } }
@@ -59,6 +62,7 @@ class CensusSentLog internal constructor(
     suspend fun clear() = withContext(io) {
         mutex.withLock {
             if (file.exists() && !file.delete()) throw IOException("Census sent record removal failed")
+            rewriteNeeded = false
             state.value = emptyList()
         }
     }
@@ -73,7 +77,9 @@ class CensusSentLog internal constructor(
             if (file.isFile) JSON.decodeFromString(SERIALIZER, file.readText(Charsets.UTF_8)) else emptyList()
         }.getOrElse { emptyList() }
         val kept = pruned(loaded)
-        if (kept.size != loaded.size) runCatching { write(kept) }
+        if (kept.size != loaded.size) rewriteNeeded = true
+        // Kept until a rewrite succeeds: a failed one is retried on the next read or write.
+        if (rewriteNeeded) runCatching { write(kept) }
         state.value = kept
         return kept
     }
@@ -97,6 +103,7 @@ class CensusSentLog internal constructor(
         } finally {
             tmp.delete()
         }
+        rewriteNeeded = false
         state.value = kept
     }
 

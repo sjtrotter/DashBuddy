@@ -72,7 +72,7 @@
         <item quantity="many">Le serveur du recensement a supprimé %1$d enregistrements.</item>
         <item quantity="other">Le serveur du recensement a supprimé %1$d enregistrements.</item>
     </plurals>
-    <string name="census_delete_status_nothing">Le serveur du recensement ne garde aucun envoi de ce téléphone.</string>
+    <string name="census_delete_status_nothing">Aucune demande de suppression n\'a été envoyée : ce téléphone n\'avait pas d\'identifiant du recensement à ce moment-là.</string>
     <string name="census_delete_status_not_possible">L\'identifiant du recensement de ce téléphone n\'est plus utilisable, donc gig.log n\'a pas pu envoyer la demande.</string>
     <string name="census_delete_dialog_title">Supprimer les données du recensement ?</string>
     <string name="census_delete_dialog_deleted">gig.log supprime les schémas et les décomptes quotidiens en attente sur ce téléphone, puis demande au serveur du recensement de supprimer les envois qu\'il peut relier à ce téléphone. Cela ne désactive pas le recensement ; désactivez-le pour arrêter les envois suivants.</string>

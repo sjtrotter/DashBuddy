@@ -91,7 +91,7 @@ private fun deletionStatus(deletion: CensusDeletion?, deleting: Boolean): String
             if (day == null) pluralStringResource(R.plurals.census_delete_status_done_no_day, rows, rows)
             else pluralStringResource(R.plurals.census_delete_status_done, rows, rows, day)
         }
-        CensusDeletion.State.NOTHING_HELD -> stringResource(R.string.census_delete_status_nothing)
+        CensusDeletion.State.NOTHING_SENT -> stringResource(R.string.census_delete_status_nothing)
         CensusDeletion.State.NOT_POSSIBLE -> stringResource(R.string.census_delete_status_not_possible)
     }
 }

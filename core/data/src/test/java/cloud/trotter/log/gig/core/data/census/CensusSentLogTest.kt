@@ -56,6 +56,23 @@ class CensusSentLogTest {
         assertEquals(CensusSentLog.MAX_BATCHES, log(file).batches.first().size)
     }
 
+    @Test fun `a failed pruning rewrite is retried by the next read until the file is pruned`() = runTest {
+        val dir = tmp.newFolder()
+        val file = File(dir, "sent.json")
+        val sent = log(file)
+        sent.record(CensusSentBatch.SKELETONS, body().toByteArray())
+        now += CensusSentLog.MAX_AGE_MILLIS + 1
+        assertTrue(dir.setWritable(false))
+        try {
+            assertTrue("the shown list is pruned even when the rewrite fails", sent.batches.first().isEmpty())
+            assertTrue("the file still holds it", file.readText().contains("doordash"))
+        } finally {
+            dir.setWritable(true)
+        }
+        assertTrue(sent.batches.first().isEmpty())
+        assertFalse("the next read persisted the pruning", file.readText().contains("doordash"))
+    }
+
     @Test fun `a path with no census data and an unreadable file record nothing and fail open`() = runTest {
         val file = File(tmp.newFolder(), "sent.json").apply { writeText("not json") }
         val sent = log(file)

@@ -22,7 +22,8 @@ import javax.inject.Singleton
  * Developer action (#1185): forget this phone's census identity. Under the uploader lock (never mid-batch) it clears
  * the skeleton spool, invalidates the envelope sink, then clears the health ledger (a failure leaves the identity
  * in place), wipes the sealed credential, and records the reset as the last run in one DataStore edit.
- * The next run mints + enrols a fresh install id. The old server-side install is orphaned, not withdrawn.
+ * The next run mints + enrols a fresh install id. The old server-side install is not withdrawn; an enrolled identity is
+ * retired (its ID and sealed key kept, never used to upload) so "Delete my census data" can still delete under it (#1622).
  * Consent is left as it is; capture sharing is switched off — the new install must be trusted again.
  * A server-imposed deferral deadline is left as it is. [resetAsync] runs on the application scope so leaving the
  * screen cannot cancel it half-done.
@@ -76,7 +77,8 @@ class CensusIdentityResetter internal constructor(
                     envelopeSink.invalidate()
                     preferences.setCensusShareCaptures(false)
                     healthSink.reset()
-                    credentials.wipe()
+                    // #1622: an enrolled identity is retired, not forgotten, so "Delete my census data" can still delete under it.
+                    credentials.retire()
                     preferences.recordCensusReset(CensusLastRun(now(), CensusRunOutcome.RESET))
                     Timber.tag(TAG).i("census identity reset")
                     true

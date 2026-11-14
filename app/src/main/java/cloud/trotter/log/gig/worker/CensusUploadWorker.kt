@@ -301,6 +301,8 @@ class CensusUploadWorker @AssistedInject constructor(
                 is EnrolResult.Enrolled -> {
                     preferences.setCensusPolicy(result.policy)
                     credentials.markEnrolled()
+                    // #1622: a "nothing sent" deletion result described the phone before it had this ID.
+                    runCatching { deletion.onEnrolled() }
                     record.set(CensusRunOutcome.ENROLLED)
                     Timber.tag(TAG).i("census enrolled installs=1")
                     return Enrollment.Ready(credential.copy(enrolled = true))

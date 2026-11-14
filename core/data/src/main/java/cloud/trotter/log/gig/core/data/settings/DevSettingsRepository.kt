@@ -85,15 +85,17 @@ class DevSettingsRepository @Inject constructor(
     val censusDeletion: Flow<CensusDeletion?> = dataSource.censusDeletion.map { raw ->
         raw?.let {
             CensusDeletion(it.requestedAtMillis, CensusDeletion.State.fromWire(it.stateWire), it.rows, it.deletedDay,
-                it.localCleared, it.installId, CensusDeletion.Waiting.fromWire(it.waitingWire))
+                it.localCleared, it.installIds?.split(',')?.filter(String::isNotEmpty),
+                CensusDeletion.Waiting.fromWire(it.waitingWire))
         }
     }
     suspend fun setCensusDeletion(value: CensusDeletion) = dataSource.setCensusDeletion(
         DevSettingsDataSource.RawCensusDeletion(
             value.requestedAtMillis, value.state.wire, value.rows, value.deletedDay, value.localCleared,
-            value.installId, value.waiting?.wire,
+            value.installIds?.joinToString(","), value.waiting?.wire,
         ),
     )
+    suspend fun clearCensusDeletion() = dataSource.clearCensusDeletion()
     val censusLastRun: Flow<CensusLastRun?> = dataSource.censusLastRun.map { raw ->
         raw?.let { (at, wire, detail, envelopes, reason) ->
             CensusLastRun(at, CensusRunOutcome.fromWire(wire), detail, envelopes, CensusEnrolRejectReason.fromWire(reason))

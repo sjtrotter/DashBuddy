@@ -131,7 +131,7 @@
     <string name="developer_settings_census_copy_id">Copy install ID</string>
     <string name="developer_settings_census_reset">Reset census identity</string>
     <string name="developer_settings_census_reset_title">Reset census identity?</string>
-    <string name="developer_settings_census_reset_body">Forgets this phone\'s census install ID and secret, deletes the waiting outlines and captures, and turns capture sharing off. The next upload signs up a new install ID, which the census server must trust again. The census switch stays as it is.</string>
+    <string name="developer_settings_census_reset_body">Stops using this phone\'s census install ID and secret, keeping them only so Delete my census data can still delete what was sent under them, deletes the waiting outlines and captures, and turns capture sharing off. A deletion request still waiting is sent first; while it can\'t go through, nothing is reset. The next upload signs up a new install ID, which the census server must trust again. The census switch stays as it is.</string>
     <string name="developer_settings_census_reset_confirm">Reset</string>
     <string name="developer_settings_census_reset_cancel">Cancel</string>
     <string name="developer_settings_census_share_captures">Share unrecognized screens (trusted installs)</string>
@@ -249,7 +249,7 @@
         <item quantity="one">The census server deleted %1$d record.</item>
         <item quantity="other">The census server deleted %1$d records.</item>
     </plurals>
-    <string name="census_delete_status_nothing">The census server holds no uploads from this phone.</string>
+    <string name="census_delete_status_nothing">No deletion was sent: this phone had no census ID at the time.</string>
     <string name="census_delete_status_not_possible">This phone\'s census ID can no longer be used, so gig.log couldn\'t send the request.</string>
     <string name="census_delete_dialog_title">Delete census data?</string>
     <string name="census_delete_dialog_deleted">gig.log deletes the outlines and daily counts waiting on this phone, then asks the census server to delete the uploads it can tie to this phone. This doesn\'t turn the census off; turn it off to stop later uploads.</string>

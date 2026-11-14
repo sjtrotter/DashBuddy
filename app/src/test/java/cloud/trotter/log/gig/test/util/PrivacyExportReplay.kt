@@ -198,7 +198,7 @@ class PrivacyExportReplay(
     }
     private val lock = CensusUploadLock()
     private val deletion = CensusDataDeletion(credentials, skeletonSpool, envelopeSink, health, preferences, scheduling, lock,
-        apiFactory, backgroundScope)
+        apiFactory, backgroundScope, "privacy-e2e")
 
     /** Load unchanged generated assets before starting the only collectors of the production outputs. */
     suspend fun start() {

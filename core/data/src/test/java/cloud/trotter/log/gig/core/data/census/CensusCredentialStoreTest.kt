@@ -86,6 +86,38 @@ class CensusCredentialStoreTest {
         }
     }
 
+    @Test fun `retire keeps an enrolled identity's key for a later deletion, drops a pending one, and survives a new identity`() = runTest {
+        // #1622: an identity reset must not lose the key a deletion of the old install's data needs.
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
+        try {
+            val ds = PreferenceDataStoreFactory.create(scope = scope) { File(tmp.root, "credentials.preferences_pb") }
+            val sealer = FakeSealer()
+            val store = CensusCredentialStore(ds, sealer)
+            val old = store.mint().also { store.markEnrolled() }
+            store.retire()
+            assertNull("no current identity after the reset", store.current())
+            assertNull(store.pending())
+            assertEquals(listOf(old.installId), store.retiredIds())
+            assertEquals(old.copy(enrolled = true), store.retired(old.installId))
+            assertFalse("the retired key stays sealed", ds.data.first().asMap().values.any { it.toString().contains(old.secret) })
+
+            val fresh = store.mint()
+            store.retire() // A pending identity uploaded nothing: it is not kept.
+            assertEquals(listOf(old.installId), store.retiredIds())
+            assertNull(store.retired(fresh.installId))
+
+            store.mint().also { store.markEnrolled() }
+            store.wipe() // A revoke forgets the current identity and keeps the retired ones.
+            assertEquals(listOf(old.installId), CensusCredentialStore(ds, sealer).retiredIds())
+            assertNull(store.current())
+            store.forgetRetired(old.installId)
+            assertTrue(store.retiredIds().isEmpty())
+            assertNull(store.retired(old.installId))
+        } finally {
+            scope.cancel()
+        }
+    }
+
     @Test fun `unusable key reports explicitly and remint produces fresh identity`() = runTest {
         val scope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
         try {

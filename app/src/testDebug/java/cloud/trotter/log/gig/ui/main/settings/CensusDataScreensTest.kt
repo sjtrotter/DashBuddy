@@ -119,6 +119,7 @@ class CensusDataScreensTest {
             override fun create(baseUrl: String): CensusTransport = transport
         },
         CoroutineScope(Dispatchers.Unconfined),
+        "0.234.0",
     )
     private lateinit var locale: Locale
     private lateinit var timeZone: TimeZone
@@ -138,6 +139,7 @@ class CensusDataScreensTest {
     private fun string(id: Int) = context.getString(id)
 
     private fun showCensus() {
+        runBlocking { whenever(credentials.retiredIds()).thenReturn(emptyList()) }
         val vm = CensusViewModel(repo, deletion, readsUnboundPlatforms = false)
         compose.setContent { GigLogTheme { CensusScreen(onBack = {}, onOpenSent = {}, viewModel = vm) } }
         compose.waitForIdle()

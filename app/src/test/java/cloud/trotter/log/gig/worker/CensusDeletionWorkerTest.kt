@@ -2,6 +2,8 @@ package cloud.trotter.log.gig.worker
 
 import androidx.work.ListenableWorker
 import cloud.trotter.log.gig.core.network.census.DeleteResult
+import cloud.trotter.log.gig.core.network.census.EnrolResult
+import kotlinx.serialization.json.JsonObject
 import cloud.trotter.log.gig.core.network.census.HealthResult
 import cloud.trotter.log.gig.core.network.census.UploadResult
 import cloud.trotter.log.gig.domain.census.CensusConsent
@@ -125,12 +127,12 @@ class CensusDeletionWorkerTest {
         assertEquals(listOf("delete"), h.api.stages)
     }
 
-    @Test fun `not enrolled - the phone uploaded nothing, and no request is made`() = runTest {
+    @Test fun `no census ID at all - no request is made, and the result says so as a fact about the request`() = runTest {
         val h = harness()
         h.initialize()
         whenever(h.credentials.current()).thenReturn(null)
         h.queue()
-        assertEquals(State.NOTHING_HELD, h.deletion.delete().state)
+        assertEquals(State.NOTHING_SENT, h.deletion.delete().state)
         assertEquals(0, h.factoryCalls)
         assertTrue("the queue is cleared all the same", h.queued.isEmpty())
     }
@@ -143,7 +145,7 @@ class CensusDeletionWorkerTest {
             val result = h.deletion.delete()
             assertEquals(State.PENDING, result.state)
             assertEquals(CensusDeletion.Waiting.UNCONFIRMED, result.waiting)
-            assertEquals(h.credential.installId, result.installId)
+            assertEquals(listOf(h.credential.installId), result.installIds)
         }
         verify(h.credentials, never()).wipe()
         assertEquals("a pending request blocks uploads", ListenableWorker.Result.success(), run {
@@ -156,6 +158,65 @@ class CensusDeletionWorkerTest {
         h.api.deletions += deleted
         assertEquals(ListenableWorker.Result.success(), h.worker(listOf(CensusWorkScheduler.DELETION_TAG)).doWork())
         assertEquals(State.DELETED, h.preferences.censusDeletion.first()?.state)
+    }
+
+    @Test fun `a 401 recovers by enrolling the same ID and key, then resolves only on the DELETE's own 200`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.queue()
+        h.api.deletions += DeleteResult.Unauthorized(System.currentTimeMillis())
+        h.api.enrollments += EnrolResult.Enrolled(JsonObject(emptyMap()))
+        h.api.deletions += deleted
+        val result = h.deletion.delete()
+        assertEquals("the same ID re-enrols with its own key", listOf(h.credential.installId), h.api.enrolledIds)
+        assertEquals(State.DELETED, result.state)
+        assertEquals(listOf(h.credential.installId, h.credential.installId), h.api.deletedIds)
+        verify(h.credentials, never()).mint()
+    }
+
+    @Test fun `a recovery enrolment that fails, or a second 401, leaves the request pending and uploads blocked`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.api.deletions += DeleteResult.Unauthorized(System.currentTimeMillis())
+        h.api.enrollments += EnrolResult.ServerUnavailable(503)
+        assertEquals(State.PENDING, h.deletion.delete().state)
+        assertEquals("no DELETE after a failed enrolment", 1, h.api.deletedIds.size)
+
+        h.queueBatch(1)
+        h.api.deletions += DeleteResult.Unauthorized(System.currentTimeMillis())
+        h.api.enrollments += EnrolResult.Enrolled(JsonObject(emptyMap()))
+        h.api.deletions += DeleteResult.Unauthorized(System.currentTimeMillis())
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals("an enrolment alone never counts as deletion", State.PENDING, h.preferences.censusDeletion.first()?.state)
+        assertTrue(h.api.bodies.isEmpty())
+    }
+
+    @Test fun `an identity reset before the request keeps the old ID's key, and the request deletes under it`() = runTest {
+        val h = harness()
+        h.initialize()
+        val old = h.credential
+        whenever(h.credentials.current()).thenReturn(null)
+        whenever(h.credentials.retiredIds()).thenReturn(listOf(old.installId))
+        whenever(h.credentials.retired(old.installId)).thenReturn(old)
+        h.api.deletions += deleted
+
+        val result = h.deletion.delete()
+        assertEquals(State.DELETED, result.state)
+        assertEquals(listOf(old.installId), h.api.deletedIds)
+        verify(h.credentials).forgetRetired(old.installId)
+    }
+
+    @Test fun `a nothing-sent result is cleared once the phone enrols`() = runTest {
+        val h = harness()
+        h.initialize()
+        whenever(h.credentials.current()).thenReturn(null)
+        whenever(h.credentials.pending()).thenReturn(null)
+        assertEquals(State.NOTHING_SENT, h.deletion.delete().state)
+
+        whenever(h.credentials.mint()).thenReturn(h.credential.copy(enrolled = false))
+        h.api.enrollments += EnrolResult.Enrolled(JsonObject(emptyMap()))
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(null, h.preferences.censusDeletion.first())
     }
 
     @Test fun `a server without the endpoint yet keeps the request waiting, with the reason the screen shows`() = runTest {
@@ -172,7 +233,7 @@ class CensusDeletionWorkerTest {
         val h = harness()
         h.initialize()
         h.api.deletions += DeleteResult.TransportFailure("IOException")
-        assertEquals(h.credential.installId, h.deletion.delete().installId)
+        assertEquals(listOf(h.credential.installId), h.deletion.delete().installIds)
 
         val other = h.credential.copy(installId = "87654321-1234-4123-8123-123456789abc")
         whenever(h.credentials.current()).thenReturn(other)

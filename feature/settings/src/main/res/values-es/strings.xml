@@ -72,7 +72,7 @@
         <item quantity="many">El servidor del censo borró %1$d registros.</item>
         <item quantity="other">El servidor del censo borró %1$d registros.</item>
     </plurals>
-    <string name="census_delete_status_nothing">El servidor del censo no guarda envíos de este teléfono.</string>
+    <string name="census_delete_status_nothing">No se envió ninguna solicitud de borrado: este teléfono no tenía identificador del censo en ese momento.</string>
     <string name="census_delete_status_not_possible">El identificador del censo de este teléfono ya no se puede usar, así que gig.log no pudo enviar la solicitud.</string>
     <string name="census_delete_dialog_title">¿Borrar los datos del censo?</string>
     <string name="census_delete_dialog_deleted">gig.log borra los esquemas y recuentos diarios que esperan en este teléfono y luego pide al servidor del censo que borre los envíos que puede vincular a este teléfono. Esto no desactiva el censo; desactívalo para detener los envíos posteriores.</string>

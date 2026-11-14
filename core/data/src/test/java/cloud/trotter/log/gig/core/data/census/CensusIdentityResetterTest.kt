@@ -84,7 +84,7 @@ class CensusIdentityResetterTest {
             verify(preferences).setCensusShareCaptures(false)
             verify(healthStore).clear()
             verify(healthStore).save(HealthLedger(generation = 1))
-            verify(credentials).wipe()
+            verify(credentials).retire()
         }
         assertFalse(preferences.censusShareCaptures.first())
         assertEquals(99L, preferences.nextAllowedAtMillis.first()) // A server-imposed deferral is not identity state.
@@ -101,7 +101,7 @@ class CensusIdentityResetterTest {
         assertFalse(resetter().reset())
         verify(deletion).resumePending()
         verify(spool, never()).clear()
-        verify(credentials, never()).wipe()
+        verify(credentials, never()).retire()
         assertEquals(CensusRunOutcome.FAILURE, preferences.censusLastRun.first()?.outcome)
         assertTrue(scheduler.enqueued.isEmpty())
     }
@@ -109,7 +109,7 @@ class CensusIdentityResetterTest {
     @Test fun `reset does not enqueue when consent is off`() = runTest {
         resetter().reset()
 
-        verify(credentials).wipe()
+        verify(credentials).retire()
         verify(spool).clear()
         assertTrue(scheduler.enqueued.isEmpty())
         assertFalse(preferences.censusUploadEnabled.first())
@@ -121,12 +121,12 @@ class CensusIdentityResetterTest {
         try {
             backgroundScope.launch { resetter().reset() }
             runCurrent()
-            verify(credentials, never()).wipe()
+            verify(credentials, never()).retire()
         } finally {
             lock.mutex.unlock()
         }
         runCurrent()
-        verify(credentials).wipe()
+        verify(credentials).retire()
         verify(spool).clear()
     }
 
@@ -136,7 +136,7 @@ class CensusIdentityResetterTest {
 
         assertFalse(resetter().reset())
 
-        verify(credentials, never()).wipe()
+        verify(credentials, never()).retire()
         verify(healthStore, never()).clear()
         assertTrue(scheduler.enqueued.isEmpty())
         assertEquals(CensusLastRun(123L, CensusRunOutcome.FAILURE), preferences.censusLastRun.first())
@@ -147,7 +147,7 @@ class CensusIdentityResetterTest {
         assertFalse(resetter().reset())
         verify(spool).clear()
         verify(healthStore, never()).clear()
-        verify(credentials, never()).wipe()
+        verify(credentials, never()).retire()
         assertEquals(CensusLastRun(123L, CensusRunOutcome.FAILURE), preferences.censusLastRun.first())
     }
 
@@ -158,7 +158,7 @@ class CensusIdentityResetterTest {
         assertFalse(resetter().reset())
 
         verify(spool).clear()
-        verify(credentials, never()).wipe()
+        verify(credentials, never()).retire()
         assertTrue(scheduler.enqueued.isEmpty())
         assertEquals(CensusLastRun(123L, CensusRunOutcome.FAILURE), preferences.censusLastRun.first())
     }
@@ -179,7 +179,7 @@ class CensusIdentityResetterTest {
         // The caller (a ViewModel leaving the screen) holds no handle the reset depends on; it completes on its own scope.
         job.join()
         verify(spool).clear()
-        verify(credentials).wipe()
+        verify(credentials).retire()
         assertEquals(listOf(true), scheduler.enqueued)
     }
 }
