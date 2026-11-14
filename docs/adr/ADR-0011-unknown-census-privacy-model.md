@@ -1019,8 +1019,8 @@ build's census runs as §1 to §11 describe.
   erases it whole) re-enrols with consent kept. The server keeps the install record and today's ledger row so uploads
   continue (census API.md), and the confirmation says so with today's quota row; the bullet below that lists "the
   install record" describes withdrawal. Until the live server is deployed with census#79 it answers 404 and the request
-  waits on the phone, bound to its install ID, with uploads held; a 401 never counts as deleted. The on-phone wipe is
-  still #1579; the disclosure's per-build line says both.
+  waits on the phone, bound to its install ID, with uploads held; a 401 never counts as deleted. The on-phone wipe
+  (#1579) asks the server first; the disclosure's per-build line says both.
 - The capture bus stays `NoOpCaptureBus` in the Play and sideload builds. Only skeletons, health counts and, from a
   contributor, the role tags and gated words of §15 leave those phones.
 - The debug build keeps the trusted-envelope path until #1633; after that the official server accepts no plaintext
@@ -1251,8 +1251,10 @@ tied to an install by whoever holds their peppers.
   already published, and rows under destroyed epoch peppers. Data that can still be tied to it for a while: the
   encrypted backups taken before the request keep the install's rows until they expire, at most 14 days later; a
   restore from one of them re-applies the deletion before the server serves anything.
-- The on-phone wipe (#1579) sends the same deletion request when the install is enrolled, then clears everything
-  gig.log keeps on the phone.
+- The on-phone wipe (#1579) sends the same deletion request when the install is enrolled and clears everything
+  gig.log keeps on the phone once the server confirms. Without a confirmation it deletes nothing until the dasher
+  chooses: wipe anyway (the phone loses the ID and can't ask again; the server's copy ages out) or wait while the
+  request keeps retrying.
 
 **Later: an independent relay and anonymous credentials** (#1635). Needed before any wide rollout, not before the first
 testers. Collection requests go through an Oblivious HTTP relay (RFC 9458) run by an independent operator (a

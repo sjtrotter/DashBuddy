@@ -942,7 +942,7 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   read or write until one succeeds), and the screen filters by
   `rememberNow` so rows leave while it is open. An observer failure never changes the request's result. "What
   gig.log sent" shows the stored daily target with the time left ticking. `CensusDataDeletion` (`:core:data`, the
-  one entry point; #1579's wipe calls `delete()`) runs under `CensusUploadLock`: it stores a pending `CensusDeletion`
+  one entry point; #1579's wipe calls `requestHoldingLock()` under the lock it keeps) runs under `CensusUploadLock`: it stores a pending `CensusDeletion`
   in `dev_settings`, queues `enqueueDeletion` (a `census_delete` run, CONNECTED, exponential backoff from one minute)
   BEFORE the first attempt, cancels a waiting manual run, clears the skeleton spool and in-flight marker, invalidates
   the envelope sink and resets the health ledger, then sends a signed `DELETE /v1/installs/me/data` with an empty
@@ -967,6 +967,20 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   cause=deletion_pending`), and a `census_delete`-tagged run never uploads. App start queues the retry run
   again for an unresolved request (`reconcile`). An unreadable stored state decodes as pending (fail closed).
   Deleting never changes consent; the switch is stop.
+  **On-phone wipe (#1579):** Settings > Data & privacy > Delete everything on this phone (`PhoneWipe`, `:core:data`,
+  application scope; `WipePhoneViewModel` + `WipePhoneDialog`, `:feature:settings`). With an enrolled census id
+  (`CensusCredentialStore.installId`, no secret read) it takes `CensusUploadLock` and runs `requestHoldingLock()`,
+  both inside `PhoneWipe.CENSUS_WAIT_MILLIS` (20 s). `DELETED` (or `nothing_sent`) goes on to the clear WITHOUT
+  releasing the lock, so no census run uploads between the confirmation and the clear; the confirmation shows for
+  `CONFIRMED_NOTICE_MILLIS` (3 s). Anything else (pending with its `waiting` reason, no answer in time,
+  `not_possible`) deletes nothing and offers Delete now or Wait (Cancel for `not_possible`); the lock is released only
+  when the request finishes. Wait leaves the pending request retrying as on the census screen. With no enrolled id
+  nothing is sent and no census client is created. The clear deletes the census Keystore key (`KeystoreSealer.reset`),
+  then calls `ActivityManager.clearApplicationUserData()` (`AppStorageClearer`): Android force-stops the package
+  (every process, service, worker and alarm) before it deletes the app's private and app-specific external storage
+  and its Keystore keys, so no in-app writer needs stopping and no store list needs keeping
+  (`WipeScopeGuardTest` pins the writes outside that storage to the dialog's "stays" list: exports and gallery
+  screenshots). A refused clear (`false` or a throw) shows Couldn't delete and releases the lock.
   **Identity reset + run status (#1185):** when the server no longer knows an enrolled install (alpha
   database reset, withdrawn install) uploads 401 and, since #1622, the worker re-enrols the same identity itself; the developer screen's **Reset
   census identity** action (confirmation dialog) runs `CensusIdentityResetter` (`:core:data`) on the
