@@ -44,3 +44,14 @@ codex-harness.local.md
 # Python bytecode (tools/ci scripts run in the worktree; retro 2026-10-31, #1467)
 __pycache__/
 *.pyc
+
+# #1646: secret files never belong in the repo, wherever they land in the checkout.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.p8
+*service-account*.json
+*-credentials.json
