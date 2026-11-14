@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #1625: Spanish for the screen-review invitation notification. English (values/) is authoritative. -->
+<resources>
+    <string name="census_channel_name">Censo</string>
+    <string name="census_channel_description">La invitación a revisar pantallas, después de un turno</string>
+    <string name="census_review_invitation_title">¿Revisar pantallas que gig.log no reconoce?</string>
+    <string name="census_review_invitation_text">Después de un turno, puedes revisar algunas pantallas que gig.log no reconoció. Toca para leer qué envía la revisión antes de decidir.</string>
+    <string name="census_review_invitation_renew_title">¿Seguir revisando pantallas?</string>
+    <string name="census_review_invitation_renew_text">Tu permiso de revisión de 30 días terminó. Toca para leer qué envía la revisión y aceptar de nuevo.</string>
+</resources>

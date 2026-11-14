@@ -1083,7 +1083,7 @@ A contributor is an opted-in dasher, invited after real use, who reviews a scree
 hash cannot give: the app's own words on constant slots, and what a field means. The tier is separate from trusted
 (§6). A contributor never sends an envelope or screen text, and contributor status never grants either.
 
-- Eligibility is computed on the phone: census opt-in, an install at least 7 days old, active on at least 3 of the
+- Eligibility is computed on the phone: census opt-in, an install at least 8 UTC days old (the server's own quarantine; #1625 corrected 7), active on at least 3 of the
   last 7 days, at least 2 recorded shifts. Only yes or no is sent. Eligibility never requires a high recognition
   ratio. The invitation comes after a shift ends, never during one; accepting shows a second disclosure and then
   requests a grant; a decline is durable.
@@ -1108,6 +1108,21 @@ hash cannot give: the app's own words on constant slots, and what a field means.
   sends unmasked text, and it is not a way around the word gate: a word the review screen shows on a constant slot is
   a local display, and in the outbound artifact that slot stays a hash unless its gate has opened.
 - Contributor review is evidence. It is never permission to send customer text.
+
+Built by #1625: eligibility, the invitation and the grant. `ContributorEligibility` holds the thresholds above and
+reads only the phone's own data (census consent, the census ID's enrolment time, shifts in the read model); the
+grant request's whole body is `{"eligible":true}`. The invitation is offered when the last running shift ends, at most
+once until answered; Not now holds it 14 days, No thanks until the dasher accepts in Settings. The second disclosure
+states the server's 30-day log of which screens the phone asked about, tied to the grant. `CensusContributor.mayUpload`
+is the check before any contributor upload; a grant ends on expiry, revocation, Stop, the census off, a new census ID
+or a deletion request, and every end clears pending reviews (none exist until #1626). Renewal asks again after a later
+shift. The census-age threshold is the server's own, 8 UTC calendar days since enrolment, so the phone never invites
+an install the server would refuse; a `403 install_too_new` (a skewed phone clock) is shown as such and asked again 2
+days later. A grant request is decided under a version captured when Accept is pressed (the dasher's answers, a stored sequence
+that moves on every census consent change, the census ID, any deletion request); a request whose version moved sends
+nothing, a response that arrives after it moved is discarded, and a stored grant keeps its version and counts only
+while that version is current; a `401 revoked` on a grant route runs the census revoke; the grant ends at the
+start of its expiry day without waiting for another change.
 
 ### §16 The anchor check is a dictionary lookup (census#82)
 

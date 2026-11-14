@@ -43,6 +43,36 @@ interface CensusTransport {
     suspend fun uploadEnvelopes(cred: Bearer.Credential, batchId: String, itemsJson: List<String>): UploadResult
     /** #1622: `DELETE /v1/installs/me/data`, signed, empty body. The credential stays valid after a deletion. */
     suspend fun deleteData(cred: Bearer.Credential): DeleteResult
+    /**
+     * #1625: signed `POST /v1/contributor/grant` with the body [CensusApi.GRANT_REQUEST_BODY], `{"eligible":true}`.
+     * The phone computes eligibility and calls this only when it is true, so there is no parameter: no count and no
+     * `false` is ever sent.
+     */
+    suspend fun requestContributorGrant(cred: Bearer.Credential): GrantResult
+    /** #1625: signed `GET /v1/contributor/grant`, the grant's state on the server. */
+    suspend fun contributorGrant(cred: Bearer.Credential): GrantResult
+}
+
+/** #1625: the server's answer about a contributor grant. Only the closed fields below leave the transport. */
+sealed interface GrantResult {
+    /** [grantedDay] and [expiresDay] are the server's UTC days, checked to be real `YYYY-MM-DD` dates. */
+    data class Granted(val grantedDay: String, val expiresDay: String) : GrantResult
+    /** The state read: the grant ran out. */
+    data object Expired : GrantResult
+    /** The state read: this install holds no grant. */
+    data object None : GrantResult
+    /** `403 grant_revoked`, or `revoked` on the state read: the operator's revocation stands. */
+    data object GrantRevoked : GrantResult
+    /** `403 install_too_new`: enrolled fewer than 8 UTC days ago. */
+    data object InstallTooNew : GrantResult
+    /** `403 not_eligible`. */
+    data object NotEligible : GrantResult
+    data class Unauthorized(val serverDateMillis: Long?) : GrantResult
+    /** `401 revoked`: the census ID itself is revoked. */
+    data object InstallRevoked : GrantResult
+    data class RateLimited(val retryAfter: Long) : GrantResult
+    data class ServerUnavailable(val status: Int) : GrantResult
+    data class TransportFailure(val failureClass: String) : GrantResult
 }
 
 /**
@@ -134,7 +164,8 @@ open class CensusApiFactory @Inject constructor(private val sent: CensusSentObse
  * constant User-Agent `dashbuddy-census/1`, Content-Type `application/json`, and the body:
  * protocol-required installId/appVersion/schemaIds on enrol, batchId/items on skeleton upload, reports on health.
  * Enrol uses the bearer without timestamp/signature; policy is a bodyless, unauthenticated GET
- * with the same User-Agent; deletion is a signed DELETE with an empty body. No other application metadata is sent.
+ * with the same User-Agent; deletion is a signed DELETE with an empty body; the contributor grant (#1625) is a signed
+ * POST of exactly [GRANT_REQUEST_BODY] or a signed bodyless GET. No other application metadata is sent.
  * [sent] is told each upload body the server read, byte for byte (#1622).
  */
 class CensusApi(
@@ -280,6 +311,53 @@ class CensusApi(
         DeleteResult.TransportFailure(e.failureToken())
     }
 
+    override suspend fun requestContributorGrant(cred: Bearer.Credential): GrantResult =
+        grant(request(GRANT_PATH, GRANT_REQUEST_BODY.toByteArray(Charsets.UTF_8), cred, signed = true))
+
+    override suspend fun contributorGrant(cred: Bearer.Credential): GrantResult =
+        grant(request(GRANT_PATH, ByteArray(0), cred, signed = true, method = "GET"))
+
+    private suspend fun grant(request: Request): GrantResult = try {
+        val response = execute(request)
+        when (response.status) {
+            200 -> {
+                val json = response.json()
+                when (json.getValue("status").jsonPrimitive.content) {
+                    "granted" -> {
+                        val granted = day(json, "grantedDay")
+                        val expires = day(json, "expiresDay")
+                        if (granted != null && expires != null) GrantResult.Granted(granted, expires)
+                        else GrantResult.TransportFailure("InvalidResponse")
+                    }
+                    "expired" -> GrantResult.Expired
+                    "revoked" -> GrantResult.GrantRevoked
+                    "none" -> GrantResult.None
+                    else -> GrantResult.TransportFailure("InvalidResponse")
+                }
+            }
+            401 -> if (response.isRevoked()) GrantResult.InstallRevoked else GrantResult.Unauthorized(response.dateMillis)
+            403 -> when (response.error()) {
+                "install_too_new" -> GrantResult.InstallTooNew
+                "not_eligible" -> GrantResult.NotEligible
+                "grant_revoked" -> GrantResult.GrantRevoked
+                else -> GrantResult.ServerUnavailable(response.status)
+            }
+            429 -> GrantResult.RateLimited(response.retryAfter)
+            else -> GrantResult.ServerUnavailable(response.status)
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        GrantResult.TransportFailure(e.failureToken())
+    }
+
+    /** Only a real date leaves the transport: the day is parsed, so a malformed one is no day at all. */
+    private fun day(json: JsonObject, key: String): String? {
+        val value = json[key]?.jsonPrimitive?.content ?: return null
+        if (!DAY.matches(value)) return null
+        return runCatching { java.time.LocalDate.parse(value).toString() }.getOrNull()
+    }
+
     /** #1622: a body the server read goes to the sent record; the record can never change the request's result. */
     private suspend fun recordRead(path: String, status: Int, body: ByteArray) {
         if (status != 200 && status != 400 && status != 422) return
@@ -303,7 +381,8 @@ class CensusApi(
         val builder = Request.Builder().url("$baseUrl$path")
             .header("User-Agent", USER_AGENT)
             .header(CensusHeaders.AUTHORIZATION, Bearer.format(cred.installId, cred.secret))
-            .method(method, requestBody)
+        // A GET carries no body; it is signed over the empty body.
+        if (method == "GET") builder.get() else builder.method(method, requestBody)
         if (signed) {
             val ts = (System.currentTimeMillis() / 1000).toString()
             builder.header(CensusHeaders.TIMESTAMP, ts)
@@ -359,6 +438,9 @@ class CensusApi(
 
         private const val USER_AGENT = "dashbuddy-census/1"
         const val DELETE_DATA_PATH = "/v1/installs/me/data"
+        const val GRANT_PATH = "/v1/contributor/grant"
+        /** #1625: the whole grant request: a yes, never a count. */
+        const val GRANT_REQUEST_BODY = "{\"eligible\":true}"
         private val DAY = Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
         fun batchId(fingerprints: List<String>): String = MessageDigest.getInstance("SHA-256")

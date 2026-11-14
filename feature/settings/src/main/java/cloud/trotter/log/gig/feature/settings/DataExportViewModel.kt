@@ -209,6 +209,7 @@ class DataExportViewModel @Inject constructor(
     private fun receiptLines(stored: StoredConsentReceipts) = consentReceiptLines(
         eventReceipt = stored.screenEvents,
         censusReceipt = stored.census,
+        reviewsReceipt = stored.reviews,
         receipts = stored.capabilities,
         capabilities = capabilityGrants.capabilities.value,
         labels = ReceiptLabels(
@@ -217,6 +218,7 @@ class DataExportViewModel @Inject constructor(
             format = context.getString(R.string.consent_receipt_format),
             screenEvents = context.getString(R.string.event_receipt_title),
             census = context.getString(R.string.census_title),
+            reviews = context.getString(R.string.census_review_title),
         ),
         zone = ZoneId.systemDefault(),
         locale = Locale.getDefault(),
@@ -295,11 +297,12 @@ internal data class ReceiptLabels(
     val format: String,
     val screenEvents: String,
     val census: String,
+    val reviews: String = "",
 )
 
 /**
  * #170 — one line per stored receipt, in the `consent_receipt_format` shape Automation & consent shows: the
- * Screen events decision first, then the census decision (#1621), then each automatic-tap decision by capability key. A key the loaded rules
+ * Screen events decision first, then the census decision (#1621), then screen reviews (#1625), then each automatic-tap decision by capability key. A key the loaded rules
  * enumerate also names its action and rule; a key they no longer enumerate is listed by key alone. Keys are
  * sha256 hashes, rule ids and action names are app vocabulary: no screen text.
  */
@@ -307,6 +310,7 @@ internal fun consentReceiptLines(
     eventReceipt: ConsentReceipt?,
     censusReceipt: ConsentReceipt?,
     receipts: Map<String, ConsentReceipt>,
+    reviewsReceipt: ConsentReceipt? = null,
     capabilities: List<RuleCapability>,
     labels: ReceiptLabels,
     zone: ZoneId,
@@ -323,6 +327,7 @@ internal fun consentReceiptLines(
     return buildList {
         eventReceipt?.let { add(line(labels.screenEvents, it)) }
         censusReceipt?.let { add(line(labels.census, it)) }
+        reviewsReceipt?.let { add(line(labels.reviews, it)) }
         receipts.toSortedMap().forEach { (key, receipt) ->
             val capability = byKey[key]
             val subject = if (capability == null) "Capability $key" else "${capability.action.wire} on ${capability.ruleId} ($key)"

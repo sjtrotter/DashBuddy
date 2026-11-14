@@ -3,6 +3,8 @@
     <cloud-backup>
         <exclude domain="file" path="datastore/census_credentials.preferences_pb" />
         <exclude domain="file" path="datastore/census_health.preferences_pb" />
+        <!-- #1625: the contributor grant belongs to this phone's census ID; the invitation answer is re-asked on a new phone. -->
+        <exclude domain="file" path="datastore/census_contributor.preferences_pb" />
     <!-- #1189 (Astra review of PR #1252): the developer settings store carries the census upload/share toggles and the server's policy cache (incl. acceptedSchemaIds) — a restored phone must re-enrol and re-fetch policy, and re-decide the debug toggles, never inherit them. -->
     <exclude domain="file" path="datastore/dev_settings.preferences_pb" />
         <exclude domain="file" path="census/" />
@@ -29,6 +31,8 @@
     <device-transfer>
         <exclude domain="file" path="datastore/census_credentials.preferences_pb" />
         <exclude domain="file" path="datastore/census_health.preferences_pb" />
+        <!-- #1625: the contributor grant belongs to this phone's census ID; the invitation answer is re-asked on a new phone. -->
+        <exclude domain="file" path="datastore/census_contributor.preferences_pb" />
     <!-- #1189 (Astra review of PR #1252): the developer settings store carries the census upload/share toggles and the server's policy cache (incl. acceptedSchemaIds) — a restored phone must re-enrol and re-fetch policy, and re-decide the debug toggles, never inherit them. -->
     <exclude domain="file" path="datastore/dev_settings.preferences_pb" />
         <exclude domain="file" path="census/" />

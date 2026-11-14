@@ -9,6 +9,7 @@ import cloud.trotter.log.gig.core.data.census.CensusCredentialStore
 import cloud.trotter.log.gig.core.data.census.CensusCredentialStore.Credential
 import cloud.trotter.log.gig.core.data.census.CensusDataDeletion
 import cloud.trotter.log.gig.core.data.census.CensusEnrolSchemas
+import cloud.trotter.log.gig.core.data.census.CensusInstallRevocation
 import cloud.trotter.log.gig.core.data.di.CensusEnvelopeSpool
 import cloud.trotter.log.gig.core.data.census.CensusSpool
 import cloud.trotter.log.gig.core.data.census.PersistentHealthSink
@@ -63,6 +64,9 @@ class CensusUploadWorker @AssistedInject constructor(
     private val envelopeSink: CensusEnvelopeSink,
     private val deletion: CensusDataDeletion,
 ) : CoroutineWorker(appContext, workerParams) {
+    /** #1625: the revoke steps' one owner, over this worker's own stores; the run already holds the upload lock. */
+    private val revocation = CensusInstallRevocation(preferences, envelopeSink, healthSink, credentials)
+
     private enum class DeferCause(val token: String) {
         BUDGET("budget"),
         UPLOAD_RATE_LIMIT("upload_rate_limit"),
@@ -703,11 +707,7 @@ class CensusUploadWorker @AssistedInject constructor(
 
     private suspend fun revoke(record: RunRecord): Result {
         record.set(CensusRunOutcome.REVOKED)
-        // Switch off first, so even a failed disk wipe cannot leave uploads enabled.
-        preferences.setCensusUploadEnabled(false)
-        envelopeSink.invalidate()
-        healthSink.reset()
-        credentials.wipe()
+        revocation.apply()
         Timber.tag(TAG).w("census revoked")
         return Result.success()
     }

@@ -1001,6 +1001,48 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   commitment included) and its Keystore keys (`WipeScopeGuardTest` pins the writes outside that storage to the
   dialog's "stays" list: exports and gallery screenshots). A refused clear drops the commitment and shows Couldn't
   delete.
+  **Contributor tier: eligibility, invitation, grant (#1625, ADR-0011 §15):** `ContributorEligibility` (`:domain`) is
+  the one owner of the thresholds (census ON, census id enrolled ≥ 8 UTC calendar days by `CensusCredentialStore.enrolledAtMillis`, the server's own quarantine,
+  a shift on ≥ 3 of the last 7 local days, ≥ 2 ended shifts, from `ContributorActivityDao` over `session_records`);
+  recognition is never an input. `ContributorEligibilityReader` fails closed (any unreadable input is not eligible).
+  Only a yes leaves the phone: `CensusTransport.requestContributorGrant` has no parameter and always sends
+  `CensusApi.GRANT_REQUEST_BODY`, `{"eligible":true}`. `ContributorInvitation` is the invitation rule: open only when
+  eligible, no shift running (`ShiftActivity`, bound in `:app` to `shiftRunning`), no live grant, no standing No thanks,
+  no Not now younger than 14 days, no `grant_revoked`, no `install_too_new` younger than 2 days; it notifies only when
+  not already offered since the last answer. `ContributorInvitationNotifier` asks `CensusContributor.inviteAfterShift`
+  only on a running-to-ended change (never at app start), `SETTLE_MILLIS` (30 s) later so the read model has folded
+  the ended shift (`collectLatest`: a shift that starts meanwhile cancels the ask), and posts on its own `census_channel`. `CensusContributor`
+  (`:core:data`) holds the record (`ContributorDataSource`, `census_contributor`, backup-excluded; one JSON value,
+  undecodable reads as empty, which holds no grant). Accept takes `CensusUploadLock`, runs `deletion.resumePending()`
+  first and sends nothing while it is false, needs an enrolled credential, writes the granted receipt, then sends the
+  one POST; 403 `install_too_new` / `not_eligible` / `grant_revoked` are stored as `GrantRefusal`, every other
+  failure stores nothing. `mayUpload()` (the `ContributorGate` #1626 calls first; lock-free, so a locked upload can call
+  it) and `watch()` (app start, on every consent / census id / deletion / record change) end a grant whose census
+  consent is off, whose install id is not the current enrolled id, that a deletion request (`requestedAtMillis` ≥ the
+  grant's `obtainedAtMillis`) followed, or whose UTC expiry day has come; `refresh()` (the state GET, #1626 calls it
+  before a review session) ends it on expired / revoked / none and never creates a grant the phone does not hold.
+  Every end clears `PendingContributorReviews` (a no-op binding until #1626) inside `NonCancellable`, and its write sets
+  `reviewsClearPending`, cleared only after the clear succeeds; `watch()` re-runs an outstanding clear at start and
+  `mayUpload()` runs it first and is false while it fails (Sol S5). An expired grant is re-offered after a
+  later shift, never renewed silently. **Late responses (Sol S1):** a `DecisionVersion` is captured when Accept is pressed (the
+  screen passes the one it showed): `ContributorRecord.generation` (moves on every answer, Stop and end),
+  `census_consent_seq` (moves in the same edit as every census switch write: on, off, a decline, a server revoke), the
+  endpoint, the census id and the latest deletion request time. It is checked after the deletion wait, before the POST
+  (nothing is sent if it moved) and again before the answer is stored; any change gives `SUPERSEDED`. **A grant stores
+  the version it was granted under (Sol S6/S7):** `ContributorGrant.standsOn(today, current)` (before its expiry day
+  AND `version == ` the current `DecisionVersion`) is what `mayUpload()` and the status read, synchronously from stored
+  state, so a withdrawal no watcher saw (census off then on, a decline right after the grant committed) can never leave
+  a grant live; `answered()` also ends any stored grant in the same write and marks its reviews for clearing, and
+  reconciliation ends a mismatched grant (cleanup, not safety). Before this: a grant the server issued after a decline is never stored, so nothing
+  uploads under it, and it lapses on the server (the API has no route for a phone to drop its own grant). **Install
+  revoked (S2):** `401 revoked` on the POST or the state GET ends the grant (`INSTALL_REVOKED`), clears pending reviews
+  and runs `CensusInstallRevocation` (census off, envelopes invalidated, health reset, credential wiped; the contributor
+  then records a `revoked` last run). That class is the one owner of the revoke steps: the upload worker and
+  `CensusDataDeletion` call it too, under the upload lock they already hold (it takes none); `refresh()` takes `CensusUploadLock` for this. **Time (S3):** `watch()` also sleeps
+  until the grant's expiry instant (start of its UTC expiry day, by the injected clock) and ends it then; `status`
+  re-reads on a one-minute tick; the reviewer screen and the Census row derive "on" from `rememberNow()` against
+  `ContributorGrant.expiryMillis`. INFO lines: `census contributor invited`, `request outcome=<token>`,
+  `ended reason=<token>`; no count, id or day.
   **Identity reset + run status (#1185):** when the server no longer knows an enrolled install (alpha
   database reset, withdrawn install) uploads 401 and, since #1622, the worker re-enrols the same identity itself; the developer screen's **Reset
   census identity** action (confirmation dialog) runs `CensusIdentityResetter` (`:core:data`) on the

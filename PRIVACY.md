@@ -199,6 +199,7 @@ traffic for every host with no exception, and `HttpsEndpointGuardTest` checks th
 | Google MPG search | manual button press | Google in the user's browser (`VehicleCard`) | entered vehicle year, make and model plus `mpg`; browser cookies/account settings apply |
 | Text-to-speech (`TtsEffectHandler`) | used for spoken offers | your phone's text-to-speech engine | the offer sentence; the engine may use the network under its own terms |
 | UNKNOWN screen/notification census (every build: Play, sideload and debug, #1620; see "The census opt-in" and "When the census uploads" below) | off | gig.log's census server, built into the app (§2.1); turning the census on enrols the install | a **skeleton** of an admitted UNKNOWN screen or platform notification: screen view classes/ids, or a grammar-bounded notification channel id and five filtered slots; text slots carry coarse kinds or hashes under a k-anonymity gate, never source text — see `docs/adr/ADR-0011-unknown-census-privacy-model.md` — plus daily recognition-health counts per platform and app version, sent with this install's ID. Once the server lists `uinode.skeleton.v2` (and `notification.skeleton.v2`) as accepted, a skeleton also carries: for a money figure, 12-hour clock time, distance, minute count or item count, its format with the digits removed, from a closed list (`$#.##`, `#:## AM/PM`, `#.# mi`, `# min(s)`, `# item(s)`; AM and PM are one class, and the value never leaves); each node's click and visibility flags; and a notification's action labels as filtered slots of the same kinds as any text slot (a hash of a short chrome-like label, a coarse kind such as `digits` or `mixed`, a format template, or `withheld`; never the label). The skeleton's day is the UTC day. At most one skeleton of each layout and format is kept a UTC day, and only from the delivery apps the census choices cover (below). |
+| Screen reviews, the contributor tier (every build, #1625; see "Screen reviews" below) | off; offered only by invitation | the same census server, under this install's census ID | to accept, one signed `POST /v1/contributor/grant` whose whole body is `{"eligible":true}`: a yes, never a count; later a bodyless signed `GET` of the grant's state. No review data is sent by this version (#1626 builds the reviews) |
 | Share UNKNOWN captures (debug build only, §2.1; `censusShareCaptures`, trusted installs) | off | the same census server, only while its operator has marked this install trusted | the **text** of UNKNOWN screens (`CensusUploadWorker.uploadEnvelopes`). An UNKNOWN screen gets no rule redaction — only the marker and address-block backstops (§3) — so a capture can still contain customer details, and the operator can read them. The switch says exactly this (`developer_settings_census_share_captures_explainer`). |
 | Bug-report export | manual | a folder/provider the user chooses (`DataExportViewModel.exportLog`) | INFO+ milestones checked against known sensitive markers before writing; matches are replaced, but unknown sensitive details can escape filtering. Then the consent receipts (§8). A cloud provider may upload the file. gig.log does not deliver it to the developer. |
 | CSV export | manual | a folder/provider the user chooses (`DataExportViewModel` → `CsvExporter`) | all recorded sessions and deliveries, including merchant names and which saved vehicle drove each dash (its id and label — the dasher's own text), plus deductible miles per vehicle per tax year and logged expenses and fill-ups (amounts, categories, the dasher’s own labels, gallons and the app's tracked miles at the fill-up, plus the saved vehicle id and label for car-care and gas receipts), including voided entries. No customer data or customer/address hashes. A cloud provider may upload the files. |
@@ -306,6 +307,51 @@ under: a new identity is minted only when there is no usable credential (none, o
 never-enrolled one conflicts, or by the developer reset, which deletes first. A 401 after the server already accepted
 a request from the same credential in that run is not treated so.
 
+**Screen reviews (the contributor tier)** (#1625, ADR-0011 §15). Separate from the census switch and off unless the
+dasher accepts an invitation. Eligibility is worked out on the phone from what it already holds
+(`ContributorEligibility`, `ContributorEligibilityReader`): the census on, this phone's census ID enrolled at least 8
+UTC calendar days ago, the census server's own rule, so the phone never invites an install the server would refuse
+(`CensusCredentialStore.enrolledAtMillis`, the phone's clock at enrolment; an ID enrolled before this was recorded
+counts from the first time it is read), a recorded shift on at least 3 of the last 7 local days, and at least
+2 ended shifts, both from the analytics read model (`ContributorActivityDao`: shift start and end times and a count,
+nothing else). Recognition is not an input. Only the answer is used, and only a yes is ever sent; the counts never
+leave the phone. The invitation is offered only when the last running shift ends, 30 seconds later so the shift is
+in the read model (`ContributorInvitationNotifier`, watching the state machine's shifts; a shift that starts meanwhile
+cancels it), never during one and never at app start: a notification on its own "Census"
+channel, and a "Screen reviews" row on the Census screen. It is offered at most once until the dasher answers; Not
+now holds it back for 14 days, No thanks until the dasher accepts from that row, and a `403 install_too_new` for 2
+days (`ContributorInvitation`). The reviewer screen (`ContributorScreen`) is the second disclosure: after a shift the
+dasher may see a few screens gig.log didn't recognize, at most 3 a day, with customer and account details it can
+detect covered; they can confirm a word is the delivery app's own wording and label what a field is; a confirmed word
+goes as its one-way code and the word itself only after other drivers confirm it; "Ask the developer" sends the
+outline as the review shows it, which only the developer can open and the server deletes after 3 days; to accept,
+gig.log sends a yes and never the counts, and the server gives a 30-day reviewer permission and, while the dasher
+reviews, keeps a log of which screens gig.log asked it about, tied to that permission, for up to 30 days; they can
+stop at any time; their agreement with a delivery company is between them and that company. The screen also says
+this version asks for the permission only. Accept (`CensusContributor.accept`) runs under the census upload lock: a
+waiting deletion request is sent first and, while it waits, nothing else is; with no enrolled census ID nothing is
+sent. It records a consent receipt (§8), then sends the one request. A grant is stored with its install ID, its UTC
+days and the phone's time it arrived, in its own store (`census_contributor`, excluded from backup and transfer). A
+`403 install_too_new`, `not_eligible` or `grant_revoked` is stored and shown as the server said it; no answer, a
+401 or a 5xx stores nothing. `CensusContributor.mayUpload` is the check every contributor upload makes first (#1626):
+true only with the census on, a grant issued to the phone's current census ID, no deletion request since the grant
+arrived, and today's UTC day before the grant's expiry day. A check that fails ends the grant on the phone, and so does
+a change to the census consent, the census ID or a deletion request (`CensusContributor.watch`), the start of the
+grant's expiry day (the watch waits for that instant, and the screens show the end from their own clock), the
+dasher's Stop reviewing, and a state read that answers expired, revoked or none; a `401 revoked` on either grant route
+ends it and turns the census off with its ID forgotten, as any census revoke does (`CensusInstallRevocation`). A grant
+request is decided under what was stored when Accept was pressed (the dasher's answers, every census consent change
+including off then on, the census ID and any deletion request); if any of it changed before the request is sent,
+nothing is sent, and a response that arrives after such a change is discarded. A stored grant keeps the version it
+was granted under and counts only while that version is still current, so a change made after it was granted (an
+answer, the census turned off and on, a new census ID, a deletion request) ends it whether or not anything was
+watching; an answer also removes it in the same write: the phone never
+stores it, so nothing is sent under it, and it lapses on the server after 30 days (the server offers no way for the
+phone to give a grant back); every end clears the reviews waiting on the phone
+(`PendingContributorReviews`, which holds none until #1626); a clear that fails is marked in the record and run again
+at the next start, and no contributor upload runs until it succeeds. An ended grant is not renewed by itself: an expired one
+is offered again after a later shift. The grant request is not listed under "What gig.log sent".
+
 Exports replace existing files with the same names in the chosen folder. Exported files survive uninstall and remain until deleted through that provider. “No direct gig.log upload” does not mean that a selected cloud folder keeps the files on the phone.
 
 Notification census publication runs after admission, dedup and capture, before UNKNOWN rejection,
@@ -329,7 +375,8 @@ user: restoring history and vehicle/economy settings on a new phone is expected.
 store (`datastore/rule_capability_grants.preferences_pb`) and the Screen-events consent/receipt store
 (`datastore/consent_event_receipt.preferences_pb`) are excluded, so a new device re-asks consent. Debug logs
 (`app.log`, `shareable.log`, `shareable.log.1`, and rotations under `logs/`), captures, census files, census
-credentials, the developer-settings store (the census switch, its consent receipt and choices, capture sharing, the server policy cache, the next daily census time and a census deletion request) and the recognition
+credentials, the developer-settings store (the census switch, its consent receipt and choices, capture sharing, the server policy cache, the next daily census time and a census deletion request), the screen-review record
+(`datastore/census_contributor.preferences_pb`, #1625), the recognition
 notice store (`datastore/recognition_notices.preferences_pb`, #1560) and the wipe commitment (`wipe_committed`, #1579) are also excluded from both backup and transfer (`app/src/main/res/xml/backup_rules.xml`,
 `data_extraction_rules.xml`; #1236, dev ruling 2026-10-07).
 
@@ -477,6 +524,11 @@ identity export. Vehicle/default resets preserve these learned preferences.
 - "What gig.log sent" keeps its summary of the census requests the server read for 7 days, at most 60 of them, in
   `filesDir/census/sent.json` (§6): counts and delivery apps only, never uploaded, excluded from backup and transfer.
   A census deletion request (its time, state and the server's confirmation) is kept in the developer-settings store.
+- The screen-review record (#1625, `ContributorDataSource`, `datastore/census_contributor.preferences_pb`): the
+  invitation answer and its time, when the invitation was offered, the reviewer grant (census install ID, the server's
+  granted and expiry days, the time it arrived), why the last one ended, the last refused request and the decision's
+  receipt. No eligibility count is stored. Never uploaded, excluded from backup and transfer. The census ID's enrolment
+  time sits with the census credential.
 
 ## 8. Consent records
 
@@ -501,6 +553,10 @@ the developer-settings store with the census switch, written in the same DataSto
 (`DevSettingsDataSource.setCensusUploadEnabled`). A receipt for another endpoint does not count as consent (§6). The
 bug-report export lists it after the Screen-events receipt, labelled "Census", without the endpoint.
 
+The screen-review decision (#1625) has a receipt of the same four fields in the contributor record: Accept writes a
+granted one before the grant request, No thanks and Stop reviewing a declined one; Not now writes none. The bug-report
+export lists it after the census receipt, labelled "Screen reviews".
+
 These decisions and their receipts are in stores excluded from Android backup and device transfer (§6), so a new
 device re-asks consent while the database and general app/economy preferences restore.
 
@@ -519,6 +575,16 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r24 (2026-11-13)** — §6: screen reviews, the contributor tier (#1625): eligibility worked out on the phone (census
+  on, a census ID 8 UTC days old, a shift on 3 of the last 7 days, 2 ended shifts; recognition is not an input), only a yes
+  sent (`{"eligible":true}`), never the counts; the invitation only when a shift ends, once until answered, Not now for
+  14 days, No thanks until Settings; the reviewer screen's second disclosure, including the server's 30-day log of
+  which screens gig.log asked about, tied to the reviewer permission; the grant stored with its census ID and expiry,
+  checked before any contributor upload, and ended by expiry, a revocation, Stop, the census off, a new census ID or a
+  deletion request, which clears pending reviews; a grant response arriving after a decline is discarded; a `401
+  revoked` on a grant route turns the census off as any revoke does; no renewal without asking. §7: the contributor record and the
+  enrolment time. §8: the screen-review receipt, and the bug report lists it. The in-app Privacy page gains a Screen
+  reviews section (`privacy_census_review_*`). Receipts created under r23 retain that revision.
 - **r23 (2026-11-13)** — §7: Delete everything on this phone (#1579): one confirmation naming what goes and what
   stays; with an enrolled census ID it first sends the census deletion request and waits up to 20 seconds, wipes on
   the server's confirmation without letting a census upload run in between, and otherwise deletes nothing until the

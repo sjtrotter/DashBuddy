@@ -9,10 +9,12 @@ import cloud.trotter.log.gig.core.data.log.LogScrubber
 import cloud.trotter.log.gig.core.pipeline.SensitiveTextMarkers
 import cloud.trotter.log.gig.core.state.EffectExecutor
 import cloud.trotter.log.gig.core.state.MetadataProvider
+import cloud.trotter.log.gig.domain.census.contributor.ShiftActivity
 import cloud.trotter.log.gig.domain.pipeline.LocaleBoundaryReporter
 import cloud.trotter.log.gig.domain.pipeline.RecognitionHealthReporter
 import cloud.trotter.log.gig.locale.LocaleBoundaryNotifier
 import cloud.trotter.log.gig.notice.RecognitionHealthNotifier
+import cloud.trotter.log.gig.state.StateShiftActivity
 import cloud.trotter.log.gig.state.effects.SideEffectEngine
 import cloud.trotter.log.gig.state.effects.TtsEngineFactory
 import dagger.Binds
@@ -48,6 +50,10 @@ abstract class AppBindingsModule {
     abstract fun bindRecognitionHealthReporter(
         impl: RecognitionHealthNotifier,
     ): RecognitionHealthReporter
+
+    /** #1625: the contributor invitation never shows during a shift; `:core:data` reads the shift state through this. */
+    @Binds
+    abstract fun bindShiftActivity(impl: StateShiftActivity): ShiftActivity
 }
 
 @Module

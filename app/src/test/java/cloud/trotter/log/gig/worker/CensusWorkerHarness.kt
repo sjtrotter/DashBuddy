@@ -37,6 +37,7 @@ import cloud.trotter.log.gig.core.network.census.CensusBudget
 import cloud.trotter.log.gig.core.network.census.CensusTransport
 import cloud.trotter.log.gig.core.network.census.CensusSentObserver
 import cloud.trotter.log.gig.core.network.census.DeleteResult
+import cloud.trotter.log.gig.core.network.census.GrantResult
 import cloud.trotter.log.gig.core.data.census.CensusDataDeletion
 import cloud.trotter.log.gig.core.network.census.EnrolResult
 import cloud.trotter.log.gig.core.network.census.PolicyResult
@@ -144,6 +145,8 @@ internal class FakeCensusApi : CensusTransport {
     val deletions = ArrayDeque<DeleteResult>()
     val deletedIds = mutableListOf<String>()
     var beforeDelete: () -> Unit = {}
+    override suspend fun requestContributorGrant(cred: Bearer.Credential): GrantResult = error("grant")
+    override suspend fun contributorGrant(cred: Bearer.Credential): GrantResult = error("grant")
     override suspend fun deleteData(cred: Bearer.Credential): DeleteResult {
         beforeDelete()
         stages += "delete"

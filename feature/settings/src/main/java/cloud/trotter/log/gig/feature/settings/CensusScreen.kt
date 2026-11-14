@@ -11,11 +11,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,15 +46,25 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.log.gig.domain.census.CensusConsent
+import cloud.trotter.log.gig.core.designsystem.time.rememberNow
+import cloud.trotter.log.gig.domain.census.contributor.ContributorEntry
+import cloud.trotter.log.gig.domain.census.contributor.ContributorGrant
 import cloud.trotter.log.gig.domain.state.Platform
 
 /**
  * #1621: the census opt-in, Settings > Data & privacy > Census, in every build. The switch turns on only through
  * [CensusDisclosure]'s Accept; turning it off, or Not now, records a decline. The choices save as they change.
  * #1622: "What gig.log sent" ([onOpenSent]) and "Delete my census data" sit below the choices.
+ * #1625: "Screen reviews" ([onOpenReviewer]) shows once there is something to show: the invitation, a grant, or an
+ * answer to change.
  */
 @Composable
-fun CensusScreen(onBack: () -> Unit, onOpenSent: () -> Unit, viewModel: CensusViewModel = hiltViewModel()) {
+fun CensusScreen(
+    onBack: () -> Unit,
+    onOpenSent: () -> Unit,
+    onOpenReviewer: () -> Unit,
+    viewModel: CensusViewModel = hiltViewModel(),
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     CensusContent(
         state = state,
@@ -63,6 +75,7 @@ fun CensusScreen(onBack: () -> Unit, onOpenSent: () -> Unit, viewModel: CensusVi
         onPlatform = viewModel::setPlatform,
         onOpenSent = onOpenSent,
         onDelete = viewModel::deleteServerData,
+        onOpenReviewer = onOpenReviewer,
     )
 }
 
@@ -78,6 +91,7 @@ fun CensusContent(
     onPlatform: (Platform, Boolean) -> Unit,
     onOpenSent: () -> Unit,
     onDelete: () -> Unit,
+    onOpenReviewer: () -> Unit = {},
 ) {
     var showDisclosure by rememberSaveable { mutableStateOf(false) }
     if (showDisclosure && state != null) {
@@ -150,6 +164,28 @@ fun CensusContent(
             )
             TextButton(onClick = { showDisclosure = true }, modifier = Modifier.padding(horizontal = 8.dp)) {
                 Text(stringResource(R.string.census_read_disclosure))
+            }
+            val now by rememberNow()
+            // A grant past the start of its expiry day reads as off at that instant (Reactive UI rule 2).
+            val endsAt = ContributorGrant.expiryMillis(state.reviewerEndsDay)
+            val reviewer = if (state.reviewer == ContributorEntry.ON && (endsAt == null || now >= endsAt)) {
+                ContributorEntry.OFF
+            } else state.reviewer
+            if (reviewer != ContributorEntry.HIDDEN) {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.census_review_row_label)) },
+                    supportingContent = {
+                        Text(
+                            when (reviewer) {
+                                ContributorEntry.ON -> stringResource(R.string.census_review_row_on, endDay(state.reviewerEndsDay))
+                                ContributorEntry.INVITED -> stringResource(R.string.census_review_row_invited)
+                                else -> stringResource(R.string.census_review_row_off)
+                            },
+                        )
+                    },
+                    trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
+                    modifier = Modifier.clickable(onClick = onOpenReviewer),
+                )
             }
             CensusDataSection(
                 deletion = state.deletion,

@@ -352,6 +352,60 @@ class CensusApiTest {
         assertEquals(DeleteResult.ServerUnavailable(503), api.deleteData(credential))
     }
 
+    @Test fun `the grant request sends exactly eligible true, signed, and decodes the grant`() = runTest {
+        respond(200, "{\"status\":\"granted\",\"grantedDay\":\"2026-11-13\",\"expiresDay\":\"2026-12-13\",\"extra\":1}")
+        assertEquals(GrantResult.Granted("2026-11-13", "2026-12-13"), api.requestContributorGrant(credential))
+        val request = requireNotNull(server.takeRequest(1, TimeUnit.SECONDS))
+        assertEquals("POST", request.method)
+        assertEquals("/v1/contributor/grant", request.url.encodedPath)
+        val bytes = requireNotNull(request.body).toByteArray()
+        // The whole body: a yes. No count, no false, nothing else.
+        assertEquals("{\"eligible\":true}", bytes.toString(Charsets.UTF_8))
+        assertEquals(Bearer.format(credential.installId, credential.secret), request.headers[CensusHeaders.AUTHORIZATION])
+        val ts = requireNotNull(request.headers[CensusHeaders.TIMESTAMP])
+        assertTrue(RequestSigner.verify(credential.secret, RequestSigner.canonical("POST", "/v1/contributor/grant", ts, bytes),
+            requireNotNull(request.headers[CensusHeaders.SIGNATURE])))
+    }
+
+    @Test fun `each grant refusal decodes to its own result`() = runTest {
+        respond(403, "{\"error\":\"install_too_new\"}")
+        assertEquals(GrantResult.InstallTooNew, api.requestContributorGrant(credential))
+        respond(403, "{\"error\":\"not_eligible\"}")
+        assertEquals(GrantResult.NotEligible, api.requestContributorGrant(credential))
+        respond(403, "{\"error\":\"grant_revoked\"}")
+        assertEquals(GrantResult.GrantRevoked, api.requestContributorGrant(credential))
+        respond(403, "{\"error\":\"something else\"}")
+        assertEquals(GrantResult.ServerUnavailable(403), api.requestContributorGrant(credential))
+        respond(401, "{\"error\":\"revoked\"}")
+        assertEquals(GrantResult.InstallRevoked, api.requestContributorGrant(credential))
+        respond(401, "{\"error\":\"unauthorized\"}")
+        assertTrue(api.requestContributorGrant(credential) is GrantResult.Unauthorized)
+        respond(429, "{\"error\":\"rate_limited\"}")
+        assertEquals(GrantResult.RateLimited(17), api.requestContributorGrant(credential))
+        // A grant whose day is not a date never reaches the phone's store.
+        respond(200, "{\"status\":\"granted\",\"grantedDay\":\"2026-11-13\",\"expiresDay\":\"2026-13-40\"}")
+        assertTrue(api.requestContributorGrant(credential) is GrantResult.TransportFailure)
+    }
+
+    @Test fun `the grant state read is a signed bodyless GET`() = runTest {
+        respond(200, "{\"status\":\"expired\",\"grantedDay\":\"2026-10-01\",\"expiresDay\":\"2026-10-31\"}")
+        assertEquals(GrantResult.Expired, api.contributorGrant(credential))
+        val request = requireNotNull(server.takeRequest(1, TimeUnit.SECONDS))
+        assertEquals("GET", request.method)
+        assertEquals("/v1/contributor/grant", request.url.encodedPath)
+        val bytes = request.body?.toByteArray() ?: ByteArray(0)
+        assertEquals(0, bytes.size)
+        val ts = requireNotNull(request.headers[CensusHeaders.TIMESTAMP])
+        assertTrue(RequestSigner.verify(credential.secret, RequestSigner.canonical("GET", "/v1/contributor/grant", ts, bytes),
+            requireNotNull(request.headers[CensusHeaders.SIGNATURE])))
+        respond(200, "{\"status\":\"revoked\"}")
+        assertEquals(GrantResult.GrantRevoked, api.contributorGrant(credential))
+        respond(200, "{\"status\":\"none\"}")
+        assertEquals(GrantResult.None, api.contributorGrant(credential))
+        respond(200, "{\"status\":\"granted\",\"grantedDay\":\"2026-11-13\",\"expiresDay\":\"2026-12-13\"}")
+        assertEquals(GrantResult.Granted("2026-11-13", "2026-12-13"), api.contributorGrant(credential))
+    }
+
     @Test fun `the sent observer gets the exact bytes of each body the server read, and nothing else`() = runTest {
         val seen = mutableListOf<Pair<String, ByteArray>>()
         val observed = CensusApi(client, server.url("/").toString().removeSuffix("/"), CensusSentObserver { path, body -> seen += path to body })

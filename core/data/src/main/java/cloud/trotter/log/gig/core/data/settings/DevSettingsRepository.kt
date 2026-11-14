@@ -53,6 +53,12 @@ class DevSettingsRepository @Inject constructor(
     }
 
     /**
+     * #1625: moves on every census consent write: the switch on or off, a decline, a server revoke. Stored with the
+     * switch in one edit, so a change and its reversal (off, then on) still leave a different value.
+     */
+    val censusConsentSeq: Flow<Long> = dataSource.censusConsentSeq
+
+    /**
      * What every upload stage obeys, in every build (#1620): [censusConsent] ON, so no receipt or a receipt for another
      * endpoint stops uploads.
      */

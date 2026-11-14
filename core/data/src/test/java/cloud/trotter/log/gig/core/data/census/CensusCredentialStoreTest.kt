@@ -3,6 +3,7 @@ package cloud.trotter.log.gig.core.data.census
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import cloud.trotter.census.contract.auth.InstallIdGrammar
 import cloud.trotter.census.contract.auth.InstallSecret
@@ -167,6 +168,30 @@ class CensusCredentialStoreTest {
             store.markEnrolled()
             ds.edit { it.remove(stringPreferencesKey("secret_sealed")) }
             assertTrue(runCatching { store.current() }.exceptionOrNull() is CensusCredentialStore.Unusable)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    /** #1625: the enrolment time eligibility reads; an ID enrolled before it was recorded counts from its first read. */
+    @Test fun `enrolment time is recorded, and backfilled once for an older enrolment`() = runTest {
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
+        try {
+            val ds = PreferenceDataStoreFactory.create(scope = scope) { File(tmp.root, "enrolled-at.preferences_pb") }
+            val store = CensusCredentialStore(ds, FakeSealer())
+            store.mint()
+            assertNull(store.enrolledAtMillis(5L))
+            val before = System.currentTimeMillis()
+            store.markEnrolled()
+            val recorded = requireNotNull(store.enrolledAtMillis(5L))
+            assertTrue(recorded >= before)
+            assertEquals(recorded, store.enrolledAtMillis(9L))
+
+            ds.edit { it.remove(longPreferencesKey("enrolled_at_millis")) }
+            assertEquals(123L, store.enrolledAtMillis(123L))
+            assertEquals(123L, store.enrolledAtMillis(456L))
+            store.wipe()
+            assertNull(store.enrolledAtMillis(789L))
         } finally {
             scope.cancel()
         }

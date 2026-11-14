@@ -30,6 +30,7 @@ class DevSettingsDataSource @Inject constructor(
         val CENSUS_SHARE_CAPTURES = booleanPreferencesKey("census_share_captures")
         val CENSUS_UPLOAD_ENABLED = booleanPreferencesKey("census_upload_enabled")
         val CENSUS_CONSENT_RECEIPT = stringPreferencesKey("census_consent_receipt_json")
+        val CENSUS_CONSENT_SEQ = longPreferencesKey("census_consent_seq")
         val CENSUS_WIFI_ONLY = booleanPreferencesKey("census_wifi_only")
         val CENSUS_PLATFORMS = stringSetPreferencesKey("census_platforms")
         val CENSUS_NEXT_ALLOWED_AT = longPreferencesKey("census_next_allowed_at_millis")
@@ -142,6 +143,9 @@ class DevSettingsDataSource @Inject constructor(
         )
     }
 
+    /** #1625: moves on every write of the census switch (on, off, a decline, a server revoke). */
+    val censusConsentSeq: Flow<Long> = ds.data.map { it[Keys.CENSUS_CONSENT_SEQ] ?: 0L }
+
     val censusWifiOnly: Flow<Boolean> = ds.data.map { it[Keys.CENSUS_WIFI_ONLY] ?: CensusChoices.DEFAULT_WIFI_ONLY }
 
     /** Platform wire values; null until a choice is saved. */
@@ -159,6 +163,8 @@ class DevSettingsDataSource @Inject constructor(
         wifiOnly: Boolean? = null,
     ) {
         ds.edit {
+            // #1625: every consent write moves the sequence in the same edit, so no change (nor an off then on) is missed.
+            it[Keys.CENSUS_CONSENT_SEQ] = (it[Keys.CENSUS_CONSENT_SEQ] ?: 0L) + 1
             it[Keys.CENSUS_UPLOAD_ENABLED] = enabled
             // One transaction: cancellation or process death cannot leave sharing ON with consent OFF.
             if (!enabled) it[Keys.CENSUS_SHARE_CAPTURES] = false

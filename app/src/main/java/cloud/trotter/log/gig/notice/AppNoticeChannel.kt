@@ -127,5 +127,8 @@ object AppNoticeChannel {
 
         /** #991 — the speech engine died and re-initialization has not brought it back. */
         const val TTS_ENGINE_HEALTH = 105
+
+        // 106 is the screen-review invitation (`ContributorInvitationNotifier.NOTIFICATION_ID`, #1625), on its own
+        // channel.
     }
 }

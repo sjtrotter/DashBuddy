@@ -24,6 +24,7 @@ import cloud.trotter.log.gig.core.network.census.CensusApiFactory
 import cloud.trotter.log.gig.core.network.census.CensusSentObserver
 import cloud.trotter.log.gig.core.network.census.CensusTransport
 import cloud.trotter.log.gig.core.network.census.DeleteResult
+import cloud.trotter.log.gig.core.network.census.GrantResult
 import cloud.trotter.log.gig.core.network.census.EnrolResult
 import cloud.trotter.log.gig.core.network.census.HealthResult
 import cloud.trotter.log.gig.core.network.census.PolicyResult
@@ -93,6 +94,8 @@ class CensusDataScreensTest {
         override suspend fun policy(): PolicyResult = error("policy")
         override suspend fun uploadSkeletons(cred: Bearer.Credential, batchId: String, itemsJson: List<String>): UploadResult = error("upload")
         override suspend fun uploadEnvelopes(cred: Bearer.Credential, batchId: String, itemsJson: List<String>): UploadResult = error("upload")
+        override suspend fun requestContributorGrant(cred: Bearer.Credential): GrantResult = error("grant")
+        override suspend fun contributorGrant(cred: Bearer.Credential): GrantResult = error("grant")
     }
 
     private class MutableClock(var millis: Long) : Clock() {
@@ -139,8 +142,8 @@ class CensusDataScreensTest {
     private fun string(id: Int) = context.getString(id)
 
     private fun showCensus() {
-        val vm = CensusViewModel(repo, deletion, readsUnboundPlatforms = false)
-        compose.setContent { GigLogTheme { CensusScreen(onBack = {}, onOpenSent = {}, viewModel = vm) } }
+        val vm = CensusViewModel(repo, deletion, hiddenReviews(), readsUnboundPlatforms = false)
+        compose.setContent { GigLogTheme { CensusScreen(onBack = {}, onOpenSent = {}, onOpenReviewer = {}, viewModel = vm) } }
         compose.waitForIdle()
     }
 

@@ -3,10 +3,12 @@ package cloud.trotter.log.gig.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.log.gig.core.data.census.CensusDataDeletion
+import cloud.trotter.log.gig.core.data.census.contributor.CensusContributor
 import cloud.trotter.log.gig.core.data.settings.DevSettingsRepository
 import cloud.trotter.log.gig.domain.census.CensusChoices
 import cloud.trotter.log.gig.domain.census.CensusConsent
 import cloud.trotter.log.gig.domain.census.CensusDeletion
+import cloud.trotter.log.gig.domain.census.contributor.ContributorEntry
 import cloud.trotter.log.gig.domain.di.ReadsUnboundPlatforms
 import cloud.trotter.log.gig.domain.state.Platform
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -34,6 +36,10 @@ data class CensusUiState(
     val deletion: CensusDeletion? = null,
     /** #1622: a deletion request is being made now. */
     val deleting: Boolean = false,
+    /** #1625: the "Screen reviews" row; [ContributorEntry.HIDDEN] shows none. */
+    val reviewer: ContributorEntry = ContributorEntry.HIDDEN,
+    /** #1625: a live grant's first day it no longer works (`YYYY-MM-DD`, UTC). */
+    val reviewerEndsDay: String? = null,
 ) {
     val choices: CensusChoices
         get() = CensusChoices(platforms.filter { it.checked }.map { it.platform }.toSet(), wifiOnly)
@@ -44,6 +50,7 @@ data class CensusUiState(
 class CensusViewModel @Inject constructor(
     private val settings: DevSettingsRepository,
     private val deletion: CensusDataDeletion,
+    contributor: CensusContributor,
     @ReadsUnboundPlatforms readsUnboundPlatforms: Boolean,
 ) : ViewModel() {
 
@@ -52,18 +59,26 @@ class CensusViewModel @Inject constructor(
     /** Null until the store answers; the screen shows no switch before then. */
     val uiState: StateFlow<CensusUiState?> =
         combine(
-            settings.censusConsent, settings.censusChoices, settings.censusBaseUrl, settings.censusDeletion,
-            deletion.inProgress,
-        ) { consent, choices, url, request, deleting ->
-            val covered = choices.platformsAmong(readable)
-            CensusUiState(
-                consent = consent,
-                platforms = readable.map { CensusPlatformRow(it, it in covered) },
-                wifiOnly = choices.wifiOnly,
-                serverHost = url.removePrefix("https://"),
-                testBuild = settings.censusTestBuild,
-                deletion = request,
-                deleting = deleting,
+            combine(
+                settings.censusConsent, settings.censusChoices, settings.censusBaseUrl, settings.censusDeletion,
+                deletion.inProgress,
+            ) { consent, choices, url, request, deleting ->
+                val covered = choices.platformsAmong(readable)
+                CensusUiState(
+                    consent = consent,
+                    platforms = readable.map { CensusPlatformRow(it, it in covered) },
+                    wifiOnly = choices.wifiOnly,
+                    serverHost = url.removePrefix("https://"),
+                    testBuild = settings.censusTestBuild,
+                    deletion = request,
+                    deleting = deleting,
+                )
+            },
+            contributor.status,
+        ) { state, reviewer ->
+            state.copy(
+                reviewer = reviewer.entry,
+                reviewerEndsDay = reviewer.record.grant?.expiresDay?.takeIf { reviewer.entry == ContributorEntry.ON },
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
