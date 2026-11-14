@@ -10,16 +10,19 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.util.Locale
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,20 +30,23 @@ import javax.inject.Singleton
 sealed interface WipeProgress {
     data object Idle : WipeProgress
 
-    /** Waiting for the census server's answer, at most [PhoneWipe.CENSUS_WAIT_MILLIS]. */
+    /** A census run holds the upload lock; nothing is deleted until it finishes. The dasher can cancel. */
+    data object WaitingForUpload : WipeProgress
+
+    /** The census deletion request is sent; the dialog waits at most [PhoneWipe.CENSUS_WAIT_MILLIS] for its answer. */
     data object AskingCensus : WipeProgress
 
     /** Deleting. [censusConfirmed]: the census server confirmed its deletion first, and the screen says so. */
     data class Wiping(val censusConfirmed: Boolean) : WipeProgress
 
-    /** The census request is not confirmed: the dasher picks between wiping now and waiting. Nothing is deleted yet. */
+    /** The census request is not confirmed: the dasher picks Delete now or Wait. Nothing is deleted yet. */
     data class CensusNotConfirmed(val reason: Reason) : WipeProgress
 
     /** Android did not start the clear; nothing is deleted except the census key. */
     data object Failed : WipeProgress
 
     enum class Reason {
-        /** No outcome in time; the request goes on in the background and its answer is stored. */
+        /** No answer while the dialog waited; the request goes on, stored as pending with its retry queued. */
         NO_ANSWER,
         UNREACHABLE,
 
@@ -58,22 +64,25 @@ sealed interface WipeProgress {
 }
 
 /**
- * #1579: Settings > Data & privacy > Delete everything on this phone, run on the application scope so leaving the
- * screen cannot stop it half-done.
+ * #1579: Settings > Data & privacy > Delete everything on this phone. One coordinator coroutine per wipe, on the
+ * application scope, owns the census upload lock for the whole flow and takes the dasher's choices as messages.
  *
- * With an enrolled census ID on the phone, [start] first sends the census deletion request (#1622) under the census
- * upload lock and waits at most [CENSUS_WAIT_MILLIS] for the answer. A confirmed deletion goes straight on to the wipe
- * without releasing the lock, so no census run can upload between the server's confirmation and the clear; an
- * unconfirmed one stops at [WipeProgress.CensusNotConfirmed] with nothing deleted, because wiping drops the census ID
- * and the pending request with it. [wipeNow] is the dasher's choice to wipe anyway; [dismiss] is "Wait". With no
- * enrolled census ID nothing is sent.
+ * - Nothing is deleted (the census key or the app's storage) unless the coordinator holds [CensusUploadLock]. A census
+ *   run holding it is waited for, never cleared beside ([WipeProgress.WaitingForUpload], with Cancel).
+ * - Under the lock it decides enrollment. An enrolled ID, or a credential store it cannot read, goes through #1622's
+ *   [CensusDataDeletion.requestHoldingLock], which stores the request as pending and queues its retry run before any
+ *   network attempt; [CENSUS_WAIT_MILLIS] bounds only how long the dialog waits for the answer. A confirmation (or a
+ *   request that found no enrolled ID) goes on to the wipe; anything else deletes nothing and offers Delete now or
+ *   Wait. A late answer still lands: a confirmation then goes on to the wipe, a new reason replaces the shown one.
+ *   Wait closes the dialog, and the coordinator releases the lock once the request finishes.
+ * - Once the wipe is committed (no census ID, a confirmation, or Delete now) the commitment is stored ([WipeIntent])
+ *   before anything is deleted, and app start checks it before anything else runs ([resumeCommitted]).
  *
- * The wipe itself is Android's own "Clear storage" ([AppStorageClearer]). Android stops every gig.log process, service
- * and scheduled job, then deletes all of the app's private storage (the database with its WAL and SHM files and its
- * pre-migration snapshots, every DataStore file, the logs, captures, census files and WorkManager's database) and its
- * Keystore keys, so nothing in the app writes in between and a store added later needs no list to stay covered. The
- * census Keystore key is deleted here too, first. Exports, gallery screenshots and Android's backup live outside the
- * app's storage and stay.
+ * The wipe deletes the census Keystore key, then runs Android's own "Clear storage" ([AppStorageClearer]): Android stops
+ * every gig.log process, service and scheduled job, then deletes all of the app's private storage (the database with
+ * its WAL and SHM files and pre-migration snapshots, every DataStore file, logs, captures, census files, WorkManager's
+ * database and the stored commitment) and its Keystore keys. Exports, gallery screenshots and Android's backup live
+ * outside the app's storage and stay.
  */
 @Singleton
 class PhoneWipe @Inject constructor(
@@ -82,129 +91,171 @@ class PhoneWipe @Inject constructor(
     private val lock: CensusUploadLock,
     private val sealer: KeystoreSealer,
     private val clearer: AppStorageClearer,
+    private val intent: WipeIntent,
     @param:ApplicationScope private val scope: CoroutineScope,
 ) {
+    private enum class Decision { DELETE_NOW, LEAVE }
 
-    private val state = MutableStateFlow<WipeProgress>(WipeProgress.Idle)
-    private val starting = AtomicBoolean(false)
-    val progress: StateFlow<WipeProgress> = state.asStateFlow()
+    private sealed interface CensusAnswer {
+        data object Confirmed : CensusAnswer
 
-    /** Whether the phone holds an enrolled census ID, so the server may hold uploads under it. Reads no secret. */
-    suspend fun censusEnrolled(): Boolean = try {
-        credentials.installId.first() != null
-    } catch (e: CancellationException) {
-        throw e
-    } catch (_: Exception) {
-        Timber.tag(TAG).w("phone wipe: census credential store unreadable")
-        false
+        /** The request found no enrolled ID, so nothing was sent and nothing on the server is tied to this phone. */
+        data object NothingSent : CensusAnswer
+        data class NotConfirmed(val reason: WipeProgress.Reason) : CensusAnswer
     }
 
-    /** The confirmation's Delete everything. Ignored while a wipe is starting or [progress] is not [WipeProgress.Idle]. */
+    private val state = MutableStateFlow<WipeProgress>(WipeProgress.Idle)
+    val progress: StateFlow<WipeProgress> = state.asStateFlow()
+
+    /** The running coordinator's inbox; null while none runs. */
+    private val inbox = AtomicReference<Channel<Decision>?>(null)
+
+    /**
+     * For the confirmation: whether the census server will be asked first. True for an enrolled ID and for a credential
+     * store that cannot be read (unknown is never "not enrolled"). Reads no secret.
+     */
+    suspend fun censusEnrolled(): Boolean = readEnrolled() != false
+
+    /** The confirmation's Delete everything. Ignored while a wipe runs. */
     fun start() {
-        if (state.value != WipeProgress.Idle || !starting.compareAndSet(false, true)) return
+        val decisions = Channel<Decision>(Channel.CONFLATED)
+        if (state.value != WipeProgress.Idle || !inbox.compareAndSet(null, decisions)) return
+        val owner = Any()
         scope.launch {
-            val enrolled = try {
-                censusEnrolled()
+            try {
+                coordinate(owner, decisions)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                Timber.tag(TAG).w("phone wipe: stopped by an error; nothing more is deleted")
+                state.value = WipeProgress.Failed
             } finally {
-                starting.set(false)
-            }
-            if (!enrolled) {
-                state.value = WipeProgress.Wiping(censusConfirmed = false)
-                clear(holdingLock = withLock(LOCK_WAIT_MILLIS))
-                return@launch
-            }
-            state.value = WipeProgress.AskingCensus
-            Timber.tag(TAG).i("phone wipe: asking the census server first")
-            when (val answer = askCensusHoldingLock()) {
-                CensusAnswer.Confirmed -> {
-                    state.value = WipeProgress.Wiping(censusConfirmed = true)
-                    delay(CONFIRMED_NOTICE_MILLIS)
-                    clear(holdingLock = true)
-                }
-                CensusAnswer.NothingSent -> {
-                    state.value = WipeProgress.Wiping(censusConfirmed = false)
-                    clear(holdingLock = true)
-                }
-                is CensusAnswer.NotConfirmed -> {
-                    Timber.tag(TAG).i("phone wipe: census not confirmed reason=%s",
-                        answer.reason.name.lowercase(Locale.ROOT))
-                    state.value = WipeProgress.CensusNotConfirmed(answer.reason)
-                }
+                inbox.compareAndSet(decisions, null)
+                if (lock.mutex.holdsLock(owner)) lock.mutex.unlock(owner)
             }
         }
     }
 
     /** "Delete now" after an unconfirmed census request: the server keeps what it holds for this phone. */
     fun wipeNow() {
-        val current = state.value as? WipeProgress.CensusNotConfirmed ?: return
-        if (!state.compareAndSet(current, WipeProgress.Wiping(censusConfirmed = false))) return
-        Timber.tag(TAG).i("phone wipe: wiping without the census server's confirmation")
-        scope.launch { clear(holdingLock = withLock(LOCK_WAIT_MILLIS)) }
+        if (state.value is WipeProgress.CensusNotConfirmed) inbox.get()?.trySend(Decision.DELETE_NOW)
     }
 
-    /** "Wait" or "OK": closes the dialog and changes nothing. A pending census request keeps retrying (#1622). */
+    /** Cancel, Wait or OK: closes the dialog and deletes nothing. A pending census request keeps retrying (#1622). */
     fun dismiss() {
-        val current = state.value
-        if (current is WipeProgress.CensusNotConfirmed || current == WipeProgress.Failed) {
-            state.compareAndSet(current, WipeProgress.Idle)
+        when (state.value) {
+            WipeProgress.WaitingForUpload, is WipeProgress.CensusNotConfirmed -> inbox.get()?.trySend(Decision.LEAVE)
+            WipeProgress.Failed -> state.compareAndSet(WipeProgress.Failed, WipeProgress.Idle)
+            else -> Unit
         }
-    }
-
-    private sealed interface CensusAnswer {
-        data object Confirmed : CensusAnswer
-        /** No enrolled ID after all, so nothing was sent; nothing to keep the phone's data for. */
-        data object NothingSent : CensusAnswer
-        data class NotConfirmed(val reason: WipeProgress.Reason) : CensusAnswer
     }
 
     /**
-     * Takes the upload lock and sends the deletion under it, all within [CENSUS_WAIT_MILLIS]. On [CensusAnswer.Confirmed]
-     * and [CensusAnswer.NothingSent] the lock is still held for the clear; otherwise it is released once the request
-     * finishes, never before, since a request that outlives the wait still runs under it.
+     * App start, before sensing, workers or uploads: a wipe committed before the process died is finished now. Takes
+     * the upload lock synchronously when it is free (at start nothing else holds it), so no census run goes first.
+     * True when the wipe is under way and the caller must start nothing else; false when none was committed, or when
+     * Android refused the clear (the commitment is dropped and the app starts as usual).
      */
-    private suspend fun askCensusHoldingLock(): CensusAnswer {
-        var locked = false
-        var request: Deferred<CensusDeletion>? = null
-        val outcome = try {
-            withTimeoutOrNull(CENSUS_WAIT_MILLIS) {
-                lock.mutex.lock(this@PhoneWipe)
-                locked = true
-                scope.async { deletion.requestHoldingLock() }.also { request = it }.await()
-            }
-        } catch (e: CancellationException) {
-            throw e
+    fun resumeCommitted(): Boolean {
+        val committed = try {
+            intent.isCommitted()
         } catch (_: Exception) {
-            null
+            false
         }
-        val answer = if (outcome == null) CensusAnswer.NotConfirmed(WipeProgress.Reason.NO_ANSWER) else when (outcome.state) {
-            CensusDeletion.State.DELETED -> CensusAnswer.Confirmed
-            CensusDeletion.State.NOTHING_SENT -> CensusAnswer.NothingSent
-            CensusDeletion.State.NOT_POSSIBLE -> CensusAnswer.NotConfirmed(WipeProgress.Reason.NOT_POSSIBLE)
-            CensusDeletion.State.PENDING -> CensusAnswer.NotConfirmed(
-                when (outcome.waiting) {
-                    CensusDeletion.Waiting.NOT_YET -> WipeProgress.Reason.NOT_YET
-                    CensusDeletion.Waiting.UNCONFIRMED -> WipeProgress.Reason.UNCONFIRMED
-                    CensusDeletion.Waiting.UNREACHABLE -> WipeProgress.Reason.UNREACHABLE
-                    null -> WipeProgress.Reason.NO_ANSWER
-                },
-            )
+        if (!committed) return false
+        Timber.tag(TAG).i("phone wipe: finishing a committed wipe at start")
+        state.value = WipeProgress.Wiping(censusConfirmed = false)
+        val owner = Any()
+        if (lock.mutex.tryLock(owner)) {
+            if (clearStorage()) return true
+            lock.mutex.unlock(owner)
+            return false
         }
-        if (answer is CensusAnswer.NotConfirmed && locked) {
-            val running = request
-            scope.launch {
-                running?.join()
-                lock.mutex.unlock(this@PhoneWipe)
-            }
+        scope.launch {
+            lock.mutex.lock(owner)
+            if (!clearStorage()) lock.mutex.unlock(owner)
         }
-        return answer
+        return true
     }
 
-    private suspend fun withLock(waitMillis: Long): Boolean =
-        withTimeoutOrNull(waitMillis) { lock.mutex.lock(this@PhoneWipe) } != null
+    private suspend fun coordinate(owner: Any, decisions: Channel<Decision>) {
+        if (!acquire(owner, decisions)) {
+            leave(decisions)
+            return
+        }
+        val enrolled = readEnrolled()
+        if (enrolled == false) return wipe(censusConfirmed = false)
+        state.value = WipeProgress.AskingCensus
+        Timber.tag(TAG).i("phone wipe: asking the census server first enrolled=%s", enrolled ?: "unknown")
+        // Runs under this coordinator's lock; after Wait the lock is released once it finishes.
+        val request = scope.async { deletion.requestHoldingLock() }
+        var answer = withTimeoutOrNull(CENSUS_WAIT_MILLIS) { request.answer() }
+            ?: CensusAnswer.NotConfirmed(WipeProgress.Reason.NO_ANSWER)
+        while (true) {
+            val current = when (val latest = answer) {
+                CensusAnswer.Confirmed -> return wipe(censusConfirmed = true)
+                CensusAnswer.NothingSent -> return wipe(censusConfirmed = false)
+                is CensusAnswer.NotConfirmed -> latest
+            }
+            Timber.tag(TAG).i("phone wipe: census not confirmed reason=%s", current.reason.name.lowercase(Locale.ROOT))
+            state.value = WipeProgress.CensusNotConfirmed(current.reason)
+            val next = select<Any> {
+                decisions.onReceive { it }
+                if (request.isActive) request.onJoin { request.answer() }
+            }
+            when (next) {
+                Decision.DELETE_NOW -> {
+                    Timber.tag(TAG).i("phone wipe: wiping without the census server's confirmation")
+                    return wipe(censusConfirmed = false)
+                }
+                Decision.LEAVE -> {
+                    leave(decisions)
+                    request.join()
+                    return
+                }
+                else -> answer = next as CensusAnswer
+            }
+        }
+    }
 
-    /** Deletes the census key, then asks Android to clear the app's storage. On success the process ends. */
-    private fun clear(holdingLock: Boolean) {
-        Timber.tag(TAG).i("phone wipe: clearing app storage censusLock=%s", holdingLock)
+    /** Takes the lock, waiting for a census run that holds it; false when the dasher cancels the wait. */
+    private suspend fun acquire(owner: Any, decisions: Channel<Decision>): Boolean {
+        if (lock.mutex.tryLock(owner)) return true
+        state.value = WipeProgress.WaitingForUpload
+        Timber.tag(TAG).i("phone wipe: waiting for a census run to finish")
+        return coroutineScope {
+            val locking = async { lock.mutex.lock(owner) }
+            val locked = select {
+                locking.onAwait { true }
+                decisions.onReceive { false }
+            }
+            // A lock taken in the same instant as the cancel is released by start()'s holdsLock check.
+            if (!locked) locking.cancel()
+            locked
+        }
+    }
+
+    /** Closes the dialog; a new wipe may start (and waits for this one's lock while it still holds it). */
+    private fun leave(decisions: Channel<Decision>) {
+        inbox.compareAndSet(decisions, null)
+        state.value = WipeProgress.Idle
+    }
+
+    /** Holding the lock: stores the commitment, then deletes. On success the process ends. */
+    private suspend fun wipe(censusConfirmed: Boolean) {
+        state.value = WipeProgress.Wiping(censusConfirmed)
+        try {
+            intent.commit()
+        } catch (_: Exception) {
+            Timber.tag(TAG).w("phone wipe: commitment not stored; the wipe goes on")
+        }
+        if (censusConfirmed) delay(CONFIRMED_NOTICE_MILLIS)
+        clearStorage()
+    }
+
+    /** Holding the lock: deletes the census key, then asks Android to clear the app's storage. */
+    private fun clearStorage(): Boolean {
+        Timber.tag(TAG).i("phone wipe: clearing app storage")
         try {
             sealer.reset()
         } catch (_: Exception) {
@@ -217,20 +268,51 @@ class PhoneWipe @Inject constructor(
         }
         if (!started) {
             Timber.tag(TAG).w("phone wipe: Android did not clear app storage")
-            if (holdingLock) lock.mutex.unlock(this)
+            runCatching { intent.clear() }
             state.value = WipeProgress.Failed
+        }
+        return started
+    }
+
+    /** True or false when the credential store answers; null when it cannot be read. */
+    private suspend fun readEnrolled(): Boolean? = try {
+        credentials.installId.first() != null
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        Timber.tag(TAG).w("phone wipe: census credential store unreadable")
+        null
+    }
+
+    private suspend fun Deferred<CensusDeletion>.answer(): CensusAnswer {
+        val outcome = try {
+            await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return CensusAnswer.NotConfirmed(WipeProgress.Reason.UNREACHABLE)
+        }
+        return when (outcome.state) {
+            CensusDeletion.State.DELETED -> CensusAnswer.Confirmed
+            CensusDeletion.State.NOTHING_SENT -> CensusAnswer.NothingSent
+            CensusDeletion.State.NOT_POSSIBLE -> CensusAnswer.NotConfirmed(WipeProgress.Reason.NOT_POSSIBLE)
+            CensusDeletion.State.PENDING -> CensusAnswer.NotConfirmed(
+                when (outcome.waiting) {
+                    CensusDeletion.Waiting.NOT_YET -> WipeProgress.Reason.NOT_YET
+                    CensusDeletion.Waiting.UNCONFIRMED -> WipeProgress.Reason.UNCONFIRMED
+                    CensusDeletion.Waiting.UNREACHABLE -> WipeProgress.Reason.UNREACHABLE
+                    null -> WipeProgress.Reason.NO_ANSWER
+                },
+            )
         }
     }
 
     companion object {
-        /** How long the wipe waits for the census server's answer before offering the choice. */
+        /** How long the dialog waits for the census server's answer before offering the choice. */
         const val CENSUS_WAIT_MILLIS = 20_000L
 
         /** How long the census server's confirmation stays on screen before the clear. */
         const val CONFIRMED_NOTICE_MILLIS = 3_000L
-
-        /** How long a wipe without a census answer waits for a census run to finish its batch. */
-        internal const val LOCK_WAIT_MILLIS = 5_000L
         private const val TAG = "Wipe"
     }
 }

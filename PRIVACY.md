@@ -330,7 +330,7 @@ store (`datastore/rule_capability_grants.preferences_pb`) and the Screen-events 
 (`datastore/consent_event_receipt.preferences_pb`) are excluded, so a new device re-asks consent. Debug logs
 (`app.log`, `shareable.log`, `shareable.log.1`, and rotations under `logs/`), captures, census files, census
 credentials, the developer-settings store (the census switch, its consent receipt and choices, capture sharing, the server policy cache, the next daily census time and a census deletion request) and the recognition
-notice store (`datastore/recognition_notices.preferences_pb`, #1560) are also excluded from both backup and transfer (`app/src/main/res/xml/backup_rules.xml`,
+notice store (`datastore/recognition_notices.preferences_pb`, #1560) and the wipe commitment (`wipe_committed`, #1579) are also excluded from both backup and transfer (`app/src/main/res/xml/backup_rules.xml`,
 `data_extraction_rules.xml`; #1236, dev ruling 2026-10-07).
 
 ## 7. Where your data lives, and how long
@@ -441,15 +441,22 @@ identity export. Vehicle/default resets preserve these learned preferences.
 - **Delete everything on this phone** (#1579, Settings > Data & privacy; `PhoneWipe`, `WipePhoneDialog`). One
   confirmation says what goes (every shift, delivery and offer, vehicles and plans, settings and consent choices,
   logs, captures) and what stays (exported files, gallery screenshots, any Android backup in the Google account), and,
-  when the phone holds an enrolled census ID, that the census server is asked first. Then, only with an enrolled census
-  ID, it sends the census deletion request (§6, "What was sent, and deleting it") under the upload lock and waits up to
-  20 seconds. A confirmation is shown ("The census server confirmed it deleted this phone's census data") and the
-  wipe follows without releasing the lock, so no census upload runs in between. Without a confirmation (offline, no
-  answer in time, a 404 until the server's update, an unconfirmed 401, or an ID that can no longer sign) nothing is
+  when the phone holds an enrolled census ID (or its census credential store can't be read), that the census server
+  is asked first, with what the server keeps, in the census screen's own words (§6). One process owns the census
+  upload lock for the whole wipe, and nothing is deleted without it: a census upload under way is waited for ("Waiting
+  for an upload to finish", with Cancel), never deleted beside. Under the lock it reads whether the phone is enrolled;
+  an enrolled or unreadable census ID sends the census deletion request (§6, "What was sent, and deleting it"), which is
+  stored as pending with its retry run queued before any network attempt, and the dialog waits up to 20 seconds for the
+  answer. A confirmation is shown ("The census server confirmed it deleted the uploads it can tie to this phone") and
+  the wipe follows without releasing the lock, so no census upload runs in between. Without a confirmation (offline,
+  no answer in time, a 404 until the server's update, an unconfirmed 401, or an ID that can no longer sign) nothing is
   deleted and the screen says why and offers two choices: Delete now, which says gig.log can't ask again and the
   census server keeps this phone's uploads until they age out (the 30-day limit takes effect with the server's next
-  update), or Wait, which changes nothing and leaves the request retrying. It never says the server deleted anything
-  the server did not confirm. With no enrolled census ID it makes no network call. The wipe deletes the census
+  update), or Wait, which deletes nothing and leaves the stored request retrying. An answer that arrives later still
+  counts: a confirmation goes on to the wipe. It never says the server deleted anything the server did not confirm.
+  With no enrolled census ID it makes no network call. Once the wipe is decided, a commitment file
+  (`filesDir/wipe_committed`, excluded from backup and transfer) is written first; if the process dies before Android
+  clears the storage, the next start finishes the wipe before anything else runs (no sensing, workers or uploads). The wipe deletes the census
   Keystore key, then calls Android's own Clear storage for the app (`ActivityManager.clearApplicationUserData`, the
   same operation as Settings > Apps > gig.log > Clear storage): Android stops every gig.log process, service and
   scheduled job, then deletes the app's private storage and its app-specific external storage (the database with
@@ -508,7 +515,10 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
   stays; with an enrolled census ID it first sends the census deletion request and waits up to 20 seconds, wipes on
   the server's confirmation without letting a census upload run in between, and otherwise deletes nothing until the
   dasher picks Delete now (the server keeps this phone's uploads until they age out) or Wait; with no census ID no
-  network call. The wipe is Android's own Clear storage for the app, after deleting the census Keystore key. §6: the
+  network call. One process owns the census upload lock throughout and waits for a running upload rather than
+  deleting beside it; the request is stored pending with its retry queued before the network, so Wait holds after the
+  dialog's 20 s; a stored commitment makes the next start finish a wipe the process died in. The wipe is Android's own
+  Clear storage for the app, after deleting the census Keystore key. §6: the
   disclosure's per-build lines name it instead of saying it isn't in this version. The in-app Privacy page's "How long
   it stays" follows. Receipts created under r22 retain that revision.
 - **r22 (2026-11-13)** — §6: "What was sent, and deleting it" (#1622): the census screen lists the requests the

@@ -90,11 +90,13 @@
     <string name="wipe_confirm_after">Después gig.log se cierra. Ábrelo de nuevo para configurarlo desde el principio; cada toque automático y el censo quedan desactivados hasta que los vuelvas a permitir.</string>
     <string name="wipe_confirm_button">Borrar todo</string>
     <string name="wipe_cancel">Cancelar</string>
+    <string name="wipe_waiting_title">Esperando a que termine un envío</string>
+    <string name="wipe_waiting_body">Hay un envío del censo en curso. gig.log no borra nada hasta que termine.</string>
     <string name="wipe_asking_title">Consultando al servidor del censo</string>
     <string name="wipe_asking_body">Esperando a que el servidor del censo confirme que borró los datos de este teléfono</string>
     <string name="wipe_running_title">Borrando todo</string>
     <string name="wipe_running_body">gig.log se cierra cuando termina.</string>
-    <string name="wipe_census_confirmed">El servidor del censo confirmó que borró los datos del censo de este teléfono.</string>
+    <string name="wipe_census_confirmed">El servidor del censo confirmó que borró los envíos que puede vincular a este teléfono.</string>
     <string name="wipe_census_title">El servidor del censo no lo ha confirmado</string>
     <string name="wipe_census_no_answer">El servidor del censo no respondió a tiempo.</string>
     <string name="wipe_census_unreachable">gig.log no pudo conectar con el servidor del censo.</string>

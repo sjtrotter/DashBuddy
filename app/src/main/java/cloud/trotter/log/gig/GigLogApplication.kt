@@ -63,6 +63,9 @@ class GigLogApplication : Application(), Configuration.Provider {
     lateinit var censusDataDeletion: CensusDataDeletion
 
     @Inject
+    lateinit var phoneWipe: cloud.trotter.log.gig.core.data.wipe.PhoneWipe
+
+    @Inject
     lateinit var jsonRuleInterpreter: JsonRuleInterpreter
 
     @Inject
@@ -131,6 +134,10 @@ class GigLogApplication : Application(), Configuration.Provider {
 
         super.onCreate()
         instance = this
+
+        // #1579: a wipe committed before the process died finishes before anything else starts (sensing, workers,
+        // census uploads); Android's clear then ends the process.
+        if (phoneWipe.resumeCommitted()) return
 
         // 1. Setup Logging
         val stateProvider = Provider {

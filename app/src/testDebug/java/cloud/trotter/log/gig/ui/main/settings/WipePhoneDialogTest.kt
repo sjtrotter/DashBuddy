@@ -18,6 +18,7 @@ import cloud.trotter.log.gig.core.data.census.PersistentHealthSink
 import cloud.trotter.log.gig.core.data.settings.DevSettingsRepository
 import cloud.trotter.log.gig.core.data.wipe.AppStorageClearer
 import cloud.trotter.log.gig.core.data.wipe.PhoneWipe
+import cloud.trotter.log.gig.core.data.wipe.WipeIntent
 import cloud.trotter.log.gig.core.datastore.settings.DevSettingsDataSource
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import cloud.trotter.log.gig.core.network.census.CensusApiFactory
@@ -119,7 +120,7 @@ class WipePhoneDialogTest {
     private fun show(enrolled: Boolean) {
         whenever(credentials.installId).thenReturn(flowOf(ENROLLED.installId.takeIf { enrolled }))
         runBlocking { whenever(credentials.current()).thenReturn(ENROLLED.takeIf { enrolled }) }
-        val vm = WipePhoneViewModel(PhoneWipe(credentials, deletion, lock, sealer, clearer, scope))
+        val vm = WipePhoneViewModel(PhoneWipe(credentials, deletion, lock, sealer, clearer, WipeIntent(context), scope))
         compose.setContent {
             GigLogTheme {
                 SettingsHomeContent(
@@ -147,6 +148,7 @@ class WipePhoneDialogTest {
         text(SettingsR.string.wipe_confirm_stays).assertExists()
         text(SettingsR.string.wipe_confirm_after).assertExists()
         text(SettingsR.string.wipe_confirm_census).assertDoesNotExist()
+        text(SettingsR.string.census_delete_dialog_survives).assertDoesNotExist()
 
         text(SettingsR.string.wipe_cancel).performClick()
         compose.waitForIdle()
@@ -169,12 +171,34 @@ class WipePhoneDialogTest {
         show(enrolled = true)
         openConfirmation()
         text(SettingsR.string.wipe_confirm_census).assertExists()
+        // #1622's own statement of what the census server keeps, word for word.
+        text(SettingsR.string.census_delete_dialog_survives).assertExists()
+        text(SettingsR.string.census_delete_dialog_backups).assertExists()
+        compose.onNodeWithText("which it keeps for 7 days", substring = true).assertExists()
+        compose.onNodeWithText("at most 14 days later", substring = true).assertExists()
         text(SettingsR.string.wipe_confirm_button).performClick()
 
         compose.waitUntil(5_000) { exists(SettingsR.string.wipe_census_confirmed) }
+        compose.onNodeWithText("The census server confirmed it deleted the uploads it can tie to this phone.").assertExists()
         assertEquals(1, transport.deletions)
         compose.waitUntil(PhoneWipe.CONFIRMED_NOTICE_MILLIS + 5_000) { "app storage" in wiped }
         assertEquals(listOf("census key", "app storage"), wiped)
+    }
+
+    @Test fun `a running census upload is waited for with Cancel, and Cancel deletes nothing`() {
+        val uploader = Any()
+        runBlocking { lock.mutex.lock(uploader) }
+        show(enrolled = false)
+        openConfirmation()
+        text(SettingsR.string.wipe_confirm_button).performClick()
+
+        compose.waitUntil(5_000) { exists(SettingsR.string.wipe_waiting_title) }
+        text(SettingsR.string.wipe_waiting_body).assertExists()
+        text(SettingsR.string.wipe_cancel).performClick()
+        compose.waitUntil(5_000) { !exists(SettingsR.string.wipe_waiting_title) }
+        lock.mutex.unlock(uploader)
+        Thread.sleep(200)
+        assertTrue("nothing is deleted beside or after the upload", wiped.isEmpty())
     }
 
     @Test fun `a deletion the server can't take yet offers the choice, and Wait deletes nothing`() {

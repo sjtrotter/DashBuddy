@@ -269,11 +269,13 @@
     <string name="wipe_confirm_after">gig.log then closes. Open it again to set it up from the start; every automatic tap and the census stay off until you allow them again.</string>
     <string name="wipe_confirm_button">Delete everything</string>
     <string name="wipe_cancel">Cancel</string>
+    <string name="wipe_waiting_title">Waiting for an upload to finish</string>
+    <string name="wipe_waiting_body">A census upload is running. gig.log deletes nothing until it finishes.</string>
     <string name="wipe_asking_title">Asking the census server</string>
     <string name="wipe_asking_body">Waiting for the census server to confirm it deleted this phone\'s data</string>
     <string name="wipe_running_title">Deleting everything</string>
     <string name="wipe_running_body">gig.log closes when it\'s done.</string>
-    <string name="wipe_census_confirmed">The census server confirmed it deleted this phone\'s census data.</string>
+    <string name="wipe_census_confirmed">The census server confirmed it deleted the uploads it can tie to this phone.</string>
     <string name="wipe_census_title">The census server hasn\'t confirmed</string>
     <string name="wipe_census_no_answer">The census server didn\'t answer in time.</string>
     <string name="wipe_census_unreachable">gig.log couldn\'t reach the census server.</string>

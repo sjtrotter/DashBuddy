@@ -30,9 +30,10 @@ fun WipePhoneHost(viewModel: WipePhoneViewModel) {
 }
 
 /**
- * #1579: the dialogs of Delete everything on this phone, stateless. The confirmation says what goes and what stays;
- * while the census server is asked and while the phone is cleared the dialog has no buttons and Back does not close
- * it; an unconfirmed census request offers Delete now or Wait.
+ * #1579: the dialogs of Delete everything on this phone, stateless. The confirmation says what goes and what stays,
+ * and for an enrolled phone what the census server keeps. While a census upload finishes the dialog offers only Cancel;
+ * while the census server is asked and while the phone is cleared it has no buttons and Back does not close it; an
+ * unconfirmed census request offers Delete now or Wait.
  */
 @Composable
 fun WipePhoneDialog(
@@ -46,6 +47,14 @@ fun WipePhoneDialog(
         is WipeDialog.Confirm -> ConfirmDialog(dialog.census, onConfirm, onDismiss)
         is WipeDialog.Running -> when (val progress = dialog.progress) {
             WipeProgress.Idle -> Unit
+            WipeProgress.WaitingForUpload -> AlertDialog(
+                onDismissRequest = {},
+                properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+                title = { Text(stringResource(R.string.wipe_waiting_title)) },
+                text = { Busy(R.string.wipe_waiting_body) },
+                confirmButton = {},
+                dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.wipe_cancel)) } },
+            )
             WipeProgress.AskingCensus -> BusyDialog(R.string.wipe_asking_title, R.string.wipe_asking_body, lead = null)
             is WipeProgress.Wiping -> BusyDialog(
                 R.string.wipe_running_title,
@@ -73,6 +82,9 @@ private fun ConfirmDialog(census: Boolean, onConfirm: () -> Unit, onDismiss: () 
                 listOfNotNull(
                     R.string.wipe_confirm_goes,
                     R.string.wipe_confirm_census.takeIf { census },
+                    // The server's exceptions, as the census screen's own Delete my census data states them (#1622).
+                    R.string.census_delete_dialog_survives.takeIf { census },
+                    R.string.census_delete_dialog_backups.takeIf { census },
                     R.string.wipe_confirm_stays,
                     R.string.wipe_confirm_after,
                 ),
@@ -124,14 +136,19 @@ private fun BusyDialog(@StringRes title: Int, @StringRes body: Int, @StringRes l
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (lead != null) Text(stringResource(lead))
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
-                    Text(stringResource(body))
-                }
+                Busy(body)
             }
         },
         confirmButton = {},
     )
+}
+
+@Composable
+private fun Busy(@StringRes body: Int) {
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+        Text(stringResource(body))
+    }
 }
 
 @Composable
