@@ -1127,9 +1127,11 @@ start of its expiry day without waiting for another change.
 Built by #1626: the review queue, the review screen and the word gate on the phone. The skeleton builder keeps a
 review's words only while a grant is stored, only for slots the v2 skeleton hashed, keyed by the server's slot id
 (`ContributorSlots` in `census-contract/`, the server's `SlotWalk` byte for byte, pinned by a shared vector), and only
-past `ReviewWordCover` (every backstop on the word including return-task names, the dasher's greeting, account and
-place labels, notes, any colon, digits), outside an address block the backstop selects, and never a value such a block
-holds anywhere in the frame; the words live in memory only. The queue
+past `ReviewAllowList` (Sol round 2: every token must be one of the 5,000 most frequent lowercase en/es/fr words of
+Google Books Ngram, CC BY 3.0, proper nouns dropped, or a word of the bundled rules' on-screen text, generated from
+`matchers/`) and then `ReviewWordCover` (every backstop on the word including return-task names, the dasher's
+greeting, account and place labels in any case, notes, any colon, digits), outside an address block the backstop
+selects, and never a value any withheld or uncovered field of the frame holds (one frame-wide exclusion set); the words live in memory only. The queue
 (`ContributorReviewQueue`) takes the spooled skeleton after `mayUpload`, 3 new layouts a UTC day, one per layout, and
 stores only that outbound skeleton; the upload worker marks what the server stored, and a screen opens the UTC day
 after, when the release covers it (classes are asked only then, for the slots of that skeleton). The session
@@ -1140,7 +1142,8 @@ varying, regional, withheld, shape and unknown slots are greyed. Not built: "Ask
 has the seam), and the contributor persona playtest in the UX plan (a separate activity, not done). One limit
 stands: a bare first name in an id-less slot passes the filter and the cover (nothing on the phone tells it from
 wording), so only the server's class keeps it greyed; it leaves the phone only if the dasher confirms it and its gate
-opens (risk 12).
+opens (risk 12). The allow-list closes that for any name or place outside the common-word and rule lists; a name or
+place that is also a common word ("Grace", "Will", "Main", "Medical Center") still passes it and stays risk 12.
 
 ### §16 The anchor check is a dictionary lookup (census#82)
 

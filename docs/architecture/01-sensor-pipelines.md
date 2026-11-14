@@ -1051,10 +1051,16 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   answer off the class list reads `UNKNOWN`). *Words:* `CensusSink.collectsReviewWords` (HttpCensusSink: census
   enabled and `ContributorReviewIntake.wantsCandidates`, a stored grant and fewer than 3 candidates today) makes the
   publisher pass `collectWords`; `SkeletonBuilder` (v2 only) then returns `Built.reviewWords`, the canonical word of
-  every slot whose emitted slot carries a hash, by slot id, kept only if `ReviewWordCover.shows` (sensitive and customer
+  every slot whose emitted slot carries a hash, by slot id, kept only if `ReviewWordCover.shows`: first
+  `ReviewAllowList.allows` (every NFC-lowercased letter run in `census/review-common-words.txt`, a committed, sha256-
+  headed list of 5,000 lowercase words per language from orgtre/google-books-ngram-frequency, CC BY 3.0, or in the
+  generated `census/review-rule-words.txt`, which `:core:pipeline:reviewRuleWords` builds from the imported rules'
+  on-screen text keys and registers as a Java resource; a missing or corrupt list allows less), then the denylist
+  (sensitive and customer
   markers, `ReturnTaskLine.hasRawName`, masks, the filter's own steps, digits, `@`, any colon-like character,
-  greeting / account / place / note patterns), its node is outside `UnknownAddressBackstop.select`, and its canonical
-  value is not one any field of a selected node holds (frame-wide, every field and the title; Sol round 1 S3).
+  greeting / account / note patterns and a case-insensitive place pattern), its node is outside
+  `UnknownAddressBackstop.select`, and its canonical value is not on the frame's exclusion set: the value of every
+  field (any node, the title) that is not eligible, whatever withheld it (one rule; Sol rounds 1 and 2).
   `ReviewWordCoverPropertyTest` runs the PII generators through every field position and duplicate. `ReviewWords` prints no word and is never serialized;
   `CensusRecord.reviewWords` is never spooled (the spool writes four named fields). *Queue:* `ContributorReviewQueue`
   (`:core:data`) is `PendingContributorReviews`, `ContributorReviewIntake` and `UploadedSkeletons`. `HttpCensusSink`
@@ -1064,8 +1070,8 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   (`filesDir/census/review/queue.json`, temp-and-rename, inside the backup-excluded `census/`): the spooled item JSON,
   its sha256, layout and days; the words and the held words are in-memory maps. `CensusUploadWorker` reports a skeleton
   batch accepted with no rejected item (`reportUploaded`, fail-open; a mixed answer or a duplicate proves no item) and the matching candidate gets `uploadedDay`;
-  `readyOn(today)` is `uploadedDay < today` (the classes come from the next release). `clear()` empties both halves and
-  throws if the file stays. Expiry (7 days) is enforced on load, `candidate`, `wordsFor`, `uploaded` and in `entries`
+  `readyOn(today)` is `uploadedDay < today` (the classes come from the next release). `clear()` empties both halves, moves `generation`
+  and throws if the file stays; `hold` and `offer` drop an insertion made under an older generation. Expiry (7 days) is enforced on load, `candidate`, `wordsFor`, `uploaded` and in `entries`
   over a minute tick, persisting the cleanup. *Session:* `ContributorReviewer` takes `CensusUploadLock` for `open` and `send` and checks
   `mayUpload()` first and before every request; the view model runs `CensusContributor.refresh()` before `open`, never
   inside the lock. `open` retries held words, then (only for a ready candidate) POSTs `classes` with the skeleton's slot

@@ -355,11 +355,17 @@ is offered again after a later shift. The grant request is not listed under "Wha
 **Reviewing a screen** (#1626, ADR-0011 §15). While a grant is stored, the skeleton builder also keeps, for an
 UNKNOWN screen it builds as `uinode.skeleton.v2`, the words of the slots the skeleton HASHED (text the census filter
 let through as possible app wording), keyed by the census server's slot id (`SkeletonBuilder.reviewWords`,
-`ReviewWords`). A word is kept only if it also passes the review's own cover (`ReviewWordCover`): no customer marker,
+`ReviewWords`). A word is kept only if every one of its words is on an allow-list (`ReviewAllowList`): the 5,000 most frequent
+lowercase words of English, Spanish and French (Google Books Ngram, CC BY 3.0; capitalized entries, the proper nouns,
+left out; `census/review-common-words.txt`), or a word of the on-screen text the bundled recognition rules match
+(generated from `matchers/` at build time). A name or place outside both lists is never held; one that is also a
+common word ("Grace", "Will", "Main") is not caught by the list and is a stated residual risk. The word must also pass
+the review's own cover (`ReviewWordCover`): no customer marker,
 sensitive marker, return-task name, mask, name or other PII shape, digit or `@`, no greeting, account or place
-label ("Hi, …", "Account …", "… in <Place>"), no note or message, and no colon of any kind (a label and its value);
-and only if the rules-independent address-block backstop did not select its node, nor does any field of a selected
-node hold the same value anywhere else in the screen. A withheld, coarse or format slot has no word, so no
+label in any case ("Hi, …", "Account …", "… in <place>"), no note or message, and no colon of any kind (a label and
+its value); and only if the rules-independent address-block backstop did not select its node. Any text on the screen
+that is withheld or not held (by a filter step, a customer or PII id, a text input, the address backstop or the cover
+itself) also stops the same text being held anywhere else on that screen, the window title included. A withheld, coarse or format slot has no word, so no
 other screen text is kept. When the census sink queues that skeleton for upload (the UTC day's first of its layout),
 the review queue (`ContributorReviewQueue`) takes it as a candidate, after checking `CensusContributor.mayUpload`: at
 most 3 new layouts a UTC day, one candidate per layout, at most 6 waiting, dropped after 7 days, and a layout sent or
@@ -390,7 +396,8 @@ gate asked again at the start of the next review session; a process death drops 
 confirmation. **Delete** drops the candidate and its words and sends nothing. A refused review (the server paused, a
 daily quota spent, no network) keeps the candidate; `403 grant_required` or `401 revoked` on any review request
 stops the session, runs the grant's state read, then drops the screen's words and every held word. The review screen
-clears its rows, words and choices whenever the grant stops standing. Review requests are not listed under "What gig.log sent". The INFO log says only how many
+clears its rows, words and choices whenever the grant stops standing, even while it is not shown. A word whose grant
+check fails is dropped, never held, and an answer that arrives after the reviews were cleared holds nothing. Review requests are not listed under "What gig.log sent". The INFO log says only how many
 confirmations, labels and accepted words went, never a slot, hash or word.
 
 Exports replace existing files with the same names in the chosen folder. Exported files survive uninstall and remain until deleted through that provider. “No direct gig.log upload” does not mean that a selected cloud folder keeps the files on the phone.
