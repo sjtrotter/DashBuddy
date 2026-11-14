@@ -935,20 +935,27 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   the server read (200, 400, 422) to `CensusSentObserver`, bound to `CensusSentLog`, which keeps only
   `CensusSentBatch.read`'s summary (kind, platform, day, node count, codes / formats / type-only / withheld counts;
   no hash, template, batch id or value) in `filesDir/census/sent.json`, `CensusSentBatch.KEEP_MILLIS` (7 days) and at
-  most 60 requests; every read prunes expired entries and rewrites the file, and the screen filters by
+  most 60 requests; every read prunes expired entries and rewrites the file (a failed rewrite is retried by the next
+  read or write until one succeeds), and the screen filters by
   `rememberNow` so rows leave while it is open. An observer failure never changes the request's result. "What
   gig.log sent" shows the stored daily target with the time left ticking. `CensusDataDeletion` (`:core:data`, the
   one entry point; #1579's wipe calls `delete()`) runs under `CensusUploadLock`: it stores a pending `CensusDeletion`
   in `dev_settings`, queues `enqueueDeletion` (a `census_delete` run, CONNECTED, exponential backoff from one minute)
   BEFORE the first attempt, cancels a waiting manual run, clears the skeleton spool and in-flight marker, invalidates
   the envelope sink and resets the health ledger, then sends a signed `DELETE /v1/installs/me/data` with an empty
-  body under the credential of the install id the request binds at its first attempt. `CensusSpool.generation` is
+  body under each install id the request binds at its first attempt (`CensusCredentialStore.retiredIds()`, then the
+  current enrolled id), each with its own key; an id leaves the list only on its own 200, and a retired key is then
+  forgotten. `CensusIdentityResetter` calls `retire()`, not `wipe()`: an enrolled identity's id and sealed key move
+  to `retired_json` (at most four, never used to upload; `wipe()` now clears only the current identity). A 401 the
+  clock does not explain gets one recovery per attempt: `POST /v1/enroll` with the SAME id and key (idempotent; after
+  a restore that erased the install it re-creates it), then the DELETE again; only that DELETE's 200 resolves. `CensusSpool.generation` is
   the clear boundary: `HttpCensusSink` tags each offered record with it and `append` drops a record tagged before
   a clear, so an outline in the sink's channel or consumer during a deletion is never written behind it. 200 stores
   the rows and the server's UTC day (only a parsed date); 401 (any cause: bad signature, clock, unknown id), 404/405
   (the server is not yet deployed with census#79), 429, 5xx and transport failures keep it pending with a
-  `waiting` reason the screen words (unconfirmed / not yet / unreachable), the credential kept; only "no enrolled
-  credential at the first attempt" stores `nothing_held`; revoked switches the census off and stores `not_possible`,
+  `waiting` reason the screen words (unconfirmed / not yet / unreachable), the credential kept; no id at all (none
+  enrolled, none retired) stores `nothing_sent` ("No deletion was sent: this phone had no census ID at the time", never
+  a claim about the server), which the worker clears on its next successful enrolment (`onEnrolled`); revoked switches the census off and stores `not_possible`,
   as does a bound id the phone no longer holds. A request is `resolved` only when the server answered AND the local
   clear succeeded (a failed clear is retried, uploads blocked meanwhile). Every worker run calls `resumePending()`
   first under the lock, whatever the consent: while unresolved it sends nothing else (INFO `census skipped
@@ -967,8 +974,8 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   Consent is untouched, and so is a server-imposed deferral deadline (Retry-After / exhausted budget is server
   policy, not identity state — a fresh id must not bypass it); only if consent is still on does it enqueue an
   immediate run with `enqueueNow(replaceQueued = true)` (REPLACE, so a manual run parked in WorkManager
-  backoff cannot swallow it), which mints + enrols a fresh id (the old server install is orphaned, not
-  withdrawn). The worker WARNs once per re-enrolment ("identity unknown to server, enrolling a new one"; the
+  backoff cannot swallow it), which mints + enrols a fresh id (the old server install is not
+  withdrawn; an enrolled one's key is retired so "Delete my census data" can still delete under it, #1622). The worker WARNs once per re-enrolment ("identity unknown to server, enrolling a new one"; the
   per-process latch is gone with the stuck state it rate-limited, #1622). Every run persists ONE
   `CensusLastRun(atMillis, CensusRunOutcome, detail?, envelopesPosted, reason?)` into developer settings (`:domain` vocabulary, wire
   strings `deferred|enrolled|enrol_conflict|enrol_rejected|keystore_transient|spool_empty|stale_removed|
