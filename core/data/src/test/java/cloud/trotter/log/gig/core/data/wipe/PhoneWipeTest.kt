@@ -438,7 +438,7 @@ class PhoneWipeTest {
         WipeIntent(intentFile).commit()
         clearStarts = false
         var removable = false
-        intent = { WipeIntent(intentFile, remove = { file -> removable && file.delete() }) }
+        intent = { WipeIntent(intentFile, remove = { path -> if (!removable) throw java.io.IOException("EIO"); java.nio.file.Files.deleteIfExists(path) }) }
         var started = 0
         val wipe = wipe()
         assertTrue(wipe.resumeCommitted { started++ })
@@ -462,7 +462,7 @@ class PhoneWipeTest {
     @Test fun `a refused clear whose commitment can't be removed stays until a retry removes it`() = runTest {
         clearStarts = false
         var removable = false
-        intent = { WipeIntent(intentFile, remove = { file -> removable && file.delete() }) }
+        intent = { WipeIntent(intentFile, remove = { path -> if (!removable) throw java.io.IOException("EIO"); java.nio.file.Files.deleteIfExists(path) }) }
         val wipe = confirmed()
         settle()
         assertEquals(WipeFlow.State.Failed(WipeFlow.Failure.CLEAR, false, commitmentStuck = true), wipe.progress.value)
@@ -476,6 +476,42 @@ class PhoneWipeTest {
         settle()
         assertEquals(null, wipe.progress.value)
         assertFalse(intentFile.exists())
+    }
+
+    @Test fun `an unreadable marker at start neither wipes nor starts the app until it is cleared`() = runTest {
+        WipeIntent(intentFile).commit()
+        var readable = false
+        intent = {
+            WipeIntent(intentFile, read = { path ->
+                if (!readable) throw java.nio.file.AccessDeniedException(path.toString())
+                java.nio.file.Files.readAllBytes(path)
+            })
+        }
+        var started = 0
+        val wipe = wipe()
+
+        assertTrue("startup is held", wipe.resumeCommitted { started++ })
+        assertTrue("never wiped on an unreadable marker", events.isEmpty())
+        assertEquals(WipeFlow.State.Failed(WipeFlow.Failure.CLEAR, false, commitmentStuck = true), wipe.progress.value)
+        assertTrue(lock.mutex.isLocked)
+        assertEquals(0, started)
+
+        wipe.cancel() // Try again: removes the marker, then starts as usual
+        assertEquals(1, started)
+        assertFalse(lock.mutex.isLocked)
+        assertFalse(intentFile.exists())
+        assertTrue(events.isEmpty())
+    }
+
+    @Test fun `a filesystem error on removal is a failure, never taken as gone`() = runTest {
+        WipeIntent(intentFile).commit()
+        val failing = WipeIntent(intentFile, remove = { throw java.io.IOException("EIO") })
+        assertFalse(failing.clear())
+        assertTrue(intentFile.isFile)
+        val denied = WipeIntent(intentFile, remove = { throw SecurityException("denied") })
+        assertFalse(denied.clear())
+        assertTrue("an absent marker counts as removed", WipeIntent(File(tmp.root, "none")).clear())
+        assertEquals(WipeIntent.Marker.ABSENT, WipeIntent(File(tmp.root, "none")).read())
     }
 
     @Test fun `a commitment that fails after its file was created leaves nothing for the next start`() = runTest {

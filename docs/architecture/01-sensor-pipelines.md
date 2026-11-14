@@ -989,7 +989,10 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   workers when a commitment is found: it takes the lock synchronously and clears. If Android refuses, `PhoneWipe`
   shows Failed(CLEAR) from the shell (`MainActivity` hosts `WipePhoneHost` over every screen) and keeps the lock and the
   commitment; OK drops the commitment, releases the lock and runs the deferred startup (rules unloaded until then, so
-  recognition stays fail-closed). Dropping counts only when `WipeIntent.clear()` verifies the final file is gone; on
+  recognition stays fail-closed). Dropping counts only when `WipeIntent.clear()` removes both files with `Files.deleteIfExists` (no `exists()` guard,
+  which Android answers false on a filesystem error; any IOException or SecurityException is a failure), and the start
+  reads the marker with `Files.readAllBytes` (`NoSuchFileException` = absent, any other error = UNKNOWN, held like a
+  refused resume with Try again, never wiped on); on
   failure the failure stays (`Failed.commitmentStuck`, "gig.log couldn't clear its delete request. Try again.") with
   the lock held and startup paused, and the button retries. In the dialog's own flow a refused clear emits
   DROP_COMMIT -> CommitDropped / CommitDropFailed, and a stuck Failed leaves only on CommitDropped (`WipeFlowTest`). The clear deletes the census

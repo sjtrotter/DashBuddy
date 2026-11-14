@@ -115,16 +115,29 @@ class PhoneWipe @Inject constructor(
      * True when the caller must start nothing now: the wipe is under way (the process ends), or Android refused the
      * clear. A refusal is shown as [WipeFlow.Failure.CLEAR] ("Couldn't delete") on the first screen; the lock and the
      * commitment are kept, so no census upload runs and the next start tries again, until the dasher presses OK, which
-     * drops the commitment, releases the lock and runs [onAcknowledged] (the app's normal startup). False when none was
-     * committed.
+     * drops the commitment, releases the lock and runs [onAcknowledged] (the app's normal startup). A marker that can't
+     * be read is held the same way, with Try again, and is never wiped on. False only when no commitment is stored.
      */
     fun resumeCommitted(onAcknowledged: () -> Unit): Boolean {
-        val committed = try {
-            intent.isCommitted()
-        } catch (_: Exception) {
-            false
+        when (intent.read()) {
+            WipeIntent.Marker.ABSENT -> return false
+            WipeIntent.Marker.UNKNOWN -> {
+                // Never wipe on an unreadable marker, and never start as if none were stored: hold startup and the
+                // lock, and show Couldn't delete with Try again, which clears the marker before the app starts.
+                Timber.tag(TAG).w("phone wipe: the commitment can't be read at start; holding startup")
+                val owner = Any()
+                if (lock.mutex.tryLock(owner)) {
+                    holdRefusedResume(owner, onAcknowledged, stuck = true)
+                } else {
+                    scope.launch {
+                        lock.mutex.lock(owner)
+                        holdRefusedResume(owner, onAcknowledged, stuck = true)
+                    }
+                }
+                return true
+            }
+            WipeIntent.Marker.COMMITTED -> Unit
         }
-        if (!committed) return false
         Timber.tag(TAG).i("phone wipe: finishing a committed wipe at start")
         state.value = State.Wiping(censusConfirmed = false, requestOpen = false)
         val owner = Any()
@@ -141,8 +154,12 @@ class PhoneWipe @Inject constructor(
 
     private fun finishResume(owner: Any, onAcknowledged: () -> Unit) {
         if (clearStorage()) return
+        holdRefusedResume(owner, onAcknowledged, stuck = false)
+    }
+
+    private fun holdRefusedResume(owner: Any, onAcknowledged: () -> Unit, stuck: Boolean) {
         refusedResume = RefusedResume(owner, onAcknowledged)
-        state.value = State.Failed(WipeFlow.Failure.CLEAR, requestOpen = false)
+        state.value = State.Failed(WipeFlow.Failure.CLEAR, requestOpen = false, commitmentStuck = stuck)
     }
 
     /**

@@ -6,6 +6,9 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.nio.channels.FileChannel
+import java.nio.file.Files
+import java.nio.file.NoSuchFileException
+import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -24,13 +27,26 @@ class WipeIntent internal constructor(
         out.write(bytes)
         out.fd.sync()
     },
-    private val remove: (File) -> Boolean = File::delete,
+    private val remove: (Path) -> Boolean = Files::deleteIfExists,
+    private val read: (Path) -> ByteArray = Files::readAllBytes,
 ) {
+    /** What the start finds. [UNKNOWN] is a filesystem error: neither wipe on it nor start as if nothing were stored. */
+    enum class Marker { ABSENT, COMMITTED, UNKNOWN }
+
     @Inject constructor(@ApplicationContext context: Context) : this(File(context.filesDir, FILE_NAME))
 
     private val temp = File(file.parentFile, "$FILE_NAME.tmp")
 
-    fun isCommitted(): Boolean = file.isFile && file.readBytes().contentEquals(MAGIC)
+    /** Reads the marker without trusting `exists()`, which reports false on a filesystem error too. */
+    fun read(): Marker = try {
+        if (read(file.toPath()).contentEquals(MAGIC)) Marker.COMMITTED else Marker.ABSENT
+    } catch (_: NoSuchFileException) {
+        Marker.ABSENT
+    } catch (_: Exception) {
+        Marker.UNKNOWN
+    }
+
+    fun isCommitted(): Boolean = read() == Marker.COMMITTED
 
     /** Throws when the commitment is not stored; nothing is left behind then. */
     fun commit() {
@@ -47,11 +63,14 @@ class WipeIntent internal constructor(
         }
     }
 
-    /** Removes the commitment; true only when the final file is verifiably gone. Never throws. */
+    /**
+     * Removes the commitment; true only when both files were deleted or confirmed absent (`deleteIfExists` answers
+     * false only for an absent file). Any filesystem error is false. Never throws.
+     */
     fun clear(): Boolean = try {
-        if (temp.exists()) remove(temp)
-        if (file.exists()) remove(file)
-        !file.exists()
+        remove(temp.toPath())
+        remove(file.toPath())
+        true
     } catch (_: Exception) {
         false
     }
