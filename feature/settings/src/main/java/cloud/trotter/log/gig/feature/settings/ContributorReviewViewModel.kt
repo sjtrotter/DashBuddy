@@ -4,6 +4,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.census.contract.contributor.ContributorRole
+import cloud.trotter.census.contract.contributor.QuarantineNote
+import cloud.trotter.log.gig.core.data.census.contributor.AskOutcome
+import cloud.trotter.log.gig.core.data.census.contributor.AskRefusal
 import cloud.trotter.log.gig.core.data.census.contributor.CensusContributor
 import cloud.trotter.log.gig.core.data.census.contributor.ContributorReviewer
 import cloud.trotter.log.gig.core.data.census.contributor.ReviewLoad
@@ -22,8 +25,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** #1626: where the review screen is. */
-enum class ReviewPhase { LOADING, READY, SENDING, SENT, DELETED, NOT_ALLOWED, NOT_FOUND, NOT_READY }
+/** #1626: where the review screen is. ASKING and ASKED are #1627's "Ask the developer". */
+enum class ReviewPhase { LOADING, READY, SENDING, ASKING, SENT, ASKED, DELETED, NOT_ALLOWED, NOT_FOUND, NOT_READY }
 
 /**
  * #1626: the review screen's state. [review]'s rows carry a word only for a constant slot this phone still holds;
@@ -37,9 +40,18 @@ data class ReviewUiState(
     val roles: Map<String, ContributorRole> = emptyMap(),
     /** The last Send that did not go through. */
     val failure: SendOutcome? = null,
+    /** #1627: the last Ask the developer that sent nothing. */
+    val askFailure: AskRefusal? = null,
+    /** #1627: after Ask the developer: the UTC day the server deletes the item by. */
+    val askedExpiresDay: String? = null,
+    /** #1627: the server's hash of what it sealed did not match the phone's. */
+    val askUnconfirmed: Boolean = false,
     val shiftLive: Boolean = false,
 ) {
     val canSend: Boolean get() = phase == ReviewPhase.READY && (confirmed.isNotEmpty() || roles.isNotEmpty())
+
+    /** #1627: Ask the developer needs no choice; the outline goes with whatever was chosen. */
+    val canAsk: Boolean get() = phase == ReviewPhase.READY && review != null
 }
 
 /**
@@ -47,7 +59,7 @@ data class ReviewUiState(
  * the dasher's choices go, and the screen offers nothing until it is opened again. Sent and Deleted keep their message.
  */
 internal fun ReviewUiState.grantEnded(): ReviewUiState = when (phase) {
-    ReviewPhase.SENT, ReviewPhase.DELETED -> copy(review = null, confirmed = emptySet(), roles = emptyMap())
+    ReviewPhase.SENT, ReviewPhase.ASKED, ReviewPhase.DELETED -> copy(review = null, confirmed = emptySet(), roles = emptyMap())
     else -> ReviewUiState(phase = ReviewPhase.NOT_ALLOWED, shiftLive = shiftLive)
 }
 
@@ -70,6 +82,24 @@ internal fun ReviewUiState.sent(outcome: SendOutcome): ReviewUiState {
         SendOutcome.NOT_FOUND -> copy(phase = ReviewPhase.NOT_FOUND, review = null)
         SendOutcome.NOT_ALLOWED, SendOutcome.INSTALL_REVOKED -> grantEnded()
         else -> copy(phase = ReviewPhase.READY, failure = outcome)
+    }
+}
+
+/** #1627: an Ask the developer's outcome, unless the grant ended while it ran. */
+internal fun ReviewUiState.asked(outcome: AskOutcome): ReviewUiState {
+    if (phase != ReviewPhase.ASKING) return this
+    fun done(expiresDay: String, unconfirmed: Boolean) = copy(
+        phase = ReviewPhase.ASKED, review = null, confirmed = emptySet(), roles = emptyMap(),
+        askedExpiresDay = expiresDay, askUnconfirmed = unconfirmed,
+    )
+    return when (outcome) {
+        is AskOutcome.Sent -> done(outcome.expiresDay, unconfirmed = false)
+        is AskOutcome.Unconfirmed -> done(outcome.expiresDay, unconfirmed = true)
+        is AskOutcome.NotSent -> when (outcome.reason) {
+            AskRefusal.NOT_FOUND -> copy(phase = ReviewPhase.NOT_FOUND, review = null)
+            AskRefusal.NOT_ALLOWED, AskRefusal.INSTALL_REVOKED -> grantEnded()
+            else -> copy(phase = ReviewPhase.READY, askFailure = outcome.reason)
+        }
     }
 }
 
@@ -122,11 +152,27 @@ class ContributorReviewViewModel @Inject constructor(
         val current = state.value
         val review = current.review ?: return
         if (!current.canSend) return
-        state.update { it.copy(phase = ReviewPhase.SENDING, failure = null) }
+        state.update { it.copy(phase = ReviewPhase.SENDING, failure = null, askFailure = null) }
         viewModelScope.launch {
             // A revocation mid-send has already run the grant's state read (the reviewer does, outside the lock).
             val outcome = reviewer.send(id, current.confirmed, current.roles, review)
             state.update { it.sent(outcome) }
+        }
+    }
+
+    /**
+     * #1627: Ask the developer, with the dasher's choices so far and [note]. The grant's state is read first, outside
+     * the upload lock, as before a review session.
+     */
+    fun ask(note: QuarantineNote?) {
+        val current = state.value
+        val review = current.review ?: return
+        if (!current.canAsk) return
+        state.update { it.copy(phase = ReviewPhase.ASKING, failure = null, askFailure = null) }
+        viewModelScope.launch {
+            contributor.refresh()
+            val outcome = reviewer.ask(id, current.confirmed, current.roles, note, review)
+            state.update { it.asked(outcome) }
         }
     }
 

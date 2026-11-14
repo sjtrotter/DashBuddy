@@ -6,7 +6,9 @@ import cloud.trotter.census.contract.UiSkeletonDto
 import cloud.trotter.census.contract.contributor.ContributorRole
 import cloud.trotter.census.contract.contributor.ContributorSlots
 import cloud.trotter.census.contract.contributor.ContributorVariant
+import cloud.trotter.census.contract.contributor.QuarantineNote
 import cloud.trotter.census.contract.contributor.SlotClass
+import cloud.trotter.census.contract.sha256OrNull
 import cloud.trotter.census.contract.auth.Bearer
 import cloud.trotter.log.gig.core.data.census.CensusCredentialStore
 import cloud.trotter.log.gig.core.data.census.CensusUploadLock
@@ -15,6 +17,7 @@ import cloud.trotter.log.gig.core.network.census.CensusApiFactory
 import cloud.trotter.log.gig.core.network.census.ContributorCall
 import cloud.trotter.log.gig.core.network.census.ContributorRefusal
 import cloud.trotter.log.gig.core.network.census.ContributorTransport
+import cloud.trotter.log.gig.core.network.census.QuarantineReceipt
 import cloud.trotter.log.gig.core.network.census.WordStatus
 import cloud.trotter.log.gig.domain.census.contributor.ContributorGate
 import javax.inject.Inject
@@ -92,6 +95,35 @@ enum class SendOutcome {
     INSTALL_REVOKED,
 }
 
+/** #1627: how an "Ask the developer" went. */
+sealed interface AskOutcome {
+    /** Quarantined, and the server's hash of what it sealed is the hash of the bytes this phone built. */
+    data class Sent(val expiresDay: String) : AskOutcome
+    /**
+     * Quarantined, but the server's hash differs from the phone's: the sealed copy cannot be shown to be the outline
+     * the screen described. Recorded (a WARN line) and never retried.
+     */
+    data class Unconfirmed(val expiresDay: String) : AskOutcome
+    /** Nothing was quarantined. */
+    data class NotSent(val reason: AskRefusal) : AskOutcome
+}
+
+/** #1627: why nothing was quarantined. */
+enum class AskRefusal {
+    /** The contributor gate is closed (or the server said no grant). */
+    NOT_ALLOWED,
+    NOT_FOUND,
+    /** The server paused uploads or today's quota is spent. */
+    LATER,
+    UNREACHABLE,
+    /** `422 bad_artifact` (or a `409` with no word in the artifact): the server could not take this screen. */
+    REFUSED,
+    /** `503 quarantine_unconfigured`: the server has no key to seal to. */
+    UNCONFIGURED,
+    /** `401 revoked`: the census ID is revoked. */
+    INSTALL_REVOKED,
+}
+
 /**
  * #1626: the review session (ADR-0011 §15, census#81 `docs/CLIENT.md` "Contributor tier"). Every request runs under
  * [CensusUploadLock] and checks [ContributorGate.mayUpload] synchronously first, before each request; the caller runs
@@ -101,6 +133,9 @@ enum class SendOutcome {
  *   (only for a candidate this phone uploaded on an earlier UTC day) and builds the rows.
  * - [send]: `review` (confirmations as public hashes, role tags) first; then `gates` for the confirmations; then
  *   `words` only for a (slot, hash) the gate reported open. A word whose gate stays closed is held in memory.
+ * - [ask] (#1627): "Ask the developer". `gates` for the confirmations, then `quarantine` with the artifact
+ *   [ContributorRequests.artifact] builds from the same skeleton, confirmations and role tags; the candidate then
+ *   leaves the queue. No review is sent.
  */
 @Singleton
 class ContributorReviewer internal constructor(
@@ -219,15 +254,7 @@ class ContributorReviewer internal constructor(
             val entry = queue.candidate(id) ?: return@run SendOutcome.NOT_FOUND
             val item = CensusSkeletonSchema.deserialize(entry.skeletonJson) as? UiSkeletonDto ?: return@run SendOutcome.NOT_FOUND
             val variant = ContributorVariant.of(item) ?: return@run SendOutcome.NOT_FOUND
-            val slots = ContributorSlots.slots(item).associateBy { it.id }
-            val confirmable = shown.rows.filter { it.confirmable }.map { it.slot }.toSet()
-            val confirmations = confirmed
-                .filter { it in confirmable }
-                .mapNotNull { slot -> slots[slot]?.slot?.h?.let { Confirmation(slot, it) } }
-                .sortedBy { it.slot }
-                .take(ContributorRequests.MAX_GATE_ITEMS)
-            val tags = roles.filterKeys { it in slots }.toSortedMap().toList()
-                .take(ContributorRequests.MAX_REVIEW_ITEMS - confirmations.size)
+            val (confirmations, tags) = choices(item, confirmed, roles, shown)
             if (confirmations.isEmpty() && tags.isEmpty()) return@run SendOutcome.NOTHING_TO_SEND
             val cred = safeCredential() ?: return@run SendOutcome.UNREACHABLE
             val api = transport()
@@ -250,6 +277,128 @@ class ContributorReviewer internal constructor(
             }
             SendOutcome.SENT
         }
+
+    /**
+     * #1627: "Ask the developer" about [id]: the outbound skeleton the screen described, [confirmed] slots (only rows
+     * [shown] as confirmable, as public hashes) and [roles], with an optional [note], sealed by the server to the
+     * operator's key. A confirmed word goes only when `gates` answered open for that exact slot and hash in this call;
+     * every other confirmation stays a hash. The phone hashes the exact artifact bytes it sent and compares them with
+     * the server's `artifactSha256`. The candidate leaves the queue once the server stored the item.
+     */
+    suspend fun ask(
+        id: String,
+        confirmed: Set<String>,
+        roles: Map<String, ContributorRole>,
+        note: QuarantineNote?,
+        shown: ScreenReview,
+    ): AskOutcome = try {
+        lock.mutex.withLock { askHoldingLock(id, confirmed, roles, note, shown) }
+    } catch (a: Aborted) {
+        abort(id, a.revoked)
+        AskOutcome.NotSent(if (a.revoked) AskRefusal.INSTALL_REVOKED else AskRefusal.NOT_ALLOWED)
+    }
+
+    private suspend fun askHoldingLock(
+        id: String,
+        confirmed: Set<String>,
+        roles: Map<String, ContributorRole>,
+        note: QuarantineNote?,
+        shown: ScreenReview,
+    ): AskOutcome = run {
+        fun refused(reason: AskRefusal) = AskOutcome.NotSent(reason)
+        if (!gate.mayUpload()) return@run refused(AskRefusal.NOT_ALLOWED)
+        if (shown.id != id) return@run refused(AskRefusal.NOT_FOUND)
+        val entry = queue.candidate(id) ?: return@run refused(AskRefusal.NOT_FOUND)
+        val item = CensusSkeletonSchema.deserialize(entry.skeletonJson) as? UiSkeletonDto ?: return@run refused(AskRefusal.NOT_FOUND)
+        val variant = ContributorVariant.of(item) ?: return@run refused(AskRefusal.NOT_FOUND)
+        val (confirmations, tags) = choices(item, confirmed, roles, shown)
+        val cred = safeCredential() ?: return@run refused(AskRefusal.UNREACHABLE)
+        val api = transport()
+        val words = queue.wordsFor(id)
+        // The gate is asked in this call: a word goes only for a (slot, hash) it answers open for right now.
+        val open = if (confirmations.isEmpty() || words == null) {
+            emptySet()
+        } else {
+            if (!gate.mayUpload()) return@run refused(AskRefusal.NOT_ALLOWED)
+            when (val gated = api.gates(cred, ContributorRequests.gates(variant, confirmations))) {
+                is ContributorCall.Ok -> gated.value.filter { it.open }.map { Confirmation(it.slot, it.hash) }.toSet()
+                // No answer: every confirmation stays a hash.
+                is ContributorCall.Refused -> emptySet<Confirmation>().also { stopOn(gated.reason) }
+            }
+        }
+        var cleared = open
+        var artifact = ContributorRequests.artifact(item, confirmations, tags, words, cleared)
+        var answer = quarantine(api, cred, artifact, note) ?: return@run refused(AskRefusal.NOT_ALLOWED)
+        // census#81: `409 gate_closed` stored nothing; the words go as their hashes instead, once.
+        if (answer is ContributorCall.Refused && answer.reason == ContributorRefusal.GATE_CLOSED &&
+            ContributorRequests.openWords(confirmations, words, cleared).isNotEmpty()
+        ) {
+            Timber.tag(TAG).w("census quarantine gate closed; asking again with hashes only")
+            cleared = emptySet()
+            artifact = ContributorRequests.artifact(item, confirmations, tags, words, cleared)
+            answer = quarantine(api, cred, artifact, note) ?: return@run refused(AskRefusal.NOT_ALLOWED)
+        }
+        val receipt = when (answer) {
+            is ContributorCall.Ok -> answer.value
+            is ContributorCall.Refused -> {
+                stopOn(answer.reason)
+                return@run refused(askRefusalOf(answer.reason))
+            }
+        }
+        // The item is stored: the candidate goes whether or not its hash matches.
+        queue.remove(id)
+        if (sha256OrNull(artifact) != receipt.artifactSha256) {
+            Timber.tag(TAG).w("census quarantine unconfirmed cause=hash_mismatch")
+            return@run AskOutcome.Unconfirmed(receipt.expiresDay)
+        }
+        Timber.tag(TAG).i(
+            "census quarantine sent confirmations=%d roles=%d words=%d note=%b",
+            confirmations.size, tags.size, ContributorRequests.openWords(confirmations, words, cleared).size, note != null,
+        )
+        AskOutcome.Sent(receipt.expiresDay)
+    }
+
+    /** One quarantine request, `mayUpload` checked right before it; null when the gate closed. Caller holds the lock. */
+    private suspend fun quarantine(
+        api: ContributorTransport,
+        cred: Bearer.Credential,
+        artifact: ByteArray,
+        note: QuarantineNote?,
+    ): ContributorCall<QuarantineReceipt>? {
+        if (!gate.mayUpload()) return null
+        return api.quarantine(cred, ContributorRequests.quarantine(artifact, note))
+    }
+
+    private fun askRefusalOf(reason: ContributorRefusal): AskRefusal = when (reason) {
+        ContributorRefusal.GRANT_REQUIRED -> AskRefusal.NOT_ALLOWED
+        ContributorRefusal.INSTALL_REVOKED -> AskRefusal.INSTALL_REVOKED
+        ContributorRefusal.PAUSED, ContributorRefusal.BUDGET_EXHAUSTED, ContributorRefusal.RATE_LIMITED -> AskRefusal.LATER
+        ContributorRefusal.BAD_ARTIFACT, ContributorRefusal.GATE_CLOSED, ContributorRefusal.BAD_REQUEST -> AskRefusal.REFUSED
+        ContributorRefusal.QUARANTINE_UNCONFIGURED -> AskRefusal.UNCONFIGURED
+        else -> AskRefusal.UNREACHABLE
+    }
+
+    /**
+     * The dasher's choices as the server's items: confirmations only for rows [shown] as confirmable (each slot's public
+     * hash, sorted, at most [ContributorRequests.MAX_GATE_ITEMS]) and role tags for slots of the skeleton.
+     */
+    private fun choices(
+        item: UiSkeletonDto,
+        confirmed: Set<String>,
+        roles: Map<String, ContributorRole>,
+        shown: ScreenReview,
+    ): Pair<List<Confirmation>, List<Pair<String, ContributorRole>>> {
+        val slots = ContributorSlots.slots(item).associateBy { it.id }
+        val confirmable = shown.rows.filter { it.confirmable }.map { it.slot }.toSet()
+        val confirmations = confirmed
+            .filter { it in confirmable }
+            .mapNotNull { slot -> slots[slot]?.slot?.h?.let { Confirmation(slot, it) } }
+            .sortedBy { it.slot }
+            .take(ContributorRequests.MAX_GATE_ITEMS)
+        val tags = roles.filterKeys { it in slots }.toSortedMap().toList()
+            .take(ContributorRequests.MAX_REVIEW_ITEMS - confirmations.size)
+        return confirmations to tags
+    }
 
     /** Drops the candidate and its words; nothing is sent. */
     suspend fun delete(id: String) = queue.remove(id)

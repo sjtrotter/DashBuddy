@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,7 +44,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.census.contract.KindClassifier
 import cloud.trotter.census.contract.contributor.ContributorRole
 import cloud.trotter.census.contract.contributor.ContributorSlots
+import cloud.trotter.census.contract.contributor.QuarantineNote
 import cloud.trotter.census.contract.contributor.SlotClass
+import cloud.trotter.log.gig.core.data.census.contributor.AskRefusal
 import cloud.trotter.log.gig.core.data.census.contributor.ClassesState
 import cloud.trotter.log.gig.core.data.census.contributor.ReviewRow
 import cloud.trotter.log.gig.core.data.census.contributor.SendOutcome
@@ -53,7 +56,8 @@ import cloud.trotter.log.gig.core.data.census.contributor.SlotValue
  * #1626: one screen under review, opened from Census > Screen reviews (and its notification after a shift). The rows
  * are the outbound skeleton, in the census server's slot order: each one says what leaves the phone. Customer and
  * personal data the phone can detect is covered before this screen exists; a constant slot shows its word, which the
- * dasher may confirm as the app's own wording; any row may get a label. Send, Delete, and (#1627) Ask the developer.
+ * dasher may confirm as the app's own wording; any row may get a label. Send, Delete, and (#1627) Ask the developer,
+ * which opens [AskDeveloperSheet] and sends the same outline to the developer's quarantine.
  */
 @Composable
 fun ContributorReviewScreen(onBack: () -> Unit, viewModel: ContributorReviewViewModel = hiltViewModel()) {
@@ -65,10 +69,15 @@ fun ContributorReviewScreen(onBack: () -> Unit, viewModel: ContributorReviewView
         onRole = viewModel::setRole,
         onSend = viewModel::send,
         onDelete = viewModel::delete,
+        onAskDeveloper = viewModel::ask,
     )
 }
 
-/** Stateless (Compose tests and screenshots render it). [onAskDeveloper] is the #1627 seam: null shows no button. */
+/**
+ * Stateless apart from whether the Ask the developer sheet is open (Compose tests and screenshots render it).
+ * [onAskDeveloper] null shows no Ask the developer button. The button and its sheet show only while the review is
+ * ready, which needs a standing grant.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContributorReviewContent(
@@ -78,9 +87,14 @@ fun ContributorReviewContent(
     onRole: (String, ContributorRole?) -> Unit,
     onSend: () -> Unit,
     onDelete: () -> Unit,
-    onAskDeveloper: (() -> Unit)? = null,
+    onAskDeveloper: ((QuarantineNote?) -> Unit)? = null,
 ) {
-    val reviewing = !state.shiftLive && (state.phase == ReviewPhase.READY || state.phase == ReviewPhase.SENDING)
+    val reviewing = !state.shiftLive &&
+        (state.phase == ReviewPhase.READY || state.phase == ReviewPhase.SENDING || state.phase == ReviewPhase.ASKING)
+    var asking by rememberSaveable { mutableStateOf(false) }
+    if (asking && onAskDeveloper != null && reviewing && state.canAsk) {
+        AskDeveloperSheet(onSend = { note -> asking = false; onAskDeveloper(note) }, onDismiss = { asking = false })
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -92,7 +106,9 @@ fun ContributorReviewContent(
                 },
             )
         },
-        bottomBar = { if (reviewing) ReviewButtons(state, onSend, onDelete, onAskDeveloper) },
+        bottomBar = {
+            if (reviewing) ReviewButtons(state, onSend, onDelete, onAskDeveloper?.let { { asking = true } })
+        },
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
             val message = phaseMessage(state)
@@ -122,6 +138,10 @@ fun ContributorReviewContent(
 @Composable
 private fun phaseMessage(state: ReviewUiState): String? = when {
     state.phase == ReviewPhase.SENT -> stringResource(R.string.census_review_screen_sent)
+    state.phase == ReviewPhase.ASKED -> stringResource(
+        if (state.askUnconfirmed) R.string.census_review_screen_asked_unconfirmed else R.string.census_review_screen_asked,
+        endDay(state.askedExpiresDay),
+    )
     state.phase == ReviewPhase.DELETED -> stringResource(R.string.census_review_screen_deleted)
     state.phase == ReviewPhase.NOT_ALLOWED -> stringResource(R.string.census_review_screen_not_allowed)
     state.phase == ReviewPhase.NOT_FOUND -> stringResource(R.string.census_review_screen_gone)
@@ -148,6 +168,7 @@ private fun ReviewHeader(state: ReviewUiState) {
                 SendOutcome.UNREACHABLE -> add(R.string.census_review_screen_send_unreachable)
                 else -> Unit
             }
+            askFailureNote(state.askFailure)?.let(::add)
         }
         notes.forEach {
             Text(
@@ -232,7 +253,13 @@ private fun ReviewButtons(state: ReviewUiState, onSend: () -> Unit, onDelete: ()
         ) {
             TextButton(onClick = onDelete, enabled = idle) { Text(stringResource(R.string.census_review_screen_delete)) }
             if (onAskDeveloper != null) {
-                TextButton(onClick = onAskDeveloper, enabled = idle) { Text(stringResource(R.string.census_review_screen_ask)) }
+                TextButton(onClick = onAskDeveloper, enabled = state.canAsk, modifier = Modifier.testTag(TAG_ASK_BUTTON)) {
+                    Text(
+                        stringResource(
+                            if (state.phase == ReviewPhase.ASKING) R.string.census_review_screen_sending else R.string.census_review_screen_ask,
+                        ),
+                    )
+                }
             }
             Button(onClick = onSend, enabled = state.canSend) {
                 Text(
@@ -243,6 +270,15 @@ private fun ReviewButtons(state: ReviewUiState, onSend: () -> Unit, onDelete: ()
             }
         }
     }
+}
+
+/** #1627: the line an Ask the developer that sent nothing leaves on the screen. */
+private fun askFailureNote(reason: AskRefusal?): Int? = when (reason) {
+    AskRefusal.LATER -> R.string.census_review_ask_later
+    AskRefusal.UNREACHABLE -> R.string.census_review_ask_unreachable
+    AskRefusal.REFUSED -> R.string.census_review_ask_refused
+    AskRefusal.UNCONFIGURED -> R.string.census_review_ask_unconfigured
+    AskRefusal.NOT_ALLOWED, AskRefusal.NOT_FOUND, AskRefusal.INSTALL_REVOKED, null -> null
 }
 
 /** What the row shows: the word on a constant slot, otherwise what is sent in place of the text. */

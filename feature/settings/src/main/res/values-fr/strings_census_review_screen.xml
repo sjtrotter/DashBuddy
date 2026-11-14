@@ -64,4 +64,20 @@
     <string name="census_review_role_customer_info">Infos du client</string>
     <string name="census_review_role_store_name">Nom du magasin</string>
     <string name="census_review_role_other">Autre</string>
+    <!-- #1627 : Interroger le développeur. -->
+    <string name="census_review_ask_title">Interroger le développeur</string>
+    <string name="census_review_ask_body">Envoie au développeur le schéma de cet écran tel que les lignes le montrent, avec vos confirmations et étiquettes. Les lignes masquées restent masquées. Un mot confirmé part sous forme de code à sens unique, sauf si d\'autres livreurs l\'ont aussi confirmé. Seul le développeur peut l\'ouvrir, et le serveur du recensement le supprime après 3 jours.</string>
+    <string name="census_review_ask_note">Note (facultative)</string>
+    <string name="census_review_ask_note_none">Pas de note</string>
+    <string name="census_review_ask_note_customer">Peut montrer les informations d\'un client</string>
+    <string name="census_review_ask_note_mine">Peut montrer mes propres informations</string>
+    <string name="census_review_ask_note_unsure">Je ne sais pas quel est cet écran</string>
+    <string name="census_review_ask_send">Envoyer</string>
+    <string name="census_review_ask_cancel">Annuler</string>
+    <string name="census_review_screen_asked">Envoyé au développeur. Le serveur du recensement le supprime avant le %1$s.</string>
+    <string name="census_review_screen_asked_unconfirmed">Envoyé au développeur, mais gig.log n\'a pas pu confirmer que le serveur a gardé le même schéma que celui de cet écran. Le serveur du recensement le supprime avant le %1$s.</string>
+    <string name="census_review_ask_later">Le serveur du recensement est en pause ou les questions au développeur d\'aujourd\'hui sont épuisées. Rien n\'a été envoyé ; réessayez plus tard.</string>
+    <string name="census_review_ask_unreachable">gig.log n\'a pas pu joindre le serveur du recensement. Rien n\'a été envoyé ; réessayez plus tard.</string>
+    <string name="census_review_ask_refused">Le serveur du recensement n\'a pas pu accepter cet écran, donc rien n\'a été envoyé au développeur.</string>
+    <string name="census_review_ask_unconfigured">Le serveur du recensement ne peut pas encore recevoir de questions pour le développeur, donc rien n\'a été envoyé.</string>
 </resources>

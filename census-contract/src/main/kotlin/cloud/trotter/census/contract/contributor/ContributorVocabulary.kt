@@ -43,6 +43,21 @@ enum class ContributorRole(val wire: String) {
 }
 
 /**
+ * The optional note on an "Ask the developer" item, from the census server's closed list (census#81, `POST
+ * /v1/contributor/quarantine`). A note says why the contributor asked; it carries no screen text.
+ */
+enum class QuarantineNote(val wire: String) {
+    MIGHT_CONTAIN_CUSTOMER("might_contain_customer"),
+    MIGHT_CONTAIN_MY_INFO("might_contain_my_info"),
+    UNSURE_WHAT_SCREEN("unsure_what_screen"),
+    ;
+
+    companion object {
+        fun fromWire(wire: String): QuarantineNote? = entries.firstOrNull { it.wire == wire }
+    }
+}
+
+/**
  * A slot's class from the day's release (census#80/#81, `POST /v1/contributor/classes`). [UNKNOWN] is never on the
  * wire: the server leaves a slot out below k installs, and the phone reads every slot it did not get back as unknown.
  */

@@ -64,4 +64,20 @@
     <string name="census_review_role_customer_info">Customer info</string>
     <string name="census_review_role_store_name">Store name</string>
     <string name="census_review_role_other">Other</string>
+    <!-- #1627: Ask the developer. -->
+    <string name="census_review_ask_title">Ask the developer</string>
+    <string name="census_review_ask_body">Sends the developer this screen\'s outline as the rows show it, with your confirmations and labels. Covered rows stay covered. A confirmed word goes as its one-way code unless other drivers have confirmed it too. Only the developer can open it, and the census server deletes it after 3 days.</string>
+    <string name="census_review_ask_note">Note (optional)</string>
+    <string name="census_review_ask_note_none">No note</string>
+    <string name="census_review_ask_note_customer">Might show a customer\'s details</string>
+    <string name="census_review_ask_note_mine">Might show my own details</string>
+    <string name="census_review_ask_note_unsure">Not sure what this screen is</string>
+    <string name="census_review_ask_send">Send</string>
+    <string name="census_review_ask_cancel">Cancel</string>
+    <string name="census_review_screen_asked">Sent to the developer. The census server deletes it by %1$s.</string>
+    <string name="census_review_screen_asked_unconfirmed">Sent to the developer, but gig.log couldn\'t confirm that the server kept the same outline this screen showed. The census server deletes it by %1$s.</string>
+    <string name="census_review_ask_later">The census server is paused or today\'s questions for the developer are used up. Nothing was sent; try again later.</string>
+    <string name="census_review_ask_unreachable">gig.log couldn\'t reach the census server. Nothing was sent; try again later.</string>
+    <string name="census_review_ask_refused">The census server couldn\'t take this screen, so nothing was sent to the developer.</string>
+    <string name="census_review_ask_unconfigured">The census server can\'t take questions for the developer yet, so nothing was sent.</string>
 </resources>

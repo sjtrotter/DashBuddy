@@ -475,4 +475,29 @@ class CensusApiTest {
         respond(200, "{\"slots\":[{\"slot\":\"root/0/text; drop\",\"class\":\"constant\"}]}")
         assertEquals(ContributorCall.Refused(ContributorRefusal.INVALID_RESPONSE), api.classes(credential, body))
     }
+
+    @Test fun `the quarantine call sends the given bytes and reads only the receipt`() = runTest {
+        val body = "{\"artifact\":\"e30\"}".toByteArray(Charsets.UTF_8)
+        val sha = "ab".repeat(32)
+        respond(200, "{\"status\":\"quarantined\",\"expiresDay\":\"2026-11-17\",\"artifactSha256\":\"$sha\"}")
+        assertEquals(ContributorCall.Ok(QuarantineReceipt("2026-11-17", sha)), api.quarantine(credential, body))
+        val request = requireNotNull(server.takeRequest(1, TimeUnit.SECONDS))
+        assertEquals(ContributorTransport.QUARANTINE_PATH, request.url.encodedPath)
+        assertArrayEquals(body, requireNotNull(request.body).toByteArray())
+
+        respond(200, "{\"status\":\"quarantined\",\"expiresDay\":\"soon\",\"artifactSha256\":\"$sha\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.INVALID_RESPONSE), api.quarantine(credential, body))
+        respond(200, "{\"status\":\"quarantined\",\"expiresDay\":\"2026-11-17\",\"artifactSha256\":\"ABC\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.INVALID_RESPONSE), api.quarantine(credential, body))
+        respond(409, "{\"error\":\"gate_closed\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.GATE_CLOSED), api.quarantine(credential, body))
+        respond(422, "{\"error\":\"bad_artifact\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.BAD_ARTIFACT), api.quarantine(credential, body))
+        respond(503, "{\"error\":\"quarantine_unconfigured\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.QUARANTINE_UNCONFIGURED), api.quarantine(credential, body))
+        respond(503, "{\"error\":\"paused\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.PAUSED, 17), api.quarantine(credential, body))
+        respond(403, "{\"error\":\"grant_required\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.GRANT_REQUIRED), api.quarantine(credential, body))
+    }
 }

@@ -7,11 +7,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import cloud.trotter.census.contract.contributor.ContributorRole
+import cloud.trotter.census.contract.contributor.QuarantineNote
 import cloud.trotter.census.contract.contributor.SlotClass
 import cloud.trotter.log.gig.core.data.census.contributor.ClassesState
 import cloud.trotter.log.gig.core.data.census.contributor.ReviewRow
@@ -21,13 +23,19 @@ import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
 import cloud.trotter.log.gig.core.designsystem.time.LocalNowProvider
 import cloud.trotter.log.gig.domain.census.contributor.ContributorEntry
 import cloud.trotter.log.gig.domain.census.contributor.InvitationAnswer
+import cloud.trotter.log.gig.feature.settings.AskDeveloperContent
 import cloud.trotter.log.gig.feature.settings.ContributorContent
 import cloud.trotter.log.gig.feature.settings.ContributorReviewContent
 import cloud.trotter.log.gig.feature.settings.ContributorUiState
 import cloud.trotter.log.gig.feature.settings.R as SettingsR
 import cloud.trotter.log.gig.feature.settings.ReviewPhase
 import cloud.trotter.log.gig.feature.settings.ReviewUiState
+import cloud.trotter.log.gig.feature.settings.TAG_ASK_BUTTON
+import cloud.trotter.log.gig.feature.settings.TAG_ASK_CANCEL
+import cloud.trotter.log.gig.feature.settings.TAG_ASK_SEND
+import cloud.trotter.log.gig.feature.settings.TAG_ASK_SHEET
 import cloud.trotter.log.gig.feature.settings.WaitingReview
+import cloud.trotter.log.gig.feature.settings.noteTag
 import cloud.trotter.log.gig.feature.settings.confirmTag
 import cloud.trotter.log.gig.feature.settings.roleTag
 import cloud.trotter.log.gig.feature.settings.rowTag
@@ -47,7 +55,8 @@ import java.time.ZoneOffset
  * #1626: the review screen renders the outbound skeleton as rows: a constant slot shows its word and may be confirmed;
  * a varying, regional, unknown or covered slot is greyed with no word and no confirm control; any row takes a label;
  * Send stays off until something is chosen. The waiting list on Screen reviews turns a screen ready at the UTC day
- * boundary from the clock alone (Reactive UI rules 2 and 6). Every value is fictional.
+ * boundary from the clock alone (Reactive UI rules 2 and 6). #1627: the Ask the developer button, its sheet and the
+ * message after asking. Every value is fictional.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h2000dp-420dpi")
@@ -72,7 +81,11 @@ class ContributorReviewScreenTest {
         ReviewRow("root/5/text", "android.widget.Button", "text", SlotValue.Hashed, SlotClass.UNKNOWN, null),
     )
 
-    private fun show(initial: ReviewUiState, sent: MutableList<ReviewUiState> = mutableListOf()) {
+    private fun show(
+        initial: ReviewUiState,
+        sent: MutableList<ReviewUiState> = mutableListOf(),
+        asked: MutableList<QuarantineNote?>? = null,
+    ) {
         compose.setContent {
             var state by remember { mutableStateOf(initial) }
             GigLogTheme {
@@ -85,6 +98,7 @@ class ContributorReviewScreenTest {
                     onRole = { slot, role -> state = state.copy(roles = if (role == null) state.roles - slot else state.roles + (slot to role)) },
                     onSend = { sent += state },
                     onDelete = {},
+                    onAskDeveloper = asked?.let { list -> { note -> list += note } },
                 )
             }
         }
@@ -164,5 +178,51 @@ class ContributorReviewScreenTest {
         compose.mainClock.advanceTimeBy(2_000)
         compose.onNodeWithText(string(SettingsR.string.census_review_waiting_ready)).assertExists()
         compose.onNodeWithText(string(SettingsR.string.census_review_waiting_tomorrow)).assertDoesNotExist()
+    }
+
+    @Test fun `the Ask the developer sheet says what goes, offers the fixed notes, and sends the one picked`() {
+        val picked = mutableListOf<QuarantineNote?>()
+        var cancelled = 0
+        compose.setContent {
+            GigLogTheme { AskDeveloperContent(onSend = { picked += it }, onCancel = { cancelled++ }) }
+        }
+        compose.onNodeWithText(string(SettingsR.string.census_review_ask_body)).assertExists()
+        compose.onNodeWithText("Only the developer can open it", substring = true).assertExists()
+        compose.onNodeWithText("deletes it after 3 days", substring = true).assertExists()
+        compose.onNodeWithText("Covered rows stay covered", substring = true).assertExists()
+        (listOf<QuarantineNote?>(null) + QuarantineNote.entries).forEach { compose.onNodeWithTag(noteTag(it)).assertExists() }
+        compose.onNodeWithTag(noteTag(null)).assertIsSelected()
+        compose.onNodeWithTag(TAG_ASK_SEND).performClick()
+        compose.onNodeWithTag(noteTag(QuarantineNote.MIGHT_CONTAIN_CUSTOMER)).performClick()
+        compose.onNodeWithTag(noteTag(QuarantineNote.MIGHT_CONTAIN_CUSTOMER)).assertIsSelected()
+        compose.onNodeWithTag(TAG_ASK_SEND).performClick()
+        compose.onNodeWithTag(TAG_ASK_CANCEL).performClick()
+        assertEquals(listOf(null, QuarantineNote.MIGHT_CONTAIN_CUSTOMER), picked)
+        assertEquals(1, cancelled)
+    }
+
+    @Test fun `with no Ask the developer handler there is no button`() {
+        show(ready())
+        compose.onNodeWithTag(TAG_ASK_BUTTON).assertDoesNotExist()
+    }
+
+    @Test fun `on a ready review the Ask the developer button opens the sheet`() {
+        show(ready(), asked = mutableListOf())
+        compose.onNodeWithTag(TAG_ASK_BUTTON).assertIsEnabled()
+        compose.onNodeWithTag(TAG_ASK_BUTTON).performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag(TAG_ASK_SHEET).assertExists()
+    }
+
+    @Test fun `while a Send runs the Ask the developer button is off`() {
+        show(ready().copy(phase = ReviewPhase.SENDING), asked = mutableListOf())
+        compose.onNodeWithTag(TAG_ASK_BUTTON).assertIsNotEnabled()
+    }
+
+    @Test fun `after asking the screen says it went to the developer and when the server deletes it`() {
+        show(ReviewUiState(phase = ReviewPhase.ASKED, askedExpiresDay = "2026-11-17"), asked = mutableListOf())
+        compose.onNodeWithText("Sent to the developer", substring = true).assertExists()
+        compose.onNodeWithText("2026", substring = true).assertExists()
+        compose.onNodeWithTag(TAG_ASK_BUTTON).assertDoesNotExist()
     }
 }
