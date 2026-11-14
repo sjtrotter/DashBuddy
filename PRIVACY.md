@@ -199,7 +199,7 @@ traffic for every host with no exception, and `HttpsEndpointGuardTest` checks th
 | Google MPG search | manual button press | Google in the user's browser (`VehicleCard`) | entered vehicle year, make and model plus `mpg`; browser cookies/account settings apply |
 | Text-to-speech (`TtsEffectHandler`) | used for spoken offers | your phone's text-to-speech engine | the offer sentence; the engine may use the network under its own terms |
 | UNKNOWN screen/notification census (every build: Play, sideload and debug, #1620; see "The census opt-in" and "When the census uploads" below) | off | gig.log's census server, built into the app (§2.1); turning the census on enrols the install | a **skeleton** of an admitted UNKNOWN screen or platform notification: screen view classes/ids, or a grammar-bounded notification channel id and five filtered slots; text slots carry coarse kinds or hashes under a k-anonymity gate, never source text — see `docs/adr/ADR-0011-unknown-census-privacy-model.md` — plus daily recognition-health counts per platform and app version, sent with this install's ID. Once the server lists `uinode.skeleton.v2` (and `notification.skeleton.v2`) as accepted, a skeleton also carries: for a money figure, 12-hour clock time, distance, minute count or item count, its format with the digits removed, from a closed list (`$#.##`, `#:## AM/PM`, `#.# mi`, `# min(s)`, `# item(s)`; AM and PM are one class, and the value never leaves); each node's click and visibility flags; and a notification's action labels as filtered slots of the same kinds as any text slot (a hash of a short chrome-like label, a coarse kind such as `digits` or `mixed`, a format template, or `withheld`; never the label). The skeleton's day is the UTC day. At most one skeleton of each layout and format is kept a UTC day, and only from the delivery apps the census choices cover (below). |
-| Screen reviews, the contributor tier (every build, #1625; see "Screen reviews" below) | off; offered only by invitation | the same census server, under this install's census ID | to accept, one signed `POST /v1/contributor/grant` whose whole body is `{"eligible":true}`: a yes, never a count; later a bodyless signed `GET` of the grant's state. No review data is sent by this version (#1626 builds the reviews) |
+| Screen reviews, the contributor tier (every build, #1625; see "Screen reviews" below) | off; offered only by invitation | the same census server, under this install's census ID | to accept, one signed `POST /v1/contributor/grant` whose whole body is `{"eligible":true}`: a yes, never a count; later a bodyless signed `GET` of the grant's state before each review session. Reviewing a screen (#1626), only while the grant stands, each request signed and sent under the census upload lock: `POST /v1/contributor/classes` (the screen's variant: its public fingerprint, kind, delivery-app version, hash domain, filter revision and layout id, and the slot ids of its own skeleton, never a value), `POST /v1/contributor/review` (the variant, each confirmed slot with that slot's public census hash, and each label as a slot and a role from the server's closed list; never a word or a value), `POST /v1/contributor/gates` (the variant and the confirmed slot and hash pairs), and `POST /v1/contributor/words` (a confirmed word in plain text, with its slot and hash, only after `gates` answered open for that exact slot and hash). Ask the developer is not built in this version |
 | Share UNKNOWN captures (debug build only, §2.1; `censusShareCaptures`, trusted installs) | off | the same census server, only while its operator has marked this install trusted | the **text** of UNKNOWN screens (`CensusUploadWorker.uploadEnvelopes`). An UNKNOWN screen gets no rule redaction — only the marker and address-block backstops (§3) — so a capture can still contain customer details, and the operator can read them. The switch says exactly this (`developer_settings_census_share_captures_explainer`). |
 | Bug-report export | manual | a folder/provider the user chooses (`DataExportViewModel.exportLog`) | INFO+ milestones checked against known sensitive markers before writing; matches are replaced, but unknown sensitive details can escape filtering. Then the consent receipts (§8). A cloud provider may upload the file. gig.log does not deliver it to the developer. |
 | CSV export | manual | a folder/provider the user chooses (`DataExportViewModel` → `CsvExporter`) | all recorded sessions and deliveries, including merchant names and which saved vehicle drove each dash (its id and label — the dasher's own text), plus deductible miles per vehicle per tax year and logged expenses and fill-ups (amounts, categories, the dasher’s own labels, gallons and the app's tracked miles at the fill-up, plus the saved vehicle id and label for car-care and gas receipts), including voided entries. No customer data or customer/address hashes. A cloud provider may upload the files. |
@@ -328,7 +328,7 @@ outline as the review shows it, which only the developer can open and the server
 gig.log sends a yes and never the counts, and the server gives a 30-day reviewer permission and, while the dasher
 reviews, keeps a log of which screens gig.log asked it about, tied to that permission, for up to 30 days; they can
 stop at any time; their agreement with a delivery company is between them and that company. The screen also says
-this version asks for the permission only. Accept (`CensusContributor.accept`) runs under the census upload lock: a
+Ask the developer is not in this version. Accept (`CensusContributor.accept`) runs under the census upload lock: a
 waiting deletion request is sent first and, while it waits, nothing else is; with no enrolled census ID nothing is
 sent. It records a consent receipt (§8), then sends the one request. A grant is stored with its install ID, its UTC
 days and the phone's time it arrived, in its own store (`census_contributor`, excluded from backup and transfer). A
@@ -348,9 +348,46 @@ answer, the census turned off and on, a new census ID, a deletion request) ends 
 watching; an answer also removes it in the same write: the phone never
 stores it, so nothing is sent under it, and it lapses on the server after 30 days (the server offers no way for the
 phone to give a grant back); every end clears the reviews waiting on the phone
-(`PendingContributorReviews`, which holds none until #1626); a clear that fails is marked in the record and run again
+(`PendingContributorReviews`, the review queue below); a clear that fails is marked in the record and run again
 at the next start, and no contributor upload runs until it succeeds. An ended grant is not renewed by itself: an expired one
 is offered again after a later shift. The grant request is not listed under "What gig.log sent".
+
+**Reviewing a screen** (#1626, ADR-0011 §15). While a grant is stored, the skeleton builder also keeps, for an
+UNKNOWN screen it builds as `uinode.skeleton.v2`, the words of the slots the skeleton HASHED (text the census filter
+let through as possible app wording), keyed by the census server's slot id (`SkeletonBuilder.reviewWords`,
+`ReviewWords`). A word is kept only if it also passes the review's own cover (`ReviewWordCover`): no customer marker,
+sensitive marker, mask, name or other PII shape, digit or `@`, no greeting, account or place label ("Hi, …",
+"Account …", "… in <Place>"), no note or message, and no label carrying a value after a colon; and only if the
+rules-independent address-block backstop did not select its node. A withheld, coarse or format slot has no word, so no
+other screen text is kept. When the census sink queues that skeleton for upload (the UTC day's first of its layout),
+the review queue (`ContributorReviewQueue`) takes it as a candidate, after checking `CensusContributor.mayUpload`: at
+most 3 new layouts a UTC day, one candidate per layout, at most 6 waiting, dropped after 7 days, and a layout sent or
+deleted is not taken again that day. The candidate is stored in `filesDir/census/review/queue.json` (inside the
+census directory every backup and transfer excludes) in its outbound form only: the skeleton item exactly as spooled
+(hashes, kinds, formats, `withheld`), its layout id, the UTC days it was built and stored by the server, and the layout
+ids sent or deleted today. The words stay in the app's memory only: never written to storage, logged or put in saved
+screen state, and gone when gig.log's process ends; the review then says the words are gone and offers labels only.
+The upload worker tells the queue which skeletons the server stored (accepted or duplicate). A screen opens for review
+only from the UTC day after the server stored it, because the server's slot classes for a new layout arrive with the
+next day's release; before that, Screen reviews says "Ready tomorrow". After a shift ends, a notification on the
+"Census" channel says screens are ready (`ContributorReviewNotifier`, at most once a UTC day, only with a standing
+grant); Screen reviews lists at most 3 ready screens. The review screen (`ContributorReviewScreen`) first reads the
+grant's state (`refresh`), then asks the server for the classes of that screen's own slots (`classes`). It shows one
+row per slot, in the server's order, with what that slot sends: a word only for a hashed slot the server calls
+`constant` whose word the phone still holds; for every other slot, what goes in place of the text (covered, a format,
+a number or a kind) or that the slot changes between screens, differs by area or store, or has not been seen by
+enough drivers, greyed and never openable. The dasher may confirm a shown word as the app's own wording and give any
+row a label from the server's closed list (total pay, tip, base pay, deadline, distance, item count, customer info,
+store name, other); a label never carries the field's value. **Send** (`ContributorReviewer.send`) checks
+`mayUpload` first and again before every request, under the census upload lock: `review` with the confirmations (each
+slot's public census hash, never the word) and the labels; then `gates` for the confirmed slot and hash pairs; then
+`words` only for a pair the server reported open (at least 2 independent phones confirmed it and enough phones see
+it), each word checked on the phone to hash to its slot's hash. A word whose gate is closed is held in memory and its
+gate asked again at the start of the next review session; a process death drops it, and the server keeps the
+confirmation. **Delete** drops the candidate and its words and sends nothing. A refused review (the server paused, a
+daily quota spent, no network) keeps the candidate; `403 grant_required` or `401 revoked` sends nothing more and runs
+the grant's state read. Review requests are not listed under "What gig.log sent". The INFO log says only how many
+confirmations, labels and accepted words went, never a slot, hash or word.
 
 Exports replace existing files with the same names in the chosen folder. Exported files survive uninstall and remain until deleted through that provider. “No direct gig.log upload” does not mean that a selected cloud folder keeps the files on the phone.
 
@@ -524,6 +561,10 @@ identity export. Vehicle/default resets preserve these learned preferences.
 - "What gig.log sent" keeps its summary of the census requests the server read for 7 days, at most 60 of them, in
   `filesDir/census/sent.json` (§6): counts and delivery apps only, never uploaded, excluded from backup and transfer.
   A census deletion request (its time, state and the server's confirmation) is kept in the developer-settings store.
+- The screen-review queue (#1626, `filesDir/census/review/queue.json`): each waiting screen's skeleton exactly as it
+  went to the census upload, its layout id and its days, and the layout ids sent or deleted today; at most 6 screens,
+  each dropped after 7 days, on Send or Delete, and all of it when the reviewer permission ends. Never uploaded as a
+  file, excluded from backup and transfer. The words a review may show are held in memory only.
 - The screen-review record (#1625, `ContributorDataSource`, `datastore/census_contributor.preferences_pb`): the
   invitation answer and its time, when the invitation was offered, the reviewer grant (census install ID, the server's
   granted and expiry days, the time it arrived), why the last one ended, the last refused request and the decision's
@@ -575,6 +616,15 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r25 (2026-11-14)** — §6: reviewing a screen (#1626): while a reviewer permission is stored, the words of the slots
+  a v2 skeleton hashed are kept in memory only, after the review's own cover (customer, sensitive and address
+  backstops, the dasher's greeting, account and place labels, notes, labelled values, digits); a review candidate is
+  taken only after `mayUpload`, at most 3 new layouts a UTC day, and stored only as its outbound skeleton; a screen opens
+  for review the UTC day after the server stored it; a notification after a shift says screens are ready; the classes,
+  review, gates and words requests and what each carries; a word leaves only through `words` after its gate opens;
+  Delete sends nothing. §7: the review queue file. The in-app Privacy page's Screen reviews section and the reviewer
+  screen's note now describe the review and say Ask the developer is not in this version. Receipts created under r24
+  retain that revision.
 - **r24 (2026-11-13)** — §6: screen reviews, the contributor tier (#1625): eligibility worked out on the phone (census
   on, a census ID 8 UTC days old, a shift on 3 of the last 7 days, 2 ended shifts; recognition is not an input), only a yes
   sent (`{"eligible":true}`), never the counts; the invitation only when a shift ends, once until answered, Not now for
