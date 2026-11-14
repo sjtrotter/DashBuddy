@@ -72,6 +72,9 @@ class GigLogApplication : Application(), Configuration.Provider {
     lateinit var contributorInvitationNotifier: cloud.trotter.log.gig.notice.ContributorInvitationNotifier
 
     @Inject
+    lateinit var contributorReviewNotifier: cloud.trotter.log.gig.notice.ContributorReviewNotifier
+
+    @Inject
     lateinit var jsonRuleInterpreter: JsonRuleInterpreter
 
     @Inject
@@ -262,6 +265,8 @@ class GigLogApplication : Application(), Configuration.Provider {
         // to end.
         censusContributor.watch()
         contributorInvitationNotifier.start()
+        // #1626: screens ready for review are announced after a shift too.
+        contributorReviewNotifier.start()
 
         Timber.i("Background workers verified and scheduled.")
     }

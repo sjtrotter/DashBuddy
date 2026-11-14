@@ -3,6 +3,7 @@ package cloud.trotter.log.gig.domain.capture
 import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.census.contract.NotifTextField
 import cloud.trotter.census.contract.SkeletonSchema
+import cloud.trotter.log.gig.domain.census.contributor.ReviewWords
 
 /**
  * One census item the publisher hands the sink (#1146). Carries NO timestamp — the skeleton's
@@ -25,7 +26,14 @@ data class CensusRecord(
      * never spooled or sent. Null for a screen, whose layout the skeleton itself carries.
      */
     val presentFields: Set<NotifTextField>? = null,
-)
+    /**
+     * #1626: the words a contributor review may show, collected only while [CensusSink.collectsReviewWords] is true.
+     * Held in memory only: never spooled, written or sent with the record ([ReviewWords]).
+     */
+    val reviewWords: ReviewWords? = null,
+) {
+    override fun toString(): String = "CensusRecord(platform=$platform, itemBytes=$itemBytes, [redacted])"
+}
 
 /**
  * The census sink seam, mirroring [CaptureBus] (#1146). `isEnabled == false` is a STRUCTURAL
@@ -35,5 +43,7 @@ interface CensusSink {
     val isEnabled: Boolean
     /** Non-blocking snapshot of the last server policy; no policy means screens only. */
     val acceptedSchemaIds: Set<String> get() = setOf(SkeletonSchema.SCHEMA_ID)
+    /** #1626: non-blocking snapshot; true while a contributor review could take this frame, so the builder keeps its words. */
+    val collectsReviewWords: Boolean get() = false
     fun offer(record: CensusRecord): Boolean
 }

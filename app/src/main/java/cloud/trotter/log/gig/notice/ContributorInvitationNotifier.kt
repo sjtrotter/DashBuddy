@@ -53,19 +53,12 @@ class ContributorInvitationNotifier internal constructor(
      * Waits [SETTLE_MILLIS] after a shift ends, so the analytics read model has folded the shift that just ended
      * before eligibility is read; a shift that starts meanwhile cancels the wait.
      */
-    internal suspend fun watch(shiftLive: Flow<Boolean>) {
-        var running = false
-        shiftLive.collectLatest { live ->
-            val ended = running && !live
-            running = live
-            if (!ended) return@collectLatest
-            delay(SETTLE_MILLIS)
-            invite()?.let { record ->
-                try {
-                    post(record.ended == ContributorEnd.EXPIRED)
-                } catch (t: Throwable) {
-                    Timber.tag(TAG).e(t, "Census review invitation could not be posted (#1625)")
-                }
+    internal suspend fun watch(shiftLive: Flow<Boolean>) = afterShiftEnds(shiftLive, SETTLE_MILLIS) {
+        invite()?.let { record ->
+            try {
+                post(record.ended == ContributorEnd.EXPIRED)
+            } catch (t: Throwable) {
+                Timber.tag(TAG).e(t, "Census review invitation could not be posted (#1625)")
             }
         }
     }
@@ -111,5 +104,20 @@ class ContributorInvitationNotifier internal constructor(
                 .build()
             manager.notify(NOTIFICATION_ID, notification)
         }
+    }
+}
+
+/**
+ * #1625/#1626: runs [block] [settleMillis] after the last running shift ends, never at app start (only a running-to-ended
+ * change counts); a shift that starts meanwhile cancels the wait.
+ */
+internal suspend fun afterShiftEnds(shiftLive: Flow<Boolean>, settleMillis: Long, block: suspend () -> Unit) {
+    var running = false
+    shiftLive.collectLatest { live ->
+        val ended = running && !live
+        running = live
+        if (!ended) return@collectLatest
+        delay(settleMillis)
+        block()
     }
 }

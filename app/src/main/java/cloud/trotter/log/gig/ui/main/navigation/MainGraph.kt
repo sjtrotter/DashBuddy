@@ -52,6 +52,8 @@ fun NavGraphBuilder.mainGraph(render: @Composable (route: String, entry: NavBack
                 )
             Screen.VehicleEdit.route ->
                 listOf(navArgument(Screen.VehicleEdit.ARG) { type = NavType.StringType })
+            Screen.CensusReview.route ->
+                listOf(navArgument(Screen.CensusReview.ARG) { type = NavType.StringType })
             else -> emptyList()
         }
         composable(route, arguments = arguments) { entry -> render(route, entry) }

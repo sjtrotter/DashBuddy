@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.feature.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +18,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -35,6 +37,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cloud.trotter.log.gig.core.data.census.contributor.ContributorReviewQueue
 import cloud.trotter.log.gig.core.data.census.contributor.GrantRequestOutcome
 import cloud.trotter.log.gig.core.designsystem.time.rememberNow
 import cloud.trotter.log.gig.domain.census.contributor.ContributorEligibility
@@ -45,7 +48,9 @@ import cloud.trotter.log.gig.domain.census.contributor.ContributorInvitation
 import cloud.trotter.log.gig.domain.census.contributor.GrantRefusal
 import cloud.trotter.log.gig.domain.census.contributor.InvitationAnswer
 import cloud.trotter.log.gig.domain.format.formatMonthDayYear
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
 
 /**
  * #1625: Settings > Data & privacy > Census > Screen reviews, and where the invitation notification opens. The second
@@ -53,11 +58,16 @@ import java.time.LocalDate
  * day and Stop reviewing. Not now and No thanks close the screen.
  */
 @Composable
-fun ContributorScreen(onBack: () -> Unit, viewModel: ContributorViewModel = hiltViewModel()) {
+fun ContributorScreen(
+    onBack: () -> Unit,
+    onOpenReview: (String) -> Unit = {},
+    viewModel: ContributorViewModel = hiltViewModel(),
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     ContributorContent(
         state = state,
         onBack = onBack,
+        onOpenReview = onOpenReview,
         onAccept = viewModel::accept,
         onNotNow = { viewModel.notNow(); onBack() },
         onNoThanks = { viewModel.noThanks(); onBack() },
@@ -84,6 +94,7 @@ fun ContributorContent(
     onNotNow: () -> Unit,
     onNoThanks: () -> Unit,
     onStop: () -> Unit,
+    onOpenReview: (String) -> Unit = {},
 ) {
     // A grant stops working at the start of its expiry day (UTC): the screen says so at that instant, whatever the
     // data layer has caught up to (Reactive UI rule 2: the state holds the anchor, the screen derives the value).
@@ -119,6 +130,7 @@ fun ContributorContent(
                 Spacer(Modifier.height(8.dp))
                 Text(line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
             }
+            if (shown.entry == ContributorEntry.ON) WaitingReviews(shown.waiting, now, onOpenReview)
             Spacer(Modifier.height(8.dp))
             Text(stringResource(R.string.census_review_intro), style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(8.dp))
@@ -147,6 +159,56 @@ fun ContributorContent(
         }
     }
 }
+
+/**
+ * #1626: the screens waiting for review. A screen is ready the UTC day after the server stored it (its slot classes
+ * come from the next day's release), derived here from the clock; at most [ContributorReviewQueue.MAX_PER_DAY] ready
+ * screens are offered at once.
+ */
+@Composable
+private fun WaitingReviews(waiting: List<WaitingReview>, nowMillis: Long, onOpen: (String) -> Unit) {
+    val today = Instant.ofEpochMilli(nowMillis).atZone(ZoneOffset.UTC).toLocalDate()
+    val (ready, later) = waiting.partition { review ->
+        review.uploadedDay?.let { runCatching { LocalDate.parse(it) < today }.getOrNull() } == true
+    }
+    Spacer(Modifier.height(16.dp))
+    Text(
+        stringResource(R.string.census_review_waiting_title),
+        style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.semantics { heading() },
+    )
+    if (waiting.isEmpty()) {
+        Spacer(Modifier.height(4.dp))
+        Text(
+            stringResource(R.string.census_review_waiting_none),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+    ready.take(ContributorReviewQueue.MAX_PER_DAY).forEach { review ->
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.census_review_waiting_row, reviewDay(review.day))) },
+            supportingContent = { Text(stringResource(R.string.census_review_waiting_ready)) },
+            modifier = Modifier.clickable { onOpen(review.id) },
+        )
+    }
+    later.forEach { review ->
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.census_review_waiting_row, reviewDay(review.day))) },
+            supportingContent = {
+                Text(
+                    stringResource(
+                        if (review.uploadedDay == null) R.string.census_review_waiting_upload else R.string.census_review_waiting_tomorrow,
+                    ),
+                )
+            },
+        )
+    }
+}
+
+/** A skeleton's UTC day as the dasher reads dates; the raw day if it cannot be read. */
+private fun reviewDay(day: String): String = runCatching { formatMonthDayYear(LocalDate.parse(day)) }.getOrDefault(day)
 
 /**
  * With a live grant, Stop reviewing. Otherwise, while Accept is open: No thanks, Not now and Accept, or Accept alone

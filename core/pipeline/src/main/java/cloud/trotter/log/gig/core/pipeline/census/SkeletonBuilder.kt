@@ -13,6 +13,9 @@ import cloud.trotter.census.contract.TextFold
 import cloud.trotter.census.contract.TextSlot
 import cloud.trotter.census.contract.UiSkeletonDto
 import cloud.trotter.census.contract.WireStrings
+import cloud.trotter.census.contract.contributor.ContributorSlots
+import cloud.trotter.log.gig.core.pipeline.UnknownAddressBackstop
+import cloud.trotter.log.gig.domain.census.contributor.ReviewWords
 import cloud.trotter.log.gig.domain.model.accessibility.UiNode
 import cloud.trotter.log.gig.domain.pipeline.UiTextBounds
 import cloud.trotter.log.gig.domain.privacy.PiiShapes
@@ -107,7 +110,17 @@ object SkeletonBuilder {
          * [malformedClass] counts nodes whose class was malformed and emitted absent (reviews AD5, AE1) —
          * a counter #1146's publisher can read; never text.
          */
-        data class Built(val skeleton: UiSkeletonDto, val json: String, val itemBytes: Int, val malformedClass: Int = 0) : Outcome
+        data class Built(
+            val skeleton: UiSkeletonDto,
+            val json: String,
+            val itemBytes: Int,
+            val malformedClass: Int = 0,
+            /**
+             * #1626: the words a contributor review may show, by slot id; only when the caller asked for them
+             * ([collectWords]) on a v2 item. In memory only ([ReviewWords] prints none).
+             */
+            val reviewWords: ReviewWords? = null,
+        ) : Outcome
         data class Refused(val reason: Refusal) : Outcome
     }
 
@@ -163,7 +176,8 @@ object SkeletonBuilder {
         platform: Platform,
         day: LocalDate,
         version: SkeletonVersion = SkeletonVersion.V1,
-    ): Outcome = outcome(tree, windowTitle, meta, platform, day, sensitive = null, version = version)
+        collectWords: Boolean = false,
+    ): Outcome = outcome(tree, windowTitle, meta, platform, day, sensitive = null, version = version, collectWords = collectWords)
 
     /**
      * [outcome] with the tree's sensitive-marker verdict the caller ALREADY computed (review PP8), so a
@@ -180,7 +194,8 @@ object SkeletonBuilder {
         day: LocalDate,
         sensitive: SensitiveVerdict?,
         version: SkeletonVersion = SkeletonVersion.V1,
-    ): Outcome = outcome(tree, windowTitle, meta, platform, day, FrameFilter(::withholdingStep), sensitive, version)
+        collectWords: Boolean = false,
+    ): Outcome = outcome(tree, windowTitle, meta, platform, day, FrameFilter(::withholdingStep), sensitive, version, collectWords)
 
     /**
      * A tree's sensitive-marker verdict, as `SensitiveTextMarkers.findMarker` reports it (reviews PP8, SS2).
@@ -230,8 +245,9 @@ object SkeletonBuilder {
         frame: FrameFilter,
         sensitive: SensitiveVerdict? = null,
         version: SkeletonVersion = SkeletonVersion.V1,
+        collectWords: Boolean = false,
     ): Outcome = try {
-        buildOutcome(tree, windowTitle, meta, platform, day, frame, sensitive, version)
+        buildOutcome(tree, windowTitle, meta, platform, day, frame, sensitive, version, collectWords)
     } catch (e: CancellationException) {
         throw e
     } catch (_: InvalidTree) {
@@ -254,6 +270,7 @@ object SkeletonBuilder {
         frame: FrameFilter,
         sensitive: SensitiveVerdict?,
         version: SkeletonVersion,
+        collectWords: Boolean,
     ): Outcome {
         // The whole-frame drop runs on the RAW tree and the RAW title, before anything is built. A scan
         // that FAILED (the marker scan's own fail-closed sentinel) is a build failure, not a banking
@@ -298,7 +315,45 @@ object SkeletonBuilder {
         }
         val measured = SkeletonSchema.measure(item)
         if (measured.bytes > SkeletonSchema.MAX_ITEM_BYTES) return Outcome.Refused(Refusal.OVERSIZE)
-        return Outcome.Built(item, measured.json, measured.bytes, frame.malformedClass)
+        val words = if (collectWords && version == SkeletonVersion.V2) reviewWords(tree, pending, title, frame) else null
+        return Outcome.Built(item, measured.json, measured.bytes, frame.malformedClass, words)
+    }
+
+    /**
+     * #1626: the words of the slots this skeleton HASHED, by the census server's slot id
+     * ([ContributorSlots], `root/<child index>/…/<key>`, `windowTitle`), each one its canonical form (the value the
+     * hash was computed from). One rule decides every field of the frame and the window title: a field is ELIGIBLE
+     * only when it was hashed, its node is outside the address block the rules-independent backstop selects
+     * ([UnknownAddressBackstop]) and [ReviewWordCover] shows it; every other field (withheld by a filter step, a PII
+     * or customer-content id, a text input, the address backstop, the cover itself, or sent as a kind or format) puts
+     * its canonical value on the frame's exclusion set, and an eligible field whose value is on that set is not kept
+     * either, wherever it sits (Sol rounds 1 and 2). No other screen text is kept. The pending tree is the emitted one
+     * node for node, so the path is the wire path.
+     */
+    private fun reviewWords(tree: UiNode, root: Pending, title: Field?, frame: FrameFilter): ReviewWords {
+        val address = UnknownAddressBackstop.select(tree)
+        val nodes = ArrayList<Pair<Pending, String>>()
+        fun flatten(node: Pending, path: String) {
+            nodes += node to path
+            node.children.forEachIndexed { i, child -> flatten(child, "$path/$i") }
+        }
+        flatten(root, "root")
+        val eligible = ArrayList<Pair<String, String>>()
+        val excluded = HashSet<String>()
+        fun judge(slot: String, field: Field, selected: Boolean) {
+            val canonical = field.canonical
+            if (canonical != null && !selected && frame.slot(field).h != null && ReviewWordCover.shows(canonical)) {
+                eligible += slot to canonical
+            } else {
+                excluded += canonical ?: field.trimmed
+            }
+        }
+        title?.let { judge(ContributorSlots.WINDOW_TITLE, it, selected = false) }
+        // Preorder, root = 0, children in order: the backstop's own indexing.
+        nodes.forEachIndexed { preorder, (node, path) ->
+            node.fields.forEach { (wire, field) -> judge("$path/$wire", field, preorder in address) }
+        }
+        return ReviewWords(eligible.filter { (_, word) -> word !in excluded }.toMap())
     }
 
     private val DAY_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)

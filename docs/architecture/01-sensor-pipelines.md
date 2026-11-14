@@ -1021,7 +1021,7 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   consent is off, whose install id is not the current enrolled id, that a deletion request (`requestedAtMillis` ≥ the
   grant's `obtainedAtMillis`) followed, or whose UTC expiry day has come; `refresh()` (the state GET, #1626 calls it
   before a review session) ends it on expired / revoked / none and never creates a grant the phone does not hold.
-  Every end clears `PendingContributorReviews` (a no-op binding until #1626) inside `NonCancellable`, and its write sets
+  Every end clears `PendingContributorReviews` (the #1626 review queue) inside `NonCancellable`, and its write sets
   `reviewsClearPending`, cleared only after the clear succeeds; `watch()` re-runs an outstanding clear at start and
   `mayUpload()` runs it first and is false while it fails (Sol S5). An expired grant is re-offered after a
   later shift, never renewed silently. **Late responses (Sol S1):** a `DecisionVersion` is captured when Accept is pressed (the
@@ -1043,6 +1043,54 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   re-reads on a one-minute tick; the reviewer screen and the Census row derive "on" from `rememberNow()` against
   `ContributorGrant.expiryMillis`. INFO lines: `census contributor invited`, `request outcome=<token>`,
   `ended reason=<token>`; no count, id or day.
+  **Contributor review (#1626, ADR-0011 §15; census#81 `docs/CLIENT.md` "Contributor tier"):** *Slot ids and the
+  layout id* are `ContributorSlots` (`census-contract/contributor/`, Apache-2.0): the server's `SlotWalk` byte for byte
+  (`windowTitle`, then pre-order `root/<child index>/…/<sorted text key>` over the tree as sent, wrappers included;
+  the layout `L1` byte form), pinned by `ContributorSlotsTest` against vectors from an independent port of the
+  server's code; `ContributorVariant` is the request scope, `ContributorRole` and `SlotClass` the closed lists (an
+  answer off the class list reads `UNKNOWN`). *Words:* `CensusSink.collectsReviewWords` (HttpCensusSink: census
+  enabled and `ContributorReviewIntake.wantsCandidates`, a stored grant and fewer than 3 candidates today) makes the
+  publisher pass `collectWords`; `SkeletonBuilder` (v2 only) then returns `Built.reviewWords`, the canonical word of
+  every slot whose emitted slot carries a hash, by slot id, kept only if `ReviewWordCover.shows`: first
+  `ReviewAllowList.allows` (every NFC-lowercased letter run in `census/review-common-words.txt`, a committed, sha256-
+  headed list of 5,000 lowercase words per language from orgtre/google-books-ngram-frequency, CC BY 3.0, or in the
+  generated `census/review-rule-words.txt`, which `:core:pipeline:reviewRuleWords` builds from the imported rules'
+  on-screen text keys and registers as a Java resource; a missing or corrupt list allows less), then the denylist
+  (sensitive and customer
+  markers, `ReturnTaskLine.hasRawName`, masks, the filter's own steps, digits, `@`, any colon-like character,
+  greeting / account / note patterns and a case-insensitive place pattern), its node is outside
+  `UnknownAddressBackstop.select`, and its canonical value is not on the frame's exclusion set: the value of every
+  field (any node, the title) that is not eligible, whatever withheld it (one rule; Sol rounds 1 and 2).
+  `ReviewWordCoverPropertyTest` runs the PII generators through every field position and duplicate. `ReviewWords` prints no word and is never serialized;
+  `CensusRecord.reviewWords` is never spooled (the spool writes four named fields). *Queue:* `ContributorReviewQueue`
+  (`:core:data`) is `PendingContributorReviews`, `ContributorReviewIntake` and `UploadedSkeletons`. `HttpCensusSink`
+  offers a record after `spool.append`; `offer` checks `ContributorGate.mayUpload()` (a `dagger.Lazy`, so the grant's
+  owner and its queue have no cycle) outside its own lock, then keeps a v2 screen once per layout id, at most 3 per
+  skeleton day and 6 in all, dropped after 7 days; a layout sent or deleted is not taken again that UTC day. Stored
+  (`filesDir/census/review/queue.json`, temp-and-rename, inside the backup-excluded `census/`): the spooled item JSON,
+  its sha256, layout and days; the words and the held words are in-memory maps. `CensusUploadWorker` reports a skeleton
+  batch accepted with no rejected item (`reportUploaded`, fail-open; a mixed answer or a duplicate proves no item) and the matching candidate gets `uploadedDay`;
+  `readyOn(today)` is `uploadedDay < today` (the classes come from the next release). `clear()` empties both halves, moves `generation`
+  and throws if the file stays; `hold` and `offer` drop an insertion made under an older generation. Expiry (7 days) is enforced on load, `candidate`, `wordsFor`, `uploaded` and in `entries`
+  over a minute tick, persisting the cleanup. *Session:* `ContributorReviewer` takes `CensusUploadLock` for `open` and `send` and checks
+  `mayUpload()` first and before every request; the view model runs `CensusContributor.refresh()` before `open`, never
+  inside the lock. `open` retries held words, then (only for a ready candidate) POSTs `classes` with the skeleton's slot
+  ids (cap 1024) and builds `ReviewRow`s: `word` only for a hashed slot the release calls `CONSTANT`. `send`: `review`
+  (confirmations: only rows shown confirmable, each slot's public `h`; roles from the closed list), the candidate then
+  leaves the queue, `gates` for the confirmations, `words` only for pairs answered open (`ContributorRequests.words`
+  refuses a word whose `CensusHash.of` is not its slot's hash); closed or refused words are held (memory, 16 per
+  variant, 6 variants). `mayUpload()` is checked again right before `review`, after the credential read. A
+  `GRANT_REQUIRED` or `INSTALL_REVOKED` refusal on any request throws out of the lock; outside it the reviewer runs
+  `refresh()`, then drops the screen's words and the held words. The view model clears its rows, words and choices
+  when `CensusContributor.status` stops reading ON, and a later session or Send answer cannot bring them back. Bodies are built by `ContributorRequests` only, compact, keys in the documented order; the
+  transport (`ContributorTransport`, `CensusApiFactory.contributor`) sends them byte for byte, signed, and returns closed
+  types (`ContributorRefusal`; a slot id off `[A-Za-z0-9/]{1,512}` or a hash off 16 hex is `INVALID_RESPONSE`).
+  `ContributorReviewNotifier` posts "Screens to review" (id 107, the Census channel) `SETTLE_MILLIS` after a shift ends
+  when a candidate is ready and the gate stands, once a UTC day per process; it shares `afterShiftEnds` with the
+  invitation. UI: `ContributorScreen` lists the queue (ready derived from `rememberNow()`, at most 3 ready rows);
+  `ContributorReviewScreen` (route `settings/census/reviewer/review/{reviewId}`, not a deep-link target) renders the
+  rows, Send / Delete, and an `onAskDeveloper` seam for #1627 that is null today. INFO lines: `census review sent
+  confirmations=<n> roles=<n>`, `census review words accepted=<n>`; DEBUG `census review candidate kept waiting=<n>`.
   **Identity reset + run status (#1185):** when the server no longer knows an enrolled install (alpha
   database reset, withdrawn install) uploads 401 and, since #1622, the worker re-enrols the same identity itself; the developer screen's **Reset
   census identity** action (confirmation dialog) runs `CensusIdentityResetter` (`:core:data`) on the

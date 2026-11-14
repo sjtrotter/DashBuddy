@@ -75,6 +75,8 @@ class SkeletonPublisher @Inject constructor(
                 platform,
                 utcDay(obs.timestamp),
                 version,
+                // #1626: words for a contributor review only while one could take this frame; held in memory only.
+                collectWords = sink.collectsReviewWords,
             )) {
                 is Outcome.Built -> {
                     val (hashed, withheld) = tokenCounts(outcome.skeleton)
@@ -85,6 +87,7 @@ class SkeletonPublisher @Inject constructor(
                         skeletonJson = outcome.json,
                         itemBytes = outcome.itemBytes,
                         captureId = obs.captureId,
+                        reviewWords = outcome.reviewWords,
                     ))
                     if (!accepted) stats.onCensusSinkRefused()
                     val captureId = obs.captureId

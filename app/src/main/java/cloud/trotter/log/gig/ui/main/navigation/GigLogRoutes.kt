@@ -99,6 +99,11 @@ sealed class Screen(val route: String) {
     data object CensusSent : Screen("settings/census/sent")
     /** #1625 — screen reviews: the invitation, its disclosure and the grant. */
     data object CensusReviewer : Screen("settings/census/reviewer")
+    /** #1626 — one screen under review; the id is a review candidate's (random) id. No deep link carries it. */
+    data object CensusReview : Screen("settings/census/reviewer/review/{reviewId}") {
+        const val ARG = "reviewId"
+        fun route(reviewId: String) = "settings/census/reviewer/review/${Uri.encode(reviewId)}"
+    }
     data object Garage : Screen("settings/garage")
     data object VehicleAdd : Screen("settings/garage/add")
     data object VehicleEdit : Screen("settings/garage/vehicle/{vehicleId}") {
@@ -134,7 +139,7 @@ sealed class Screen(val route: String) {
          * the routes no external link may target — the wizard, Ratings and the argument routes.
          */
         val graphRoutes: Set<String> by lazy {
-            allRoutes + setOf(Wizard.route, Ratings.route, SessionDetail.route, Day.route, Shifts.route, Month.route, Search.route, VehicleEdit.route)
+            allRoutes + setOf(Wizard.route, Ratings.route, SessionDetail.route, Day.route, Shifts.route, Month.route, Search.route, VehicleEdit.route, CensusReview.route)
         }
     }
 }

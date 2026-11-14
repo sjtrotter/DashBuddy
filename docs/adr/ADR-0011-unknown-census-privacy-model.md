@@ -1115,7 +1115,7 @@ grant request's whole body is `{"eligible":true}`. The invitation is offered whe
 once until answered; Not now holds it 14 days, No thanks until the dasher accepts in Settings. The second disclosure
 states the server's 30-day log of which screens the phone asked about, tied to the grant. `CensusContributor.mayUpload`
 is the check before any contributor upload; a grant ends on expiry, revocation, Stop, the census off, a new census ID
-or a deletion request, and every end clears pending reviews (none exist until #1626). Renewal asks again after a later
+or a deletion request, and every end clears pending reviews (the #1626 review queue). Renewal asks again after a later
 shift. The census-age threshold is the server's own, 8 UTC calendar days since enrolment, so the phone never invites
 an install the server would refuse; a `403 install_too_new` (a skewed phone clock) is shown as such and asked again 2
 days later. A grant request is decided under a version captured when Accept is pressed (the dasher's answers, a stored sequence
@@ -1123,6 +1123,27 @@ that moves on every census consent change, the census ID, any deletion request);
 nothing, a response that arrives after it moved is discarded, and a stored grant keeps its version and counts only
 while that version is current; a `401 revoked` on a grant route runs the census revoke; the grant ends at the
 start of its expiry day without waiting for another change.
+
+Built by #1626: the review queue, the review screen and the word gate on the phone. The skeleton builder keeps a
+review's words only while a grant is stored, only for slots the v2 skeleton hashed, keyed by the server's slot id
+(`ContributorSlots` in `census-contract/`, the server's `SlotWalk` byte for byte, pinned by a shared vector), and only
+past `ReviewAllowList` (Sol round 2: every token must be one of the 5,000 most frequent lowercase en/es/fr words of
+Google Books Ngram, CC BY 3.0, proper nouns dropped, or a word of the bundled rules' on-screen text, generated from
+`matchers/`) and then `ReviewWordCover` (every backstop on the word including return-task names, the dasher's
+greeting, account and place labels in any case, notes, any colon, digits), outside an address block the backstop
+selects, and never a value any withheld or uncovered field of the frame holds (one frame-wide exclusion set); the words live in memory only. The queue
+(`ContributorReviewQueue`) takes the spooled skeleton after `mayUpload`, 3 new layouts a UTC day, one per layout, and
+stores only that outbound skeleton; the upload worker marks what the server stored, and a screen opens the UTC day
+after, when the release covers it (classes are asked only then, for the slots of that skeleton). The session
+(`ContributorReviewer`) checks `mayUpload` before every request under the census upload lock, after the caller's
+`refresh()`; it sends `review` (hashes and roles), then `gates`, then `words` only for a gate reported open, and holds a
+closed word in memory until a later session's gate check. A word is shown only on a slot the release calls constant;
+varying, regional, withheld, shape and unknown slots are greyed. Not built: "Ask the developer" (#1627; the screen
+has the seam), and the contributor persona playtest in the UX plan (a separate activity, not done). One limit
+stands: a bare first name in an id-less slot passes the filter and the cover (nothing on the phone tells it from
+wording), so only the server's class keeps it greyed; it leaves the phone only if the dasher confirms it and its gate
+opens (risk 12). The allow-list closes that for any name or place outside the common-word and rule lists; a name or
+place that is also a common word ("Grace", "Will", "Main", "Medical Center") still passes it and stays risk 12.
 
 ### §16 The anchor check is a dictionary lookup (census#82)
 

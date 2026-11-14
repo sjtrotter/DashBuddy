@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #1626: the screen review (one screen gig.log didn't recognize) and the waiting list on Screen reviews. -->
+<resources>
+    <string name="census_review_waiting_title">Screens to review</string>
+    <string name="census_review_waiting_none">None waiting. gig.log keeps up to 3 a day from your shifts.</string>
+    <string name="census_review_waiting_row">Screen from %1$s</string>
+    <string name="census_review_waiting_ready">Ready to review</string>
+    <string name="census_review_waiting_tomorrow">Ready tomorrow</string>
+    <string name="census_review_waiting_upload">Waiting for the daily census upload</string>
+
+    <string name="census_review_screen_title">Review a screen</string>
+    <string name="census_review_screen_intro">Each row is what gig.log sends about one text on this screen: a one-way code, a format or a kind. A word you confirm as the app\'s own wording is sent as text, and only after other drivers confirm it too. Covered rows stay covered.</string>
+    <string name="census_review_screen_loading">Asking the census server</string>
+    <string name="census_review_screen_shift">You can review after your shift ends.</string>
+    <string name="census_review_screen_tomorrow">Come back tomorrow. The census server checks a screen\'s words the day after it receives the screen.</string>
+    <string name="census_review_screen_gone">This review is gone: it was sent, deleted or more than 7 days old.</string>
+    <string name="census_review_screen_not_allowed">Reviewing is off, so gig.log shows and sends no review.</string>
+    <string name="census_review_screen_sent">Sent. A confirmed word went as its one-way code. gig.log sends the word itself only after other drivers confirm it.</string>
+    <string name="census_review_screen_deleted">Deleted. gig.log sent no review of this screen.</string>
+    <string name="census_review_screen_words_lost">gig.log restarted since it saw this screen, so its words are no longer on this phone. You can still label fields.</string>
+    <string name="census_review_screen_release_unavailable">The census server hasn\'t prepared today\'s word check yet. Try again in an hour; you can still label fields.</string>
+    <string name="census_review_screen_unreachable">gig.log couldn\'t reach the census server, so no word can be checked.</string>
+    <string name="census_review_screen_later">The census server is paused or this phone\'s reviews for today are used up. The review waits; try again later.</string>
+    <string name="census_review_screen_send_unreachable">gig.log couldn\'t reach the census server. The review waits; try again later.</string>
+
+    <string name="census_review_screen_word">\"%1$s\"</string>
+    <string name="census_review_screen_confirm">The app\'s own wording</string>
+    <string name="census_review_screen_covered">Covered</string>
+    <string name="census_review_screen_format">Format %1$s</string>
+    <string name="census_review_screen_number">A number</string>
+    <string name="census_review_screen_mixed">Letters and numbers</string>
+    <string name="census_review_screen_long">Long text</string>
+    <string name="census_review_screen_constant_no_word">Covered on this phone</string>
+    <string name="census_review_screen_varying">Changes from screen to screen</string>
+    <string name="census_review_screen_regional">Differs by area or store</string>
+    <string name="census_review_screen_unknown">Not seen by enough drivers yet</string>
+    <string name="census_review_screen_where">%1$s, %2$s</string>
+
+    <string name="census_review_screen_role_add">Add label</string>
+    <string name="census_review_screen_role_set">Label: %1$s</string>
+    <string name="census_review_screen_role_none">No label</string>
+    <string name="census_review_screen_send">Send</string>
+    <string name="census_review_screen_sending">Sending</string>
+    <string name="census_review_screen_delete">Delete</string>
+    <string name="census_review_screen_ask">Ask the developer</string>
+
+    <string name="census_review_key_text">Text</string>
+    <string name="census_review_key_desc">Description</string>
+    <string name="census_review_key_hint">Hint</string>
+    <string name="census_review_key_state">State</string>
+    <string name="census_review_key_pane">Pane title</string>
+    <string name="census_review_key_tooltip">Tooltip</string>
+    <string name="census_review_key_error">Error</string>
+    <string name="census_review_key_click_label">Tap label</string>
+    <string name="census_review_key_window_title">Window title</string>
+    <string name="census_review_key_other">Other text</string>
+
+    <string name="census_review_role_total_pay">Total pay</string>
+    <string name="census_review_role_tip">Tip</string>
+    <string name="census_review_role_base_pay">Base pay</string>
+    <string name="census_review_role_deadline">Deadline</string>
+    <string name="census_review_role_distance">Distance</string>
+    <string name="census_review_role_item_count">Item count</string>
+    <string name="census_review_role_customer_info">Customer info</string>
+    <string name="census_review_role_store_name">Store name</string>
+    <string name="census_review_role_other">Other</string>
+</resources>

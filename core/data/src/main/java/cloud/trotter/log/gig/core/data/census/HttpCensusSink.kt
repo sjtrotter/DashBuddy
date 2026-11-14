@@ -6,6 +6,7 @@ import cloud.trotter.log.gig.domain.capture.CensusSink
 import cloud.trotter.log.gig.domain.census.CensusSampleKey
 import cloud.trotter.log.gig.domain.census.CensusUploadPreferences
 import cloud.trotter.log.gig.domain.census.CensusUploadStats
+import cloud.trotter.log.gig.domain.census.contributor.ContributorReviewIntake
 import cloud.trotter.log.gig.domain.di.ApplicationScope
 import cloud.trotter.log.gig.domain.di.IoDispatcher
 import cloud.trotter.log.gig.domain.di.ReadsUnboundPlatforms
@@ -37,6 +38,8 @@ class HttpCensusSink @Inject constructor(
     @ApplicationScope scope: CoroutineScope,
     @IoDispatcher io: CoroutineDispatcher,
     @ReadsUnboundPlatforms readsUnboundPlatforms: Boolean,
+    /** #1626: takes a spooled screen as a review candidate; it checks the contributor gate itself. */
+    private val reviews: ContributorReviewIntake = ContributorReviewIntake.NONE,
 ) : CensusSink {
     private val readable = Platform.readable(readsUnboundPlatforms)
     private val enabled = preferences.enabled.stateIn(scope, SharingStarted.Eagerly, false)
@@ -44,6 +47,7 @@ class HttpCensusSink @Inject constructor(
     // Wait for the persisted policy snapshot before enabling publication after process restart.
     override val isEnabled: Boolean get() = enabled.value && schemas.value != null
     override val acceptedSchemaIds: Set<String> get() = schemas.value.orEmpty()
+    override val collectsReviewWords: Boolean get() = isEnabled && reviews.wantsCandidates
     /** A record with the spool's clear boundary at the moment it was offered (#1622). */
     private class Offered(val record: CensusRecord, val generation: Long)
 
@@ -74,6 +78,8 @@ class HttpCensusSink @Inject constructor(
                             continue
                         }
                         spool.append(record, offered.generation)
+                        // #1626: only a spooled skeleton (the one the server will hold) can be reviewed; its words stay in memory.
+                        if (record.reviewWords != null) reviews.offer(record)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {

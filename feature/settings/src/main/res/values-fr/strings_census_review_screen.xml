@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #1626: the screen review (one screen gig.log didn't recognize) and the waiting list on Screen reviews. -->
+<resources>
+    <string name="census_review_waiting_title">Écrans à vérifier</string>
+    <string name="census_review_waiting_none">Aucun en attente. gig.log en garde jusqu\'à 3 par jour de vos services.</string>
+    <string name="census_review_waiting_row">Écran du %1$s</string>
+    <string name="census_review_waiting_ready">Prêt à vérifier</string>
+    <string name="census_review_waiting_tomorrow">Prêt demain</string>
+    <string name="census_review_waiting_upload">En attente de l\'envoi quotidien du recensement</string>
+
+    <string name="census_review_screen_title">Vérifier un écran</string>
+    <string name="census_review_screen_intro">Chaque ligne est ce que gig.log envoie sur un texte de cet écran : un code à sens unique, un format ou un type. Un mot que vous confirmez comme texte propre de l\'app part en texte, et seulement après que d\'autres livreurs l\'ont aussi confirmé. Les lignes masquées restent masquées.</string>
+    <string name="census_review_screen_loading">Interrogation du serveur du recensement</string>
+    <string name="census_review_screen_shift">Vous pourrez vérifier à la fin de votre service.</string>
+    <string name="census_review_screen_tomorrow">Revenez demain. Le serveur du recensement vérifie les mots d\'un écran le lendemain du jour où il le reçoit.</string>
+    <string name="census_review_screen_gone">Cette vérification n\'existe plus : elle a été envoyée, supprimée ou date de plus de 7 jours.</string>
+    <string name="census_review_screen_not_allowed">La vérification est désactivée, donc gig.log n\'affiche et n\'envoie aucune vérification.</string>
+    <string name="census_review_screen_sent">Envoyé. Un mot confirmé est parti sous forme de code à sens unique. gig.log n\'envoie le mot lui-même qu\'après que d\'autres livreurs l\'ont confirmé.</string>
+    <string name="census_review_screen_deleted">Supprimé. gig.log n\'a envoyé aucune vérification de cet écran.</string>
+    <string name="census_review_screen_words_lost">gig.log a redémarré depuis qu\'il a vu cet écran, ses mots ne sont donc plus sur ce téléphone. Vous pouvez encore étiqueter des champs.</string>
+    <string name="census_review_screen_release_unavailable">Le serveur du recensement n\'a pas encore préparé la vérification des mots d\'aujourd\'hui. Réessayez dans une heure ; vous pouvez encore étiqueter des champs.</string>
+    <string name="census_review_screen_unreachable">gig.log n\'a pas pu joindre le serveur du recensement, donc aucun mot ne peut être vérifié.</string>
+    <string name="census_review_screen_later">Le serveur du recensement est en pause ou ce téléphone a utilisé ses vérifications du jour. La vérification attend ; réessayez plus tard.</string>
+    <string name="census_review_screen_send_unreachable">gig.log n\'a pas pu joindre le serveur du recensement. La vérification attend ; réessayez plus tard.</string>
+
+    <string name="census_review_screen_word">\"%1$s\"</string>
+    <string name="census_review_screen_confirm">Le texte propre de l\'app</string>
+    <string name="census_review_screen_covered">Masqué</string>
+    <string name="census_review_screen_format">Format %1$s</string>
+    <string name="census_review_screen_number">Un nombre</string>
+    <string name="census_review_screen_mixed">Lettres et chiffres</string>
+    <string name="census_review_screen_long">Texte long</string>
+    <string name="census_review_screen_constant_no_word">Masqué sur ce téléphone</string>
+    <string name="census_review_screen_varying">Change d\'un écran à l\'autre</string>
+    <string name="census_review_screen_regional">Varie selon la zone ou le magasin</string>
+    <string name="census_review_screen_unknown">Pas encore vu par assez de livreurs</string>
+    <string name="census_review_screen_where">%1$s, %2$s</string>
+
+    <string name="census_review_screen_role_add">Ajouter une étiquette</string>
+    <string name="census_review_screen_role_set">Étiquette : %1$s</string>
+    <string name="census_review_screen_role_none">Aucune étiquette</string>
+    <string name="census_review_screen_send">Envoyer</string>
+    <string name="census_review_screen_sending">Envoi</string>
+    <string name="census_review_screen_delete">Supprimer</string>
+    <string name="census_review_screen_ask">Interroger le développeur</string>
+
+    <string name="census_review_key_text">Texte</string>
+    <string name="census_review_key_desc">Description</string>
+    <string name="census_review_key_hint">Indication</string>
+    <string name="census_review_key_state">État</string>
+    <string name="census_review_key_pane">Titre du volet</string>
+    <string name="census_review_key_tooltip">Info-bulle</string>
+    <string name="census_review_key_error">Erreur</string>
+    <string name="census_review_key_click_label">Libellé d\'appui</string>
+    <string name="census_review_key_window_title">Titre de la fenêtre</string>
+    <string name="census_review_key_other">Autre texte</string>
+
+    <string name="census_review_role_total_pay">Paiement total</string>
+    <string name="census_review_role_tip">Pourboire</string>
+    <string name="census_review_role_base_pay">Paiement de base</string>
+    <string name="census_review_role_deadline">Échéance</string>
+    <string name="census_review_role_distance">Distance</string>
+    <string name="census_review_role_item_count">Nombre d\'articles</string>
+    <string name="census_review_role_customer_info">Infos du client</string>
+    <string name="census_review_role_store_name">Nom du magasin</string>
+    <string name="census_review_role_other">Autre</string>
+</resources>
