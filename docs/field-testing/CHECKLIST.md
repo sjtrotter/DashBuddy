@@ -97,6 +97,7 @@ Five items the dev confirmed on 2026-10-07. Each full item appears once, with it
 - [#1625 the screen-review invitation comes after a shift, once, and Accept asks for a grant](checklist/open/1625-census-review-invitation-after-a-shift.md)
 - [#1626 a screen review covers customer data, shows only constant words, and holds a confirmed word until its gate opens](checklist/open/1626-census-screen-review-masks-and-word-gate.md)
 - [#1627 Ask the developer sends the masked outline to the quarantine and says when it is deleted](checklist/open/1627-census-ask-the-developer.md)
+- [#1568 the bundled rules load as one generation at startup](checklist/open/1568-rules-generation-loads-at-startup.md)
 - [#1610 a one-chain shift links its offers](checklist/open/1610-one-chain-shift-links-its-offers.md)
 - [#1515 Recap is the week](checklist/open/1515-recap-week.md)
 - [#1517 an accepted offer with no delivery is checked on its shift page](checklist/open/1517-shift-checks.md)
