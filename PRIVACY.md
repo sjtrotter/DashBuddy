@@ -280,24 +280,23 @@ re-applies the deletion first). Under the upload lock it stores the request as p
 any network (`CensusWorkScheduler.enqueueDeletion`, queued again at app start while a request is unresolved), cancels
 a waiting manual run, clears the skeleton queue and its in-flight batch (the queue's clear boundary also drops an
 outline handed to the queue before the clear and written after it), the debug build's envelopes and the unsent daily
-counts, then sends a signed `DELETE /v1/installs/me/data` with an empty body under each install ID the request is
-bound to at its first attempt: the identities a developer identity reset retired, then the current enrolled one, each
-with its own key. The identity reset keeps an enrolled identity's ID and sealed key in the credential store (at most
-four, never used to upload, excluded from backup like the current one) for exactly this, and drops it only after the
-confirmation under it is saved (a forget that fails is finished on a later load). Each ID keeps its own outcome and
-confirmation day; an ID whose key is gone is reported on its own and the others are still sent, and the screen shows
-the total with the last confirmation day when the days differ. The screen shows the server's confirmation: the rows it erased and its UTC day (only a
+counts, then sends a signed `DELETE /v1/installs/me/data` with an empty body with the key of the one enrolled
+install ID the request binds at its first attempt. The screen shows the server's confirmation: the rows it erased and its UTC day (only a
 well-formed date is kept). Until the server has confirmed and the phone's queue is cleared, every census run sends the
-request first and sends nothing else, whatever the consent, and the developer identity reset is refused, so the
-request is never sent under another ID. A request the server does not answer, answers 404 (the deployed census server
+request first and sends nothing else, whatever the consent. The developer identity reset (test build only) never
+lets an enrolled identity go undeleted: it first runs a fresh deletion for it and resets only after the server
+confirms it and the phone's queue is cleared; otherwise it is refused, keeps the identity and says why ("The census
+server hasn't confirmed deleting this phone's data yet, so the ID can't be reset"). A never-enrolled identity resets
+freely. So the phone never keeps an old identity's key. A request the server does not answer, answers 404 (the deployed census server
 takes deletion requests only from its next update, census#79; until then the request waits on the phone and the
 screen says so) or answers 401 stays pending: a 401 can mean a bad signature as well as an unknown ID, so it never
 counts as deleted, and the ID is kept. On a 401 the phone's clock does not explain, it re-enrols the SAME ID with the
 SAME key (idempotent on the server; after a restore that erased the install, it re-creates it) and sends the DELETE
 once more; only the DELETE's own confirmation resolves the request, and an enrolment alone never does. With no census
-ID on the phone at all (none enrolled, none retired), no request is sent and the screen says so ("No deletion was
+ID enrolled on the phone, no request is sent and the screen says so ("No deletion was
 sent: this phone had no census ID at the time"), a fact about the request, not a claim about the server; that line
-clears once the phone enrols again. A revoked install cannot delete: the census turns off, as on any revoke. After a server restore from a backup
+clears once the phone enrols again. A revoked install cannot delete: the census turns off and the credential is
+wiped, as on any revoke (the server deletes a revoked install's sightings itself). After a server restore from a backup
 older than a deletion, the server erases the whole install and answers 401 to uploads; once no deletion is pending,
 the worker then enrols a fresh identity, consent kept, and sends again once under it (the old identity's unsent daily
 counts and capture sharing go with it), instead of stopping. A 401 after the server already accepted a request from
@@ -484,9 +483,9 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
   value or batch ID), and "Delete my census data" clears the phone's census queue and asks the server to delete this
   install's data, with what the server keeps (the install record, today's quota row for 7 days), what it cannot tie
   to the phone and the 14-day backups stated before it is sent; a request the server has not confirmed (offline, a
-  401, or a 404 until the server's update) stays pending, bound to its install IDs (including ones a developer
-  identity reset retired, whose keys the reset now keeps for this), and is sent before anything else; a 401 retries
-  after re-enrolling the same ID and key.
+  401, or a 404 until the server's update) stays pending, bound to its install ID, and is sent before anything else;
+  a 401 retries after re-enrolling the same ID and key. The developer identity reset first deletes an enrolled
+  identity's data and resets only on the server's confirmation.
   An install the server no longer knows enrols a fresh identity, consent kept. The disclosure's per-build lines drop
   "no delete button yet", say server deletion and the 30-day limit take effect with the server's next update, and
   that deleting what gig.log keeps on the phone is not in this version. §7: the sent record and the deletion request. The in-app Privacy page's Census
