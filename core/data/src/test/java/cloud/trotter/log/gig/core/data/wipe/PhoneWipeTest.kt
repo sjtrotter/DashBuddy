@@ -18,6 +18,7 @@ import cloud.trotter.log.gig.core.network.census.CensusSentObserver
 import cloud.trotter.log.gig.core.network.census.CensusTransport
 import cloud.trotter.log.gig.core.network.census.DeleteResult
 import cloud.trotter.log.gig.core.network.census.EnrolResult
+import cloud.trotter.log.gig.core.network.census.GrantResult
 import cloud.trotter.log.gig.core.network.census.HealthResult
 import cloud.trotter.log.gig.core.network.census.PolicyResult
 import cloud.trotter.log.gig.core.network.census.UploadResult
@@ -69,6 +70,8 @@ class PhoneWipeTest {
     /** Answers deletion with [answer]; any other call but the policy read is a test failure. */
     private inner class Transport : CensusTransport {
         var answer: suspend () -> DeleteResult = { DeleteResult.Deleted(rows = 4, deletedDay = "2026-11-13") }
+        override suspend fun requestContributorGrant(cred: Bearer.Credential): GrantResult = error("grant")
+        override suspend fun contributorGrant(cred: Bearer.Credential): GrantResult = error("grant")
         override suspend fun deleteData(cred: Bearer.Credential): DeleteResult {
             events += "delete request"
             return answer()
