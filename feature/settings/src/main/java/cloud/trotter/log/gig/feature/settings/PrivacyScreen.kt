@@ -80,6 +80,8 @@ fun PrivacyScreen(onBack: () -> Unit, viewModel: PrivacyViewModel = hiltViewMode
             // build's commit. The card's and Automation & consent's privacy links open this page.
             WebLink(R.string.privacy_policy_link, PrivacyDisclosure.POLICY_URL, Modifier.fillMaxWidth().padding(top = 8.dp))
             WebLink(R.string.privacy_technical_link, viewModel.privacyUrl, Modifier.fillMaxWidth())
+            // #1627: the credits for data the app ships (the screen-review word list, CC BY 3.0).
+            WebLink(R.string.privacy_notices_link, THIRD_PARTY_NOTICES_URL, Modifier.fillMaxWidth())
             Spacer(Modifier.height(32.dp))
         }
     }
@@ -103,6 +105,9 @@ internal val PRIVACY_SECTIONS: List<Pair<Int, Int>> = listOf(
     R.string.privacy_retention_title to R.string.privacy_retention_body,
     R.string.privacy_choices_title to R.string.privacy_choices_body,
 )
+
+/** #1627: THIRD_PARTY_NOTICES.md on master, the attribution for third-party data the app ships. */
+internal const val THIRD_PARTY_NOTICES_URL: String = "https://github.com/sjtrotter/gig.log/blob/master/THIRD_PARTY_NOTICES.md"
 
 /** A link that opens [url] in the browser. No browser (restricted or work profile) throws; it must never crash the page. */
 @Composable

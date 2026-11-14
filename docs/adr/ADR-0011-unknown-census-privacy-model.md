@@ -1138,12 +1138,23 @@ after, when the release covers it (classes are asked only then, for the slots of
 (`ContributorReviewer`) checks `mayUpload` before every request under the census upload lock, after the caller's
 `refresh()`; it sends `review` (hashes and roles), then `gates`, then `words` only for a gate reported open, and holds a
 closed word in memory until a later session's gate check. A word is shown only on a slot the release calls constant;
-varying, regional, withheld, shape and unknown slots are greyed. Not built: "Ask the developer" (#1627; the screen
-has the seam), and the contributor persona playtest in the UX plan (a separate activity, not done). One limit
+varying, regional, withheld, shape and unknown slots are greyed. Not built: the contributor persona playtest in the UX
+plan (a separate activity, not done). One limit
 stands: a bare first name in an id-less slot passes the filter and the cover (nothing on the phone tells it from
 wording), so only the server's class keeps it greyed; it leaves the phone only if the dasher confirms it and its gate
 opens (risk 12). The allow-list closes that for any name or place outside the common-word and rule lists; a name or
 place that is also a common word ("Grace", "Will", "Main", "Medical Center") still passes it and stays risk 12.
+
+Built by #1627: "Ask the developer". `ContributorRequests.artifact` is the one builder of the artifact, in the server's
+canonical form (`{"skeleton":…,"confirmations":[…],"roles":[…],"words":[…]}`, keys in that order, every array present,
+compact, the skeleton as the contract serializes it), from the candidate's outbound skeleton, the confirmations (public
+hashes of rows shown confirmable) and the role tags. Its `words` are built there from the (slot, hash) pairs `gates`
+answered open in the same request, each checked to hash to its slot's hash, so a word the screen shows locally on a
+closed slot reaches the quarantine only as its hash; a `409 gate_closed` is answered once with no words. The phone
+compares the server's `artifactSha256` with its own SHA-256 of the bytes it sent, says so when they differ and does not
+resend. `ContributorReviewer.ask` runs under the census upload lock with `mayUpload` before every request, after the
+view model's `refresh()`; a revocation stops it as for Send. The candidate leaves the queue once the server stored the
+item, and no review is sent for it. The note is one of the server's three values or absent.
 
 ### §16 The anchor check is a dictionary lookup (census#82)
 

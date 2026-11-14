@@ -64,4 +64,22 @@
     <string name="census_review_role_customer_info">Datos del cliente</string>
     <string name="census_review_role_store_name">Nombre de la tienda</string>
     <string name="census_review_role_other">Otro</string>
+    <!-- #1627: Preguntar al desarrollador. -->
+    <string name="census_review_ask_title">Preguntar al desarrollador</string>
+    <string name="census_review_ask_body">Envía al desarrollador el esquema de esta pantalla tal como lo muestran las filas, con tus confirmaciones y etiquetas. Las filas tapadas siguen tapadas. Una palabra confirmada va como su código de un solo sentido, salvo que otros conductores también la hayan confirmado. Solo el desarrollador puede abrirlo, y el servidor del censo lo borra a los 3 días.</string>
+    <string name="census_review_ask_note">Nota (opcional)</string>
+    <string name="census_review_ask_note_none">Sin nota</string>
+    <string name="census_review_ask_note_customer">Puede mostrar datos de un cliente</string>
+    <string name="census_review_ask_note_mine">Puede mostrar mis propios datos</string>
+    <string name="census_review_ask_note_unsure">No sé qué pantalla es</string>
+    <string name="census_review_ask_send">Enviar</string>
+    <string name="census_review_ask_cancel">Cancelar</string>
+    <string name="census_review_screen_asked">Enviado al desarrollador. El servidor del censo lo borra antes del %1$s.</string>
+    <string name="census_review_screen_asked_unconfirmed">Enviado al desarrollador, pero gig.log no pudo confirmar que el servidor guardó el mismo esquema que mostraba esta pantalla. El servidor del censo lo borra antes del %1$s.</string>
+    <string name="census_review_screen_asked_unread">Enviado al desarrollador, pero gig.log no pudo leer la confirmación del servidor. El servidor del censo lo borra a los 3 días.</string>
+    <string name="census_review_screen_asked_unknown">gig.log no pudo saber si esta pantalla llegó al desarrollador, así que no la volverá a enviar. Si llegó, el servidor del censo la borra a los 3 días.</string>
+    <string name="census_review_ask_later">El servidor del censo está en pausa o ya se usaron las preguntas de hoy al desarrollador. No se envió nada; inténtalo más tarde.</string>
+    <string name="census_review_ask_unreachable">gig.log no pudo conectar con el servidor del censo. No se envió nada; inténtalo más tarde.</string>
+    <string name="census_review_ask_refused">El servidor del censo no pudo aceptar esta pantalla, así que no se envió nada al desarrollador.</string>
+    <string name="census_review_ask_unconfigured">El servidor del censo todavía no puede recibir preguntas para el desarrollador, así que no se envió nada.</string>
 </resources>

@@ -390,6 +390,15 @@ class CensusApi(
             }
         }
 
+    override suspend fun quarantine(cred: Bearer.Credential, body: ByteArray): ContributorCall<QuarantineReceipt> =
+        contributorCall(ContributorTransport.QUARANTINE_PATH, cred, body) { json ->
+            require(json.getValue("status").jsonPrimitive.content == "quarantined")
+            val expires = day(json, "expiresDay") ?: throw IllegalArgumentException("expiresDay")
+            val sha = json.getValue("artifactSha256").jsonPrimitive.content
+            require(SHA256.matches(sha))
+            QuarantineReceipt(expires, sha)
+        }
+
     /**
      * #1626: one signed contributor POST of exactly [body]. A 200 is parsed by [parse]; anything it cannot read is
      * [ContributorRefusal.INVALID_RESPONSE]. Every other answer maps to a closed [ContributorRefusal].
@@ -410,6 +419,12 @@ class CensusApi(
                 ContributorCall.Refused(ContributorRefusal.INVALID_RESPONSE)
             }
             400 -> ContributorCall.Refused(ContributorRefusal.BAD_REQUEST)
+            409 -> ContributorCall.Refused(
+                if (response.error() == "gate_closed") ContributorRefusal.GATE_CLOSED else ContributorRefusal.SERVER_UNAVAILABLE,
+            )
+            422 -> ContributorCall.Refused(
+                if (response.error() == "bad_artifact") ContributorRefusal.BAD_ARTIFACT else ContributorRefusal.SERVER_UNAVAILABLE,
+            )
             401 -> ContributorCall.Refused(
                 if (response.isRevoked()) ContributorRefusal.INSTALL_REVOKED else ContributorRefusal.UNAUTHORIZED,
             )
@@ -423,15 +438,25 @@ class CensusApi(
             503 -> when (response.error()) {
                 "paused" -> ContributorCall.Refused(ContributorRefusal.PAUSED, response.retryAfter)
                 "release_unavailable" -> ContributorCall.Refused(ContributorRefusal.RELEASE_UNAVAILABLE, response.retryAfter)
-                else -> ContributorCall.Refused(ContributorRefusal.SERVER_UNAVAILABLE, response.retryAfter)
+                "quarantine_unconfigured" -> ContributorCall.Refused(ContributorRefusal.QUARANTINE_UNCONFIGURED)
+                "db_unavailable" -> ContributorCall.Refused(ContributorRefusal.SERVER_UNAVAILABLE, response.retryAfter)
+                else -> ContributorCall.Refused(ContributorRefusal.OUTCOME_UNKNOWN, response.retryAfter)
             }
+            in 500..599 -> ContributorCall.Refused(ContributorRefusal.OUTCOME_UNKNOWN)
             else -> ContributorCall.Refused(ContributorRefusal.SERVER_UNAVAILABLE)
         }
     } catch (e: CancellationException) {
         throw e
-    } catch (_: Exception) {
-        ContributorCall.Refused(ContributorRefusal.TRANSPORT_FAILURE)
+    } catch (e: Exception) {
+        // Sol round 1 S1: only a failure to connect proves nothing left the phone.
+        ContributorCall.Refused(if (e.beforeSending()) ContributorRefusal.TRANSPORT_FAILURE else ContributorRefusal.OUTCOME_UNKNOWN)
     }
+
+    /** A failure that happens before any request byte can leave: no address, no connection, no TLS session. */
+    private fun Exception.beforeSending(): Boolean =
+        this is java.net.UnknownHostException || this is java.net.ConnectException ||
+            this is java.net.NoRouteToHostException || this is javax.net.ssl.SSLHandshakeException ||
+            this is javax.net.ssl.SSLPeerUnverifiedException
 
     /** A slot id from the server is held to the slot grammar, so nothing else reaches the phone's state. */
     private fun slotId(obj: JsonObject): String =
@@ -531,6 +556,8 @@ class CensusApi(
         /** #1626: the server's slot id grammar and the public census hash. */
         private val SLOT = Regex("[A-Za-z0-9/]{1,512}")
         private val HASH = Regex("[0-9a-f]{16}")
+        /** #1627: the quarantine answer's artifact digest. */
+        private val SHA256 = Regex("[0-9a-f]{64}")
 
         fun batchId(fingerprints: List<String>): String = MessageDigest.getInstance("SHA-256")
             .digest(fingerprints.sorted().joinToString("\n").toByteArray(Charsets.UTF_8))

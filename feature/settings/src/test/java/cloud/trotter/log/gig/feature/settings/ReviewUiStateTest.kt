@@ -2,6 +2,8 @@ package cloud.trotter.log.gig.feature.settings
 
 import cloud.trotter.census.contract.contributor.ContributorRole
 import cloud.trotter.census.contract.contributor.SlotClass
+import cloud.trotter.log.gig.core.data.census.contributor.AskOutcome
+import cloud.trotter.log.gig.core.data.census.contributor.AskRefusal
 import cloud.trotter.log.gig.core.data.census.contributor.ClassesState
 import cloud.trotter.log.gig.core.data.census.contributor.ReviewLoad
 import cloud.trotter.log.gig.core.data.census.contributor.ReviewRow
@@ -11,6 +13,7 @@ import cloud.trotter.log.gig.core.data.census.contributor.SlotValue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** #1626 (Sol S6): the review screen's state when the grant stops standing. Every value is fictional. */
@@ -50,5 +53,37 @@ class ReviewUiStateTest {
         }
         assertEquals(SendOutcome.LATER, sending.sent(SendOutcome.LATER).failure)
         assertNull(sending.sent(SendOutcome.SENT).review)
+    }
+
+    @Test fun `Ask the developer leaves the screen with the deletion day, or keeps the review and says why`() {
+        val asking = ready.copy(phase = ReviewPhase.ASKING)
+        val sent = asking.asked(AskOutcome.Sent("2026-11-17"))
+        assertEquals(ReviewPhase.ASKED, sent.phase)
+        assertEquals(AskOutcome.Sent("2026-11-17"), sent.asked)
+        assertNull(sent.review)
+        assertEquals(emptySet<String>(), sent.confirmed)
+        // Sol round 1 S1: an unverified or possible send leaves the screen too; it is never offered again.
+        listOf(AskOutcome.Unconfirmed("2026-11-17"), AskOutcome.ReceiptUnreadable, AskOutcome.MaybeSent).forEach {
+            val after = asking.asked(it)
+            assertEquals(ReviewPhase.ASKED, after.phase)
+            assertEquals(it, after.asked)
+            assertNull(after.review)
+        }
+        listOf(AskRefusal.LATER, AskRefusal.UNREACHABLE, AskRefusal.REFUSED, AskRefusal.UNCONFIGURED).forEach {
+            val kept = asking.asked(AskOutcome.NotSent(it))
+            assertEquals(ReviewPhase.READY, kept.phase)
+            assertEquals(it, kept.askFailure)
+            assertEquals(review, kept.review)
+        }
+        listOf(AskRefusal.NOT_ALLOWED, AskRefusal.INSTALL_REVOKED).forEach {
+            assertNull(asking.asked(AskOutcome.NotSent(it)).review)
+        }
+        assertEquals(ReviewPhase.NOT_FOUND, asking.asked(AskOutcome.NotSent(AskRefusal.NOT_FOUND)).phase)
+        // A grant that ended while it ran stays ended; a sent ask keeps its message once the grant ends.
+        val ended = ReviewUiState().grantEnded()
+        assertEquals(ended, ended.asked(AskOutcome.Sent("2026-11-17")))
+        assertEquals(ReviewPhase.ASKED, sent.grantEnded().phase)
+        assertFalse(asking.canAsk)
+        assertTrue(ready.canAsk)
     }
 }

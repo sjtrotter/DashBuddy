@@ -90,6 +90,10 @@ class ContributorReviewTest {
             val sent = Json.parseToJsonElement(body.decodeToString()).jsonObject.getValue("words").jsonArray
             return ContributorCall.Ok(sent.map { WordAnswer(it.jsonObject.getValue("slot").toString().trim('"'), WordStatus.ACCEPTED) })
         }
+        override suspend fun quarantine(cred: Bearer.Credential, body: ByteArray): ContributorCall<cloud.trotter.log.gig.core.network.census.QuarantineReceipt> {
+            calls += ContributorTransport.QUARANTINE_PATH to body
+            return ContributorCall.Refused(ContributorRefusal.QUARANTINE_UNCONFIGURED)
+        }
         fun bodies(path: String? = null): List<String> = calls.filter { path == null || it.first == path }.map { it.second.decodeToString() }
     }
 

@@ -2,6 +2,7 @@ package cloud.trotter.log.gig.census
 
 import cloud.trotter.census.contract.CensusHash
 import cloud.trotter.census.contract.SkeletonVersion
+import cloud.trotter.census.contract.sha256OrNull
 import cloud.trotter.census.contract.auth.Bearer
 import cloud.trotter.census.contract.auth.InstallSecret
 import cloud.trotter.census.contract.contributor.ContributorRole
@@ -9,6 +10,7 @@ import cloud.trotter.census.contract.contributor.ContributorSlots
 import cloud.trotter.census.contract.contributor.SlotClass
 import cloud.trotter.log.gig.core.data.census.CensusCredentialStore
 import cloud.trotter.log.gig.core.data.census.CensusUploadLock
+import cloud.trotter.log.gig.core.data.census.contributor.AskOutcome
 import cloud.trotter.log.gig.core.data.census.contributor.ContributorReviewQueue
 import cloud.trotter.log.gig.core.data.census.contributor.ContributorReviewer
 import cloud.trotter.log.gig.core.data.census.contributor.ReviewLoad
@@ -20,6 +22,7 @@ import cloud.trotter.log.gig.core.network.census.CensusSentObserver
 import cloud.trotter.log.gig.core.network.census.ContributorCall
 import cloud.trotter.log.gig.core.network.census.ContributorTransport
 import cloud.trotter.log.gig.core.network.census.GateAnswer
+import cloud.trotter.log.gig.core.network.census.QuarantineReceipt
 import cloud.trotter.log.gig.core.network.census.ReviewCounts
 import cloud.trotter.log.gig.core.network.census.SlotClasses
 import cloud.trotter.log.gig.core.network.census.WordAnswer
@@ -91,6 +94,15 @@ class ContributorReviewPrivacyTest {
             calls += ContributorTransport.WORDS_PATH to body.decodeToString()
             val sent = Json.parseToJsonElement(body.decodeToString()).jsonObject.getValue("words").jsonArray.map { it.jsonObject }
             return ContributorCall.Ok(sent.map { WordAnswer(it.getValue("slot").jsonPrimitive.content, WordStatus.ACCEPTED) })
+        }
+        /** #1627: the artifact the server would seal, decoded from the request; the receipt echoes its hash. */
+        val artifacts = mutableListOf<String>()
+        override suspend fun quarantine(cred: Bearer.Credential, body: ByteArray): ContributorCall<QuarantineReceipt> {
+            calls += ContributorTransport.QUARANTINE_PATH to body.decodeToString()
+            val encoded = Json.parseToJsonElement(body.decodeToString()).jsonObject.getValue("artifact").jsonPrimitive.content
+            val artifact = java.util.Base64.getUrlDecoder().decode(encoded)
+            artifacts += artifact.decodeToString()
+            return ContributorCall.Ok(QuarantineReceipt("2026-11-17", requireNotNull(sha256OrNull(artifact))))
         }
     }
 
@@ -222,6 +234,51 @@ class ContributorReviewPrivacyTest {
         transport.calls.forEach { (path, body) ->
             values.forEach { value -> assertFalse("'$value' left in $path", body.contains(value)) }
             values.mapNotNull { CensusHash.of(it) }.forEach { assertFalse("a hash of a covered value left in $path", body.contains(it)) }
+        }
+    }
+
+    @Test fun `Ask the developer sends no customer value in any field, and a word only once its gate opens`() = runTest {
+        for (gateOpen in listOf(false, true)) {
+            context.filesDir.deleteRecursively()
+            context.filesDir.mkdirs()
+            val built = SkeletonBuilder.outcome(frame(), "Current dash", ReplayMetadata(engineVersion = 1), Platform.DoorDash,
+                LocalDate.parse("2026-11-13"), SkeletonVersion.V2, collectWords = true) as SkeletonBuilder.Outcome.Built
+            val record = CensusRecord(Platform.DoorDash, built.skeleton.fingerprint, built.json, built.itemBytes, null, reviewWords = built.reviewWords)
+            val transport = Recording { SlotClass.CONSTANT }.apply { open = gateOpen }
+            val queue = ContributorReviewQueue(context, { gate }, ContributorDataSource(memoryPreferences()), backgroundScope, Dispatchers.Unconfined, clock)
+            queue.offer(record)
+            queue.uploaded(listOf(record.skeletonJson))
+            val start = clock.millis
+            clock.millis += 86_400_000L
+            val id = queue.entries.first().single().id
+            val reviewer = reviewerFor(queue, transport)
+            val review = (reviewer.open(id) as ReviewLoad.Ready).review
+            // The dasher confirms every row it can (the bare first name included) and labels every row.
+            val confirmable = review.rows.filter { it.confirmable }.map { it.slot }.toSet()
+            val all = review.rows.map { it.slot }
+            val outcome = reviewer.ask(id, confirmable, all.associateWith { ContributorRole.CUSTOMER_INFO }, null, review)
+            assertTrue("gate open=$gateOpen", outcome is AskOutcome.Sent)
+            val artifact = Json.parseToJsonElement(transport.artifacts.single()).jsonObject
+            assertEquals(listOf("skeleton", "confirmations", "roles", "words"), artifact.keys.toList())
+            // No plaintext customer value anywhere in the artifact, the skeleton included.
+            customer.filter { it != "Quinn" }.forEach { value ->
+                assertFalse("'$value' in the artifact", transport.artifacts.single().contains(value.trim('"')))
+            }
+            val words = artifact.getValue("words").jsonArray.map { it.jsonObject.getValue("word").jsonPrimitive.content }
+            if (gateOpen) {
+                // Every gate answers open in this fake; only words the phone's covers let through are held at all.
+                assertTrue(wording in words)
+                customer.filter { it != "Quinn" }.forEach { value -> assertTrue(words.none { it.contains(value.trim('"')) }) }
+            } else {
+                assertTrue("a closed gate sends no word", words.isEmpty())
+                assertFalse(transport.artifacts.single().contains(wording))
+            }
+            // Customer values' hashes are never confirmed: their slots were covered, so they are not confirmable.
+            val confirmed = artifact.getValue("confirmations").toString()
+            customer.filter { it != "Quinn" }.mapNotNull { CensusHash.of(it) }.forEach { assertFalse(confirmed.contains(it)) }
+            assertEquals("no review is sent by Ask the developer", 0, transport.calls.count { it.first == ContributorTransport.REVIEW_PATH })
+            assertTrue("the candidate was handled", queue.entries.first().isEmpty())
+            clock.millis = start
         }
     }
 

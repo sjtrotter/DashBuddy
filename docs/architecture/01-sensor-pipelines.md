@@ -1089,8 +1089,31 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   when a candidate is ready and the gate stands, once a UTC day per process; it shares `afterShiftEnds` with the
   invitation. UI: `ContributorScreen` lists the queue (ready derived from `rememberNow()`, at most 3 ready rows);
   `ContributorReviewScreen` (route `settings/census/reviewer/review/{reviewId}`, not a deep-link target) renders the
-  rows, Send / Delete, and an `onAskDeveloper` seam for #1627 that is null today. INFO lines: `census review sent
+  rows, Send / Delete and Ask the developer. INFO lines: `census review sent
   confirmations=<n> roles=<n>`, `census review words accepted=<n>`; DEBUG `census review candidate kept waiting=<n>`.
+  **Ask the developer (#1627, census#81 "Quarantine"):** the button shows only while the review is READY (so the grant
+  stands) and opens `AskDeveloperSheet` (what goes, who can open it, 3 days; an optional `QuarantineNote` from the
+  contract's closed list). The view model runs `refresh()` outside the lock, then `ContributorReviewer.ask` under
+  `CensusUploadLock`: `mayUpload()` first; with confirmations and held words, `mayUpload()` then `gates`; then
+  `mayUpload()` and `POST /v1/contributor/quarantine` (`ContributorTransport.quarantine`, body
+  `ContributorRequests.quarantine`: `{"artifact":<unpadded base64url>,"note"?}`). The artifact is
+  `ContributorRequests.artifact` only: the server's canonical form (`CensusSkeletonSchema.serialize` of the stored
+  skeleton, then `confirmations`, `roles`, `words`, compact, every array present); `words` come only from
+  `openWords(confirmations, words, open)`, `open` being the (slot, hash) pairs `gates` answered open in this call, each
+  word checked against `CensusHash.of`. `409 gate_closed` (`ContributorRefusal.GATE_CLOSED`) is answered once with an
+  empty `words`; `422 bad_artifact`, `503 quarantine_unconfigured`, `paused`, `budget_exhausted` and transport failures
+  keep the candidate (`AskOutcome.NotSent`); `GRANT_REQUIRED`/`INSTALL_REVOKED` stop the session through `abort`. On
+  200 the candidate is removed; `sha256OrNull(artifact)` equal to `artifactSha256` is `AskOutcome.Sent(expiresDay)`,
+  otherwise `Unconfirmed` (WARN `census quarantine unconfirmed cause=hash_mismatch`, never resent); the removal, hash
+  check and WARN run in `NonCancellable` (Sol round 1 S2). Sol round 1 S1: the transport tells a failure to connect
+  (`TRANSPORT_FAILURE`: unknown host, refused connection, TLS handshake) from one after it (`OUTCOME_UNKNOWN`: a
+  timeout or reset, a 5xx with no known error); `OUTCOME_UNKNOWN`, an unreadable 200 (`INVALID_RESPONSE`) and a
+  cancellation while the request is out retire the candidate (`AskOutcome.MaybeSent`, `ReceiptUnreadable`; WARN
+  `census quarantine unverified cause=<token>`) instead of inviting a second copy. The screen's ASKED
+  phase shows the server's `expiresDay` ("deletes it by", 00:00 UTC that day). WARN `census quarantine gate closed;
+  asking again with hashes only` on a 409; INFO `census quarantine sent
+  confirmations=<n> roles=<n> words=<n> note=<bool>`. `ContributorQuarantineTest` canonicalizes like the server's
+  `QuarantineArtifact.parse` and asserts byte identity and the hash; the privacy test runs the real skeleton builder.
   **Identity reset + run status (#1185):** when the server no longer knows an enrolled install (alpha
   database reset, withdrawn install) uploads 401 and, since #1622, the worker re-enrols the same identity itself; the developer screen's **Reset
   census identity** action (confirmation dialog) runs `CensusIdentityResetter` (`:core:data`) on the

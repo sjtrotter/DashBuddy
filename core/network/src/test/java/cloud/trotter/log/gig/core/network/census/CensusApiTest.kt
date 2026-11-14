@@ -475,4 +475,50 @@ class CensusApiTest {
         respond(200, "{\"slots\":[{\"slot\":\"root/0/text; drop\",\"class\":\"constant\"}]}")
         assertEquals(ContributorCall.Refused(ContributorRefusal.INVALID_RESPONSE), api.classes(credential, body))
     }
+
+    @Test fun `the quarantine call sends the given bytes and reads only the receipt`() = runTest {
+        val body = "{\"artifact\":\"e30\"}".toByteArray(Charsets.UTF_8)
+        val sha = "ab".repeat(32)
+        respond(200, "{\"status\":\"quarantined\",\"expiresDay\":\"2026-11-17\",\"artifactSha256\":\"$sha\"}")
+        assertEquals(ContributorCall.Ok(QuarantineReceipt("2026-11-17", sha)), api.quarantine(credential, body))
+        val request = requireNotNull(server.takeRequest(1, TimeUnit.SECONDS))
+        assertEquals(ContributorTransport.QUARANTINE_PATH, request.url.encodedPath)
+        assertArrayEquals(body, requireNotNull(request.body).toByteArray())
+
+        respond(200, "{\"status\":\"quarantined\",\"expiresDay\":\"soon\",\"artifactSha256\":\"$sha\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.INVALID_RESPONSE), api.quarantine(credential, body))
+        respond(200, "{\"status\":\"quarantined\",\"expiresDay\":\"2026-11-17\",\"artifactSha256\":\"ABC\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.INVALID_RESPONSE), api.quarantine(credential, body))
+        respond(409, "{\"error\":\"gate_closed\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.GATE_CLOSED), api.quarantine(credential, body))
+        respond(422, "{\"error\":\"bad_artifact\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.BAD_ARTIFACT), api.quarantine(credential, body))
+        respond(503, "{\"error\":\"quarantine_unconfigured\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.QUARANTINE_UNCONFIGURED), api.quarantine(credential, body))
+        respond(503, "{\"error\":\"paused\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.PAUSED, 17), api.quarantine(credential, body))
+        respond(403, "{\"error\":\"grant_required\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.GRANT_REQUIRED), api.quarantine(credential, body))
+    }
+
+    @Test fun `a failure to connect proves nothing was sent, any later failure or an unknown 5xx may have stored it`() = runTest {
+        val body = "{}".toByteArray()
+        fun failing(e: java.io.IOException) = CensusApi(
+            OkHttpClient.Builder().addInterceptor { throw e }.build(), server.url("/").toString().removeSuffix("/"),
+        )
+        listOf(java.net.ConnectException(), java.net.UnknownHostException(), javax.net.ssl.SSLHandshakeException("x")).forEach {
+            assertEquals(ContributorCall.Refused(ContributorRefusal.TRANSPORT_FAILURE), failing(it).quarantine(credential, body))
+        }
+        listOf(java.net.SocketTimeoutException(), java.io.IOException("unexpected end of stream")).forEach {
+            assertEquals(ContributorCall.Refused(ContributorRefusal.OUTCOME_UNKNOWN), failing(it).quarantine(credential, body))
+        }
+        respond(502, "<html>bad gateway</html>")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.OUTCOME_UNKNOWN), api.quarantine(credential, body))
+        respond(500, "{\"error\":\"internal_error\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.OUTCOME_UNKNOWN), api.quarantine(credential, body))
+        respond(503, "{\"error\":\"db_unavailable\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.SERVER_UNAVAILABLE, 17), api.quarantine(credential, body))
+        respond(404, "")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.SERVER_UNAVAILABLE), api.quarantine(credential, body))
+    }
 }

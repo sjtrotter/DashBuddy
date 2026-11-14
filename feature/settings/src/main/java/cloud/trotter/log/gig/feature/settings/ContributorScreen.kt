@@ -133,12 +133,6 @@ fun ContributorContent(
             if (shown.entry == ContributorEntry.ON) WaitingReviews(shown.waiting, now, onOpenReview)
             Spacer(Modifier.height(8.dp))
             Text(stringResource(R.string.census_review_intro), style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                stringResource(R.string.census_review_note),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             REVIEW_SECTIONS.forEach { (title, body) ->
                 Spacer(Modifier.height(16.dp))
                 Text(
