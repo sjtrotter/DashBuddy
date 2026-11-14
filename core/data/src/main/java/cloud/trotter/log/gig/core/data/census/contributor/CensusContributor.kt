@@ -11,6 +11,8 @@ import cloud.trotter.log.gig.core.network.census.GrantResult
 import cloud.trotter.log.gig.domain.capability.ConsentReceipt
 import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
 import cloud.trotter.log.gig.domain.census.CensusConsent
+import cloud.trotter.log.gig.domain.census.CensusLastRun
+import cloud.trotter.log.gig.domain.census.CensusRunOutcome
 import cloud.trotter.log.gig.domain.census.contributor.ContributorEnd
 import cloud.trotter.log.gig.domain.census.contributor.ContributorEntry
 import cloud.trotter.log.gig.domain.census.contributor.ContributorGate
@@ -263,6 +265,7 @@ class CensusContributor internal constructor(
         clearPendingReviews()
         try {
             revokeInstall()
+            settings.setCensusLastRun(CensusLastRun(now, CensusRunOutcome.REVOKED))
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {

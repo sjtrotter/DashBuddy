@@ -2,16 +2,15 @@ package cloud.trotter.log.gig.core.data.census
 
 import cloud.trotter.log.gig.core.data.settings.DevSettingsRepository
 import cloud.trotter.log.gig.domain.capture.CensusEnvelopeSink
-import cloud.trotter.log.gig.domain.census.CensusLastRun
-import cloud.trotter.log.gig.domain.census.CensusRunOutcome
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * #1625: the phone's half of a `401 revoked` outside the upload worker (the contributor grant routes), the same steps
- * as the worker's revoke: the census switched off first (so a failed wipe cannot leave uploads on; capture sharing goes
- * off in the same edit), the envelopes invalidated, the health ledger reset, the credential wiped, and `revoked` recorded
- * as the last run so the census screen says why. The caller holds [CensusUploadLock].
+ * The one owner of the phone's half of a census `401 revoked` (#1625): the census upload worker, the deletion request
+ * (#1622) and the contributor grant routes all run these steps. The census switch goes off first, so a failed wipe can
+ * never leave uploads on (capture sharing goes off in the same edit); then the envelopes are invalidated, the health
+ * ledger reset (its rows belong to the revoked ID and must never post under a new one), and the credential wiped. It
+ * takes no lock: every caller already holds [CensusUploadLock]. Each caller records its own outcome.
  */
 @Singleton
 class CensusInstallRevocation @Inject constructor(
@@ -25,6 +24,5 @@ class CensusInstallRevocation @Inject constructor(
         envelopeSink.invalidate()
         healthSink.reset()
         credentials.wipe()
-        preferences.setCensusLastRun(CensusLastRun(System.currentTimeMillis(), CensusRunOutcome.REVOKED))
     }
 }

@@ -1027,8 +1027,9 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   any change discards the response (`SUPERSEDED`): a grant the server issued after a decline is never stored, so nothing
   uploads under it, and it lapses on the server (the API has no route for a phone to drop its own grant). **Install
   revoked (S2):** `401 revoked` on the POST or the state GET ends the grant (`INSTALL_REVOKED`), clears pending reviews
-  and runs `CensusInstallRevocation` (census off, envelopes invalidated, health reset, credential wiped, `revoked` last
-  run), the worker's revoke steps; `refresh()` takes `CensusUploadLock` for this. **Time (S3):** `watch()` also sleeps
+  and runs `CensusInstallRevocation` (census off, envelopes invalidated, health reset, credential wiped; the contributor
+  then records a `revoked` last run). That class is the one owner of the revoke steps: the upload worker and
+  `CensusDataDeletion` call it too, under the upload lock they already hold (it takes none); `refresh()` takes `CensusUploadLock` for this. **Time (S3):** `watch()` also sleeps
   until the grant's expiry instant (start of its UTC expiry day, by the injected clock) and ends it then; `status`
   re-reads on a one-minute tick; the reviewer screen and the Census row derive "on" from `rememberNow()` against
   `ContributorGrant.expiryMillis`. INFO lines: `census contributor invited`, `request outcome=<token>`,

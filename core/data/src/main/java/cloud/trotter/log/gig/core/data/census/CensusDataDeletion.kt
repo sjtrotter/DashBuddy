@@ -72,6 +72,9 @@ class CensusDataDeletion internal constructor(
     ) : this(credentials, spool, envelopeSink, healthSink, preferences, scheduler, lock, apis, scope, appVersion,
         System::currentTimeMillis)
 
+    /** #1625: the revoke steps' one owner, over this class's own stores; a request already holds the upload lock. */
+    private val revocation = CensusInstallRevocation(preferences, envelopeSink, healthSink, credentials)
+
     private val running = MutableStateFlow(false)
 
     /** True while a request from this process is being made; the screen shows progress from it. */
@@ -192,13 +195,10 @@ class CensusDataDeletion internal constructor(
                 finish(current.copy(waiting = CensusDeletion.Waiting.UNCONFIRMED))
             }
             DeleteResult.Revoked -> {
-                // As the worker's revoke: the outcome is saved, the census switched off, then the identity forgotten.
-                // The server deletes a revoked install's sightings itself on revocation.
+                // The outcome is saved first, then the worker's revoke steps (CensusInstallRevocation). The server deletes
+                // a revoked install's sightings itself on revocation.
                 val done = finish(current.copy(state = State.NOT_POSSIBLE, waiting = null))
-                preferences.setCensusUploadEnabled(false)
-                envelopeSink.invalidate()
-                preferences.setCensusShareCaptures(false)
-                credentials.wipe()
+                revocation.apply()
                 Timber.tag(TAG).w("census deletion: revoked")
                 done
             }
