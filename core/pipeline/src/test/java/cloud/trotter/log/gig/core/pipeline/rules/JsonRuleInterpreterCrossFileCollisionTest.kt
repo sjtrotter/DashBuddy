@@ -46,7 +46,7 @@ class JsonRuleInterpreterCrossFileCollisionTest {
     @After fun uproot() = Timber.uprootAll()
 
     /** A file re-declaring [sharedId], with a distinctive redact [keepPrefix] marker. */
-    private fun fileDeclaring(platform: String, sharedId: String, keepPrefix: String, ownId: String) = """
+    private fun fileDeclaring(platform: String, sharedId: String, keepPrefix: String, ownId: String, ownPriority: Int) = """
         {
           "format_version": 2,
           "platform_id": "$platform",
@@ -57,7 +57,7 @@ class JsonRuleInterpreterCrossFileCollisionTest {
               "require": { "exists": { "hasText": "Deliver to" } },
               "redact": [ { "find": { "hasTextStartsWith": "Deliver to " }, "keepPrefix": ["$keepPrefix"] } ]
             },
-            { "id": "$ownId", "priority": 9102, "require": { "exists": { "hasText": "X" } } }
+            { "id": "$ownId", "priority": $ownPriority, "require": { "exists": { "hasText": "X" } } }
           ]
         }
     """.trimIndent()
@@ -76,11 +76,11 @@ class JsonRuleInterpreterCrossFileCollisionTest {
     fun `a later rule colliding on a rule id is dropped, the rest of its file and other platforms survive`() {
         val shared = "doordash.screen.shared"
         val alpha = interpreter.loadSingle(
-            fileDeclaring("doordash.driver", shared, "ALPHA ", "doordash.screen.alpha_only"), "alpha.json",
+            fileDeclaring("doordash.driver", shared, "ALPHA ", "doordash.screen.alpha_only", 9102), "alpha.json",
         )!!
         // Later file re-declares `shared` with a DIFFERENT redact (the would-be shadow).
         val beta = interpreter.loadSingle(
-            fileDeclaring("doordash.driver", shared, "BETA ", "doordash.screen.beta_only"), "beta.json",
+            fileDeclaring("doordash.driver", shared, "BETA ", "doordash.screen.beta_only", 9103), "beta.json",
         )!!
         // A disjoint, different platform that must keep loading.
         val gamma = interpreter.loadSingle(disjointFile("uber.driver", "uber.screen.gamma_only"), "gamma.json")!!

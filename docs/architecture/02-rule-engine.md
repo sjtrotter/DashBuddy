@@ -474,8 +474,10 @@ bundled `assets/rules/` files; when that generation goes live its files become t
 `prepareGeneration(remote)` and `load(verified)` take remote files only and assemble them on that floor, so a caller
 cannot leave the bundled blocks out, and both refuse until the floor exists. Preparing, capability reconciliation and
 publishing run under one `Mutex`, so a load suspended in reconciliation cannot be overtaken by another and leave one
-generation live with the other's capabilities (`ActivationSerializationTest`). No network code exists yet (the rules
-feed is #640).
+generation live with the other's capabilities (`ActivationSerializationTest`). A `Prepared` carries its interpreter,
+the floor it was built on and the activation revision it saw; `activate` refuses it (false, with a WARN, live
+generation untouched) when any of them is no longer current, so a candidate prepared on an older floor, or before
+another generation went live, cannot replace a newer one. No network code exists yet (the rules feed is #640).
 
 - **Generation.** `RuleGeneration` is one immutable set of screen, click and notification rulesets, and it is the
   redaction source (`ScreenRedactionSource`). `ObservationClassifier.classifyFrame` reads the live generation once
@@ -508,7 +510,10 @@ feed is #640).
   Discovery walks every sub-expression (`extract` blocks, `coalesce` arms, `join` parts), so a field hidden under a
   `coalesce` is still found. The hash check judges the expression the compiler selects, using
   `ParseExpressionCompiler.SCREEN_SELECTORS` (its dispatch order, pinned by `ParseSelectorOrderPinTest`), and a
-  customer field naming two selectors (a raw `find` beside a hashed `coalesce`) is refused.
+  customer field naming two selectors (a raw `find` beside a hashed `coalesce`) is refused. A notification rule is
+  judged on the notification compiler's semantics instead: a `from` read whose `transform` ends in `sha256`, with no
+  key outside `ParseExpressionCompiler.NOTIFICATION_KEYS` (that compiler ignores the rest, such as a `coalesce`;
+  pinned by the same test).
   This stops a customer field being parsed unhashed. It cannot stop a signed hostile rule routing a customer's text
   into a field stored as-is, such as `storeName`, because the rule chooses what each field means (ADR-0013 X2).
 - **Catch-all rules (ADR-0013 X5).** "A remote set can add blocks but never remove or pre-empt one" holds for the

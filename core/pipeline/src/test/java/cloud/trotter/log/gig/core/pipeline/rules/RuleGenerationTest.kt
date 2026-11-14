@@ -322,4 +322,60 @@ class RuleGenerationTest {
         val reason = rejected(bundledFile, remote(file(known, rule)))
         assertTrue(reason, reason.contains("customerAddressHash"))
     }
+
+    private fun notificationFile(addressSpec: String) = """
+        { "format_version": 2, "platform_id": "doordash.driver", "notifications": [
+          { "id": "doordash.notification.address_push", "priority": 50, "intent": "address_push",
+            "require": { "anyFieldContains": "Deliver" },
+            "redact": { "text": {} },
+            "parse": { "as": "task", "fields": { "customerAddressHash": $addressSpec } } } ] }
+    """.trimIndent()
+
+    @Test
+    fun `a notification customer field is judged on the notification compiler's semantics`() {
+        val ignoredCoalesce = """{ "from": "text", "coalesce": [ { "find": { "hasIdSuffix": "unused" }, "transform": "sha256" } ] }"""
+        val reason = rejected(bundledFile, remote(notificationFile(ignoredCoalesce)))
+        assertTrue(reason, reason.contains("customerAddressHash"))
+
+        val generation = prepared(bundledFile, remote(notificationFile("""{ "from": "text", "transform": "sha256" }""")))
+        assertNotNull(generation.notifications.ruleById("doordash.notification.address_push"))
+    }
+
+    // ── Stale prepared generations ─────────────────────────────────────
+
+    private val extraBlock = rule("doordash.screen.sensitive.second", 1, "Bank Account", "sensitive", overrideable = false)
+    private val newerFloor = RuleFile.Bundled("rules/doordash.json", file(known, catchall, bundledIdle, extraBlock))
+
+    @Test
+    fun `a generation prepared on an older bundled floor is refused at activation`() = runTest {
+        interpreter.loadBundled(listOf(bundledFile))
+        val onOldFloor = interpreter.prepareGeneration(listOf(remote(file(rule("doordash.screen.other", 11, "Other")))))
+        interpreter.loadBundled(listOf(newerFloor))
+        val live = interpreter.generation
+
+        assertFalse(interpreter.activate(onOldFloor as GenerationResult.Prepared))
+        assertSame(live, interpreter.generation)
+        assertEquals("doordash.screen.sensitive.second", interpreter.generation?.winner("Bank Account"))
+    }
+
+    @Test
+    fun `an older prepared generation cannot replace a newer live one`() = runTest {
+        interpreter.loadBundled(listOf(bundledFile))
+        val a = interpreter.prepareGeneration(listOf(remote(file(rule("doordash.screen.a", 11, "A")))))
+        val b = interpreter.prepareGeneration(listOf(remote(file(rule("doordash.screen.b", 12, "B")))))
+
+        assertTrue(interpreter.activate(b as GenerationResult.Prepared))
+        assertFalse(interpreter.activate(a as GenerationResult.Prepared))
+        assertNotNull(interpreter.generation?.screens?.ruleById("doordash.screen.b"))
+        assertNull(interpreter.generation?.screens?.ruleById("doordash.screen.a"))
+    }
+
+    @Test
+    fun `another interpreter's prepared generation is refused`() = runTest {
+        interpreter.loadBundled(listOf(bundledFile))
+        val other = JsonRuleInterpreter(mock<Context>(), mock<RuleCapabilityGrants>())
+        other.loadBundled(listOf(bundledFile))
+        val foreign = other.prepareGeneration(listOf(remote(file(rule("doordash.screen.a", 11, "A")))))
+        assertFalse(interpreter.activate(foreign as GenerationResult.Prepared))
+    }
 }

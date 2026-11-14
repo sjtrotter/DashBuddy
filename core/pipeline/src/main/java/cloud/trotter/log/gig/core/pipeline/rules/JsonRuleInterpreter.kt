@@ -55,6 +55,10 @@ class JsonRuleInterpreter @Inject constructor(
     /** Held across prepare, reconcile and publish. */
     private val activation = Mutex()
 
+    /** Counts publishes. Written after [bundledFloor], read before it. */
+    @Volatile
+    private var revision = 0L
+
     val generation: RuleGeneration? get() = current
     val screenRuleset: Ruleset<UiNode>? get() = current?.screens
     val clickRuleset: Ruleset<UiNode>? get() = current?.clicks
@@ -95,8 +99,8 @@ class JsonRuleInterpreter @Inject constructor(
         activation.withLock {
             val result = RuleGenerationAssembler.assemble(files, emptyList())
             if (result is GenerationResult.Prepared) {
-                publish(result)
                 bundledFloor = files
+                publish(result)
             }
         }
     }
@@ -124,23 +128,39 @@ class JsonRuleInterpreter @Inject constructor(
      */
     fun prepareGeneration(remote: List<RuleFile.Remote>): GenerationResult = prepareOnFloor(remote)
 
-    /** Reconcile [prepared]'s capabilities, then make its generation live. */
-    suspend fun activate(prepared: GenerationResult.Prepared) {
-        activation.withLock { publish(prepared) }
+    /**
+     * Reconcile [prepared]'s capabilities, then make its generation live. Refused (false, live
+     * generation untouched) when [prepared] came from another interpreter, or a generation went live
+     * since it was prepared: it was built on a floor or a live state that is no longer current.
+     */
+    suspend fun activate(prepared: GenerationResult.Prepared): Boolean = activation.withLock {
+        val fresh = prepared.owner === this && prepared.baseRevision == revision &&
+            prepared.floor === bundledFloor
+        if (fresh) {
+            publish(prepared)
+        } else {
+            Timber.tag("Rules").w("Rules generation refused at activation: prepared on a generation no longer live")
+        }
+        fresh
     }
 
     private fun prepareOnFloor(remote: List<RuleFile.Remote>): GenerationResult {
+        val base = revision
         val floor = bundledFloor
         if (floor == null) {
             Timber.tag("Rules").e("Rules generation rejected: no bundled rules are live yet")
             return GenerationResult.Rejected("no bundled rules are live yet")
         }
-        return RuleGenerationAssembler.assemble(floor, remote)
+        return when (val result = RuleGenerationAssembler.assemble(floor, remote)) {
+            is GenerationResult.Prepared -> result.stamped(this, floor, base)
+            is GenerationResult.Rejected -> result
+        }
     }
 
     private suspend fun publish(prepared: GenerationResult.Prepared) {
         reconcileCapabilities(prepared.capabilities)
         current = prepared.generation
+        revision++
         Timber.tag("Rules").i(
             "Rules generation live: %d bundled + %d remote file(s) (screens=%d, clicks=%d, notifications=%d)",
             prepared.bundledFiles, prepared.remoteFiles, prepared.generation.screens.ruleCount,

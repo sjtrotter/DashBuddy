@@ -43,13 +43,22 @@ sealed class RuleFile(val source: String, internal val json: String) {
 /** The outcome of [JsonRuleInterpreter.prepareGeneration]. */
 sealed interface GenerationResult {
 
-    /** A generation that passed every check; [JsonRuleInterpreter.activate] makes it live. */
+    /**
+     * A generation that passed every check; [JsonRuleInterpreter.activate] makes it live while the
+     * interpreter is still where it was when this was prepared ([owner], [floor], [baseRevision]).
+     */
     class Prepared internal constructor(
         val generation: RuleGeneration,
         internal val capabilities: List<RuleCapability>,
         val bundledFiles: Int,
         val remoteFiles: Int,
-    ) : GenerationResult
+        internal val owner: JsonRuleInterpreter? = null,
+        internal val floor: List<RuleFile.Bundled>? = null,
+        internal val baseRevision: Long = -1,
+    ) : GenerationResult {
+        internal fun stamped(owner: JsonRuleInterpreter, floor: List<RuleFile.Bundled>, baseRevision: Long) =
+            Prepared(generation, capabilities, bundledFiles, remoteFiles, owner, floor, baseRevision)
+    }
 
     /** A generation that failed a check. The live generation stays. [reason] names files and rule ids only. */
     data class Rejected(val reason: String) : GenerationResult

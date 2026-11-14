@@ -40,6 +40,14 @@ internal object ParseExpressionCompiler {
         "siblingOf", "join", "coalesce", "read",
     )
 
+    /**
+     * Every key `compileNotifParseExpression` reads (#1568). A notification expression is a
+     * `literal`, or a read of the field named by `from`; any other key is ignored, so
+     * [RemoteRuleAdmission] refuses a notification customer field that carries one.
+     * `ParseSelectorOrderPinTest` pins this to that function.
+     */
+    val NOTIFICATION_KEYS = setOf("literal", "from", "find", "group", "transform", "fallback")
+
     // ==========================================================================
     //  Screen parse block compiler
     // ==========================================================================

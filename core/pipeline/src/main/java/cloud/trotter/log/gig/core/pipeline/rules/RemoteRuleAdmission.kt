@@ -30,7 +30,12 @@ internal object RemoteRuleAdmission {
             return "rule '${rule.id}' is overrideable: false without the sensitive shape on every branch"
         }
         val customerFields = customerFieldSpecs(raw)
-        val unhashed = customerFields.filterNot { (_, spec) -> hashesLast(spec) }.map { it.first }
+        val hashed: (JsonElement) -> Boolean = if (context == RuleContext.NOTIFICATION) {
+            { spec -> notificationHashesLast(spec) }
+        } else {
+            { spec -> hashesLast(spec) }
+        }
+        val unhashed = customerFields.filterNot { (_, spec) -> hashed(spec) }.map { it.first }
         if (unhashed.isNotEmpty()) {
             return "rule '${rule.id}' parses customer field(s) ${unhashed.distinct()} without sha256 last"
         }
@@ -95,15 +100,29 @@ internal object RemoteRuleAdmission {
                 val arms = obj["coalesce"] as? JsonArray
                 arms != null && arms.isNotEmpty() && arms.all { hashesLast(it) }
             }
-            in HASHED_READ_FORMS -> {
-                val last = when (val transform = obj["transform"]) {
-                    is JsonArray -> transform.lastOrNull()
-                    else -> transform
-                }
-                last is JsonPrimitive && last.isString && last.content == "sha256"
-            }
+            in HASHED_READ_FORMS -> endsInSha256(obj)
             else -> false
         }
+    }
+
+    /**
+     * The notification twin of [hashesLast], on the notification compiler's semantics: a read of
+     * the `from` field whose `transform` ends in `sha256`. A key that compiler ignores
+     * ([ParseExpressionCompiler.NOTIFICATION_KEYS]), such as a `coalesce`, is refused rather than
+     * trusted.
+     */
+    private fun notificationHashesLast(spec: JsonElement): Boolean {
+        val obj = spec as? JsonObject ?: return false
+        return obj.keys.all { it in ParseExpressionCompiler.NOTIFICATION_KEYS } &&
+            "literal" !in obj && "from" in obj && endsInSha256(obj)
+    }
+
+    private fun endsInSha256(obj: JsonObject): Boolean {
+        val last = when (val transform = obj["transform"]) {
+            is JsonArray -> transform.lastOrNull()
+            else -> transform
+        }
+        return last is JsonPrimitive && last.isString && last.content == "sha256"
     }
 
     private val HASHED_READ_FORMS = setOf("find", "textAfterLabel", "siblingOf", "join", "read")
