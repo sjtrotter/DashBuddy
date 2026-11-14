@@ -71,7 +71,10 @@ import cloud.trotter.log.gig.feature.settings.EventReceiptOffConfirmDialog
 import cloud.trotter.log.gig.feature.settings.PrivacyScreen
 import cloud.trotter.log.gig.feature.settings.PrivacyViewModel
 import cloud.trotter.log.gig.feature.settings.StrategySettingsContent
+import cloud.trotter.log.gig.feature.settings.WipeDialog
+import cloud.trotter.log.gig.feature.settings.WipePhoneDialog
 import cloud.trotter.log.gig.feature.settings.eventReceiptDisclosureParts
+import cloud.trotter.log.gig.core.data.wipe.WipeProgress
 import cloud.trotter.log.gig.ui.bubble.BubbleManager
 import cloud.trotter.log.gig.ui.main.analytics.DatePickerChoice
 import cloud.trotter.log.gig.ui.main.analytics.RecapDatePickerContent
@@ -217,7 +220,7 @@ class ScreenshotsTest(private val theme: String) {
     }) {
         SettingsHomeContent(
             isDevUnlocked = false, garage = ScreenshotData.garage, userEconomy = ScreenshotData.userEconomy,
-            onNavigate = {}, onBack = {},
+            onNavigate = {}, onBack = {}, onDeleteEverything = {},
         )
     }
 
@@ -277,6 +280,21 @@ class ScreenshotsTest(private val theme: String) {
     @Test fun settingsCensusDeleteDialog() = render("settings/census-delete-dialog", window = true, assertion = {
         text(string(SettingsR.string.census_delete_dialog_title)).assertExists()
     }) { CensusDeleteDialog(onConfirm = {}, onDismiss = {}) }
+
+    /** #1579: Delete everything on this phone, enrolled in the census: what goes, the census request first, what stays. */
+    @Test fun settingsWipeConfirm() = render("settings/wipe-confirm", window = true, assertion = {
+        text(string(SettingsR.string.wipe_confirm_title)).assertExists()
+    }) { WipePhoneDialog(WipeDialog.Confirm(census = true), onConfirm = {}, onWipeNow = {}, onDismiss = {}) }
+
+    /** #1579: the census server can't take deletions yet: Delete now (the server keeps the uploads) or Wait. */
+    @Test fun settingsWipeCensusNotConfirmed() = render("settings/wipe-census-not-confirmed", window = true, assertion = {
+        text(string(SettingsR.string.wipe_census_title)).assertExists()
+    }) {
+        WipePhoneDialog(
+            WipeDialog.Running(WipeProgress.CensusNotConfirmed(WipeProgress.Reason.NOT_YET)),
+            onConfirm = {}, onWipeNow = {}, onDismiss = {},
+        )
+    }
 
     /** #1622: what the census sent, a day with outlines, a notification and daily counts, the next upload ahead. */
     @Test fun settingsCensusSent() = render("settings/census-sent", assertion = {

@@ -58,15 +58,6 @@ class CensusSentLog internal constructor(
         }
     }
 
-    /** Forgets every sent record (the on-phone wipe, #1579). */
-    suspend fun clear() = withContext(io) {
-        mutex.withLock {
-            if (file.exists() && !file.delete()) throw IOException("Census sent record removal failed")
-            rewriteNeeded = false
-            state.value = emptyList()
-        }
-    }
-
     /**
      * The kept records, pruned to [MAX_AGE_MILLIS]: an expired record is dropped from the file and from [batches] on
      * every read (each collection of [batches] reads first), not only on the next write. A failed rewrite keeps the

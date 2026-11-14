@@ -79,7 +79,5 @@ class CensusSentLogTest {
         assertTrue(sent.batches.first().isEmpty())
         sent.record("/v1/enroll", """{"installId":"x"}""".toByteArray())
         assertTrue(sent.batches.first().isEmpty())
-        sent.clear()
-        assertFalse(file.exists())
     }
 }

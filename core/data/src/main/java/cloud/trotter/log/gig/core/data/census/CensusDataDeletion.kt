@@ -30,8 +30,8 @@ import javax.inject.Singleton
 import kotlin.math.abs
 
 /**
- * #1622: "Delete my census data", separate from stopping (ADR-0011 §21). [delete] is the one entry point: the census
- * screen's button calls it through [deleteAsync], and the on-phone wipe (#1579) calls it too.
+ * #1622: "Delete my census data", separate from stopping (ADR-0011 §21). The census screen's button calls [delete]
+ * through [deleteAsync]; the on-phone wipe (#1579, `PhoneWipe`) calls [requestHoldingLock] under the lock it keeps.
  *
  * Under the uploader lock (never mid-batch), it stores the request as pending, queues its own retry run on any
  * network ([CensusUploadScheduler.enqueueDeletion]) before the first attempt, cancels a waiting manual run and clears

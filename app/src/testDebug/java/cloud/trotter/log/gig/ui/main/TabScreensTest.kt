@@ -133,7 +133,7 @@ class TabScreensTest {
         show {
             SettingsHomeContent(
                 isDevUnlocked = false, garage = ScreenshotData.garage, userEconomy = ScreenshotData.userEconomy,
-                onNavigate = {}, onBack = { calls += "back" },
+                onNavigate = {}, onBack = { calls += "back" }, onDeleteEverything = {},
             )
         }
         click(compose.onNodeWithContentDescription(back))
