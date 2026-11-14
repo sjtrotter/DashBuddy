@@ -356,9 +356,10 @@ is offered again after a later shift. The grant request is not listed under "Wha
 UNKNOWN screen it builds as `uinode.skeleton.v2`, the words of the slots the skeleton HASHED (text the census filter
 let through as possible app wording), keyed by the census server's slot id (`SkeletonBuilder.reviewWords`,
 `ReviewWords`). A word is kept only if it also passes the review's own cover (`ReviewWordCover`): no customer marker,
-sensitive marker, mask, name or other PII shape, digit or `@`, no greeting, account or place label ("Hi, …",
-"Account …", "… in <Place>"), no note or message, and no label carrying a value after a colon; and only if the
-rules-independent address-block backstop did not select its node. A withheld, coarse or format slot has no word, so no
+sensitive marker, return-task name, mask, name or other PII shape, digit or `@`, no greeting, account or place
+label ("Hi, …", "Account …", "… in <Place>"), no note or message, and no colon of any kind (a label and its value);
+and only if the rules-independent address-block backstop did not select its node, nor does any field of a selected
+node hold the same value anywhere else in the screen. A withheld, coarse or format slot has no word, so no
 other screen text is kept. When the census sink queues that skeleton for upload (the UTC day's first of its layout),
 the review queue (`ContributorReviewQueue`) takes it as a candidate, after checking `CensusContributor.mayUpload`: at
 most 3 new layouts a UTC day, one candidate per layout, at most 6 waiting, dropped after 7 days, and a layout sent or
@@ -367,7 +368,9 @@ census directory every backup and transfer excludes) in its outbound form only: 
 (hashes, kinds, formats, `withheld`), its layout id, the UTC days it was built and stored by the server, and the layout
 ids sent or deleted today. The words stay in the app's memory only: never written to storage, logged or put in saved
 screen state, and gone when gig.log's process ends; the review then says the words are gone and offers labels only.
-The upload worker tells the queue which skeletons the server stored (accepted or duplicate). A screen opens for review
+The upload worker tells the queue which skeletons the server stored: only a batch the server accepted with no
+rejected item counts, since its answer has no per-item results; a duplicate answer counts for none. A candidate past 7
+days is dropped, with its words, on load, on every read and from the clock alone. A screen opens for review
 only from the UTC day after the server stored it, because the server's slot classes for a new layout arrive with the
 next day's release; before that, Screen reviews says "Ready tomorrow". After a shift ends, a notification on the
 "Census" channel says screens are ready (`ContributorReviewNotifier`, at most once a UTC day, only with a standing
@@ -385,8 +388,9 @@ slot's public census hash, never the word) and the labels; then `gates` for the 
 it), each word checked on the phone to hash to its slot's hash. A word whose gate is closed is held in memory and its
 gate asked again at the start of the next review session; a process death drops it, and the server keeps the
 confirmation. **Delete** drops the candidate and its words and sends nothing. A refused review (the server paused, a
-daily quota spent, no network) keeps the candidate; `403 grant_required` or `401 revoked` sends nothing more and runs
-the grant's state read. Review requests are not listed under "What gig.log sent". The INFO log says only how many
+daily quota spent, no network) keeps the candidate; `403 grant_required` or `401 revoked` on any review request
+stops the session, runs the grant's state read, then drops the screen's words and every held word. The review screen
+clears its rows, words and choices whenever the grant stops standing. Review requests are not listed under "What gig.log sent". The INFO log says only how many
 confirmations, labels and accepted words went, never a slot, hash or word.
 
 Exports replace existing files with the same names in the chosen folder. Exported files survive uninstall and remain until deleted through that provider. “No direct gig.log upload” does not mean that a selected cloud folder keeps the files on the phone.
@@ -622,7 +626,7 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
   taken only after `mayUpload`, at most 3 new layouts a UTC day, and stored only as its outbound skeleton; a screen opens
   for review the UTC day after the server stored it; a notification after a shift says screens are ready; the classes,
   review, gates and words requests and what each carries; a word leaves only through `words` after its gate opens;
-  Delete sends nothing. §7: the review queue file. The in-app Privacy page's Screen reviews section and the reviewer
+  Delete sends nothing; a revocation mid-session stops it and drops the words. §7: the review queue file. The in-app Privacy page's Screen reviews section and the reviewer
   screen's note now describe the review and say Ask the developer is not in this version. Receipts created under r24
   retain that revision.
 - **r24 (2026-11-13)** — §6: screen reviews, the contributor tier (#1625): eligibility worked out on the phone (census

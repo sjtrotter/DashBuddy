@@ -1127,8 +1127,9 @@ start of its expiry day without waiting for another change.
 Built by #1626: the review queue, the review screen and the word gate on the phone. The skeleton builder keeps a
 review's words only while a grant is stored, only for slots the v2 skeleton hashed, keyed by the server's slot id
 (`ContributorSlots` in `census-contract/`, the server's `SlotWalk` byte for byte, pinned by a shared vector), and only
-past `ReviewWordCover` (every backstop on the word, the dasher's greeting, account and place labels, notes, labelled
-values, digits) and outside an address block the backstop selects; the words live in memory only. The queue
+past `ReviewWordCover` (every backstop on the word including return-task names, the dasher's greeting, account and
+place labels, notes, any colon, digits), outside an address block the backstop selects, and never a value such a block
+holds anywhere in the frame; the words live in memory only. The queue
 (`ContributorReviewQueue`) takes the spooled skeleton after `mayUpload`, 3 new layouts a UTC day, one per layout, and
 stores only that outbound skeleton; the upload worker marks what the server stored, and a screen opens the UTC day
 after, when the release covers it (classes are asked only then, for the slots of that skeleton). The session
