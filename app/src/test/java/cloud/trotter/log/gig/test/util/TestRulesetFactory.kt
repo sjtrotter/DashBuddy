@@ -14,6 +14,7 @@ import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import java.io.File
+import kotlin.concurrent.thread
 
 /**
  * Shared test helper that loads and compiles all production rule files
@@ -71,11 +72,20 @@ object TestRulesetFactory {
      * over the generated files, so the corpus suites read the generation the batch loader builds.
      */
     val generation: RuleGeneration by lazy {
+        // Built on its own thread: Mockito's stubbing state is per thread, and the first read is
+        // often the argument of a caller's `on { generation } doReturn ...`, where creating the
+        // loader's mocks would leave that stubbing unfinished.
+        var built: Result<RuleGeneration>? = null
+        thread { built = runCatching { loadBundled() } }.join()
+        built!!.getOrThrow()
+    }
+
+    private fun loadBundled(): RuleGeneration {
         val assets = generatedAssets()
         val context = mock<Context> { on { this.assets } doReturn assets }
         val interpreter = JsonRuleInterpreter(context, mock<RuleCapabilityGrants>())
         runBlocking { interpreter.loadDefaults() }
-        interpreter.generation ?: error("the bundled rules did not load")
+        return interpreter.generation ?: error("the bundled rules did not load")
     }
 
     val screenRuleset: Ruleset<UiNode> get() = generation.screens
