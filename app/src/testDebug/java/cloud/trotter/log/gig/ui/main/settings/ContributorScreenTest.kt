@@ -16,6 +16,7 @@ import cloud.trotter.log.gig.core.data.census.CensusInstallRevocation
 import cloud.trotter.log.gig.core.data.census.CensusUploadLock
 import cloud.trotter.log.gig.core.data.census.contributor.CensusContributor
 import cloud.trotter.log.gig.core.data.census.contributor.ContributorEligibilityReader
+import cloud.trotter.log.gig.core.data.census.contributor.ContributorReviewQueue
 import cloud.trotter.log.gig.core.data.settings.DevSettingsRepository
 import cloud.trotter.log.gig.core.database.analytics.ContributorActivityDao
 import cloud.trotter.log.gig.core.database.analytics.ShiftSpanRow
@@ -156,11 +157,16 @@ class ContributorScreenTest {
         )
         compose.setContent {
             CompositionLocalProvider(LocalNowProvider provides FixedClock(now)) {
-                GigLogTheme { ContributorScreen(onBack = { closed++ }, viewModel = ContributorViewModel(contributor)) }
+                GigLogTheme { ContributorScreen(onBack = { closed++ }, viewModel = ContributorViewModel(contributor, queue(contributor))) }
             }
         }
         compose.waitForIdle()
     }
+
+    /** #1626: the review queue over this test's app files; empty unless a test fills it. */
+    private fun queue(gate: CensusContributor) = ContributorReviewQueue(
+        context, { gate }, store, CoroutineScope(Dispatchers.Unconfined), Dispatchers.Unconfined, FixedClock(now),
+    )
 
     private fun text(substring: String) = compose.onNodeWithText(substring, substring = true)
     private fun record() = runBlocking { store.record.first() }

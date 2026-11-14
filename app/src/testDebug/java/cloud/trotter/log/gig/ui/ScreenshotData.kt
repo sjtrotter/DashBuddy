@@ -426,4 +426,32 @@ internal object ScreenshotData {
             nextUploadAtMillis = at("2026-10-28T21:40:00Z"),
         )
     }
+
+    /** #1626: a screen under review, every value fictional: wording to confirm, greyed values, a format, a cover. */
+    fun screenReview(): cloud.trotter.log.gig.feature.settings.ReviewUiState {
+        fun row(slot: String, cls: String?, key: String, value: cloud.trotter.log.gig.core.data.census.contributor.SlotValue,
+                slotClass: cloud.trotter.census.contract.contributor.SlotClass, word: String? = null) =
+            cloud.trotter.log.gig.core.data.census.contributor.ReviewRow(slot, cls, key, value, slotClass, word)
+        val hashed = cloud.trotter.log.gig.core.data.census.contributor.SlotValue.Hashed
+        val c = cloud.trotter.census.contract.contributor.SlotClass.CONSTANT
+        val rows = listOf(
+            row("windowTitle", null, "windowTitle", hashed, c, "Current dash"),
+            row("root/0/text", "android.widget.TextView", "text", hashed, c, "Pick up by"),
+            row("root/1/text", "android.widget.TextView", "text", hashed, cloud.trotter.census.contract.contributor.SlotClass.VARYING),
+            row("root/2/text", "android.widget.TextView", "text",
+                cloud.trotter.log.gig.core.data.census.contributor.SlotValue.Covered, cloud.trotter.census.contract.contributor.SlotClass.WITHHELD),
+            row("root/3/text", "android.widget.TextView", "text",
+                cloud.trotter.log.gig.core.data.census.contributor.SlotValue.Format("\$#.##"), cloud.trotter.census.contract.contributor.SlotClass.SHAPE),
+            row("root/4/text", "android.widget.TextView", "text", hashed, cloud.trotter.census.contract.contributor.SlotClass.REGIONAL),
+            row("root/5/text", "android.widget.Button", "text", hashed, cloud.trotter.census.contract.contributor.SlotClass.UNKNOWN),
+        )
+        return cloud.trotter.log.gig.feature.settings.ReviewUiState(
+            phase = cloud.trotter.log.gig.feature.settings.ReviewPhase.READY,
+            review = cloud.trotter.log.gig.core.data.census.contributor.ScreenReview(
+                "shot", "2026-10-27", rows, cloud.trotter.log.gig.core.data.census.contributor.ClassesState.LOADED, wordsKept = true,
+            ),
+            confirmed = setOf("root/0/text"),
+            roles = mapOf("root/3/text" to cloud.trotter.census.contract.contributor.ContributorRole.TOTAL_PAY),
+        )
+    }
 }

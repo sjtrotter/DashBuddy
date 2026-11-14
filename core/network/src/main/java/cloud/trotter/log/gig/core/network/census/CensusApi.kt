@@ -4,6 +4,7 @@ import cloud.trotter.census.contract.SkeletonRejectionReason
 import cloud.trotter.census.contract.auth.Bearer
 import cloud.trotter.census.contract.auth.CensusHeaders
 import cloud.trotter.census.contract.auth.RequestSigner
+import cloud.trotter.census.contract.contributor.SlotClass
 import cloud.trotter.log.gig.core.network.di.ClientProfile
 import cloud.trotter.log.gig.core.network.di.NetworkClientFactory
 import cloud.trotter.log.gig.domain.census.CensusEnrolRejectReason
@@ -12,7 +13,9 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Call
@@ -156,6 +159,8 @@ sealed interface HealthResult {
 open class CensusApiFactory @Inject constructor(private val sent: CensusSentObserver) {
     private val client by lazy { NetworkClientFactory.okHttpClient("Census", ClientProfile.Census) }
     open fun create(baseUrl: String): CensusTransport = CensusApi(client, baseUrl, sent)
+    /** #1626: the screen-review routes, on the same client and endpoint. */
+    open fun contributor(baseUrl: String): ContributorTransport = CensusApi(client, baseUrl, sent)
 }
 
 /**
@@ -172,7 +177,7 @@ class CensusApi(
     client: OkHttpClient,
     private val baseUrl: String,
     private val sent: CensusSentObserver = CensusSentObserver.NONE,
-) : CensusTransport {
+) : CensusTransport, ContributorTransport {
     private val client = client.newBuilder()
         .retryOnConnectionFailure(false)
         .followRedirects(false)
@@ -351,6 +356,87 @@ class CensusApi(
         GrantResult.TransportFailure(e.failureToken())
     }
 
+    override suspend fun classes(cred: Bearer.Credential, body: ByteArray): ContributorCall<SlotClasses> =
+        contributorCall(ContributorTransport.CLASSES_PATH, cred, body) { json ->
+            val day = day(json, "releaseDay") ?: throw IllegalArgumentException("releaseDay")
+            val bySlot = LinkedHashMap<String, SlotClass>()
+            json.getValue("slots").jsonArray.forEach { item ->
+                val obj = item.jsonObject
+                bySlot[slotId(obj)] = SlotClass.fromWire(obj.getValue("class").jsonPrimitive.content)
+            }
+            SlotClasses(day, bySlot)
+        }
+
+    override suspend fun review(cred: Bearer.Credential, body: ByteArray): ContributorCall<ReviewCounts> =
+        contributorCall(ContributorTransport.REVIEW_PATH, cred, body) { json ->
+            ReviewCounts(json.int("confirmations"), json.int("roles"), json.int("skipped"))
+        }
+
+    override suspend fun gates(cred: Bearer.Credential, body: ByteArray): ContributorCall<List<GateAnswer>> =
+        contributorCall(ContributorTransport.GATES_PATH, cred, body) { json ->
+            json.getValue("slots").jsonArray.map { item ->
+                val obj = item.jsonObject
+                val hash = obj.getValue("hash").jsonPrimitive.content
+                require(HASH.matches(hash))
+                GateAnswer(slotId(obj), hash, obj.getValue("open").jsonPrimitive.boolean)
+            }
+        }
+
+    override suspend fun words(cred: Bearer.Credential, body: ByteArray): ContributorCall<List<WordAnswer>> =
+        contributorCall(ContributorTransport.WORDS_PATH, cred, body) { json ->
+            json.getValue("words").jsonArray.map { item ->
+                val obj = item.jsonObject
+                WordAnswer(slotId(obj), requireNotNull(WordStatus.fromWire(obj.getValue("status").jsonPrimitive.content)))
+            }
+        }
+
+    /**
+     * #1626: one signed contributor POST of exactly [body]. A 200 is parsed by [parse]; anything it cannot read is
+     * [ContributorRefusal.INVALID_RESPONSE]. Every other answer maps to a closed [ContributorRefusal].
+     */
+    private suspend fun <T> contributorCall(
+        path: String,
+        cred: Bearer.Credential,
+        body: ByteArray,
+        parse: (JsonObject) -> T,
+    ): ContributorCall<T> = try {
+        val response = execute(request(path, body, cred, signed = true))
+        when (response.status) {
+            200 -> try {
+                ContributorCall.Ok(parse(response.json()))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                ContributorCall.Refused(ContributorRefusal.INVALID_RESPONSE)
+            }
+            400 -> ContributorCall.Refused(ContributorRefusal.BAD_REQUEST)
+            401 -> ContributorCall.Refused(
+                if (response.isRevoked()) ContributorRefusal.INSTALL_REVOKED else ContributorRefusal.UNAUTHORIZED,
+            )
+            403 -> ContributorCall.Refused(
+                if (response.error() == "grant_required") ContributorRefusal.GRANT_REQUIRED else ContributorRefusal.SERVER_UNAVAILABLE,
+            )
+            429 -> ContributorCall.Refused(
+                if (response.error() == "budget_exhausted") ContributorRefusal.BUDGET_EXHAUSTED else ContributorRefusal.RATE_LIMITED,
+                response.retryAfter,
+            )
+            503 -> when (response.error()) {
+                "paused" -> ContributorCall.Refused(ContributorRefusal.PAUSED, response.retryAfter)
+                "release_unavailable" -> ContributorCall.Refused(ContributorRefusal.RELEASE_UNAVAILABLE, response.retryAfter)
+                else -> ContributorCall.Refused(ContributorRefusal.SERVER_UNAVAILABLE, response.retryAfter)
+            }
+            else -> ContributorCall.Refused(ContributorRefusal.SERVER_UNAVAILABLE)
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        ContributorCall.Refused(ContributorRefusal.TRANSPORT_FAILURE)
+    }
+
+    /** A slot id from the server is held to the slot grammar, so nothing else reaches the phone's state. */
+    private fun slotId(obj: JsonObject): String =
+        obj.getValue("slot").jsonPrimitive.content.also { require(SLOT.matches(it)) }
+
     /** Only a real date leaves the transport: the day is parsed, so a malformed one is no day at all. */
     private fun day(json: JsonObject, key: String): String? {
         val value = json[key]?.jsonPrimitive?.content ?: return null
@@ -442,6 +528,9 @@ class CensusApi(
         /** #1625: the whole grant request: a yes, never a count. */
         const val GRANT_REQUEST_BODY = "{\"eligible\":true}"
         private val DAY = Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")
+        /** #1626: the server's slot id grammar and the public census hash. */
+        private val SLOT = Regex("[A-Za-z0-9/]{1,512}")
+        private val HASH = Regex("[0-9a-f]{16}")
 
         fun batchId(fingerprints: List<String>): String = MessageDigest.getInstance("SHA-256")
             .digest(fingerprints.sorted().joinToString("\n").toByteArray(Charsets.UTF_8))

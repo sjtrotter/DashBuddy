@@ -67,6 +67,8 @@ import cloud.trotter.log.gig.feature.settings.CensusDisclosure
 import cloud.trotter.log.gig.feature.settings.CensusPlatformRow
 import cloud.trotter.log.gig.feature.settings.CensusUiState
 import cloud.trotter.log.gig.feature.settings.ContributorContent
+import cloud.trotter.log.gig.feature.settings.ContributorReviewContent
+import cloud.trotter.log.gig.feature.settings.WaitingReview
 import cloud.trotter.log.gig.feature.settings.ContributorUiState
 import cloud.trotter.log.gig.domain.census.contributor.ContributorEntry
 import cloud.trotter.log.gig.domain.census.contributor.InvitationAnswer
@@ -327,8 +329,23 @@ class ScreenshotsTest(private val theme: String) {
             state = ContributorUiState(
                 entry = ContributorEntry.ON, canAccept = false, shiftLive = false, answer = InvitationAnswer.NONE,
                 expiresDay = "2026-12-13", ended = null, refusal = null,
+                waiting = listOf(
+                    WaitingReview("a", "2026-10-26", "2026-10-27"),
+                    WaitingReview("b", "2026-10-28", "2026-10-28"),
+                    WaitingReview("c", "2026-10-28", null),
+                ),
             ),
             onBack = {}, onAccept = {}, onNotNow = {}, onNoThanks = {}, onStop = {},
+        )
+    }
+
+    /** #1626: one screen under review: the app's wording to confirm, greyed values, a format, a cover and a label. */
+    @Test fun settingsCensusReview() = render("settings/census-review", assertion = {
+        text(string(SettingsR.string.census_review_screen_confirm)).assertExists()
+    }) {
+        ContributorReviewContent(
+            state = ScreenshotData.screenReview(),
+            onBack = {}, onToggle = {}, onRole = { _, _ -> }, onSend = {}, onDelete = {},
         )
     }
 

@@ -31,6 +31,7 @@ import cloud.trotter.log.gig.domain.census.CensusEnrolRejectReason
 import cloud.trotter.log.gig.domain.census.CensusLastRun
 import cloud.trotter.log.gig.domain.census.CensusRunOutcome
 import cloud.trotter.log.gig.domain.census.CensusUploadStats
+import cloud.trotter.log.gig.domain.census.contributor.UploadedSkeletons
 import cloud.trotter.log.gig.domain.state.Platform
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -63,6 +64,8 @@ class CensusUploadWorker @AssistedInject constructor(
     @param:CensusEnvelopeSpool private val envelopeSpool: CensusSpool,
     private val envelopeSink: CensusEnvelopeSink,
     private val deletion: CensusDataDeletion,
+    /** #1626: told which skeleton items the server stored, so a review reads classes only for its own upload. */
+    private val uploadedSkeletons: UploadedSkeletons = UploadedSkeletons.NONE,
 ) : CoroutineWorker(appContext, workerParams) {
     /** #1625: the revoke steps' one owner, over this worker's own stores; the run already holds the upload lock. */
     private val revocation = CensusInstallRevocation(preferences, envelopeSink, healthSink, credentials)
@@ -556,6 +559,7 @@ class CensusUploadWorker @AssistedInject constructor(
                         Timber.tag(TAG).w("census envelopes rejected reasons=%s", result.rejected)
                     }
                 } else {
+                    reportUploaded(items)
                     record.accepted += result.accepted
                     record.duplicate += result.duplicate
                     record.rejected += result.rejected.values.sum()
@@ -568,6 +572,7 @@ class CensusUploadWorker @AssistedInject constructor(
             UploadResult.Duplicate -> {
                 removeBatch(ids, spool)
                 if (!envelopes) {
+                    reportUploaded(items)
                     record.duplicate += items.size
                     stats.duplicate.addAndGet(items.size.toLong())
                     Timber.tag(TAG).i("census duplicate=%d", items.size)
@@ -642,6 +647,17 @@ class CensusUploadWorker @AssistedInject constructor(
             is UploadResult.ServerUnavailable, is UploadResult.TransportFailure -> return failure(record)
         }
         return null
+    }
+
+    /** #1626: a review-candidate bookkeeping failure never changes the run. */
+    private suspend fun reportUploaded(items: List<CensusSpool.Spooled>) {
+        try {
+            uploadedSkeletons.uploaded(items.map { it.itemJson })
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            Timber.tag(TAG).w("census review upload mark failed")
+        }
     }
 
     private suspend fun removeBatch(ids: List<String>, spool: CensusSpool = this.spool) {

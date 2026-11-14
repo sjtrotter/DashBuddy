@@ -3,6 +3,7 @@ package cloud.trotter.log.gig.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.log.gig.core.data.census.contributor.CensusContributor
+import cloud.trotter.log.gig.core.data.census.contributor.ContributorReviewQueue
 import cloud.trotter.log.gig.domain.census.contributor.DecisionVersion
 import cloud.trotter.log.gig.core.data.census.contributor.GrantRequestOutcome
 import cloud.trotter.log.gig.domain.census.contributor.ContributorEnd
@@ -33,14 +34,22 @@ data class ContributorUiState(
     val outcome: GrantRequestOutcome? = null,
     /** What an Accept pressed now is decided under; null until the store answers. */
     val version: DecisionVersion? = null,
+    /** #1626: the screens waiting for review, oldest first. Readiness is derived on screen from the clock. */
+    val waiting: List<WaitingReview> = emptyList(),
 )
 
+/** #1626: one screen waiting for review: its skeleton's UTC day and the UTC day the server stored it (null: not yet). */
+data class WaitingReview(val id: String, val day: String, val uploadedDay: String?)
+
 @HiltViewModel
-class ContributorViewModel @Inject constructor(private val contributor: CensusContributor) : ViewModel() {
+class ContributorViewModel @Inject constructor(
+    private val contributor: CensusContributor,
+    queue: ContributorReviewQueue,
+) : ViewModel() {
 
     /** Null until the store answers. */
     val uiState: StateFlow<ContributorUiState?> =
-        combine(contributor.status, contributor.requesting, contributor.lastOutcome) { status, requesting, outcome ->
+        combine(contributor.status, contributor.requesting, contributor.lastOutcome, queue.entries) { status, requesting, outcome, entries ->
             val record = status.record
             ContributorUiState(
                 entry = status.entry,
@@ -53,6 +62,7 @@ class ContributorViewModel @Inject constructor(private val contributor: CensusCo
                 requesting = requesting,
                 outcome = outcome,
                 version = status.version,
+                waiting = entries.map { WaitingReview(it.id, it.day, it.uploadedDay) },
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 

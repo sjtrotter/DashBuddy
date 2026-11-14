@@ -17,8 +17,9 @@ interface ContributorGate {
 }
 
 /**
- * #1625: the reviews waiting on the phone. #1626 holds them; until then nothing waits and the binding is a no-op.
- * Cleared whenever the grant ends (expiry, revocation, the dasher's Stop, the census off, a data deletion).
+ * #1625: the reviews waiting on the phone, held by #1626's review queue (its stored candidates and the words in
+ * memory). Cleared whenever the grant ends (expiry, revocation, the dasher's Stop, the census off, a data deletion); a
+ * clear that cannot finish throws, so the contributor runs it again.
  */
 fun interface PendingContributorReviews {
     suspend fun clear()

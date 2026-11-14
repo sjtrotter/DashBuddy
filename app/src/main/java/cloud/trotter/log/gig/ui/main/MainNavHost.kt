@@ -10,6 +10,7 @@ import cloud.trotter.log.gig.core.designsystem.motion.rememberReducedMotion
 import cloud.trotter.log.gig.feature.settings.CapabilityConsentScreen
 import cloud.trotter.log.gig.feature.settings.CensusScreen
 import cloud.trotter.log.gig.feature.settings.CensusSentScreen
+import cloud.trotter.log.gig.feature.settings.ContributorReviewScreen
 import cloud.trotter.log.gig.feature.settings.ContributorScreen
 import cloud.trotter.log.gig.feature.settings.DataExportScreen
 import cloud.trotter.log.gig.feature.settings.DeveloperSettingsScreen
@@ -118,7 +119,11 @@ private fun MainScreen(route: String, actions: MainNavActions) {
             onOpenReviewer = { actions.open(Screen.CensusReviewer.route) },
         )
         Screen.CensusSent.route -> CensusSentScreen(onBack = actions::back)
-        Screen.CensusReviewer.route -> ContributorScreen(onBack = actions::back)
+        Screen.CensusReviewer.route -> ContributorScreen(
+            onBack = actions::back,
+            onOpenReview = { actions.open(Screen.CensusReview.route(it)) },
+        )
+        Screen.CensusReview.route -> ContributorReviewScreen(onBack = actions::back)
         Screen.ConsentSettings.route -> CapabilityConsentScreen(
             onBack = actions::back,
             onOpenPrivacy = actions::openPrivacy,

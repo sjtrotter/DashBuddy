@@ -432,4 +432,47 @@ class CensusApiTest {
         respond(200, accepted)
         assertTrue(failing.uploadSkeletons(credential, "b1", emptyList()) is UploadResult.Accepted)
     }
+
+    @Test fun `contributor calls send exactly the given bytes, signed, and read only the closed answers`() = runTest {
+        val body = "{\"variant\":{},\"slots\":[\"root/0/text\"]}".toByteArray(Charsets.UTF_8)
+        respond(200, "{\"releaseDay\":\"2026-11-14\",\"slots\":[{\"slot\":\"root/0/text\",\"class\":\"constant\"},{\"slot\":\"root/1/text\",\"class\":\"surprise\"}]}")
+        val classes = api.classes(credential, body) as ContributorCall.Ok
+        assertEquals(cloud.trotter.census.contract.contributor.SlotClass.CONSTANT, classes.value.bySlot["root/0/text"])
+        assertEquals(cloud.trotter.census.contract.contributor.SlotClass.UNKNOWN, classes.value.bySlot["root/1/text"])
+        val request = requireNotNull(server.takeRequest(1, TimeUnit.SECONDS))
+        assertEquals(ContributorTransport.CLASSES_PATH, request.url.encodedPath)
+        val sent = requireNotNull(request.body).toByteArray()
+        assertArrayEquals(body, sent)
+        val ts = requireNotNull(request.headers[CensusHeaders.TIMESTAMP])
+        assertTrue(RequestSigner.verify(credential.secret, RequestSigner.canonical("POST", ContributorTransport.CLASSES_PATH, ts, sent),
+            requireNotNull(request.headers[CensusHeaders.SIGNATURE])))
+
+        respond(200, "{\"confirmations\":1,\"roles\":2,\"skipped\":0}")
+        assertEquals(ContributorCall.Ok(ReviewCounts(1, 2, 0)), api.review(credential, body))
+        assertEquals(ContributorTransport.REVIEW_PATH, requireNotNull(server.takeRequest(1, TimeUnit.SECONDS)).url.encodedPath)
+
+        respond(200, "{\"slots\":[{\"slot\":\"root/0/text\",\"hash\":\"0123456789abcdef\",\"open\":true}]}")
+        assertEquals(ContributorCall.Ok(listOf(GateAnswer("root/0/text", "0123456789abcdef", true))), api.gates(credential, body))
+        server.takeRequest(1, TimeUnit.SECONDS)
+
+        respond(200, "{\"words\":[{\"slot\":\"root/0/text\",\"status\":\"gate_closed\"}]}")
+        assertEquals(ContributorCall.Ok(listOf(WordAnswer("root/0/text", WordStatus.GATE_CLOSED))), api.words(credential, body))
+        assertEquals(ContributorTransport.WORDS_PATH, requireNotNull(server.takeRequest(1, TimeUnit.SECONDS)).url.encodedPath)
+    }
+
+    @Test fun `contributor refusals map to closed reasons`() = runTest {
+        val body = "{}".toByteArray()
+        respond(403, "{\"error\":\"grant_required\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.GRANT_REQUIRED), api.review(credential, body))
+        respond(503, "{\"error\":\"paused\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.PAUSED, 17), api.words(credential, body))
+        respond(503, "{\"error\":\"release_unavailable\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.RELEASE_UNAVAILABLE, 17), api.classes(credential, body))
+        respond(401, "{\"error\":\"revoked\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.INSTALL_REVOKED), api.gates(credential, body))
+        respond(429, "{\"error\":\"budget_exhausted\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.BUDGET_EXHAUSTED, 17), api.review(credential, body))
+        respond(200, "{\"slots\":[{\"slot\":\"root/0/text; drop\",\"class\":\"constant\"}]}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.INVALID_RESPONSE), api.classes(credential, body))
+    }
 }
