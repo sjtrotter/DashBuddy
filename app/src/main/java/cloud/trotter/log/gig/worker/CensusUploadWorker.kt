@@ -150,7 +150,7 @@ class CensusUploadWorker @AssistedInject constructor(
                 when (enrolled) {
                     is Enrollment.Ready -> {
                         val result = send(api, enrolled.credential, record)
-                        if (record.identityUnknown) reenrol(api, record) else result
+                        if (record.identityUnknown) reenrol(api, enrolled.credential, record) else result
                     }
                     is Enrollment.Stop -> enrolled.result
                 }
@@ -190,21 +190,41 @@ class CensusUploadWorker @AssistedInject constructor(
     }
 
     /**
-     * #1622: the server no longer knows this enrolled ID (after a restore from a backup older than a deletion, it erases
-     * the install whole, census#88). The phone enrols a fresh ID, consent kept, and sends once more under it; the
-     * queued outlines stay, the old ID's unsent daily counts and capture sharing do not (as any new identity).
+     * #1622: a 401 for this enrolled ID that the clock does not explain, with nothing proving the credential this run.
+     * It may be a passing signature failure, or a server that no longer knows the ID (a restore from a backup older
+     * than a deletion erases the install whole, census#88). Either way the phone re-enrols the SAME ID with the SAME key
+     * (idempotent on the server, and what an erased install needs) and sends once more. It never mints a new identity:
+     * an ID that uploaded is only ever let go by the developer reset, which deletes its data first, so this phone can
+     * always delete what it sent. If the enrolment fails, the identity is kept and the next run tries again.
      */
-    private suspend fun reenrol(api: CensusTransport, record: RunRecord): Result {
+    private suspend fun reenrol(api: CensusTransport, credential: Credential, record: RunRecord): Result {
         record.identityUnknown = false
         record.authorized = false
-        Timber.tag(TAG).w("census unauthorized: identity unknown to server, enrolling a new one")
-        return when (val enrolled = enrol(api, freshIdentity(), record)) {
-            is Enrollment.Ready -> send(api, enrolled.credential, record)
-            is Enrollment.Stop -> enrolled.result
+        Timber.tag(TAG).w("census unauthorized: re-enrolling the same identity")
+        val declared = when (val policy = api.policy()) {
+            is PolicyResult.Available -> CensusEnrolSchemas.declared(policy.policy)
+            is PolicyResult.Unavailable, is PolicyResult.TransportFailure -> CensusEnrolSchemas.declared(null)
+        }
+        if (declared.isEmpty()) return Result.success()
+        return when (val result = api.enrol(credential.bearer(), BuildConfig.VERSION_NAME, declared)) {
+            is EnrolResult.Enrolled -> {
+                preferences.setCensusPolicy(result.policy)
+                send(api, credential, record)
+            }
+            EnrolResult.Revoked -> revoke(record)
+            is EnrolResult.RateLimited -> defer(record, result.retryAfter, DeferCause.ENROL_RATE_LIMIT)
+            // A conflict (another key holds this ID), a refusal or no answer: keep the identity, try again next run.
+            else -> {
+                Timber.tag(TAG).i("census same-identity enrol failed cause=%s", result.javaClass.simpleName)
+                Result.success()
+            }
         }
     }
 
-    /** A new identity drops what belonged to the old one: the envelopes, capture sharing and the health ledger. */
+    /**
+     * A new identity drops what belonged to the old one: the envelopes, capture sharing and the health ledger. Minted
+     * only when there is no usable credential (none, or its key is lost) or a never-enrolled identity conflicts.
+     */
     private suspend fun freshIdentity(): Credential {
         envelopeSink.invalidate()
         preferences.setCensusShareCaptures(false)

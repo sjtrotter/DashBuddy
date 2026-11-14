@@ -298,9 +298,12 @@ sent: this phone had no census ID at the time"), a fact about the request, not a
 clears once the phone enrols again. A revoked install cannot delete: the census turns off and the credential is
 wiped, as on any revoke (the server deletes a revoked install's sightings itself). After a server restore from a backup
 older than a deletion, the server erases the whole install and answers 401 to uploads; once no deletion is pending,
-the worker then enrols a fresh identity, consent kept, and sends again once under it (the old identity's unsent daily
-counts and capture sharing go with it), instead of stopping. A 401 after the server already accepted a request from
-the same credential in that run is not treated so.
+the worker re-enrols the SAME install ID with the SAME key (idempotent on the server; it also covers a passing
+signature failure), consent kept, and sends once more; if that enrolment fails it keeps the identity and tries again
+on the next run. It never mints a new identity on a 401, so every ID that uploaded stays one this phone can delete
+under: a new identity is minted only when there is no usable credential (none, or its key is lost), when a
+never-enrolled one conflicts, or by the developer reset, which deletes first. A 401 after the server already accepted
+a request from the same credential in that run is not treated so.
 
 Exports replace existing files with the same names in the chosen folder. Exported files survive uninstall and remain until deleted through that provider. “No direct gig.log upload” does not mean that a selected cloud folder keeps the files on the phone.
 
@@ -486,7 +489,7 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
   401, or a 404 until the server's update) stays pending, bound to its install ID, and is sent before anything else;
   a 401 retries after re-enrolling the same ID and key. The developer identity reset first deletes an enrolled
   identity's data and resets only on the server's confirmation.
-  An install the server no longer knows enrols a fresh identity, consent kept. The disclosure's per-build lines drop
+  A 401 on an upload re-enrols the same ID with the same key, consent kept; a 401 never mints a new identity. The disclosure's per-build lines drop
   "no delete button yet", say server deletion and the 30-day limit take effect with the server's next update, and
   that deleting what gig.log keeps on the phone is not in this version. §7: the sent record and the deletion request. The in-app Privacy page's Census
   section follows. Receipts created under r21 retain that revision.

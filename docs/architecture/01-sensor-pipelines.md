@@ -927,10 +927,13 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   **Unknown identity (#1622):** a 401 for an enrolled ID that the clock does not explain (Date within 300 s) after
   the run's one re-sign, or a health 401 the same way, with no answer earlier in the run that proves the server
   verified this credential (`RunRecord.authorized`: health accepted / batch quality / budget, uploads accepted /
-  duplicate / batch quality / budget / not trusted, across every stage), means the server no longer knows the ID (a
-  restore from a backup older than a deletion erases the install whole, census#88). The worker forgets it
-  (envelopes, capture sharing, health ledger, as any new identity), mints and enrols a fresh one, consent kept, and
-  sends once more under it; the queued outlines and their in-flight batch stay.
+  duplicate / batch quality / budget / not trusted, across every stage), is a passing signature failure or a server
+  that no longer knows the ID (a restore from a backup older than a deletion erases the install whole, census#88).
+  The worker re-enrols the SAME id with the SAME key (`reenrol`; idempotent per the server contract) and sends once
+  more; a refused or unanswered enrolment keeps the identity (outcome `unauthorized`, rate limits deferred) and the
+  next run tries again. A 401 never mints (Sol S16): a new identity comes only from no usable credential (none, or an
+  unusable Keystore key), a never-enrolled identity's 409, or the developer reset, which deletes first, so every id
+  that uploaded stays deletable from the phone.
   **Sent record and deletion (#1622):** `CensusApi` hands the exact bytes of each skeleton, health or envelope body
   the server read (200, 400, 422) to `CensusSentObserver`, bound to `CensusSentLog`, which keeps only
   `CensusSentBatch.read`'s summary (kind, platform, day, node count, codes / formats / type-only / withheld counts;
@@ -965,7 +968,7 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   again for an unresolved request (`reconcile`). An unreadable stored state decodes as pending (fail closed).
   Deleting never changes consent; the switch is stop.
   **Identity reset + run status (#1185):** when the server no longer knows an enrolled install (alpha
-  database reset, withdrawn install) uploads 401 and, since #1622, the worker enrols a fresh identity itself; the developer screen's **Reset
+  database reset, withdrawn install) uploads 401 and, since #1622, the worker re-enrols the same identity itself; the developer screen's **Reset
   census identity** action (confirmation dialog) runs `CensusIdentityResetter` (`:core:data`) on the
   APPLICATION scope (leaving the screen cannot cancel it half-done; a failure is recorded as `failure`, never
   thrown) under the shared `CensusUploadLock` (moved to `:core:data` so the resetter and the `:app` worker
@@ -976,7 +979,7 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   policy, not identity state — a fresh id must not bypass it); only if consent is still on does it enqueue an
   immediate run with `enqueueNow(replaceQueued = true)` (REPLACE, so a manual run parked in WorkManager
   backoff cannot swallow it), which mints + enrols a fresh id (the old server install is not
-  withdrawn, but since #1622 an enrolled one's data is deleted, server-confirmed, before the reset). The worker WARNs once per re-enrolment ("identity unknown to server, enrolling a new one"; the
+  withdrawn, but since #1622 an enrolled one's data is deleted, server-confirmed, before the reset). The worker WARNs once per re-enrolment ("re-enrolling the same identity"; the
   per-process latch is gone with the stuck state it rate-limited, #1622). Every run persists ONE
   `CensusLastRun(atMillis, CensusRunOutcome, detail?, envelopesPosted, reason?)` into developer settings (`:domain` vocabulary, wire
   strings `deferred|enrolled|enrol_conflict|enrol_rejected|keystore_transient|spool_empty|stale_removed|

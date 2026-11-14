@@ -697,8 +697,7 @@ class CensusUploadWorkerTest {
         val h = harness()
         h.initialize()
         h.queue()
-        // #1622: the unknown ID re-enrols; a rate-limited enrolment sends nothing more this run.
-        whenever(h.credentials.mint()).thenReturn(h.credential.copy(installId = "87654321-1234-4123-8123-123456789abc", enrolled = false))
+        // #1622: the same ID re-enrols with its key; a rate-limited enrolment sends nothing more this run.
         h.api.enrollments += EnrolResult.RateLimited(60)
         h.api.uploads.addAll(listOf(
             UploadResult.Unauthorized(System.currentTimeMillis()),
@@ -715,43 +714,65 @@ class CensusUploadWorkerTest {
         verify(h.spool, never()).clearInFlight()
     }
 
-    @Test fun `an unknown enrolled identity enrols a fresh one, consent kept, and sends the batch again`() = runTest {
+    @Test fun `a first-request 401 after earlier uploads re-enrols the SAME identity and sends again, nothing minted`() = runTest {
+        // #1622 (S16): ID A uploaded before; a passing signature failure or a restored server answers 401 today.
+        // Minting a new ID would leave A's uploads undeletable from this phone.
         val h = harness()
         h.initialize()
         h.queue()
-        val fresh = h.credential.copy(installId = "87654321-1234-4123-8123-123456789abc", enrolled = false)
-        whenever(h.credentials.mint()).thenReturn(fresh)
         h.api.uploads.addAll(List(2) { UploadResult.Unauthorized(System.currentTimeMillis()) })
         h.api.enrollments += EnrolResult.Enrolled(JsonObject(emptyMap()))
         h.api.uploads += UploadResult.Accepted(1, 0, emptyMap(), CensusBudget(299, 1000, 39, 300))
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
 
-        assertEquals("the restored server forgot the old ID: a fresh one enrols", listOf(fresh.installId), h.api.enrolledIds)
-        verify(h.credentials).mint()
-        verify(h.credentials).markEnrolled()
-        assertEquals("the same batch, twice under the old ID, once under the new", 3, h.api.batches.size)
+        assertEquals("the same ID, with its own key", listOf(h.credential.installId), h.api.enrolledIds)
+        verify(h.credentials, never()).mint()
+        verify(h.credentials, never()).wipe()
+        assertEquals("the same batch, twice before the enrolment, once after", 3, h.api.batches.size)
         assertTrue(h.queued.isEmpty())
         assertEquals(CensusConsent.ON, h.preferences.censusConsent.first())
         assertEquals(CensusRunOutcome.UPLOADED, h.preferences.censusLastRun.first()?.outcome)
-        assertEquals(1L, h.stats.unauthorized.get())
-        assertTrue(logs.any { it.message == "census unauthorized: identity unknown to server, enrolling a new one" })
+        assertTrue(logs.any { it.message == "census unauthorized: re-enrolling the same identity" })
     }
 
-    @Test fun `an unknown identity found by the health report enrols a fresh one before the outlines`() = runTest {
+    @Test fun `a failed same-identity enrolment keeps the identity and the batch, mints nothing, and tries again next run`() = runTest {
+        val h = harness()
+        h.initialize()
+        h.queue()
+        h.api.uploads.addAll(List(2) { UploadResult.Unauthorized(System.currentTimeMillis()) })
+        h.api.enrollments += EnrolResult.ServerUnavailable(503)
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        verify(h.credentials, never()).mint()
+        verify(h.credentials, never()).wipe()
+        assertEquals(1, h.queued.size)
+        assertEquals(CensusRunOutcome.UNAUTHORIZED, h.preferences.censusLastRun.first()?.outcome)
+
+        // The next run: the same ID, enrolled again with its key, then the batch.
+        h.api.uploads += UploadResult.Unauthorized(System.currentTimeMillis())
+        h.api.uploads += UploadResult.Unauthorized(System.currentTimeMillis())
+        h.api.enrollments += EnrolResult.Enrolled(JsonObject(emptyMap()))
+        h.api.uploads += UploadResult.Duplicate
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(List(2) { h.credential.installId }, h.api.enrolledIds)
+        assertTrue(h.queued.isEmpty())
+        verify(h.credentials, never()).mint()
+    }
+
+    @Test fun `a health 401 re-enrols the same identity before the outlines`() = runTest {
         val h = harness()
         h.initialize()
         h.health()
         h.queue()
-        val fresh = h.credential.copy(installId = "87654321-1234-4123-8123-123456789abc", enrolled = false)
-        whenever(h.credentials.mint()).thenReturn(fresh)
         h.api.healthResults += HealthResult.Unauthorized(System.currentTimeMillis())
         h.api.enrollments += EnrolResult.Enrolled(JsonObject(emptyMap()))
+        h.api.healthResults += HealthResult.Accepted(1, emptyMap())
         h.api.uploads += UploadResult.Duplicate
         assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
 
-        assertEquals(listOf(fresh.installId), h.api.enrolledIds)
-        assertEquals("the old ID's unsent counts go with it", 1, h.api.healthBodies.size)
-        assertEquals("no outline went under the unknown ID", 1, h.api.batches.size)
+        assertEquals(listOf(h.credential.installId), h.api.enrolledIds)
+        verify(h.credentials, never()).mint()
+        assertEquals("the day's counts go again under the same ID", 2, h.api.healthBodies.size)
+        assertEquals("no outline went before the enrolment", 1, h.api.batches.size)
         assertTrue(h.queued.isEmpty())
     }
 
@@ -809,8 +830,7 @@ class CensusUploadWorkerTest {
             val h = harness()
             h.initialize()
             h.queue()
-            // #1622: without skew the unknown ID re-enrols; a rate-limited enrolment sends nothing more this run.
-            whenever(h.credentials.mint()).thenReturn(h.credential.copy(installId = "87654321-1234-4123-8123-123456789abc", enrolled = false))
+            // #1622: without skew the same ID re-enrols with its key; a rate-limited enrolment sends nothing more.
             h.api.enrollments += EnrolResult.RateLimited(60)
             val date = System.currentTimeMillis() + if (skew) 600_000 else 0
             h.api.uploads.addAll(listOf(UploadResult.Unauthorized(date), UploadResult.Unauthorized(date)))
