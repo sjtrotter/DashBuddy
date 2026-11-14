@@ -37,22 +37,15 @@ jobs:
     runs-on: ubuntu-latest
     # #1547 — run 41345313754 hung about 48 minutes on a Compose test; a full run takes 8 to 16.
     timeout-minutes: 30
-    # The workflow_dispatch escape hatch (docs/agents/workflow.md) posts a real `build-and-test`
-    # commit status onto the PR head; the default GITHUB_TOKEN cannot (`Resource not accessible by
-    # integration`, seen on PR #1075's dispatched run 34070019980), so the job asks for it explicitly.
+    # Read-only: a dispatch run can build a fork's PR, so the token that writes the commit status lives in
+    # report-dispatch below, a job that runs no PR code.
     permissions:
       contents: read
-      statuses: write
       pull-requests: read
+    outputs:
+      head: ${{ steps.pin.outputs.head }}
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      # Docs-only PRs skip via the literal token `[skip ci]` in the PR BODY (see docs/agents/workflow.md).
-      # #902 footgun guard: a PR whose body merely DESCRIBES the token (PR #928 documented the
-      # mechanism and silently skipped its own CI) can force the run back on with `[force ci]`.
-      # A workflow_dispatch run has no PR body — contains(null, …) is false — so it always runs.
-      # #1548 — the job itself always runs and every step checks RUN_GATE: a job skipped at job level reports its
-      # name expression unevaluated (probe PR #1553), so a docs PR would never get its passing `build-and-test`.
-      RUN_GATE: ${{ !contains(github.event.pull_request.body, '[skip ci]') || contains(github.event.pull_request.body, '[force ci]') }}
       # #1547 — CI's Gradle flags, on every command line below and never in gradle.properties (the laptop keeps its
       # own limits). The runner has 4 cores. Test tasks stay uncacheable (root build.gradle.kts), so the cache
       # serves compile, resource and lint work only.
@@ -63,15 +56,37 @@ jobs:
       RENDER_SHOTS: ${{ github.event_name != 'push' && !github.event.pull_request.draft }}
 
     steps:
+      - name: Scope (a PR that changes only Markdown skips the gate)
+        # #1646 — the file list comes from the API for this event's base and head SHAs, never from the PR body or the
+        # PR's code. A rename counts both names, and a list past 299 files (the compare API truncates at 300) runs the
+        # gate. Push and dispatch runs always run it. #1548 — the job itself always runs and every step checks
+        # RUN_GATE: a job skipped at job level reports its name expression unevaluated (probe PR #1553), so a docs PR
+        # would never get its passing `build-and-test`.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          run=true
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            scope="$(gh api "repos/$GITHUB_REPOSITORY/compare/$BASE...$HEAD" --jq '[.files[]? | .filename, (.previous_filename // empty)]
+              | if length > 0 and length < 300 and all(endswith(".md")) then "docs" else "code" end')"
+            [ "$scope" = docs ] && run=false
+          fi
+          echo "RUN_GATE=$run" >> "$GITHUB_ENV"
+          echo "RUN_GATE=$run"
+
       - name: Checkout
         if: ${{ env.RUN_GATE == 'true' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           # Empty ref (pull_request events) keeps the default merge-commit checkout; a
           # workflow_dispatch run substitutes the named PR's merge ref (#902).
           ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/merge', inputs.pr) || '' }}
           # #1450 — a dispatch run needs the merge commit's parents to pin the head it tests.
           fetch-depth: ${{ github.event_name == 'workflow_dispatch' && 2 || 1 }}
+          persist-credentials: false
 
       - name: Pin the tested PR head (dispatch runs only)
         # #1450 — the merge ref's second parent IS the head this run tests; reading the head from the
@@ -82,7 +97,7 @@ jobs:
 
       - name: Set up JDK 21
         if: ${{ env.RUN_GATE == 'true' }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           java-version: '21'
           distribution: 'temurin'
@@ -92,7 +107,7 @@ jobs:
         # #1547 — master pushes and PR runs write the cache (it carries the build cache, caches/build-cache-1, in the
         # Gradle home entry). GitHub scopes a PR's entries to that PR, which still reads master's, so a PR's second
         # push restores its first push's outputs. A dispatch run (it can test a fork's PR) restores read-only.
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
         with:
           cache-read-only: ${{ github.event_name == 'workflow_dispatch' }}
 
@@ -165,7 +180,7 @@ jobs:
       - name: Upload the regenerated schemas (drift only)
         # #1548 — the JSON the build exported, so the missing schema can be committed without a laptop build.
         if: ${{ failure() && steps.schemas.outcome == 'failure' && env.RUN_GATE == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: room-schemas-${{ github.event.pull_request.number || inputs.pr || github.sha }}
           path: core/database/schemas/
@@ -173,7 +188,7 @@ jobs:
 
       - name: Upload debug APK
         if: ${{ env.RUN_GATE == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: debug-apk-${{ github.event.pull_request.number || inputs.pr || github.sha }}
           path: app/build/outputs/apk/debug/app-debug.apk
@@ -215,7 +230,7 @@ jobs:
       - name: Upload JUnit results and timings
         if: ${{ always() && env.RUN_GATE == 'true' }}
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: junit-results-${{ github.event.pull_request.number || inputs.pr || github.sha }}
           path: |
@@ -261,7 +276,7 @@ jobs:
         if: ${{ !cancelled() && steps.compile.outcome == 'success' && env.RENDER_SHOTS == 'true' && env.RUN_GATE == 'true' }}
         # Advisory: only a render crash or a checker failure turns the job red.
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: screenshots-${{ github.event.pull_request.number || inputs.pr || github.sha }}
           path: |
@@ -272,20 +287,29 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Report status to PR head (dispatch runs only)
-        # #902 — a workflow_dispatch run is not attached to the PR, so its result would never
-        # satisfy the required `build-and-test` check. Post a commit status with that exact
-        # context onto the PR's HEAD sha (branch protection accepts a commit status of the
-        # same name). A red dispatch run reports failure, not silence; a cancelled one reports nothing,
-        # and the status goes only to the head pinned before the build (#1450).
-        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && env.RUN_GATE == 'true' }}
+  report-dispatch:
+    # #902 — a workflow_dispatch run is not attached to the PR, so its result would never satisfy the required
+    # `build-and-test` check. This job posts a commit status with that exact context onto the PR's HEAD sha (branch
+    # protection accepts a commit status of the same name). A red dispatch run reports failure, not silence; a
+    # cancelled one reports nothing, and the status goes only to the head pinned before the build (#1450). #1646 — it
+    # runs no PR code, so the status-writing token never shares a job with a fork's build.
+    needs: build-and-test
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+    steps:
+      - name: Report status to PR head
         env:
           GH_TOKEN: ${{ github.token }}
+          PINNED_HEAD: ${{ needs.build-and-test.outputs.head }}
+          STATE: ${{ needs.build-and-test.result == 'success' && 'success' || 'failure' }}
         run: |
-          gh api "repos/${{ github.repository }}/statuses/${{ steps.pin.outputs.head }}" \
-            -f state="${{ job.status == 'success' && 'success' || 'failure' }}" \
+          test -n "$PINNED_HEAD"
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$PINNED_HEAD" \
+            -f state="$STATE" \
             -f context="build-and-test" \
-            -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             -f description="manual dispatch run (#902 escape hatch)"
 
 # (tree-nudge: Actions refused to dispatch for the original tree — the exact #902 class this PR mitigates; see issue #902 forensics)

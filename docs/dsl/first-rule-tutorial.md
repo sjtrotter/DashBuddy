@@ -314,9 +314,9 @@ Once both are green (and the rest of the suite, which they will be if you didn't
 else), commit the new/updated rule file **and** the snapshot(s) that moved out of `INBOX/` into
 their intent folder, **and** the regenerated `approved-parse-output.json` if it changed. Never
 commit anything still sitting in `snapshots/INBOX/` — that folder is gitignored intake, not a
-corpus location. And treat a rule (`.json5`) change as a **code** change for CI purposes — it
-alters compiled recognition behavior and generated assets, so never use `[skip ci]` on a rule PR
-(that escape is strictly docs-only).
+corpus location. A rule (`.json5`) change is a **code** change for CI: it alters compiled
+recognition behavior and generated assets, so PR CI always runs the full gate on it (only a PR
+that changes nothing but Markdown skips).
 
 ---
 
