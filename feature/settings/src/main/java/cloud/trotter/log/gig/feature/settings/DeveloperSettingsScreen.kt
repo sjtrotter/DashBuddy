@@ -219,6 +219,14 @@ fun DeveloperSettingsScreen(
                 ) {
                     Text(stringResource(R.string.developer_settings_census_reset))
                 }
+                // #1622: a refused reset says why, until the next run or reset replaces the outcome.
+                if (lastRun?.outcome == CensusRunOutcome.RESET_REFUSED) {
+                    Text(
+                        stringResource(R.string.developer_settings_census_reset_refused),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
                 if (showReset) {
                     AlertDialog(
                         onDismissRequest = { showReset = false },

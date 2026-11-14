@@ -32,7 +32,6 @@ import cloud.trotter.log.gig.core.pipeline.census.NotificationSkeletonBuilder
 import cloud.trotter.log.gig.core.pipeline.census.SkeletonBuilder
 import cloud.trotter.log.gig.domain.capture.CensusEnvelopeSink
 import cloud.trotter.log.gig.domain.capture.ReplayMetadata
-import cloud.trotter.log.gig.domain.census.CensusDeletion
 import cloud.trotter.log.gig.domain.census.CensusSentBatch
 import cloud.trotter.log.gig.domain.census.CensusUploadScheduler
 import cloud.trotter.log.gig.domain.model.accessibility.UiNode
@@ -140,7 +139,6 @@ class CensusDataScreensTest {
     private fun string(id: Int) = context.getString(id)
 
     private fun showCensus() {
-        runBlocking { whenever(credentials.retiredIds()).thenReturn(emptyList()) }
         val vm = CensusViewModel(repo, deletion, readsUnboundPlatforms = false)
         compose.setContent { GigLogTheme { CensusScreen(onBack = {}, onOpenSent = {}, viewModel = vm) } }
         compose.waitForIdle()
@@ -215,21 +213,6 @@ class CensusDataScreensTest {
         compose.onNodeWithText(string(SettingsR.string.census_delete_label)).performClick()
         compose.onNodeWithText("keeps this phone's census ID", substring = true).assertExists()
         compose.onNodeWithText("which it keeps for 7 days", substring = true).assertExists()
-    }
-
-    @Test fun `IDs confirmed on different days show the total and the last day, never one day for all`() {
-        runBlocking {
-            repo.setCensusDeletion(CensusDeletion(1L, CensusDeletion.State.DELETED, localCleared = true, targets = listOf(
-                CensusDeletion.Target("a", CensusDeletion.Outcome.DELETED, rows = 3, day = "2026-11-16"),
-                CensusDeletion.Target("b", CensusDeletion.Outcome.DELETED, rows = 4, day = "2026-11-17"),
-                CensusDeletion.Target("c", CensusDeletion.Outcome.NOT_POSSIBLE),
-            )))
-        }
-        showCensus()
-        compose.onNodeWithText("The census server deleted 7 records in all; the last deletion was confirmed on Nov 17, 2026.",
-            substring = true).assertExists()
-        compose.onNodeWithText("1 census ID on this phone could no longer be used", substring = true).assertExists()
-        compose.onNodeWithText("Nov 16", substring = true).assertDoesNotExist()
     }
 
     @Test fun `the sent screen shows each item's kind, app and counts from the sent bytes, and the next upload ticks`() {

@@ -27,8 +27,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import cloud.trotter.census.contract.SkeletonSchema
-import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
@@ -86,17 +84,14 @@ class DevSettingsRepository @Inject constructor(
     /** #1622: the last census deletion request; an unreadable state decodes as pending (fail closed). */
     val censusDeletion: Flow<CensusDeletion?> = dataSource.censusDeletion.map { raw ->
         raw?.let {
-            // An unreadable target list fails closed: the request reads as pending, with the targets bound again.
-            val targets = it.targetsJson?.let { json -> runCatching { Json.decodeFromString(DELETION_TARGETS, json) }.getOrNull() }
-            val state = if (it.targetsJson != null && targets == null) CensusDeletion.State.PENDING
-                else CensusDeletion.State.fromWire(it.stateWire)
-            CensusDeletion(it.requestedAtMillis, state, it.localCleared, targets, CensusDeletion.Waiting.fromWire(it.waitingWire))
+            CensusDeletion(it.requestedAtMillis, CensusDeletion.State.fromWire(it.stateWire), it.localCleared, it.installId,
+                it.rows, it.deletedDay, CensusDeletion.Waiting.fromWire(it.waitingWire))
         }
     }
     suspend fun setCensusDeletion(value: CensusDeletion) = dataSource.setCensusDeletion(
         DevSettingsDataSource.RawCensusDeletion(
-            value.requestedAtMillis, value.state.wire, value.localCleared,
-            value.targets?.let { Json.encodeToString(DELETION_TARGETS, it) }, value.waiting?.wire,
+            value.requestedAtMillis, value.state.wire, value.localCleared, value.installId, value.rows, value.deletedDay,
+            value.waiting?.wire,
         ),
     )
     suspend fun clearCensusDeletion() = dataSource.clearCensusDeletion()
@@ -205,6 +200,5 @@ class DevSettingsRepository @Inject constructor(
 
     private companion object {
         private const val TAG = "DevSettings"
-        val DELETION_TARGETS = ListSerializer(CensusDeletion.Target.serializer())
     }
 }

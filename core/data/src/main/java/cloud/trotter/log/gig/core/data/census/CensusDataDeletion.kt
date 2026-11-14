@@ -8,7 +8,6 @@ import cloud.trotter.log.gig.core.network.census.EnrolResult
 import cloud.trotter.log.gig.core.network.census.PolicyResult
 import cloud.trotter.log.gig.domain.capture.CensusEnvelopeSink
 import cloud.trotter.log.gig.domain.census.CensusDeletion
-import cloud.trotter.log.gig.domain.census.CensusDeletion.Outcome
 import cloud.trotter.log.gig.domain.census.CensusDeletion.State
 import cloud.trotter.log.gig.domain.census.CensusUploadScheduler
 import cloud.trotter.log.gig.domain.di.ApplicationScope
@@ -37,11 +36,13 @@ import kotlin.math.abs
  * Under the uploader lock (never mid-batch), it stores the request as pending, queues its own retry run on any
  * network ([CensusUploadScheduler.enqueueDeletion]) before the first attempt, cancels a waiting manual run and clears
  * what waits on the phone (the queued outlines and their in-flight batch, the test build's envelopes, the unsent daily
- * counts), as the server's client guide asks, then sends `DELETE /v1/installs/me/data` with the credential of the
- * install ID the request is bound to. Until the request is resolved (the server answered AND the queue is cleared),
- * every census run sends it before anything else and sends nothing else ([resumePending]), and the identity cannot be
- * reset ([CensusIdentityResetter]). A 401 never counts as "nothing held": the server answers 401 to a bad signature as
- * well as to an ID it does not know, so the request stays pending with its ID. Consent is left as it is.
+ * counts), as the server's client guide asks, then sends `DELETE /v1/installs/me/data` with the key of the one
+ * enrolled install ID the request binds at its first attempt. Until the request is resolved (the server answered AND
+ * the queue is cleared), every census run sends it before anything else and sends nothing else ([resumePending]). The
+ * identity reset runs a fresh request first and resets only on its confirmation ([requestHoldingLock],
+ * [CensusIdentityResetter]), so no identity with uploads is ever let go undeleted. A 401 never counts as deleted: the
+ * server answers 401 to a bad signature as well as to an ID it does not know, so the request stays pending with its
+ * ID. Consent is left as it is.
  */
 @Singleton
 class CensusDataDeletion internal constructor(
@@ -97,27 +98,30 @@ class CensusDataDeletion internal constructor(
     suspend fun delete(): CensusDeletion {
         running.value = true
         try {
-            return lock.mutex.withLock {
-                withContext(NonCancellable) {
-                    val request = CensusDeletion(now(), State.PENDING)
-                    preferences.setCensusDeletion(request)
-                    // Queued before the first attempt, so a process death mid-request still leaves a retry.
-                    runCatching { scheduler.enqueueDeletion() }
-                    runCatching { scheduler.cancelManual() }
-                    Timber.tag(TAG).i("census deletion requested")
-                    try {
-                        attempt(request)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (_: Exception) {
-                        // A store write failed mid-request: what was saved stands, and the queued run resumes from it.
-                        Timber.tag(TAG).w("census deletion attempt failed")
-                        runCatching { preferences.censusDeletion.first() }.getOrNull() ?: request
-                    }
-                }
-            }
+            return lock.mutex.withLock { requestHoldingLock() }
         } finally {
             running.value = false
+        }
+    }
+
+    /**
+     * [delete] for a caller that already holds [CensusUploadLock] (the identity reset). Never throws for a failed store
+     * write: what was saved stands, and the queued run resumes from it.
+     */
+    internal suspend fun requestHoldingLock(): CensusDeletion = withContext(NonCancellable) {
+        val request = CensusDeletion(now(), State.PENDING)
+        preferences.setCensusDeletion(request)
+        // Queued before the first attempt, so a process death mid-request still leaves a retry.
+        runCatching { scheduler.enqueueDeletion() }
+        runCatching { scheduler.cancelManual() }
+        Timber.tag(TAG).i("census deletion requested")
+        try {
+            attempt(request)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            Timber.tag(TAG).w("census deletion attempt failed")
+            runCatching { preferences.censusDeletion.first() }.getOrNull() ?: request
         }
     }
 
@@ -128,7 +132,6 @@ class CensusDataDeletion internal constructor(
      */
     suspend fun resumePending(): Boolean {
         val stored = preferences.censusDeletion.first() ?: return true
-        forgetConfirmedKeys(stored)
         if (stored.resolved) return true
         return withContext(NonCancellable) { attempt(stored) }.resolved
     }
@@ -153,101 +156,60 @@ class CensusDataDeletion internal constructor(
     }
 
     /**
-     * Binds the request to its install IDs at the first attempt (the retired ones, then the current enrolled one), then
-     * deletes under each pending one with its own key. Each confirmation is saved BEFORE its retired key is forgotten,
-     * and forgetting is an idempotent cleanup ([forgetConfirmedKeys]) re-run on every load, so no interruption can
-     * leave a pending ID without its key. An ID whose key is gone is not possible on its own; the others go on.
+     * Binds the request to the current enrolled install ID at its first attempt and deletes under it with its key. The
+     * request's state is saved before anything else happens to the identity.
      */
     private suspend fun send(request: CensusDeletion): CensusDeletion {
         var current = request
-        if (current.targets == null) {
-            val ids = try {
-                credentials.retiredIds() + listOfNotNull(credentials.current()?.installId)
-            } catch (_: CensusCredentialStore.Unusable) {
-                return finish(current.copy(state = State.NOT_POSSIBLE, targets = emptyList(), waiting = null))
-            } catch (_: CensusCredentialStore.Transient) {
-                Timber.tag(TAG).i("census deletion pending cause=keystore")
-                return finish(current.copy(waiting = CensusDeletion.Waiting.UNREACHABLE))
-            }
-            // No census ID at all (never enrolled, or enrolment unconfirmed): nothing is sent. This is a fact about
-            // the request, not about the server.
-            if (ids.isEmpty()) return finish(current.copy(state = State.NOTHING_SENT, targets = emptyList(), waiting = null))
-            current = finish(current.copy(targets = ids.distinct().map { CensusDeletion.Target(it) }))
+        val held = try {
+            credentials.current()
+        } catch (_: CensusCredentialStore.Unusable) {
+            return finish(current.copy(state = State.NOT_POSSIBLE, waiting = null))
+        } catch (_: CensusCredentialStore.Transient) {
+            Timber.tag(TAG).i("census deletion pending cause=keystore")
+            return finish(current.copy(waiting = CensusDeletion.Waiting.UNREACHABLE))
+        }
+        if (current.installId == null) {
+            // No enrolled census ID (never enrolled, or enrolment unconfirmed): nothing is sent. A fact about the
+            // request, not about the server.
+            if (held == null) return finish(current.copy(state = State.NOTHING_SENT, waiting = null))
+            current = finish(current.copy(installId = held.installId))
+        }
+        val credential = held?.takeIf { it.installId == current.installId } ?: run {
+            // The ID the request was made for is gone (a revoke elsewhere, or a lost Keystore key).
+            Timber.tag(TAG).w("census deletion: its identity is gone")
+            return finish(current.copy(state = State.NOT_POSSIBLE, waiting = null))
         }
         val api = apis.create(preferences.censusBaseUrl.first())
-        for (target in requireNotNull(current.targets).filter { it.outcome == Outcome.PENDING }) {
-            val id = target.installId
-            var retired = false
-            val credential = try {
-                credentials.current()?.takeIf { it.installId == id } ?: credentials.retired(id)?.also { retired = true }
-            } catch (_: CensusCredentialStore.Unusable) {
-                null
-            } catch (_: CensusCredentialStore.Transient) {
-                Timber.tag(TAG).i("census deletion pending cause=keystore")
-                return finish(current.copy(waiting = CensusDeletion.Waiting.UNREACHABLE))
+        return when (val result = deleteWithRecovery(api, credential)) {
+            is DeleteResult.Deleted -> {
+                Timber.tag(TAG).i("census deleted rows=%d", result.rows)
+                finish(current.copy(state = State.DELETED, rows = result.rows, deletedDay = result.deletedDay, waiting = null))
             }
-            if (credential == null) {
-                // This ID's key is gone (a revoke elsewhere, or a lost Keystore key): only this ID is not possible.
-                Timber.tag(TAG).w("census deletion: an identity's key is gone")
-                current = finish(current.with(target.copy(outcome = Outcome.NOT_POSSIBLE)))
-                continue
+            is DeleteResult.Unauthorized -> {
+                // A bad signature, a skewed clock or an ID the server no longer knows all answer 401: never conclude.
+                Timber.tag(TAG).w("census deletion pending cause=unauthorized skew=%s", clockSkew(result.serverDateMillis))
+                finish(current.copy(waiting = CensusDeletion.Waiting.UNCONFIRMED))
             }
-            when (val result = deleteWithRecovery(api, credential)) {
-                is DeleteResult.Deleted -> {
-                    Timber.tag(TAG).i("census deleted rows=%d", result.rows)
-                    // The confirmation is saved first; only then is the retired key forgotten.
-                    current = finish(current.with(target.copy(outcome = Outcome.DELETED, rows = result.rows, day = result.deletedDay)))
-                    if (retired) forgetRetiredQuietly(id)
-                }
-                is DeleteResult.Unauthorized -> {
-                    // A bad signature, a skewed clock or an ID the server no longer knows all answer 401: never conclude.
-                    Timber.tag(TAG).w("census deletion pending cause=unauthorized skew=%s", clockSkew(result.serverDateMillis))
-                    return finish(current.copy(waiting = CensusDeletion.Waiting.UNCONFIRMED))
-                }
-                DeleteResult.Revoked -> {
-                    // As the worker's revoke: switch off first, then forget the identity. Other IDs go on.
-                    preferences.setCensusUploadEnabled(false)
-                    envelopeSink.invalidate()
-                    preferences.setCensusShareCaptures(false)
-                    current = finish(current.with(target.copy(outcome = Outcome.NOT_POSSIBLE)))
-                    if (retired) forgetRetiredQuietly(id) else credentials.wipe()
-                    Timber.tag(TAG).w("census deletion: revoked")
-                }
-                is DeleteResult.NotAvailable -> {
-                    Timber.tag(TAG).i("census deletion pending cause=not_available status=%d", result.status)
-                    return finish(current.copy(waiting = CensusDeletion.Waiting.NOT_YET))
-                }
-                is DeleteResult.RateLimited, is DeleteResult.ServerUnavailable, is DeleteResult.TransportFailure -> {
-                    Timber.tag(TAG).i("census deletion pending cause=%s", result.javaClass.simpleName)
-                    return finish(current.copy(waiting = CensusDeletion.Waiting.UNREACHABLE))
-                }
+            DeleteResult.Revoked -> {
+                // As the worker's revoke: the outcome is saved, the census switched off, then the identity forgotten.
+                // The server deletes a revoked install's sightings itself on revocation.
+                val done = finish(current.copy(state = State.NOT_POSSIBLE, waiting = null))
+                preferences.setCensusUploadEnabled(false)
+                envelopeSink.invalidate()
+                preferences.setCensusShareCaptures(false)
+                credentials.wipe()
+                Timber.tag(TAG).w("census deletion: revoked")
+                done
             }
-        }
-        val anyDeleted = current.targets.orEmpty().any { it.outcome == Outcome.DELETED }
-        return finish(current.copy(state = if (anyDeleted) State.DELETED else State.NOT_POSSIBLE, waiting = null))
-    }
-
-    private fun CensusDeletion.with(target: CensusDeletion.Target): CensusDeletion =
-        copy(targets = targets.orEmpty().map { if (it.installId == target.installId) target else it })
-
-    /**
-     * The idempotent half of a confirmation: a retired key whose ID the server confirmed is forgotten. Re-run on every
-     * load, so a forget that failed (or a process death after the confirmation was saved) is finished later. Never throws.
-     */
-    private suspend fun forgetConfirmedKeys(stored: CensusDeletion) {
-        val confirmed = stored.targets.orEmpty().filter { it.outcome == Outcome.DELETED }.map { it.installId }
-        if (confirmed.isEmpty()) return
-        val retired = runCatching { credentials.retiredIds() }.getOrNull() ?: return
-        confirmed.filter { it in retired }.forEach { forgetRetiredQuietly(it) }
-    }
-
-    private suspend fun forgetRetiredQuietly(id: String) {
-        try {
-            credentials.forgetRetired(id)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            Timber.tag(TAG).w("census deletion: a confirmed identity's key could not be forgotten yet")
+            is DeleteResult.NotAvailable -> {
+                Timber.tag(TAG).i("census deletion pending cause=not_available status=%d", result.status)
+                finish(current.copy(waiting = CensusDeletion.Waiting.NOT_YET))
+            }
+            is DeleteResult.RateLimited, is DeleteResult.ServerUnavailable, is DeleteResult.TransportFailure -> {
+                Timber.tag(TAG).i("census deletion pending cause=%s", result.javaClass.simpleName)
+                finish(current.copy(waiting = CensusDeletion.Waiting.UNREACHABLE))
+            }
         }
     }
 

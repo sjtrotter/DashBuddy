@@ -25,6 +25,8 @@ enum class CensusRunOutcome(val wire: String) {
     REVOKED("revoked"),
     FAILURE("failure"),
     RESET("reset"),
+    /** #1622: the identity reset was refused: the server has not confirmed deleting the enrolled identity's data. */
+    RESET_REFUSED("reset_refused"),
     UNKNOWN("unknown");
 
     companion object {

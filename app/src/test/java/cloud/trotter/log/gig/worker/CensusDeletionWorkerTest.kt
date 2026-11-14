@@ -1,6 +1,7 @@
 package cloud.trotter.log.gig.worker
 
 import androidx.work.ListenableWorker
+import cloud.trotter.log.gig.core.network.census.CensusBudget
 import cloud.trotter.log.gig.core.network.census.DeleteResult
 import cloud.trotter.log.gig.core.network.census.EnrolResult
 import kotlinx.serialization.json.JsonObject
@@ -9,6 +10,7 @@ import cloud.trotter.log.gig.core.network.census.UploadResult
 import cloud.trotter.log.gig.domain.census.CensusConsent
 import cloud.trotter.log.gig.domain.census.CensusDeletion
 import cloud.trotter.log.gig.domain.census.CensusDeletion.State
+import cloud.trotter.log.gig.domain.census.CensusRunOutcome
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -17,8 +19,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.never
-import org.mockito.kotlin.times
-import cloud.trotter.log.gig.core.data.census.CensusCredentialStore
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.robolectric.RobolectricTestRunner
@@ -46,7 +46,7 @@ class CensusDeletionWorkerTest {
         assertEquals("the queue is empty before the request goes", 0, queuedAtRequest)
         assertEquals(State.DELETED, result.state)
         assertEquals(12, result.rows)
-        assertEquals(listOf("2026-11-13"), result.confirmedDays)
+        assertEquals("2026-11-13", result.deletedDay)
         assertEquals(result, h.preferences.censusDeletion.first())
         assertEquals(listOf(h.credential.installId), h.api.deletedIds)
         assertTrue("no unsent daily count survives", h.healthSink.snapshot().rows.isEmpty())
@@ -147,7 +147,7 @@ class CensusDeletionWorkerTest {
             val result = h.deletion.delete()
             assertEquals(State.PENDING, result.state)
             assertEquals(CensusDeletion.Waiting.UNCONFIRMED, result.waiting)
-            assertEquals(listOf(h.credential.installId), result.targets?.map { it.installId })
+            assertEquals(h.credential.installId, result.installId)
         }
         verify(h.credentials, never()).wipe()
         assertEquals("a pending request blocks uploads", ListenableWorker.Result.success(), run {
@@ -193,83 +193,48 @@ class CensusDeletionWorkerTest {
         assertTrue(h.api.bodies.isEmpty())
     }
 
-    @Test fun `an identity reset before the request keeps the old ID's key, and the request deletes under it`() = runTest {
+    @Test fun `delete, upload, then reset - the reset first deletes again, and the later uploads with it`() = runTest {
         val h = harness()
         h.initialize()
-        val old = h.credential
+        h.api.deletions += deleted
+        assertEquals(State.DELETED, h.deletion.delete().state)
+
+        // Uploads go on under the same ID after the deletion.
+        h.queue()
+        h.api.uploads += UploadResult.Accepted(1, 0, emptyMap(), CensusBudget(299, 1000, 39, 300))
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(1, h.api.batches.size)
+
+        // The reset sends a fresh deletion for that ID and resets only on its confirmation.
+        h.api.deletions += DeleteResult.Deleted(rows = 2, deletedDay = "2026-11-14")
+        assertTrue(h.resetter().reset())
+        assertEquals("a second deletion, for the uploads after the first", 2, h.api.deletedIds.size)
+        assertEquals(2, h.preferences.censusDeletion.first()?.rows)
+        verify(h.credentials).wipe()
+        assertEquals(CensusRunOutcome.RESET, h.preferences.censusLastRun.first()?.outcome)
+    }
+
+    @Test fun `a reset is refused while the server has not confirmed the deletion, and the ID is kept`() = runTest {
+        val h = harness()
+        h.initialize()
+        for (unconfirmed in listOf(DeleteResult.TransportFailure("IOException"), DeleteResult.NotAvailable(404),
+            DeleteResult.Unauthorized(System.currentTimeMillis()))) {
+            h.api.deletions += unconfirmed
+            assertFalse(h.resetter().reset())
+            assertEquals(CensusRunOutcome.RESET_REFUSED, h.preferences.censusLastRun.first()?.outcome)
+        }
+        verify(h.credentials, never()).wipe()
+        assertTrue("the request stays pending and keeps uploads blocked", h.preferences.censusDeletion.first()!!.pending)
+    }
+
+    @Test fun `a never-enrolled identity resets freely, with no deletion`() = runTest {
+        val h = harness()
+        h.initialize()
         whenever(h.credentials.current()).thenReturn(null)
-        whenever(h.credentials.retiredIds()).thenReturn(listOf(old.installId))
-        whenever(h.credentials.retired(old.installId)).thenReturn(old)
-        h.api.deletions += deleted
-
-        val result = h.deletion.delete()
-        assertEquals(State.DELETED, result.state)
-        assertEquals(listOf(old.installId), h.api.deletedIds)
-        verify(h.credentials).forgetRetired(old.installId)
-    }
-
-    /** A retired identity A (an identity reset) and the current one B, both to delete. */
-    private suspend fun CensusWorkerHarness.retiredAndCurrent(): CensusCredentialStore.Credential {
-        initialize()
-        val a = credential.copy(installId = "aaaaaaaa-1234-4123-8123-123456789abc")
-        whenever(credentials.retiredIds()).thenReturn(listOf(a.installId))
-        whenever(credentials.retired(a.installId)).thenReturn(a)
-        return a
-    }
-
-    @Test fun `a confirmation is saved before the retired key is forgotten, and a failed forget is finished later`() = runTest {
-        val h = harness()
-        val a = h.retiredAndCurrent()
-        whenever(h.credentials.forgetRetired(a.installId)).thenAnswer { throw java.io.IOException("disk") }.thenReturn(Unit)
-        h.api.deletions.addAll(listOf(DeleteResult.Deleted(3, "2026-11-12"), DeleteResult.Deleted(4, "2026-11-13")))
-
-        val result = h.deletion.delete()
-        assertEquals("a failed forget never stops the next ID", State.DELETED, result.state)
-        assertEquals(listOf(a.installId, h.credential.installId), h.api.deletedIds)
-        assertEquals(7, result.rows)
-
-        // The next load re-runs the idempotent cleanup: the confirmed ID's key, still kept, is forgotten now.
-        assertTrue(h.deletion.resumePending())
-        verify(h.credentials, times(2)).forgetRetired(a.installId)
-    }
-
-    @Test fun `a confirmation that could not be saved keeps the key, and the retry still deletes both IDs`() = runTest {
-        val h = harness()
-        val a = h.retiredAndCurrent()
-        val targetsKey = androidx.datastore.preferences.core.stringPreferencesKey("census_deletion_targets_json")
-        h.memory.failOnce = { prefs -> prefs[targetsKey]?.contains("\"DELETED\"") == true }
-        h.api.deletions += DeleteResult.Deleted(3, "2026-11-12")
-
-        val interrupted = h.deletion.delete()
-        assertTrue("still pending: A's confirmation was not saved", interrupted.pending)
-        verify(h.credentials, never()).forgetRetired(a.installId)
-
-        h.api.deletions.addAll(listOf(DeleteResult.Deleted(0, "2026-11-12"), DeleteResult.Deleted(4, "2026-11-13")))
-        assertEquals(ListenableWorker.Result.success(), h.worker(listOf(CensusWorkScheduler.DELETION_TAG)).doWork())
-        val done = requireNotNull(h.preferences.censusDeletion.first())
-        assertEquals(State.DELETED, done.state)
-        assertEquals("A again (idempotent), then B", listOf(a.installId, a.installId, h.credential.installId), h.api.deletedIds)
-        verify(h.credentials).forgetRetired(a.installId)
-    }
-
-    @Test fun `an ID whose key is gone is not possible on its own, and the others are still deleted`() = runTest {
-        val h = harness()
-        val a = h.retiredAndCurrent()
-        whenever(h.credentials.retired(a.installId)).thenReturn(null)
-        h.api.deletions += deleted
-        val result = h.deletion.delete()
-        assertEquals(State.DELETED, result.state)
-        assertEquals(1, result.notPossibleCount)
-        assertEquals(listOf(h.credential.installId), h.api.deletedIds)
-    }
-
-    @Test fun `each ID keeps its own confirmation day`() = runTest {
-        val h = harness()
-        h.retiredAndCurrent()
-        h.api.deletions.addAll(listOf(DeleteResult.Deleted(3, "2026-11-16"), DeleteResult.Deleted(4, "2026-11-17")))
-        val result = h.deletion.delete()
-        assertEquals(listOf(3 to "2026-11-16", 4 to "2026-11-17"), result.targets?.map { it.rows to it.day })
-        assertEquals(listOf("2026-11-16", "2026-11-17"), result.confirmedDays)
+        assertTrue(h.resetter().reset())
+        assertEquals(0, h.factoryCalls)
+        assertEquals(null, h.preferences.censusDeletion.first())
+        verify(h.credentials).wipe()
     }
 
     @Test fun `a nothing-sent result is cleared once the phone enrols`() = runTest {
@@ -299,7 +264,7 @@ class CensusDeletionWorkerTest {
         val h = harness()
         h.initialize()
         h.api.deletions += DeleteResult.TransportFailure("IOException")
-        assertEquals(listOf(h.credential.installId), h.deletion.delete().targets?.map { it.installId })
+        assertEquals(h.credential.installId, h.deletion.delete().installId)
 
         val other = h.credential.copy(installId = "87654321-1234-4123-8123-123456789abc")
         whenever(h.credentials.current()).thenReturn(other)

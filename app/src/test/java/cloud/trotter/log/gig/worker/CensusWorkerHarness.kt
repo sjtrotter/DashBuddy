@@ -208,12 +208,15 @@ internal class CensusWorkerHarness(scope: CoroutineScope, io: CoroutineDispatche
         }
     }
     private val lock = CensusUploadLock()
+    fun resetter() = cloud.trotter.log.gig.core.data.census.CensusIdentityResetter(
+        credentials, spool, preferences, scheduler, lock, resetScope, healthSink, envelopeSink, deletion,
+    )
+    private val resetScope = scope
     val deletion = CensusDataDeletion(credentials, spool, envelopeSink, healthSink, preferences, scheduler, lock, factory, scope, "test")
 
     suspend fun initialize(enabled: Boolean = true) {
         preferences.setCensusUploadEnabled(enabled)
         whenever(credentials.current()).thenReturn(credential)
-        whenever(credentials.retiredIds()).thenReturn(emptyList())
         whenever(spool.take(100, 900 * 1024)).thenAnswer {
             val retained = pending?.ids?.mapNotNull { id -> queued.flatten().find { it.id == id } }
             if (!retained.isNullOrEmpty()) retained else {

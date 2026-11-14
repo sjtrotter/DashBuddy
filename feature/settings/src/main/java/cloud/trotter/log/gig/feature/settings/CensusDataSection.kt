@@ -86,18 +86,10 @@ private fun deletionStatus(deletion: CensusDeletion?, deleting: Boolean): String
             },
         )
         CensusDeletion.State.DELETED -> {
-            // One day: the count on that day. Several (IDs confirmed on different days): the total and the LAST day,
-            // never one day for all of them.
-            val rows = deletion.rows
-            val days = deletion.confirmedDays.mapNotNull { runCatching { formatMonthDayYear(LocalDate.parse(it)) }.getOrNull() }
-            val done = when (days.size) {
-                0 -> pluralStringResource(R.plurals.census_delete_status_done_no_day, rows, rows)
-                1 -> pluralStringResource(R.plurals.census_delete_status_done, rows, rows, days.single())
-                else -> pluralStringResource(R.plurals.census_delete_status_done_days, rows, rows, days.last())
-            }
-            val lost = deletion.notPossibleCount
-            if (lost == 0) done
-            else done + " " + pluralStringResource(R.plurals.census_delete_status_some_not_possible, lost, lost)
+            val rows = deletion.rows ?: 0
+            val day = deletion.deletedDay?.let { runCatching { formatMonthDayYear(LocalDate.parse(it)) }.getOrNull() }
+            if (day == null) pluralStringResource(R.plurals.census_delete_status_done_no_day, rows, rows)
+            else pluralStringResource(R.plurals.census_delete_status_done, rows, rows, day)
         }
         CensusDeletion.State.NOTHING_SENT -> stringResource(R.string.census_delete_status_nothing)
         CensusDeletion.State.NOT_POSSIBLE -> stringResource(R.string.census_delete_status_not_possible)
