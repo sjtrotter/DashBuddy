@@ -48,3 +48,8 @@ annotation class VehiclePreferences
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 annotation class RecognitionNoticePreferences
+
+/** #1625 — the contributor record (invitation answer, grant); device-local, excluded from backup and transfer. */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class ContributorPreferences

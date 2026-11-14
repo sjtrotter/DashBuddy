@@ -82,4 +82,10 @@ object DataStoreModule {
     @RecognitionNoticePreferences
     fun provideRecognitionNoticeDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
         PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("recognition_notices") }
+
+    @Provides
+    @Singleton
+    @ContributorPreferences
+    fun provideContributorDataStore(@ApplicationContext context: Context): DataStore<Preferences> =
+        PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("census_contributor") }
 }

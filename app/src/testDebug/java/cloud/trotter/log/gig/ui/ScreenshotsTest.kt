@@ -66,6 +66,10 @@ import cloud.trotter.log.gig.feature.settings.CensusSentContent
 import cloud.trotter.log.gig.feature.settings.CensusDisclosure
 import cloud.trotter.log.gig.feature.settings.CensusPlatformRow
 import cloud.trotter.log.gig.feature.settings.CensusUiState
+import cloud.trotter.log.gig.feature.settings.ContributorContent
+import cloud.trotter.log.gig.feature.settings.ContributorUiState
+import cloud.trotter.log.gig.domain.census.contributor.ContributorEntry
+import cloud.trotter.log.gig.domain.census.contributor.InvitationAnswer
 import cloud.trotter.log.gig.feature.settings.EventReceiptConsentDialog
 import cloud.trotter.log.gig.feature.settings.EventReceiptOffConfirmDialog
 import cloud.trotter.log.gig.feature.settings.PrivacyScreen
@@ -271,6 +275,7 @@ class ScreenshotsTest(private val theme: String) {
                 consent = CensusConsent.ON,
                 platforms = listOf(CensusPlatformRow(Platform.DoorDash, true), CensusPlatformRow(Platform.Uber, false)),
                 wifiOnly = true, serverHost = "census.dashbuddy.trotter.cloud", testBuild = true,
+                reviewer = ContributorEntry.INVITED,
             ),
             onBack = {}, onAccept = {}, onDecline = {}, onWifiOnly = {}, onPlatform = { _, _ -> },
             onOpenSent = {}, onDelete = {},
@@ -307,6 +312,25 @@ class ScreenshotsTest(private val theme: String) {
 
     @Test @Config(qualifiers = FULL)
     fun settingsCensusDisclosureFull() = censusDisclosure("settings/census-disclosure-full")
+
+    /** #1625: the screen-review invitation's disclosure, before Accept. */
+    @Test fun settingsCensusReviewer() = censusReviewer("settings/census-reviewer")
+
+    @Test @Config(qualifiers = FULL)
+    fun settingsCensusReviewerFull() = censusReviewer("settings/census-reviewer-full")
+
+    /** #1625: a live reviewer permission, with its end day and Stop reviewing. */
+    @Test fun settingsCensusReviewerOn() = render("settings/census-reviewer-on", assertion = {
+        text(string(SettingsR.string.census_review_stop)).assertExists()
+    }) {
+        ContributorContent(
+            state = ContributorUiState(
+                entry = ContributorEntry.ON, canAccept = false, shiftLive = false, answer = InvitationAnswer.NONE,
+                expiresDay = "2026-12-13", ended = null, refusal = null,
+            ),
+            onBack = {}, onAccept = {}, onNotNow = {}, onNoThanks = {}, onStop = {},
+        )
+    }
 
     // ── Home ─────────────────────────────────────────────────────────────
 
@@ -529,6 +553,18 @@ class ScreenshotsTest(private val theme: String) {
         CensusDisclosure(
             serverHost = "census.dashbuddy.trotter.cloud", testBuild = false, accepted = false,
             onAccept = {}, onNotNow = {}, onClose = {},
+        )
+    }
+
+    private fun censusReviewer(path: String) = render(path, assertion = {
+        text(string(SettingsR.string.census_review_heading)).assertExists()
+    }) {
+        ContributorContent(
+            state = ContributorUiState(
+                entry = ContributorEntry.INVITED, canAccept = true, shiftLive = false, answer = InvitationAnswer.NONE,
+                expiresDay = null, ended = null, refusal = null,
+            ),
+            onBack = {}, onAccept = {}, onNotNow = {}, onNoThanks = {}, onStop = {},
         )
     }
 

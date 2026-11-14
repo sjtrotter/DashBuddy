@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #1625: French for the screen-review invitation notification. English (values/) is authoritative. -->
+<resources>
+    <string name="census_channel_name">Recensement</string>
+    <string name="census_channel_description">L\'invitation à vérifier des écrans, après un service</string>
+    <string name="census_review_invitation_title">Vérifier des écrans que gig.log ne reconnaît pas ?</string>
+    <string name="census_review_invitation_text">Après un service, vous pouvez vérifier quelques écrans que gig.log n\'a pas reconnus. Touchez pour lire ce que la vérification envoie avant de décider.</string>
+    <string name="census_review_invitation_renew_title">Continuer à vérifier des écrans ?</string>
+    <string name="census_review_invitation_renew_text">Votre autorisation de vérification de 30 jours a pris fin. Touchez pour lire ce que la vérification envoie et accepter à nouveau.</string>
+</resources>

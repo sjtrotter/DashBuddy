@@ -1,10 +1,14 @@
 package cloud.trotter.log.gig.domain.capability
 
-/** #170 — the consent receipts as stored: the Screen events receipt, each capability's by key, and the census's (#1621). */
+/**
+ * #170 — the consent receipts as stored: the Screen events receipt, each capability's by key, the census's (#1621) and
+ * the screen-review decision's (#1625).
+ */
 data class StoredConsentReceipts(
     val screenEvents: ConsentReceipt?,
     val capabilities: Map<String, ConsentReceipt>,
     val census: ConsentReceipt? = null,
+    val reviews: ConsentReceipt? = null,
 )
 
 /**

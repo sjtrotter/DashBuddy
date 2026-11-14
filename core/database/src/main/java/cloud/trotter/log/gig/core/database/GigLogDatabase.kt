@@ -11,6 +11,7 @@ import cloud.trotter.log.gig.core.database.analytics.DeliveryRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.ExpenseRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.FuelRecordEntity
 import cloud.trotter.log.gig.core.database.analytics.HudShiftDao
+import cloud.trotter.log.gig.core.database.analytics.ContributorActivityDao
 import cloud.trotter.log.gig.core.database.analytics.RecapDao
 import cloud.trotter.log.gig.core.database.analytics.StoreSearchDao
 import cloud.trotter.log.gig.core.database.analytics.LedgerDao
@@ -159,6 +160,7 @@ abstract class GigLogDatabase : RoomDatabase() {
     abstract fun ledgerDao(): LedgerDao
     abstract fun analyticsDao(): AnalyticsDao
     abstract fun hudShiftDao(): HudShiftDao
+    abstract fun contributorActivityDao(): ContributorActivityDao
     abstract fun recapDao(): RecapDao
     abstract fun storeSearchDao(): StoreSearchDao
     abstract fun receiptDao(): ReceiptDao

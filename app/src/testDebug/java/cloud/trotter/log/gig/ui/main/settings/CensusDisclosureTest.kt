@@ -64,8 +64,8 @@ class CensusDisclosureTest {
     private fun show() {
         val deletion = mock<CensusDataDeletion>()
         whenever(deletion.inProgress).thenReturn(MutableStateFlow(false))
-        val vm = CensusViewModel(repo, deletion, readsUnboundPlatforms = false)
-        compose.setContent { GigLogTheme { CensusScreen(onBack = {}, onOpenSent = {}, viewModel = vm) } }
+        val vm = CensusViewModel(repo, deletion, hiddenReviews(), readsUnboundPlatforms = false)
+        compose.setContent { GigLogTheme { CensusScreen(onBack = {}, onOpenSent = {}, onOpenReviewer = {}, viewModel = vm) } }
         compose.waitForIdle()
     }
 

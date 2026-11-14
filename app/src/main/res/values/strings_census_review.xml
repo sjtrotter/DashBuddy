@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #1625: the screen-review invitation notification and its channel. -->
+<resources>
+    <string name="census_channel_name">Census</string>
+    <string name="census_channel_description">The invitation to review screens, after a shift</string>
+    <string name="census_review_invitation_title">Review screens gig.log doesn\'t recognize?</string>
+    <string name="census_review_invitation_text">After a shift, you can check a few screens gig.log didn\'t recognize. Tap to read what reviewing sends before you decide.</string>
+    <string name="census_review_invitation_renew_title">Keep reviewing screens?</string>
+    <string name="census_review_invitation_renew_text">Your 30-day reviewer permission ended. Tap to read what reviewing sends and accept again.</string>
+</resources>

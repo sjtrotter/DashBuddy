@@ -50,7 +50,7 @@ class CensusViewModelTest {
         val repo = DevSettingsRepository(DevSettingsDataSource(SlowPreferences()), true, main, "test")
         val deletion = mock<CensusDataDeletion>()
         whenever(deletion.inProgress).thenReturn(MutableStateFlow(false))
-        val vm = CensusViewModel(repo, deletion, readsUnboundPlatforms = true)
+        val vm = CensusViewModel(repo, deletion, hiddenReviews(), readsUnboundPlatforms = true)
         backgroundScope.launch { vm.uiState.collect {} }
         advanceUntilIdle()
 

@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import cloud.trotter.census.contract.auth.Bearer
 import cloud.trotter.census.contract.auth.InstallIdGrammar
@@ -78,10 +79,28 @@ class CensusCredentialStore @Inject constructor(
         Credential(id, secret, false)
     }
 
+    /** #1625: also records when, for contributor eligibility's census-age rule. */
     suspend fun markEnrolled() = mutex.withLock {
         check(read() != null)
-        ds.edit { it[ENROLLED] = true }
+        ds.edit {
+            it[ENROLLED] = true
+            it[ENROLLED_AT] = System.currentTimeMillis()
+        }
         Unit
+    }
+
+    /**
+     * #1625: when the enrolled census ID enrolled, by the phone's clock, for contributor eligibility; null while none is
+     * enrolled. An ID enrolled before this was recorded gets [nowMillis] the first time it is read, so its age counts
+     * from then, never from a guess. Reads no secret.
+     */
+    suspend fun enrolledAtMillis(nowMillis: Long): Long? = mutex.withLock {
+        val prefs = ds.data.first()
+        if (prefs[ENROLLED] != true) return@withLock null
+        prefs[ENROLLED_AT] ?: run {
+            ds.edit { if (it[ENROLLED] == true && it[ENROLLED_AT] == null) it[ENROLLED_AT] = nowMillis }
+            ds.data.first()[ENROLLED_AT]
+        }
     }
 
     suspend fun wipe() = mutex.withLock {
@@ -126,5 +145,6 @@ class CensusCredentialStore @Inject constructor(
         val SEALED = stringPreferencesKey("secret_sealed")
         val IV = stringPreferencesKey("secret_iv")
         val ENROLLED = booleanPreferencesKey("enrolled")
+        val ENROLLED_AT = longPreferencesKey("enrolled_at_millis")
     }
 }

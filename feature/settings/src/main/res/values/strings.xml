@@ -168,6 +168,8 @@
     <!-- #1621, #1620: the census opt-in and the census as built, the same in every build. -->
     <string name="privacy_census_title">Census</string>
     <string name="privacy_census_body">Off unless you accept it in Settings > Data &amp; privacy > Census, which first shows what it sends. When on, it sends gig.log\'s census server, at most once a day, outlines of the screens and notifications gig.log doesn\'t recognize, at most one of each layout a day, and daily counts of the screens it recognized, from the delivery apps you pick, with this install\'s ID, over HTTPS. Each day it picks a random time to send; a send waits up to an hour for Wi-Fi (unless you allow mobile data) and battery, and is skipped that day if it can\'t start by then. The choice is saved on this phone with its date, app version, privacy notice version and the census server\'s address, together with the delivery apps and Wi-Fi setting you pick. That record leaves the phone only in a bug report you export. If the server\'s address changes, the census stays off until you accept again. The census screen lists what gig.log sent in the last 7 days, a list kept on this phone only, and can ask the server to delete what it holds for this phone; until the server\'s next update, that request waits on the phone. The server keeps this phone\'s census ID, a tally of today\'s uploads for 7 days, and data it can\'t tie to this phone; its backups keep the rest for up to 14 days.</string>
+    <string name="privacy_census_review_title">Screen reviews</string>
+    <string name="privacy_census_review_body">Off unless you accept the invitation. gig.log shows it only after a shift ends, and only on a phone that has been on the census for 7 days, recorded 2 shifts and ran a shift on 3 of the last 7 days. gig.log works that out on the phone; to accept, it sends the census server a yes, never the counts. The server gives this phone a reviewer permission for 30 days, and gig.log asks again when it ends. While you review, the server keeps a log of which screens gig.log asked it about, tied to that permission, for up to 30 days. This version asks for the permission only; screens to review arrive in a later update. Stopping, turning the census off or deleting your census data ends the permission. Your answer is saved on this phone with its date, app version and privacy notice version, and leaves the phone only in a bug report you export.</string>
     <string name="privacy_storage_title">How it is stored</string>
     <string name="privacy_storage_body">Your history, settings and consent choices are kept in gig.log\'s private storage on the phone, which other apps can\'t read, and Android encrypts that storage. gig.log adds no encryption of its own. Gas-price and vehicle lookups and the census use HTTPS, and gig.log refuses unencrypted connections. Screenshots and exports are ordinary files outside that storage, so apps you let see your photos or files can read them.</string>
     <string name="privacy_screenshots_title">Screenshots</string>
@@ -212,6 +214,48 @@
     <string name="census_disclosure_close">Close</string>
     <!-- #1622: what the census sent, and deleting the census server's data for this phone. The dialog states what
          deletion cannot reach (ADR-0011 §21, the census server's API.md "Delete my data"). -->
+    <!-- #1625: screen reviews (the contributor tier): the Census screen's row, the reviewer screen and its disclosure. -->
+    <string name="census_review_row_label">Screen reviews</string>
+    <string name="census_review_row_invited">Invitation open</string>
+    <string name="census_review_row_on">On, ends %1$s</string>
+    <string name="census_review_row_off">Off</string>
+    <string name="census_review_title">Screen reviews</string>
+    <string name="census_review_heading">Review screens gig.log doesn\'t recognize</string>
+    <string name="census_review_intro">Reviewing is separate from the census, and off unless you accept. The census works the same either way.</string>
+    <string name="census_review_note">This version asks for the permission only; screens to review arrive in a later update.</string>
+    <string name="census_review_see_title">What you see</string>
+    <string name="census_review_see_body">After a shift, gig.log may show you a few screens it didn\'t recognize, at most 3 a day. Customer details and your own account details that gig.log can detect are covered before you see a screen.</string>
+    <string name="census_review_do_title">What you can do</string>
+    <string name="census_review_do_body">Confirm that a word on a screen is the delivery app\'s own wording, such as \"Pick up by\", and label what a field is, such as tip or deadline. Ask the developer about a screen you\'re unsure of.</string>
+    <string name="census_review_sent_title">What is sent</string>
+    <string name="census_review_sent_body">A confirmed word goes as its one-way code. The word itself is sent only after other drivers confirm the same word. A label goes alone, without the field\'s value. Ask the developer sends the screen\'s outline as the review shows it; only the developer can open it, and the census server deletes it after 3 days.</string>
+    <string name="census_review_grant_title">Your reviewer permission</string>
+    <string name="census_review_grant_body">To accept, gig.log sends the census server a yes, never your shift counts. The server gives this phone a reviewer permission for 30 days, and gig.log asks again when it ends. While you review, the server keeps a log of which screens gig.log asked it about, tied to your reviewer permission, for up to 30 days.</string>
+    <string name="census_review_stop_title">Stop</string>
+    <string name="census_review_stop_body">You can stop at any time on this screen. Stopping, turning the census off or deleting your census data ends the permission, and reviews waiting on the phone are dropped.</string>
+    <string name="census_review_accept">Accept</string>
+    <string name="census_review_no_thanks">No thanks</string>
+    <string name="census_review_stop">Stop reviewing</string>
+    <string name="census_review_status_on">Reviewing is on. The permission ends %1$s.</string>
+    <string name="census_review_status_requesting">Asking the census server</string>
+    <string name="census_review_status_unreachable">gig.log couldn\'t reach the census server. Try again later.</string>
+    <string name="census_review_status_deletion_pending">gig.log is still sending your census deletion request. Try again once the server confirms it.</string>
+    <string name="census_review_status_no_id">This phone has no census ID yet. It gets one with its first census upload.</string>
+    <string name="census_review_status_too_new">The census server takes reviewers once this phone\'s census ID is 8 days old. gig.log asks again after a later shift.</string>
+    <string name="census_review_status_not_eligible">The census server didn\'t accept this phone as a reviewer.</string>
+    <string name="census_review_status_revoked">The census server stopped reviews from this phone, so gig.log sends nothing for reviews.</string>
+    <string name="census_review_status_expired">Your reviewer permission ended after 30 days. Accept to review again.</string>
+    <string name="census_review_status_deleted">Deleting your census data ended your reviewer permission.</string>
+    <string name="census_review_status_census_off">Turning the census off ended your reviewer permission.</string>
+    <string name="census_review_status_id_changed">This phone\'s census ID changed, which ended your reviewer permission.</string>
+    <string name="census_review_status_server_none">The census server no longer holds a reviewer permission for this phone.</string>
+    <string name="census_review_status_off">Reviewing is off.</string>
+    <plurals name="census_review_status_not_now">
+        <item quantity="one">gig.log asks again after a shift, %d day from your answer.</item>
+        <item quantity="other">gig.log asks again after a shift, %d days from your answer.</item>
+    </plurals>
+    <string name="census_review_status_shift">You can answer after your shift ends.</string>
+    <string name="census_review_status_not_open">Reviews open to a phone that has been on the census for %1$d days, recorded %2$d shifts and ran a shift on %3$d of the last %4$d days.</string>
     <string name="census_data_title">Your census data</string>
     <string name="census_sent_title">What gig.log sent</string>
     <string name="census_sent_entry_supporting">Uploads from the last 7 days</string>

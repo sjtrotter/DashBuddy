@@ -66,6 +66,12 @@ class GigLogApplication : Application(), Configuration.Provider {
     lateinit var phoneWipe: cloud.trotter.log.gig.core.data.wipe.PhoneWipe
 
     @Inject
+    lateinit var censusContributor: cloud.trotter.log.gig.core.data.census.contributor.CensusContributor
+
+    @Inject
+    lateinit var contributorInvitationNotifier: cloud.trotter.log.gig.notice.ContributorInvitationNotifier
+
+    @Inject
     lateinit var jsonRuleInterpreter: JsonRuleInterpreter
 
     @Inject
@@ -252,6 +258,10 @@ class GigLogApplication : Application(), Configuration.Provider {
         // #1622: a census deletion request left unresolved (a process death mid-request, or still waiting) gets its
         // any-network retry run queued again.
         censusDataDeletion.reconcile()
+        // #1625: a contributor grant ends whenever what it stands on changes; the review invitation waits for a shift
+        // to end.
+        censusContributor.watch()
+        contributorInvitationNotifier.start()
 
         Timber.i("Background workers verified and scheduled.")
     }
