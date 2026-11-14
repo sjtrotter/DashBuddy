@@ -1489,3 +1489,7 @@ JSON, and `SchemaVersionGuardTest` (unit) source-scans the `@Database` migration
 retention) to prove they chain v8 → `VERSION` with no gap — the forgotten-`AutoMigration` class the
 retired fallback used to mask. Migration-*correctness* tests are instrumented (`connectedAndroidTest`)
 and do NOT gate the unit-only PR CI.
+**The on-phone wipe is not a migration path (#1579).** Settings > Data & privacy > Delete everything on this phone
+removes the database (with its WAL/SHM sidecars and the `db-backups/` snapshots) only as an explicit, confirmed act of
+the dasher, through Android's own Clear storage (`PhoneWipe`, `docs/architecture/01-sensor-pipelines.md`); nothing
+in the open or upgrade path ever deletes it.

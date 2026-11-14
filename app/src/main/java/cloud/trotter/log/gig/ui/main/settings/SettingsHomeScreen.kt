@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
@@ -53,6 +54,7 @@ import cloud.trotter.log.gig.R
 import cloud.trotter.log.gig.core.data.vehicle.Garage
 import cloud.trotter.log.gig.domain.evaluation.UserEconomy
 import cloud.trotter.log.gig.feature.settings.SettingsMenuViewModel
+import cloud.trotter.log.gig.feature.settings.WipePhoneViewModel
 import cloud.trotter.log.gig.feature.settings.R as SettingsR
 import cloud.trotter.log.gig.ui.main.navigation.Screen
 import cloud.trotter.log.gig.domain.format.Formats
@@ -62,7 +64,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 fun SettingsHomeScreen(
     onNavigate: (String) -> Unit,
     onBack: () -> Unit,
-    viewModel: SettingsMenuViewModel = hiltViewModel()
+    viewModel: SettingsMenuViewModel = hiltViewModel(),
+    wipeViewModel: WipePhoneViewModel = hiltViewModel(),
 ) {
     // Relying strictly on the persisted DataStore state now
     val isDevUnlocked by viewModel.isDevModeUnlocked.collectAsStateWithLifecycle(initialValue = false)
@@ -75,6 +78,7 @@ fun SettingsHomeScreen(
         userEconomy = userEconomy,
         onNavigate = onNavigate,
         onBack = onBack,
+        onDeleteEverything = wipeViewModel::open,
     )
 }
 
@@ -90,6 +94,7 @@ fun SettingsHomeContent(
     userEconomy: UserEconomy?,
     onNavigate: (String) -> Unit,
     onBack: () -> Unit,
+    onDeleteEverything: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -197,6 +202,12 @@ fun SettingsHomeContent(
                     title = stringResource(R.string.settings_home_item_consent_title),
                     subtitle = stringResource(R.string.settings_home_item_consent_subtitle),
                     onClick = { onNavigate(Screen.ConsentSettings.route) }
+                )
+                SettingsNavItem(
+                    icon = Icons.Default.DeleteForever,
+                    title = stringResource(SettingsR.string.wipe_label),
+                    subtitle = stringResource(SettingsR.string.wipe_supporting),
+                    onClick = onDeleteEverything,
                 )
             }
 

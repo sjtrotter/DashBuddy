@@ -216,11 +216,12 @@ allowed, and for enough battery, and is skipped that day if it cannot start by t
 server can tell one phone's uploads apart for 30 days, not after), that the census can be stopped and its data on the
 server and on the phone deleted from Settings, and that the dasher's agreement with a delivery company is between the
 dasher and that company. The timing, Wi-Fi and HTTPS statements are built in every build (#1620, below), and so is
-the button that asks the server to delete its census data (#1622, "What was sent, and deleting it" below). Deleting
-what gig.log keeps on the phone is #1579, and the server takes deletion requests (census#79) and holds the 30-day limit
-(census#86) only from its next deployment, so the disclosure carries one line for the build it runs in: in the Play and
-sideload builds, "Deleting what gig.log keeps on the phone isn't in this version yet; clearing the app's storage or
-uninstalling removes it. The 30-day limit and deleting the census server's data take effect with the census server's
+the button that asks the server to delete its census data (#1622, "What was sent, and deleting it" below), and
+deleting what gig.log keeps on the phone (Settings > Data & privacy > Delete everything on this phone, #1579, §7).
+The server takes deletion requests (census#79) and holds the 30-day limit (census#86) only from its next deployment,
+so the disclosure carries one line for the build it runs in: in the Play and sideload builds, "Settings > Data &
+privacy > Delete everything on this phone deletes what gig.log keeps on the phone, and asks the census server first.
+The 30-day limit and deleting the census server's data take effect with the census server's
 next update; until then a deletion request waits on this phone" (`census_note_release`); in the debug build, that it
 can also send the text of unrecognized screens from a phone the census server trusts, with capture sharing on in
 developer options, that the 30-day limit doesn't apply to it yet, and the same server-deletion and on-phone lines
@@ -329,7 +330,7 @@ store (`datastore/rule_capability_grants.preferences_pb`) and the Screen-events 
 (`datastore/consent_event_receipt.preferences_pb`) are excluded, so a new device re-asks consent. Debug logs
 (`app.log`, `shareable.log`, `shareable.log.1`, and rotations under `logs/`), captures, census files, census
 credentials, the developer-settings store (the census switch, its consent receipt and choices, capture sharing, the server policy cache, the next daily census time and a census deletion request) and the recognition
-notice store (`datastore/recognition_notices.preferences_pb`, #1560) are also excluded from both backup and transfer (`app/src/main/res/xml/backup_rules.xml`,
+notice store (`datastore/recognition_notices.preferences_pb`, #1560) and the wipe commitment (`wipe_committed`, #1579) are also excluded from both backup and transfer (`app/src/main/res/xml/backup_rules.xml`,
 `data_extraction_rules.xml`; #1236, dev ruling 2026-10-07).
 
 ## 7. Where your data lives, and how long
@@ -432,10 +433,47 @@ identity export. Vehicle/default resets preserve these learned preferences.
   Android backup and device transfer, in both external storage and the internal-storage fallback. Each log-store
   initialization moves legacy root rotations into that root's `logs/`; failed moves attempt deletion because
   debug rotations are disposable, and any remaining legacy rotations are retried on the next initialization.
-- Retention of app-private data is "until you delete it": uninstalling removes the database, the DataStore files,
-  the logs and any captures. Android may restore the backed-up database and app/economy preferences on reinstall
+- Retention of app-private data is "until you delete it": Delete everything on this phone (below), clearing the app's
+  storage in Android's settings, or uninstalling removes the database, the DataStore files, the logs and any captures.
+  Android may restore the backed-up database and app/economy preferences on reinstall
   or a new phone; the excluded consent stores and debug logs do not restore. Gallery screenshots (§4) and files
-  you exported (§6) live outside the app and stay until you delete them. A one-tap in-app wipe does not exist yet — tracked in #1579.
+  you exported (§6) live outside the app and stay until you delete them.
+- **Delete everything on this phone** (#1579, Settings > Data & privacy; `PhoneWipe`, `WipePhoneDialog`). One
+  confirmation says what goes (every shift, delivery and offer, vehicles and plans, settings and consent choices,
+  logs, captures) and what stays (exported files, gallery screenshots, any Android backup in the Google account), and,
+  whenever a census request could be sent (the census is on, a census identity is stored, or the store can't be read),
+  that the census server is asked first, with what the server keeps, in the census screen's own words (§6). One process owns the census
+  upload lock for the whole wipe, and nothing is deleted without it: a census upload under way is waited for ("Waiting
+  for an upload to finish", with Cancel), never deleted beside. Under the lock it reads whether the phone is enrolled;
+  an enrolled or unreadable census ID sends the census deletion request (§6, "What was sent, and deleting it"), which is
+  stored as pending with its retry run queued before any network attempt, and the dialog waits up to 20 seconds for the
+  answer. A confirmation is shown ("The census server confirmed it deleted the uploads it can tie to this phone") and
+  the wipe follows without releasing the lock, so no census upload runs in between. Without a confirmation (offline,
+  no answer in time, a 404 until the server's update, an unconfirmed 401, or an ID that can no longer sign) nothing is
+  deleted and the screen says why and offers two choices: Delete now, which says gig.log can't ask again and the
+  census server keeps this phone's uploads until they age out (the 30-day limit takes effect with the server's next
+  update), or Wait, which deletes nothing and leaves the stored request retrying. An answer that arrives later still
+  counts: a confirmation goes on to the wipe. It never says the server deleted anything the server did not confirm.
+  With no enrolled census ID it makes no network call. Once the wipe is decided, a commitment file
+  (`filesDir/wipe_committed`, excluded from backup and transfer) is written first; if the process dies before Android
+  clears the storage, the next start finishes the wipe before anything else runs (no sensing, workers or uploads). The
+  file is written whole or not at all (a synced temporary file renamed into place, checked by its content), so a
+  failed write leaves nothing and the screen says nothing was deleted. If Android refuses the clear at that start, the
+  first screen says "Couldn't delete", and the app starts nothing (no recognition, workers or census uploads) until
+  the dasher presses OK; the next start tries again until then. OK lets the app start only once the stored request to
+  delete is verifiably removed; if it can't be, the screen says "gig.log couldn't clear its delete request. Try again."
+  and nothing starts, so a later start never wipes data made after the OK. The same holds after a refused clear in the
+  dialog itself: it closes only once that request is removed. A marker gig.log can't read at start (a filesystem error) is never wiped on
+  and never taken as absent: the same screen holds startup until Try again removes it. The wipe deletes the census
+  Keystore key, then calls Android's own Clear storage for the app (`ActivityManager.clearApplicationUserData`, the
+  same operation as Settings > Apps > gig.log > Clear storage): Android stops every gig.log process, service and
+  scheduled job, then deletes the app's private storage and its app-specific external storage (the database with
+  its WAL and SHM files and pre-migration snapshots, every DataStore file including the consent and census stores,
+  the logs, captures, census files and scheduled work) and the app's Keystore keys, revokes the runtime permissions
+  Android granted it and removes its notifications. gig.log then closes; opened again it is a first run: setup
+  starts, every automatic tap is undecided (no auto-grant) and the census is off. If Android refuses the clear, the
+  screen says so and points to clearing the storage in Android's settings; the census key is already gone, so a census
+  that stays on enrols a new ID.
 - "What gig.log sent" keeps its summary of the census requests the server read for 7 days, at most 60 of them, in
   `filesDir/census/sent.json` (§6): counts and delivery apps only, never uploaded, excluded from backup and transfer.
   A census deletion request (its time, state and the server's confirmation) is kept in the developer-settings store.
@@ -481,6 +519,16 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r23 (2026-11-13)** — §7: Delete everything on this phone (#1579): one confirmation naming what goes and what
+  stays; with an enrolled census ID it first sends the census deletion request and waits up to 20 seconds, wipes on
+  the server's confirmation without letting a census upload run in between, and otherwise deletes nothing until the
+  dasher picks Delete now (the server keeps this phone's uploads until they age out) or Wait; with no census ID no
+  network call. One process owns the census upload lock throughout and waits for a running upload rather than
+  deleting beside it; the request is stored pending with its retry queued before the network, so Wait holds after the
+  dialog's 20 s; a stored commitment makes the next start finish a wipe the process died in. The wipe is Android's own
+  Clear storage for the app, after deleting the census Keystore key. §6: the
+  disclosure's per-build lines name it instead of saying it isn't in this version. The in-app Privacy page's "How long
+  it stays" follows. Receipts created under r22 retain that revision.
 - **r22 (2026-11-13)** — §6: "What was sent, and deleting it" (#1622): the census screen lists the requests the
   server read in the last 7 days, summarized on the phone from the request bytes (kinds, delivery apps, counts; no code,
   value or batch ID), and "Delete my census data" clears the phone's census queue and asks the server to delete this

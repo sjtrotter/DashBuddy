@@ -175,7 +175,7 @@
     <string name="privacy_backup_title">Backup and new phones</string>
     <string name="privacy_backup_body">Android backup and phone transfer may copy your history and settings and restore them. Consent choices and logs are left out, so a new phone asks again.</string>
     <string name="privacy_retention_title">How long it stays</string>
-    <string name="privacy_retention_body">Until you clear app data or uninstall, though a backup can bring it back on a reinstall or a new phone. Logs keep only recent entries. Screenshots and exports stay until you delete them. There is no one-tap delete yet.</string>
+    <string name="privacy_retention_body">Until you delete it. Settings > Data &amp; privacy > Delete everything on this phone deletes your history, settings, consent choices and logs; with the census on, it first asks the census server to delete its data and shows whether the server confirmed. Clearing app data or uninstalling also deletes it. A backup can bring it back on a reinstall or a new phone. Logs keep only recent entries. Screenshots and exports stay until you delete them.</string>
     <string name="privacy_choices_title">Your choices</string>
     <string name="privacy_choices_body">Each choice on Automation &amp; consent is saved on this phone with its date, app version and privacy notice version. The app log notes each automatic-tap choice. Both leave the phone only in a bug report you export.</string>
     <string name="privacy_test_builds_title">Test builds</string>
@@ -191,8 +191,8 @@
     <string name="census_wifi_only_label">Wi-Fi only</string>
     <string name="census_wifi_only_supporting">When off, uploads can use mobile data</string>
     <string name="census_read_disclosure">What the census sends</string>
-    <string name="census_note_release">Deleting what gig.log keeps on the phone isn\'t in this version yet; clearing the app\'s storage or uninstalling removes it. The 30-day limit and deleting the census server\'s data take effect with the census server\'s next update; until then a deletion request waits on this phone.</string>
-    <string name="census_note_test_build">This test build can also send the text of unrecognized screens from a phone the census server trusts, with capture sharing on in developer options. The 30-day limit doesn\'t apply to it yet. Deleting the census server\'s data takes effect with the census server\'s next update; until then a deletion request waits on this phone. Deleting what gig.log keeps on the phone isn\'t in this version yet; clearing the app\'s storage or uninstalling removes it.</string>
+    <string name="census_note_release">Settings > Data &amp; privacy > Delete everything on this phone deletes what gig.log keeps on the phone, and asks the census server first. The 30-day limit and deleting the census server\'s data take effect with the census server\'s next update; until then a deletion request waits on this phone.</string>
+    <string name="census_note_test_build">This test build can also send the text of unrecognized screens from a phone the census server trusts, with capture sharing on in developer options. The 30-day limit doesn\'t apply to it yet. Deleting the census server\'s data takes effect with the census server\'s next update; until then a deletion request waits on this phone. Settings > Data &amp; privacy > Delete everything on this phone deletes what gig.log keeps on the phone, and asks the census server first.</string>
     <string name="census_disclosure_heading">Before you turn on the census</string>
     <string name="census_disclosure_intro">The census is off unless you accept. gig.log works the same with it off.</string>
     <string name="census_disclosure_what_title">What it sends</string>
@@ -258,4 +258,39 @@
     <string name="census_delete_dialog_backups">Server backups made before your request keep this phone\'s records until they expire, at most 14 days later. If the server is restored from one, it deletes them again before it serves anything.</string>
     <string name="census_delete_dialog_confirm">Delete</string>
     <string name="census_delete_dialog_cancel">Cancel</string>
+    <!-- #1579: Settings > Data & privacy > Delete everything on this phone. Each line states only what PRIVACY.md 7 says
+         the wipe does. -->
+    <string name="wipe_label">Delete everything on this phone</string>
+    <string name="wipe_supporting">History, settings, consent choices and logs</string>
+    <string name="wipe_confirm_title">Delete everything on this phone?</string>
+    <string name="wipe_confirm_goes">gig.log deletes every shift, delivery and offer it recorded, your vehicles and plans, your settings and consent choices, its logs, and any captures of screens it didn\'t recognize.</string>
+    <string name="wipe_confirm_census">First it asks the census server to delete what it holds for this phone, and shows whether the server confirmed.</string>
+    <string name="wipe_confirm_stays">Files you exported, screenshots in your gallery and any Android backup of gig.log in your Google account stay, because they\'re kept outside gig.log.</string>
+    <string name="wipe_confirm_after">gig.log then closes. Open it again to set it up from the start; every automatic tap and the census stay off until you allow them again.</string>
+    <string name="wipe_confirm_button">Delete everything</string>
+    <string name="wipe_cancel">Cancel</string>
+    <string name="wipe_waiting_title">Waiting for an upload to finish</string>
+    <string name="wipe_waiting_body">A census upload is running. gig.log deletes nothing until it finishes.</string>
+    <string name="wipe_reading_body">Checking this phone\'s census ID</string>
+    <string name="wipe_failed_commit_body">gig.log couldn\'t save the decision to delete, so nothing was deleted. Try again.</string>
+    <string name="wipe_asking_title">Asking the census server</string>
+    <string name="wipe_asking_body">Waiting for the census server to confirm it deleted this phone\'s data</string>
+    <string name="wipe_running_title">Deleting everything</string>
+    <string name="wipe_running_body">gig.log closes when it\'s done.</string>
+    <string name="wipe_census_confirmed">The census server confirmed it deleted the uploads it can tie to this phone.</string>
+    <string name="wipe_census_title">The census server hasn\'t confirmed</string>
+    <string name="wipe_census_no_answer">The census server didn\'t answer in time.</string>
+    <string name="wipe_census_unreachable">gig.log couldn\'t reach the census server.</string>
+    <string name="wipe_census_not_yet">The census server can\'t take deletion requests until its next update.</string>
+    <string name="wipe_census_unconfirmed">The census server couldn\'t confirm this phone\'s census ID.</string>
+    <string name="wipe_census_not_possible">This phone\'s census ID can no longer be used, so gig.log can\'t ask the census server to delete its data.</string>
+    <string name="wipe_census_now">If you delete now, gig.log can\'t ask again, and the census server keeps this phone\'s uploads until they age out. The 30-day limit takes effect with the census server\'s next update.</string>
+    <string name="wipe_census_wait">If you wait, nothing is deleted. gig.log keeps asking, and the census screen shows when the server confirms; then delete everything here.</string>
+    <string name="wipe_census_delete_now">Delete now</string>
+    <string name="wipe_census_wait_button">Wait</string>
+    <string name="wipe_failed_title">Couldn\'t delete</string>
+    <string name="wipe_failed_body">Android didn\'t clear gig.log\'s storage. Clearing it in Android\'s Settings > Apps > gig.log deletes the same data.</string>
+    <string name="wipe_failed_drop">gig.log couldn\'t clear its delete request. Try again.</string>
+    <string name="wipe_try_again">Try again</string>
+    <string name="wipe_ok">OK</string>
 </resources>
