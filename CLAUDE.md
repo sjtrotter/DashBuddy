@@ -485,9 +485,8 @@ full diff against the Development Principles and record it in the PR description
 **Then the adversarial review:** `sol-loop`, run as delivery chain step 4. Its axes, reviewer strength and round
 rules live in `.claude/council.md`.
 
-**Docs-only PRs can skip CI:** put the literal `[skip ci]` in the PR **body** when the diff has no code. The check is a
-bare `contains()`, so a code PR whose body merely describes the token skips its own CI: paraphrase it, or add
-`[force ci]` to force the run.
+**Docs-only PRs skip the gate by themselves:** a PR whose every changed file is Markdown passes `build-and-test` in
+seconds. The PR body has no say.
 
 ## Session Orientation
 

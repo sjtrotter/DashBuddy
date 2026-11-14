@@ -1,8 +1,8 @@
 name: CLAUDE.md budget
 
 # #1466: CLAUDE.md loads into every agent session, so its size is a budget. This job fails when the file passes
-# 40,000 bytes. It is its own workflow, with no `[skip ci]` / `[force ci]` condition, because docs-only PRs (the ones
-# that skip pr-check.yml) are the ones that edit CLAUDE.md alone. Raising the budget is a reviewed one-line change.
+# 40,000 bytes. It is its own workflow, with no docs-only skip, because docs-only PRs (the ones that skip
+# pr-check.yml's gate) are the ones that edit CLAUDE.md alone. Raising the budget is a reviewed one-line change.
 on:
   pull_request:
     branches: [ master ]

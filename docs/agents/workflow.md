@@ -85,17 +85,15 @@ PR CI (`pr-check.yml`, job `build-and-test`) is the gate because the laptop cann
   tasks and `:core:database`'s KSP tasks are never cached (undeclared inputs and outputs), so a cache hit can never
   pass a test or a schema export that did not run.
 
-## Skip-ci, force-ci and the dispatch escape hatch
+## Docs-only skips and the dispatch escape hatch
 
-- `pr-check.yml` skips every step of `build-and-test` when the PR **body** contains the literal `[skip ci]` (not
-  `[no-ci]`, not a comment, not a label), and the job passes in seconds. Use it only when the diff has no code; when in
-  doubt, let CI run. The job itself always runs (`RUN_GATE`, #1548): a job skipped by a job-level `if` reports its
-  name expression unevaluated, so the dynamically named job would never produce the required `build-and-test`.
-- The token is read when a run starts: a code branch's early draft body must not carry it, and a later body edit
-  (`file-pr`) neither re-runs CI nor skips it.
-- Footgun (#902/#928): the check is a bare `contains()`, so a code PR whose body merely describes the token skips its
-  own CI. Paraphrase it ("the skip-ci token") or add `[force ci]` to the body, which forces the run back on.
-- The `CLAUDE.md` size budget runs in its own workflow (`claude-md-budget.yml`) and ignores both tokens.
+- `pr-check.yml` skips every step of `build-and-test` when every file the PR changes ends in `.md`, and the job passes
+  in seconds. Its first step reads the file list from the compare API for the event's base and head SHAs, so neither
+  the PR body nor the PR's code decides (#1646; the old body token let any author pass the required check). A rename
+  counts both names, and a list of 300 or more files runs the gate. The job itself always runs (`RUN_GATE`, #1548): a
+  job skipped by a job-level `if` reports its name expression unevaluated, so the dynamically named job would never
+  produce the required `build-and-test`.
+- The `CLAUDE.md` size budget runs in its own workflow (`claude-md-budget.yml`), on every PR.
 - If Actions refuses to dispatch runs for a PR's tree (the 2026-07-27 class: no run object across shas and
   branches), use the `workflow_dispatch` escape hatch: Actions → PR Check → Run workflow → enter the PR number. It
   builds that PR's merge ref and reports a real `build-and-test` commit status onto the PR head it tested (pinned
@@ -107,7 +105,8 @@ PR CI (`pr-check.yml`, job `build-and-test`) is the gate because the laptop cann
 
 - `master` is protected by a ruleset (#1450): a PR is required, merge commits only, `build-and-test` must pass (a
   skipped run counts), no approvals, and the admin bypass applies to PRs only.
-- The signing secrets live in the `release` environment, which only `v*.*.*` tags can use. `release.yml` runs on a
+- The signing secrets live in the `release` environment, which only `v*.*.*` tags can use, and every run of it waits for
+  the owner's approval (#1646). A tag ruleset lets only the admin create, move or delete any tag. `release.yml` runs on a
   version tag: it uploads the Play build to the internal testing track (while the `PLAY_PUBLISH` variable is `true`)
   and attaches the sideload and debug APKs to a GitHub Release; its signing job and its release-writing job are
   separate. `play-listing.yml` pushes `play/listing/` by hand. The runbook, secrets and version-code rule are in
