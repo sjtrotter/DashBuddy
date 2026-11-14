@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -58,15 +57,16 @@ class ContributorViewModel @Inject constructor(private val contributor: CensusCo
         contributor.acceptAsync()
     }
 
+    /** Not now, No thanks and Stop also run on the application scope: Not now and No thanks close the screen. */
     fun notNow() {
-        viewModelScope.launch { contributor.notNow() }
+        contributor.notNowAsync()
     }
 
     fun noThanks() {
-        viewModelScope.launch { contributor.noThanks() }
+        contributor.noThanksAsync()
     }
 
     fun stop() {
-        viewModelScope.launch { contributor.stop() }
+        contributor.stopAsync()
     }
 }

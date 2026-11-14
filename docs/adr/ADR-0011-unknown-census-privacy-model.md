@@ -1109,6 +1109,16 @@ hash cannot give: the app's own words on constant slots, and what a field means.
   a local display, and in the outbound artifact that slot stays a hash unless its gate has opened.
 - Contributor review is evidence. It is never permission to send customer text.
 
+Built by #1625: eligibility, the invitation and the grant. `ContributorEligibility` holds the thresholds above and
+reads only the phone's own data (census consent, the census ID's enrolment time, shifts in the read model); the
+grant request's whole body is `{"eligible":true}`. The invitation is offered when the last running shift ends, at most
+once until answered; Not now holds it 14 days, No thanks until the dasher accepts in Settings. The second disclosure
+states the server's 30-day log of which screens the phone asked about, tied to the grant. `CensusContributor.mayUpload`
+is the check before any contributor upload; a grant ends on expiry, revocation, Stop, the census off, a new census ID
+or a deletion request, and every end clears pending reviews (none exist until #1626). Renewal asks again after a later
+shift. The phone's census-age threshold is 7 days; the server's own check is 8 UTC days, and a `403 install_too_new`
+is shown as such and asked again 2 days later.
+
 ### §16 The anchor check is a dictionary lookup (census#82)
 
 When the developer or an agent drafts an anchor, the workbench checks whether a word is what a constant slot holds by

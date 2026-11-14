@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapLatest
@@ -223,6 +224,11 @@ class CensusContributor internal constructor(
         return outcome
     }
 
+    /** The screen's answers run on the application scope: the screen closes on Not now and No thanks. */
+    fun notNowAsync(): Job = scope.launch { notNow() }
+    fun noThanksAsync(): Job = scope.launch { noThanks() }
+    fun stopAsync(): Job = scope.launch { stop() }
+
     /** Not now: no repeat for [ContributorInvitation.NOT_NOW_DAYS] days. */
     suspend fun notNow() {
         store.update { it.answered(InvitationAnswer.NOT_NOW, clock.millis()) }
@@ -275,6 +281,9 @@ class CensusContributor internal constructor(
     fun watch(): Job = scope.launch {
         combine(store.record, settings.censusConsent, credentials.installId, settings.censusDeletion) { record, _, _, _ ->
             record.grant
+        }.catch { e ->
+            // mayUpload checks again before any upload, so a watch that stops leaves nothing open.
+            Timber.tag(TAG).w("census contributor watch stopped cause=%s", e.javaClass.simpleName)
         }.collect { grant -> if (grant != null) guarded(false) { reconcile() } }
     }
 

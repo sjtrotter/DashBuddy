@@ -16,7 +16,9 @@ import cloud.trotter.log.gig.ui.main.navigation.Screen
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -24,7 +26,7 @@ import javax.inject.Singleton
 
 /**
  * #1625: posts the screen-review invitation when the last running shift ends, never during one and never at app start
- * (only a running-to-ended change counts). Whether to post is [CensusContributor.inviteAfterShift]'s decision, which
+ * (only a running-to-ended change counts), [SETTLE_MILLIS] later. Whether to post is [CensusContributor.inviteAfterShift]'s decision, which
  * also records the offer so it posts at most once until the dasher answers. The tap opens the reviewer screen.
  *
  * Its own "Census" channel: muting the invitation must not mute the App notices warnings. Fail-open: a post the OS
@@ -47,24 +49,30 @@ class ContributorInvitationNotifier internal constructor(
 
     fun start(): Job = scope.launch { watch(shifts.shiftLive) }
 
+    /**
+     * Waits [SETTLE_MILLIS] after a shift ends, so the analytics read model has folded the shift that just ended
+     * before eligibility is read; a shift that starts meanwhile cancels the wait.
+     */
     internal suspend fun watch(shiftLive: Flow<Boolean>) {
         var running = false
-        shiftLive.collect { live ->
-            if (running && !live) {
-                invite()?.let { record ->
-                    try {
-                        post(record.ended == ContributorEnd.EXPIRED)
-                    } catch (t: Throwable) {
-                        Timber.tag(TAG).e(t, "Census review invitation could not be posted (#1625)")
-                    }
+        shiftLive.collectLatest { live ->
+            val ended = running && !live
+            running = live
+            if (!ended) return@collectLatest
+            delay(SETTLE_MILLIS)
+            invite()?.let { record ->
+                try {
+                    post(record.ended == ContributorEnd.EXPIRED)
+                } catch (t: Throwable) {
+                    Timber.tag(TAG).e(t, "Census review invitation could not be posted (#1625)")
                 }
             }
-            running = live
         }
     }
 
     companion object {
         private const val TAG = "Census"
+        internal const val SETTLE_MILLIS = 30_000L
 
         /** Stable channel id. Do not rename: the dasher's mute state is keyed on it. */
         const val CHANNEL_ID = "census_channel"
