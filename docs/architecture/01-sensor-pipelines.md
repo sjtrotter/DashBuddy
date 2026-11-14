@@ -979,13 +979,17 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   is read under the lock and unknown (an unreadable store) is treated as enrolled, so `requestHoldingLock()` stores
   the request pending and queues `enqueueDeletion` before any network attempt; a confirmation (or `nothing_sent`) goes
   on, anything else is Choosing (Delete now or Wait, Cancel for `not_possible`) and a late confirmation still goes on;
-  `WipeIntent` (`filesDir/wipe_committed`, fsynced, excluded from backup and transfer) must be written (CommitWritten)
+  `WipeIntent` (`filesDir/wipe_committed`, excluded from backup and transfer; a synced temp file renamed into place,
+  directory synced where allowed, accepted only with its exact content) must be written (CommitWritten)
   before Wiping is published or anything deleted, and a failed write is Failed with nothing deleted; the lock is never
   released while the request runs (Releasing waits for it, and so does Failed). The confirmation names the census
   request and what the server keeps (#1622's own strings) whenever one could be sent: the census on, any census
   identity stored, or a store that can't be read (`PhoneWipe.censusDisclosed`, live). `GigLogApplication.onCreate`
   calls `resumeCommitted()` right after injection and returns before the logging tree, state machine, projector and
-  workers when a commitment is found: it takes the lock synchronously and clears. The clear deletes the census
+  workers when a commitment is found: it takes the lock synchronously and clears. If Android refuses, `PhoneWipe`
+  shows Failed(CLEAR) from the shell (`MainActivity` hosts `WipePhoneHost` over every screen) and keeps the lock and the
+  commitment; OK drops the commitment, releases the lock and runs the deferred startup (rules unloaded until then, so
+  recognition stays fail-closed). The clear deletes the census
   Keystore key (`KeystoreSealer.reset`), then calls `ActivityManager.clearApplicationUserData()` (`AppStorageClearer`):
   Android force-stops the package before it deletes the app's private and app-specific external storage (the
   commitment included) and its Keystore keys (`WipeScopeGuardTest` pins the writes outside that storage to the

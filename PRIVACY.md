@@ -456,8 +456,11 @@ identity export. Vehicle/default resets preserve these learned preferences.
   counts: a confirmation goes on to the wipe. It never says the server deleted anything the server did not confirm.
   With no enrolled census ID it makes no network call. Once the wipe is decided, a commitment file
   (`filesDir/wipe_committed`, excluded from backup and transfer) is written first; if the process dies before Android
-  clears the storage, the next start finishes the wipe before anything else runs (no sensing, workers or uploads). If
-  that file can't be written, nothing is deleted and the screen says so. The wipe deletes the census
+  clears the storage, the next start finishes the wipe before anything else runs (no sensing, workers or uploads). The
+  file is written whole or not at all (a synced temporary file renamed into place, checked by its content), so a
+  failed write leaves nothing and the screen says nothing was deleted. If Android refuses the clear at that start, the
+  first screen says "Couldn't delete", and the app starts nothing (no recognition, workers or census uploads) until
+  the dasher presses OK; the next start tries again until then. The wipe deletes the census
   Keystore key, then calls Android's own Clear storage for the app (`ActivityManager.clearApplicationUserData`, the
   same operation as Settings > Apps > gig.log > Clear storage): Android stops every gig.log process, service and
   scheduled job, then deletes the app's private storage and its app-specific external storage (the database with

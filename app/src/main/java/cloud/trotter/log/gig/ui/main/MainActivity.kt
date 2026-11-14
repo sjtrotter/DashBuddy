@@ -11,6 +11,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import cloud.trotter.log.gig.feature.settings.WipePhoneHost
+import cloud.trotter.log.gig.feature.settings.WipePhoneViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -55,6 +57,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             GigLogTheme {
                 val navController = rememberNavController()
+
+                // #1579: the Delete everything dialog lives on the shell, over every screen and the debug gate, so a
+                // wipe Android refused at start is the first thing shown; Settings' row only opens it.
+                WipePhoneHost(hiltViewModel<WipePhoneViewModel>())
 
                 // #1151 review LL4 — the debug decline gates the whole SHELL, not one screen: while
                 // `DEBUG && DECLINED` (the pure buildEventReceiptConsentState) the block replaces

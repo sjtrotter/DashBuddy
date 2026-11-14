@@ -88,9 +88,10 @@ class PhoneWipe @Inject constructor(
         send(Event.UserConfirm)
     }
 
-    /** Cancel, or OK on a failure. A failure shown with no flow behind it (a refused resume at start) just closes. */
+    /** Cancel, or OK on a failure; OK on a refused resume at start lets the app start ([resumeCommitted]). */
     fun cancel() {
-        if (!send(Event.UserCancel) && state.value is State.Failed) state.value = null
+        if (send(Event.UserCancel) || acknowledgeRefusedResume()) return
+        if (state.value is State.Failed) state.value = null
     }
 
     fun deleteNow() {
@@ -103,13 +104,21 @@ class PhoneWipe @Inject constructor(
 
     private fun send(event: Event): Boolean = current?.events?.trySend(event)?.isSuccess == true
 
+    /** A committed wipe that Android refused at start: its lock owner and the startup to run once the dasher has seen it. */
+    private class RefusedResume(val owner: Any, val onAcknowledged: () -> Unit)
+
+    @Volatile private var refusedResume: RefusedResume? = null
+
     /**
      * App start, before sensing, workers or uploads: a wipe committed before the process died is finished now. Takes
      * the upload lock synchronously when it is free (at start nothing else holds it), so no census run goes first.
-     * True when the wipe is under way and the caller must start nothing else; false when none was committed, or when
-     * Android refused the clear (the commitment is dropped and the app starts as usual).
+     * True when the caller must start nothing now: the wipe is under way (the process ends), or Android refused the
+     * clear. A refusal is shown as [WipeFlow.Failure.CLEAR] ("Couldn't delete") on the first screen; the lock and the
+     * commitment are kept, so no census upload runs and the next start tries again, until the dasher presses OK, which
+     * drops the commitment, releases the lock and runs [onAcknowledged] (the app's normal startup). False when none was
+     * committed.
      */
-    fun resumeCommitted(): Boolean {
+    fun resumeCommitted(onAcknowledged: () -> Unit): Boolean {
         val committed = try {
             intent.isCommitted()
         } catch (_: Exception) {
@@ -120,20 +129,31 @@ class PhoneWipe @Inject constructor(
         state.value = State.Wiping(censusConfirmed = false, requestOpen = false)
         val owner = Any()
         if (lock.mutex.tryLock(owner)) {
-            if (clearStorage()) return true
-            lock.mutex.unlock(owner)
-            dropCommitment()
-            state.value = null
-            return false
-        }
-        scope.launch {
-            lock.mutex.lock(owner)
-            if (!clearStorage()) {
-                lock.mutex.unlock(owner)
-                dropCommitment()
-                state.value = State.Failed(WipeFlow.Failure.CLEAR, requestOpen = false)
+            finishResume(owner, onAcknowledged)
+        } else {
+            scope.launch {
+                lock.mutex.lock(owner)
+                finishResume(owner, onAcknowledged)
             }
         }
+        return true
+    }
+
+    private fun finishResume(owner: Any, onAcknowledged: () -> Unit) {
+        if (clearStorage()) return
+        refusedResume = RefusedResume(owner, onAcknowledged)
+        state.value = State.Failed(WipeFlow.Failure.CLEAR, requestOpen = false)
+    }
+
+    /** OK on a refused resume: the dasher has seen it; the app starts as usual with its data. */
+    private fun acknowledgeRefusedResume(): Boolean {
+        val refusal = refusedResume ?: return false
+        refusedResume = null
+        dropCommitment()
+        state.value = null
+        if (lock.mutex.holdsLock(refusal.owner)) lock.mutex.unlock(refusal.owner)
+        Timber.tag(TAG).i("phone wipe: refused clear acknowledged; starting as usual")
+        refusal.onAcknowledged()
         return true
     }
 

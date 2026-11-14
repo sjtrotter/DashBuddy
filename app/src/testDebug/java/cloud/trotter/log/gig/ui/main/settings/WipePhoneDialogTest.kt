@@ -118,16 +118,18 @@ class WipePhoneDialogTest {
             wiped += "census key"
         }
     }
-    private val clearer = AppStorageClearer { wiped += "app storage"; true }
+    private var clearStarts = true
+    private val clearer = AppStorageClearer { wiped += "app storage"; clearStarts }
 
     private fun string(id: Int) = context.getString(id)
     private fun text(id: Int) = compose.onNodeWithText(string(id))
 
-    private fun show(enrolled: Boolean) {
+    private fun show(enrolled: Boolean, beforeShow: (PhoneWipe) -> Unit = {}) {
         whenever(credentials.installId).thenReturn(flowOf(ENROLLED.installId.takeIf { enrolled }))
         whenever(credentials.held).thenReturn(flowOf(enrolled))
         runBlocking { whenever(credentials.current()).thenReturn(ENROLLED.takeIf { enrolled }) }
         val wipe = PhoneWipe(credentials, deletion, repo, lock, sealer, clearer, WipeIntent(context), scope)
+        beforeShow(wipe)
         val vm = WipePhoneViewModel(wipe)
         compose.setContent {
             GigLogTheme {
@@ -252,6 +254,24 @@ class WipePhoneDialogTest {
         click(SettingsR.string.wipe_census_delete_now)
         assertEquals(listOf("census key", "app storage"), wiped)
         assertEquals(1, transport.deletions)
+    }
+
+    @Test fun `a wipe Android refused at start is the first thing shown, and OK starts the app`() {
+        WipeIntent(context).commit()
+        clearStarts = false
+        var started = 0
+        show(enrolled = false) { wipe -> assertTrue(wipe.resumeCommitted { started++ }) }
+
+        text(SettingsR.string.wipe_failed_title).assertExists()
+        text(SettingsR.string.wipe_failed_body).assertExists()
+        assertEquals(0, started)
+        assertTrue(lock.mutex.isLocked)
+
+        click(SettingsR.string.wipe_ok)
+        text(SettingsR.string.wipe_failed_title).assertDoesNotExist()
+        assertEquals(1, started)
+        assertFalse(lock.mutex.isLocked)
+        assertFalse(WipeIntent(context).isCommitted())
     }
 
     private companion object {

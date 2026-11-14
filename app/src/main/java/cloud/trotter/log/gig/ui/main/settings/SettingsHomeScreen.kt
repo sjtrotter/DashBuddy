@@ -54,7 +54,6 @@ import cloud.trotter.log.gig.R
 import cloud.trotter.log.gig.core.data.vehicle.Garage
 import cloud.trotter.log.gig.domain.evaluation.UserEconomy
 import cloud.trotter.log.gig.feature.settings.SettingsMenuViewModel
-import cloud.trotter.log.gig.feature.settings.WipePhoneHost
 import cloud.trotter.log.gig.feature.settings.WipePhoneViewModel
 import cloud.trotter.log.gig.feature.settings.R as SettingsR
 import cloud.trotter.log.gig.ui.main.navigation.Screen
@@ -81,7 +80,6 @@ fun SettingsHomeScreen(
         onBack = onBack,
         onDeleteEverything = wipeViewModel::open,
     )
-    WipePhoneHost(wipeViewModel)
 }
 
 /**

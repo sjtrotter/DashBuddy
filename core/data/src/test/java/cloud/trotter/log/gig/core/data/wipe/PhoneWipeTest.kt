@@ -407,15 +407,59 @@ class PhoneWipeTest {
         WipeIntent(intentFile).commit()
         val wipe = wipe()
 
-        assertTrue(wipe.resumeCommitted())
+        assertTrue(wipe.resumeCommitted { error("the app must not start") })
         assertTrue("taken synchronously, before any census run can start", lock.mutex.isLocked)
         assertEquals(wiped, events)
         assertEquals(0, clients)
     }
 
+    @Test fun `a refused clear at the next start is shown and holds everything until OK`() = runTest {
+        WipeIntent(intentFile).commit()
+        clearStarts = false
+        var started = 0
+        val wipe = wipe()
+
+        assertTrue("the app starts nothing yet", wipe.resumeCommitted { started++ })
+        assertEquals(WipeFlow.State.Failed(WipeFlow.Failure.CLEAR, requestOpen = false), wipe.progress.value)
+        assertTrue("no census upload before the dasher has seen it", lock.mutex.isLocked)
+        assertTrue("the next start tries again", intentFile.isFile)
+        assertEquals(0, started)
+        wipe.open()
+        assertEquals("the failure stays on screen", WipeFlow.State.Failed(WipeFlow.Failure.CLEAR, false), wipe.progress.value)
+
+        wipe.cancel() // OK
+        assertEquals(1, started)
+        assertEquals(null, wipe.progress.value)
+        assertFalse(lock.mutex.isLocked)
+        assertFalse(intentFile.isFile)
+    }
+
+    @Test fun `a commitment that fails after its file was created leaves nothing for the next start`() = runTest {
+        for (failure in listOf("write", "sync")) {
+            val broken = WipeIntent(intentFile) { out, bytes ->
+                if (failure == "write") throw java.io.IOException("disk full")
+                out.write(bytes)
+                throw java.io.SyncFailedException("sync")
+            }
+            assertTrue(runCatching { broken.commit() }.isFailure)
+            assertFalse("$failure: no final marker", intentFile.exists())
+            assertFalse("$failure: no temporary file", File(tmp.root, "${WipeIntent.FILE_NAME}.tmp").exists())
+            assertFalse(wipe().resumeCommitted { })
+            assertTrue(events.isEmpty())
+        }
+    }
+
+    @Test fun `only a whole commitment counts`() = runTest {
+        intentFile.writeText("")
+        assertFalse(WipeIntent(intentFile).isCommitted())
+        assertFalse(wipe().resumeCommitted { })
+        WipeIntent(intentFile).commit()
+        assertTrue(WipeIntent(intentFile).isCommitted())
+    }
+
     @Test fun `no commitment, no resume`() = runTest {
         val wipe = wipe()
-        assertFalse(wipe.resumeCommitted())
+        assertFalse(wipe.resumeCommitted { error("no resume, so no deferred start") })
         assertTrue(events.isEmpty())
         assertFalse(lock.mutex.isLocked)
     }
