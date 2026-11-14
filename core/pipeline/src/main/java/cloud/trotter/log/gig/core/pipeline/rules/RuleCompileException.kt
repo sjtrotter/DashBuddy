@@ -16,7 +16,7 @@ package cloud.trotter.log.gig.core.pipeline.rules
  * capture-PII guards, #425 actuation rejects, #590 depth bounds) stay
  * untagged and reject the whole file by default. Even an isolable error still
  * rejects the whole file when the offending rule is sensitive-layer (see
- * `RuleCompiler.rawRuleIsSensitive` — the belt on top of this default).
+ * `rawRuleIsSensitive` in `RuleObjectChecks.kt` — the belt on top of this default).
  */
 class RuleCompileException(
     message: String,
