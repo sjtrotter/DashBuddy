@@ -54,7 +54,8 @@ any other/later source (#419); priority only orders *within* a partition. The hi
 sensitive block (`sensitive.known`) is priority 0 + `overrideable: false` — structurally first,
 blocking all further processing of banking/identity screens — while the low-confidence
 `sensitive.catchall` net stays `overrideable: true` (priority 999) so specific recognition still
-wins over it. A CLICK rule may also carry `screenIs`, the screen-context gate: the branch matches only when the
+wins over it. Since #1568 a generation's bundled `overrideable: false` rules form a guard evaluated
+before both partitions, so no remote rule can precede them (see the batch loader section below). A CLICK rule may also carry `screenIs`, the screen-context gate: the branch matches only when the
 observing platform's LAST ADMITTED screen target is the value it names — or, since #1104, one of the
 values its **array** form enumerates (`CompiledBranch.screenIs: Set<String>?`; the compiler accepts a
 bare string or a non-empty array of strings and fails LOUD on an empty array, a non-string member, or
@@ -462,3 +463,59 @@ integrity verification before compile. `RulesetVerifier` (ECDSA P-256/SHA-256, n
 so compiling remote bytes is structurally unreachable without verification against the configured source's pinned
 key. Bundled assets are exempt (the APK signature covers them). Signing tooling: `matchers/tools/`.
 
+
+## The batch loader: one generation, checked whole, swapped in one step (#1568)
+
+Before #1568, `loadDefaults` merged the bundled files and `load` swapped in one verified file, each with its own
+checks, and `CaptureWriter` fetched a recognized rule's `redact` block from the live rules by rule id. A swap between
+classification and capture would have masked a frame with another rule set's block. Now every load goes through one
+path, `JsonRuleInterpreter.prepareGeneration(files)` then `activate(prepared)`; `loadDefaults` prepares the bundled
+`assets/rules/` files, and `load(verified)` prepares those same files plus one signature-verified remote file. The
+rules live in `RuleGenerationAssembler`; no network code exists yet (the rules feed is #640).
+
+- **Generation.** `RuleGeneration` is one immutable set of screen, click and notification rulesets, and it is the
+  redaction source (`ScreenRedactionSource`). `ObservationClassifier.classifyFrame` reads the live generation once
+  per frame and returns it with the observation (`Classified`); the pipelines hand it to `CaptureWriter`, which no
+  longer holds a redaction source of its own. A click carries the generation that classified its screen, stored
+  with the per-platform screen context, so the #910 click-envelope inheritance masks with the same block the screen
+  envelope used. `GenerationSwapCaptureTest` forces a swap between classify and capture on all three paths.
+- **Bundled versus remote.** Bundled files keep the policy they always had, because nothing older stands behind
+  them: a file that fails to compile or collides with an earlier one (#633/#438) is skipped, and a non-sensitive
+  rule with an authoring error is isolated (#293). `BundledGenerationTest` holds the shipped set to zero skipped
+  files and zero isolated rules. Remote content is all or nothing: a remote file that fails to compile, has any
+  isolated rule, names no known platform (`Platform.fromWire`, never `Unknown`), or carries a refused rule rejects
+  the generation, and the live one stays.
+- **Protected rules** are the bundled rules whose every compiled branch has the sensitive shape (`isSensitiveShape`),
+  decided by shape and never by an id substring. This supersedes the design-r3 round-3 amendment that let a remote
+  rule replace a bundled `.sensitive.` catch-all by id. A remote rule with a protected id is dropped with a WARN and
+  the bundled rule stays, so a published copy of the canonical rule set (which carries `sensitive.known` and the
+  catch-alls) loads cleanly with the bundled blocks in force.
+- **Evaluation groups**, in order: (1) the bundled guard, every bundled `overrideable: false` rule
+  (`Ruleset(rules, guard)`); (2) the remote `overrideable: false` rules; (3) the overrideable rules, remote for each
+  platform a remote file carries and bundled for the rest, plus that platform's protected bundled rules. Groups 2
+  and 3 are the #419 two-partition order; a ruleset with no guard is exactly that order, so the bundled-only
+  generation evaluates as before. `TestRulesetFactory` builds the corpus suites' rulesets through `loadDefaults`,
+  so the golden and parse-output suites read this path.
+- **Admission**, one rule at a time: a protected id is dropped; `priority < 0` is refused by the compiler for every
+  source (`requirePriority`, isolable, so a bundled non-sensitive rule is skipped and a sensitive one rejects its
+  file); a remote `overrideable: false` rule needs the sensitive shape on every branch (`RemoteRuleAdmission`).
+- **Customer fields.** `ParsedFieldsFactory.CUSTOMER_FIELDS_BY_SHAPE` (task `customerNameHash` and
+  `customerAddressHash`, timeline `tasks[].nameHash`) sits beside `REQUIRED_FIELDS_BY_SHAPE`. A remote rule that
+  parses one must end its transform chain in `sha256` (a `coalesce` on every arm) and declare a non-empty `redact`.
+  This stops a customer field being parsed unhashed. It cannot stop a signed hostile rule routing a customer's text
+  into a field stored as-is, such as `storeName`, because the rule chooses what each field means (ADR-0013 X2).
+- **Catch-all rules (ADR-0013 X5).** "A remote set can add blocks but never remove or pre-empt one" holds for the
+  protected group 1, `sensitive.known`. The `sensitive.catchall` rules are protected from removal, but they are
+  overrideable at priority 999 and 998 by design, so any more specific rule, bundled or remote, can pre-empt them.
+  Review is the control there.
+- **Effective checks.** The #633 id and #438 priority checks run on the effective generation: a remote rule that
+  collides with a rule already in it is dropped with a WARN, not its file. The coverage check follows: a platform
+  whose screens include remote rules and no sensitive rule rejects the generation (#419); a bundled-only platform
+  without one has its screen rules excluded (#432). The #432 frame gate is unchanged: nothing classifies until a
+  generation is live. Capabilities are enumerated from the live rules, stamped with their file's source, and land
+  undecided (#843).
+- **Contract.** `RuleEngineConstants.RULES_CONTRACT` is the rules feed's `contract` number, the version of the
+  vocabulary the compiler accepts. `RulesContractPinTest` fingerprints that vocabulary (both editor schemas without
+  their prose, the contract tables, the per-file caps) and pins it to the number, so a vocabulary change fails CI
+  until it bumps the contract or re-pins it on purpose. The 1 MB per-file limit (`MAX_RULE_FILE_BYTES`) and
+  `MAX_RULES_PER_FILE` hold for every source.

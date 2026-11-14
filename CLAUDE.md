@@ -306,8 +306,10 @@ Every new feature or refactor holds to these; they are design inputs, not aftert
 6. **Security & privacy first.** The Pledges above are design inputs; every feature is measured against them before
    it ships. Working rules:
    - **Treat third-party UI and any remote rule source as untrusted input:** bounded ingestion (size, depth, node and
-     regex caps, §2), fail-closed validation, and a remote rule source signature-verified before compile
-     (`RulesetVerifier`; detail in `docs/architecture/02-rule-engine.md`).
+     regex caps, §2), fail-closed validation, a remote rule source signature-verified before compile
+     (`RulesetVerifier`), and remote rules that cannot remove a bundled all-sensitive-shape rule or pre-empt
+     `sensitive.known`; any specific rule can pre-empt `sensitive.catchall`, so review guards it
+     (`docs/architecture/02-rule-engine.md`).
    - **The dasher's sensitive screens are blocked, never parsed or stored**, in both sensor pipelines, and the gate
      fails closed beyond rule coverage: frames drop until rulesets load, every platform shipping screen rules must
      ship sensitive rules (load-time check), and UNKNOWN captures pass the `SensitiveTextMarkers` backstop.
