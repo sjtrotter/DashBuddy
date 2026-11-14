@@ -32,7 +32,7 @@ collapse the others.
    aggregation-derived market context. Source-available licence; auditable byte-for-byte.
 2. **Distributed Integrity (the matchers).** The recognition rules, licensed Apache-2.0 (`matchers/LICENSE`) so they
    can be forked. They stay in-tree in the `matchers/` included build; the separate repo (#637) was closed as not
-   planned on 2026-10-04. Signed remote rule delivery is supported by the in-tree `RulesetVerifier` (#416); the design keeps rules forkable, so if an upstream source is ever compromised, drivers can switch sources via configuration (ADR-0009). RFC #192.
+   planned on 2026-10-04. Signed remote rule delivery is planned over the one feed channel (ADR-0013); the rules stay forkable, and a rules source other than gig.log's is later work (#1570). RFC #192.
 3. **Academic Federation (the research).** Opt-in (k=10 cohort, on-device DP budget, edge PII scrub) anonymized
    aggregation across university-hosted instances under IRB review. No central corpus; only aggregate query results
    returned. AGPL-3.0 aggregator. RFCs #193 (aggregation) and #194 (academic federation).

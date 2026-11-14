@@ -5,8 +5,9 @@ now the production default: `matchers/rules/*.json5` is the SOLE rule source, ca
 included `matchers` build (kotlinx-serialization, replacing the spike text-stripper) into
 **generated** `assets/rules/*.json` consumed by both the APK and the tests. The composite build is
 un-guarded (no `-PuseLocalMatchers`); the committed `assets/rules/*.json` are deleted. Milestone 2
-(OTA/CDN) remains greenfield. **Amended 2026-09-30 (#1144):** the authoring model is drafted-and-reviewed,
-not hand-authored — see the Amendment section at the end; ADR-0011 holds the census privacy model.
+(OTA/CDN) is unbuilt; its shape is decided by the 2026-11-14 amendment at the end (#1561, ADR-0013).
+**Amended 2026-09-30 (#1144):** the authoring model is drafted-and-reviewed, not hand-authored — see the
+2026-09-30 Amendment section near the end; ADR-0011 holds the census privacy model.
 **Issue:** Sub-RFC of Epic #192 (matchers split); gated on #246 (licensing)
 **Date:** 2026-07-03
 **Builds on:** ADR-0001 (matcher rule format), ADR-0003 (versioning and API contracts)
@@ -49,12 +50,12 @@ produces from JSON5 source. Neither channel re-derives it.
 
 | | **Build-time bundle** (baseline) | **Runtime OTA** (Milestone 2) |
 |---|---|---|
-| Source | matchers repo as a **git submodule** of the app repo | matchers repo CI publishes to **CDN** |
+| Source | matchers repo as a **git submodule** of the app repo | matchers repo CI publishes to **CDN** (amended 2026-11-14: a `rules-v*` tag publishes to GitHub Pages) |
 | Wiring | **Gradle composite build** (`includeBuild`) substitutes the local submodule for the pinned artifact | app fetches signed JSON, verifies, hot-swaps |
 | Rebuild to update? | **Yes** — coupled to an app build/release | **No** — deployed apps update in place |
 | Trust | in-tree, pinned by submodule SHA | **untrusted** until signature-verified (#416) |
 | Role | first-run / offline / signature-failure **fallback**, and the CI test corpus baseline | primary update path for fielded apps |
-| Status | spike-validated (this ADR) | greenfield, unbuilt (#416, #419, CDN infra, signing) |
+| Status | spike-validated (this ADR) | unbuilt; shape decided 2026-11-14 (amendment below, ADR-0013) |
 
 The bundled baseline is **not** retired when OTA lands. It remains the first-run seed (before
 any fetch), the offline fallback, and — critically — the **fail-closed fallback when signature
@@ -240,6 +241,7 @@ loop into the actual test corpus is migration work, not spike work.
 6. **Milestone 2 — OTA/CDN.** Signature verification before compile (#416), capability
    enumeration + sensitive-rule survival across the swap (#419), CDN infrastructure, and signing.
    All greenfield and unbuilt; the bundled baseline (steps 1–3) remains the fallback throughout.
+   Amended 2026-11-14: the host, signer and release gate are decided in the Milestone 2 amendment at the end.
 
 ## Consequences
 
@@ -276,7 +278,7 @@ loop into the actual test corpus is migration work, not spike work.
   in the matchers repo CI.
 - Wire the canonical artifact into `JsonRuleInterpreter` asset loading and `TestRulesetFactory`
   (migration steps 3–4).
-- OTA/CDN as Milestone 2 (#416, #419).
+- OTA/CDN as Milestone 2 (#416, #419), in the shape of the 2026-11-14 amendment.
 
 ---
 
@@ -312,3 +314,34 @@ census (#1138, ADR-0011) changes who does what while leaving every gate in place
 
 Consequence for the split (#192/#637): the separate repo's contributor surface is a review queue and
 a fixture corpus, not a rule-authoring guide; its CI is the same suite, run on drafted PRs.
+
+---
+
+## Amendment (2026-11-14, #1561): Milestone 2 is the signed rules feed on GitHub Pages
+
+ADR-0013 (the signed feed channel) decides the Milestone 2 shape. It replaces the "matchers repo CI publishes to
+CDN" column above and the host and signer this ADR left open. The bundle channel, the canonical artifact and the
+single local dev loop are unchanged, and the 2026-09-30 authoring model holds.
+
+- **GitHub Pages serves the rules.** The rules are one feed of the signed feed channel on the Pages site
+  `gig.log.trotter.cloud`, under `/feeds/rules/`, beside fuel prices and yearly constants. The payload is the exact
+  canonical JSON per platform that the bundle ships, so a rule behaves the same however it arrived. The census
+  server never serves rules.
+- **The census drafts.** The census dashboard imports the published rules from Pages, edits a rule and exports the
+  change (ADR-0011 §9 and §18).
+- **Drafts reach `matchers/` as pull requests.** Rules stay in this repository's `matchers/` included build; the
+  separate matchers repository and submodule of migration steps 2, 3 and 5 are not part of Milestone 2 (#637 was
+  closed as not planned). The pinned published artifact of §3's production path is retired: an APK bundles the rules
+  the included build generates from the commit it is built from.
+- **App CI gates every rule.** `AllMatchersSuite` and the canonicalizer run on every pull request today; the
+  planned `FEED_SEQUENCE` / `FEED_DIGEST` check (#641) joins them on every rules pull request.
+- **A `rules-v*` tag publishes (planned, #641).** Merging to master changes nothing on phones. The tag job, in the
+  `feed-rules` environment the developer approves, re-checks that the tagged commit is an ancestor of master and that
+  its digest and sequence are valid, then signs and adds the rules feed to the Pages site.
+- **The KMS key signs.** A Google Cloud KMS P-256 key that cannot be exported signs the manifest, reached only
+  through a workload identity pool that admits this repository's two feed tag patterns in the `feed-rules`
+  environment. No human principal can sign with it. A hardware backup key covers loss of Google Cloud.
+
+The runtime gate stays `RulesetVerifier`'s scheme (ECDSA P-256, SHA-256), moved into the shared `feed-contract/`
+verifier (#1563); the phone's fetch is #640, the publishing job #641 and the batch loader #1568. The bundled baseline
+remains the first-run, offline and verification-failure fallback.
