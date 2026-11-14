@@ -20,14 +20,13 @@ import javax.inject.Singleton
 @Singleton
 class WipeIntent internal constructor(
     private val file: File,
-    private val write: (FileOutputStream, ByteArray) -> Unit,
-) {
-    @Inject constructor(@ApplicationContext context: Context) : this(File(context.filesDir, FILE_NAME))
-
-    internal constructor(file: File) : this(file, { out, bytes ->
+    private val write: (FileOutputStream, ByteArray) -> Unit = { out, bytes ->
         out.write(bytes)
         out.fd.sync()
-    })
+    },
+    private val remove: (File) -> Boolean = File::delete,
+) {
+    @Inject constructor(@ApplicationContext context: Context) : this(File(context.filesDir, FILE_NAME))
 
     private val temp = File(file.parentFile, "$FILE_NAME.tmp")
 
@@ -48,9 +47,13 @@ class WipeIntent internal constructor(
         }
     }
 
-    fun clear() {
-        temp.delete()
-        if (file.exists() && !file.delete()) throw IOException("Wipe commitment removal failed")
+    /** Removes the commitment; true only when the final file is verifiably gone. Never throws. */
+    fun clear(): Boolean = try {
+        if (temp.exists()) remove(temp)
+        if (file.exists()) remove(file)
+        !file.exists()
+    } catch (_: Exception) {
+        false
     }
 
     companion object {

@@ -111,5 +111,7 @@
     <string name="wipe_census_wait_button">Esperar</string>
     <string name="wipe_failed_title">No se pudo borrar</string>
     <string name="wipe_failed_body">Android no borró el almacenamiento de gig.log. Borrarlo en Ajustes de Android > Aplicaciones > gig.log elimina los mismos datos.</string>
+    <string name="wipe_failed_drop">gig.log no pudo quitar su solicitud de borrado. Vuelve a intentarlo.</string>
+    <string name="wipe_try_again">Reintentar</string>
     <string name="wipe_ok">Aceptar</string>
 </resources>

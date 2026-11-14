@@ -26,7 +26,7 @@ class WipeFlowTest {
                 add(State.Committing(confirmed, open))
                 add(State.Wiping(confirmed, open))
             }
-            Failure.entries.forEach { add(State.Failed(it, open)) }
+            Failure.entries.forEach { failure -> listOf(true, false).forEach { add(State.Failed(failure, open, it)) } }
         }
         add(State.Releasing)
         add(State.Left)
@@ -39,7 +39,7 @@ class WipeFlowTest {
     private val events: List<Event> = listOf(
         Event.UserConfirm, Event.UserCancel, Event.UserDeleteNow, Event.UserWait, Event.LockAcquired,
         Event.DialogTimeout, Event.CommitWritten, Event.CommitFailed, Event.NoticeElapsed, Event.ClearStarted,
-        Event.ClearRefused,
+        Event.ClearRefused, Event.CommitDropped, Event.CommitDropFailed,
     ) + Enrollment.entries.map { Event.EnrollmentRead(it) } + answers.map { Event.RequestResult(it) }
 
     private fun State.requestOpen(): Boolean = when (this) {
@@ -91,6 +91,23 @@ class WipeFlowTest {
             assertEquals(State.Left, left)
             for (e in events) assertEquals("$e after a cancel", State.Left, WipeFlow.step(left, e).state)
         }
+    }
+
+    @Test fun `a failure leaves only once no commitment is left for the next start`() = every { s, e, step ->
+        if (s is State.Failed && s.commitmentStuck && step.state !is State.Failed) {
+            assertEquals("$s + $e", Event.CommitDropped, e)
+        }
+    }
+
+    @Test fun `a stuck commitment is retried, and leaving follows its removal`() {
+        val stuck = State.Failed(Failure.CLEAR, requestOpen = false, commitmentStuck = true)
+        assertEquals(Step(stuck), WipeFlow.step(State.Failed(Failure.CLEAR, false), Event.CommitDropFailed))
+        assertEquals(Step(stuck, listOf(Effect.DROP_COMMIT)), WipeFlow.step(stuck, Event.UserCancel))
+        assertEquals(Step(stuck), WipeFlow.step(stuck, Event.CommitDropFailed))
+        assertEquals(Step(State.Left), WipeFlow.step(stuck, Event.CommitDropped))
+        assertEquals(Step(State.Releasing), WipeFlow.step(stuck.copy(requestOpen = true), Event.CommitDropped))
+        assertEquals("the first drop after a refused clear does not close the dialog",
+            Step(State.Failed(Failure.CLEAR, false)), WipeFlow.step(State.Failed(Failure.CLEAR, false), Event.CommitDropped))
     }
 
     @Test fun `terminal states stay put`() = every { s, e, step ->

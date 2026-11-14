@@ -69,19 +69,25 @@ fun WipePhoneDialog(dialog: WipeDialog, actions: WipeActions) {
         )
         State.Done -> BusyDialog(R.string.wipe_running_title, R.string.wipe_running_body, lead = null)
         is State.Failed -> AlertDialog(
-            onDismissRequest = actions.onCancel,
+            // While the request to delete can't be cleared, only the button (a retry) closes it.
+            onDismissRequest = { if (!state.commitmentStuck) actions.onCancel() },
             title = { Text(stringResource(R.string.wipe_failed_title)) },
             text = {
-                Text(
-                    stringResource(
+                Paragraphs(
+                    listOfNotNull(
                         when (state.failure) {
                             WipeFlow.Failure.COMMIT -> R.string.wipe_failed_commit_body
                             WipeFlow.Failure.CLEAR -> R.string.wipe_failed_body
                         },
+                        R.string.wipe_failed_drop.takeIf { state.commitmentStuck },
                     ),
                 )
             },
-            confirmButton = { TextButton(onClick = actions.onCancel) { Text(stringResource(R.string.wipe_ok)) } },
+            confirmButton = {
+                TextButton(onClick = actions.onCancel) {
+                    Text(stringResource(if (state.commitmentStuck) R.string.wipe_try_again else R.string.wipe_ok))
+                }
+            },
         )
     }
 }

@@ -145,11 +145,18 @@ class PhoneWipe @Inject constructor(
         state.value = State.Failed(WipeFlow.Failure.CLEAR, requestOpen = false)
     }
 
-    /** OK on a refused resume: the dasher has seen it; the app starts as usual with its data. */
+    /**
+     * OK on a refused resume: the dasher has seen it; the app starts as usual with its data, but only once the
+     * commitment is gone, or the next start would wipe data made after this OK. Until then the failure stays, with the
+     * lock held and startup paused, and OK retries.
+     */
     private fun acknowledgeRefusedResume(): Boolean {
         val refusal = refusedResume ?: return false
+        if (!dropCommitment()) {
+            state.value = State.Failed(WipeFlow.Failure.CLEAR, requestOpen = false, commitmentStuck = true)
+            return true
+        }
         refusedResume = null
-        dropCommitment()
         state.value = null
         if (lock.mutex.holdsLock(refusal.owner)) lock.mutex.unlock(refusal.owner)
         Timber.tag(TAG).i("phone wipe: refused clear acknowledged; starting as usual")
@@ -227,7 +234,8 @@ class PhoneWipe @Inject constructor(
                     events.trySend(Event.NoticeElapsed)
                 }
                 Effect.CLEAR -> events.trySend(if (clearStorage()) Event.ClearStarted else Event.ClearRefused)
-                Effect.DROP_COMMIT -> dropCommitment()
+                Effect.DROP_COMMIT ->
+                    events.trySend(if (dropCommitment()) Event.CommitDropped else Event.CommitDropFailed)
                 Effect.RELEASE_LOCK -> if (lock.mutex.holdsLock(owner)) lock.mutex.unlock(owner)
             }
         }
@@ -250,12 +258,9 @@ class PhoneWipe @Inject constructor(
         return started
     }
 
-    private fun dropCommitment() {
-        try {
-            intent.clear()
-        } catch (_: Exception) {
-            Timber.tag(TAG).w("phone wipe: the commitment could not be removed")
-        }
+    /** True only when the commitment is verifiably gone, so the next start cannot wipe. */
+    private fun dropCommitment(): Boolean = intent.clear().also {
+        if (!it) Timber.tag(TAG).w("phone wipe: the commitment could not be removed")
     }
 
     private suspend fun readEnrollment(): WipeFlow.Enrollment = try {

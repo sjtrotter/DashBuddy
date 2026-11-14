@@ -69,7 +69,11 @@ object WipeFlow {
         /** Committed: deleting the census key, then Android's clear. */
         data class Wiping(val censusConfirmed: Boolean, val requestOpen: Boolean) : State
 
-        data class Failed(val failure: Failure, val requestOpen: Boolean) : State
+        /**
+         * [commitmentStuck]: the commitment could not be removed, so the next start would still wipe; the dialog says so
+         * and its button retries the removal, leaving only once it succeeds.
+         */
+        data class Failed(val failure: Failure, val requestOpen: Boolean, val commitmentStuck: Boolean = false) : State
 
         /** The dasher left with a request still running; the lock is released when it finishes. */
         data object Releasing : State
@@ -95,6 +99,8 @@ object WipeFlow {
         data object NoticeElapsed : Event
         data object ClearStarted : Event
         data object ClearRefused : Event
+        data object CommitDropped : Event
+        data object CommitDropFailed : Event
     }
 
     enum class Effect {
@@ -165,7 +171,10 @@ object WipeFlow {
         is State.Failed -> when (event) {
             is Event.RequestResult ->
                 if (state.requestOpen) Step(state.copy(requestOpen = false), listOf(Effect.RELEASE_LOCK)) else Step(state)
-            Event.UserCancel -> if (state.requestOpen) Step(State.Releasing) else Step(State.Left)
+            // OK leaves only once no commitment is left for the next start; while one is stuck it retries the removal.
+            Event.UserCancel -> if (state.commitmentStuck) Step(state, listOf(Effect.DROP_COMMIT)) else leaveFailed(state)
+            Event.CommitDropFailed -> Step(state.copy(commitmentStuck = true))
+            Event.CommitDropped -> if (state.commitmentStuck) leaveFailed(state) else Step(state)
             else -> Step(state)
         }
         State.Releasing -> when (event) {
@@ -179,6 +188,8 @@ object WipeFlow {
         }
         State.Done -> Step(state)
     }
+
+    private fun leaveFailed(state: State.Failed): Step = if (state.requestOpen) Step(State.Releasing) else Step(State.Left)
 
     private fun answered(answer: Answer): Step = when (answer) {
         Answer.Confirmed -> Step(State.Committing(true, requestOpen = false), listOf(Effect.COMMIT))

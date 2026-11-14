@@ -290,5 +290,7 @@
     <string name="wipe_census_wait_button">Wait</string>
     <string name="wipe_failed_title">Couldn\'t delete</string>
     <string name="wipe_failed_body">Android didn\'t clear gig.log\'s storage. Clearing it in Android\'s Settings > Apps > gig.log deletes the same data.</string>
+    <string name="wipe_failed_drop">gig.log couldn\'t clear its delete request. Try again.</string>
+    <string name="wipe_try_again">Try again</string>
     <string name="wipe_ok">OK</string>
 </resources>

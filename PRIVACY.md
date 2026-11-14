@@ -460,7 +460,10 @@ identity export. Vehicle/default resets preserve these learned preferences.
   file is written whole or not at all (a synced temporary file renamed into place, checked by its content), so a
   failed write leaves nothing and the screen says nothing was deleted. If Android refuses the clear at that start, the
   first screen says "Couldn't delete", and the app starts nothing (no recognition, workers or census uploads) until
-  the dasher presses OK; the next start tries again until then. The wipe deletes the census
+  the dasher presses OK; the next start tries again until then. OK lets the app start only once the stored request to
+  delete is verifiably removed; if it can't be, the screen says "gig.log couldn't clear its delete request. Try again."
+  and nothing starts, so a later start never wipes data made after the OK. The same holds after a refused clear in the
+  dialog itself: it closes only once that request is removed. The wipe deletes the census
   Keystore key, then calls Android's own Clear storage for the app (`ActivityManager.clearApplicationUserData`, the
   same operation as Settings > Apps > gig.log > Clear storage): Android stops every gig.log process, service and
   scheduled job, then deletes the app's private storage and its app-specific external storage (the database with

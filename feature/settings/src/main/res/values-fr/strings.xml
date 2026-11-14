@@ -111,5 +111,7 @@
     <string name="wipe_census_wait_button">Attendre</string>
     <string name="wipe_failed_title">Suppression impossible</string>
     <string name="wipe_failed_body">Android n\'a pas effacé le stockage de gig.log. L\'effacer dans Paramètres Android > Applications > gig.log supprime les mêmes données.</string>
+    <string name="wipe_failed_drop">gig.log n\'a pas pu effacer sa demande de suppression. Réessayez.</string>
+    <string name="wipe_try_again">Réessayer</string>
     <string name="wipe_ok">OK</string>
 </resources>

@@ -434,13 +434,57 @@ class PhoneWipeTest {
         assertFalse(intentFile.isFile)
     }
 
+    @Test fun `OK on a refused resume starts the app only once the commitment is gone`() = runTest {
+        WipeIntent(intentFile).commit()
+        clearStarts = false
+        var removable = false
+        intent = { WipeIntent(intentFile, remove = { file -> removable && file.delete() }) }
+        var started = 0
+        val wipe = wipe()
+        assertTrue(wipe.resumeCommitted { started++ })
+
+        wipe.cancel() // OK, but the commitment can't be removed
+        assertEquals(WipeFlow.State.Failed(WipeFlow.Failure.CLEAR, false, commitmentStuck = true), wipe.progress.value)
+        assertEquals("startup stays paused", 0, started)
+        assertTrue("the lock stays held", lock.mutex.isLocked)
+        assertTrue(intentFile.isFile)
+
+        removable = true
+        wipe.cancel() // Try again
+        assertEquals(1, started)
+        assertEquals(null, wipe.progress.value)
+        assertFalse(lock.mutex.isLocked)
+        assertFalse(intentFile.exists())
+        wipe.cancel()
+        assertEquals("starts once", 1, started)
+    }
+
+    @Test fun `a refused clear whose commitment can't be removed stays until a retry removes it`() = runTest {
+        clearStarts = false
+        var removable = false
+        intent = { WipeIntent(intentFile, remove = { file -> removable && file.delete() }) }
+        val wipe = confirmed()
+        settle()
+        assertEquals(WipeFlow.State.Failed(WipeFlow.Failure.CLEAR, false, commitmentStuck = true), wipe.progress.value)
+        assertTrue(intentFile.isFile)
+
+        wipe.cancel() // Try again, still failing
+        settle()
+        assertEquals(WipeFlow.State.Failed(WipeFlow.Failure.CLEAR, false, commitmentStuck = true), wipe.progress.value)
+        removable = true
+        wipe.cancel()
+        settle()
+        assertEquals(null, wipe.progress.value)
+        assertFalse(intentFile.exists())
+    }
+
     @Test fun `a commitment that fails after its file was created leaves nothing for the next start`() = runTest {
         for (failure in listOf("write", "sync")) {
-            val broken = WipeIntent(intentFile) { out, bytes ->
+            val broken = WipeIntent(intentFile, write = { out, bytes ->
                 if (failure == "write") throw java.io.IOException("disk full")
                 out.write(bytes)
                 throw java.io.SyncFailedException("sync")
-            }
+            })
             assertTrue(runCatching { broken.commit() }.isFailure)
             assertFalse("$failure: no final marker", intentFile.exists())
             assertFalse("$failure: no temporary file", File(tmp.root, "${WipeIntent.FILE_NAME}.tmp").exists())
