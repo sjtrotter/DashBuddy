@@ -194,10 +194,13 @@ class ContributorReviewQueue internal constructor(
             if (item.schemaId != SkeletonSchema.SCHEMA_ID_V2) return
             val layout = ContributorSlots.layout(item) ?: return
             val sha = sha256OrNull(record.skeletonJson) ?: return
-            // The gate is checked first and outside this queue's lock: a gate that ends the grant clears this queue.
+            // The gate is checked first and outside this queue's lock: a gate that ends the grant clears this queue,
+            // and a clear between the check and the write drops this candidate (the generation moved).
+            val before = generation
             if (!gate().mayUpload()) return
             load()
             mutex.withLock {
+                if (generation != before) return@withLock
                 val current = pruned(state.value)
                 val today = todayUtc().toString()
                 val admitted = current.entries.none { it.layout == layout } &&
@@ -249,7 +252,17 @@ class ContributorReviewQueue internal constructor(
     }
 
     /** Holds a confirmed word until its gate opens; memory only. */
-    suspend fun hold(word: HeldWord) = mutex.withLock {
+    /**
+     * The clear boundary (Sol round 2 S12): [clear] moves it. A session captures it at its start, and a word or a
+     * candidate inserted under an older one is dropped, so a late answer can never refill a queue the grant's end
+     * emptied.
+     */
+    @Volatile var generation: Long = 0L
+        private set
+
+    /** Holds [word] until its gate opens, only if no [clear] ran since [sessionGeneration]; memory only. */
+    suspend fun hold(word: HeldWord, sessionGeneration: Long) = mutex.withLock {
+        if (sessionGeneration != generation) return@withLock
         val list = heldWords.getOrPut(word.variant) { mutableListOf() }
         if (list.none { it.slot == word.slot && it.hash == word.hash }) list += word
         if (list.size > MAX_HELD_PER_VARIANT) list.removeAt(0)
@@ -264,6 +277,7 @@ class ContributorReviewQueue internal constructor(
     /** [PendingContributorReviews]: the grant ended. Both halves go; a file that cannot be deleted throws. */
     override suspend fun clear() {
         mutex.withLock {
+            generation++
             words.clear()
             heldWords.clear()
             state.value = QueueFile()

@@ -157,10 +157,11 @@ class ContributorReviewer internal constructor(
 
     private suspend fun openHoldingLock(id: String): ReviewLoad {
         if (!gate.mayUpload()) return ReviewLoad.NotAllowed
+        val generation = queue.generation
         val cred = safeCredential()
         val api = transport()
         // Every session first asks again about the words held since an earlier Send, whichever screen it opens.
-        if (cred != null) retryHeld(cred, api)
+        if (cred != null) retryHeld(cred, api, generation)
         val entry = queue.candidate(id) ?: return ReviewLoad.NotFound
         if (!entry.readyOn(queue.todayUtc())) return ReviewLoad.NotReady
         val item = CensusSkeletonSchema.deserialize(entry.skeletonJson) as? UiSkeletonDto ?: return ReviewLoad.NotFound
@@ -214,6 +215,7 @@ class ContributorReviewer internal constructor(
     private suspend fun sendHoldingLock(id: String, confirmed: Set<String>, roles: Map<String, ContributorRole>, shown: ScreenReview): SendOutcome =
         run {
             if (!gate.mayUpload()) return@run SendOutcome.NOT_ALLOWED
+            val generation = queue.generation
             val entry = queue.candidate(id) ?: return@run SendOutcome.NOT_FOUND
             val item = CensusSkeletonSchema.deserialize(entry.skeletonJson) as? UiSkeletonDto ?: return@run SendOutcome.NOT_FOUND
             val variant = ContributorVariant.of(item) ?: return@run SendOutcome.NOT_FOUND
@@ -244,7 +246,7 @@ class ContributorReviewer internal constructor(
             queue.remove(id)
             if (confirmations.isNotEmpty() && words != null) {
                 val pending = confirmations.mapNotNull { c -> words[c.slot]?.let { ContributorReviewQueue.HeldWord(variant, c.slot, c.hash, it) } }
-                gateAndSend(cred, api, pending)
+                gateAndSend(cred, api, pending, generation)
             }
             SendOutcome.SENT
         }
@@ -253,16 +255,23 @@ class ContributorReviewer internal constructor(
     suspend fun delete(id: String) = queue.remove(id)
 
     /** The confirmed words held since an earlier Send: their gates are asked again. Caller holds the lock. */
-    private suspend fun retryHeld(cred: Bearer.Credential, api: ContributorTransport) {
+    private suspend fun retryHeld(cred: Bearer.Credential, api: ContributorTransport, generation: Long) {
         val held = queue.takeHeld()
-        if (held.isNotEmpty()) gateAndSend(cred, api, held)
+        if (held.isNotEmpty()) gateAndSend(cred, api, held, generation)
     }
 
     /**
      * Asks the gate for each word's (slot, hash) and sends only the words it reports open; the rest are held again.
      * Caller holds the lock. A closed gate means the word never leaves the phone.
      */
-    private suspend fun gateAndSend(cred: Bearer.Credential, api: ContributorTransport, words: List<ContributorReviewQueue.HeldWord>) {
+    private suspend fun gateAndSend(
+        cred: Bearer.Credential,
+        api: ContributorTransport,
+        words: List<ContributorReviewQueue.HeldWord>,
+        generation: Long,
+    ) {
+        // Every word held again is held under the generation the session started with: after a clear it is dropped.
+        suspend fun hold(word: ContributorReviewQueue.HeldWord) = queue.hold(word, generation)
         for ((variant, group) in words.groupBy { it.variant }) {
             for (chunk in group.chunked(ContributorRequests.MAX_GATE_ITEMS)) {
                 if (!gate.mayUpload()) return
@@ -270,17 +279,15 @@ class ContributorReviewer internal constructor(
                 val answer = api.gates(cred, ContributorRequests.gates(variant, asked))
                 if (answer !is ContributorCall.Ok) {
                     (answer as ContributorCall.Refused).reason.let(::stopOn)
-                    chunk.forEach { queue.hold(it) }
+                    chunk.forEach { hold(it) }
                     continue
                 }
                 val open = answer.value.filter { it.open }.map { it.slot to it.hash }.toSet()
                 val (ready, closed) = chunk.partition { (it.slot to it.hash) in open }
-                closed.forEach { queue.hold(it) }
+                closed.forEach { hold(it) }
                 for (send in ready.chunked(ContributorRequests.MAX_WORD_ITEMS)) {
-                    if (!gate.mayUpload()) {
-                        send.forEach { queue.hold(it) }
-                        return
-                    }
+                    // A failed grant check discards the words; they are never held again (Sol round 2 S12).
+                    if (!gate.mayUpload()) return
                     val body = try {
                         ContributorRequests.words(variant, send.map { OpenWord(it.slot, it.hash, it.word) })
                     } catch (_: IllegalArgumentException) {
@@ -289,12 +296,12 @@ class ContributorReviewer internal constructor(
                     when (val sent = api.words(cred, body)) {
                         is ContributorCall.Ok -> {
                             val closedAgain = sent.value.filter { it.status == WordStatus.GATE_CLOSED }.map { it.slot }.toSet()
-                            send.filter { it.slot in closedAgain }.forEach { queue.hold(it) }
+                            send.filter { it.slot in closedAgain }.forEach { hold(it) }
                             Timber.tag(TAG).i("census review words accepted=%d", sent.value.count { it.status == WordStatus.ACCEPTED })
                         }
                         is ContributorCall.Refused -> {
                             stopOn(sent.reason)
-                            send.forEach { queue.hold(it) }
+                            send.forEach { hold(it) }
                         }
                     }
                 }

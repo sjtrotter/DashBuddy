@@ -85,7 +85,7 @@ class SkeletonReviewWordsTest : SkeletonBuilderTestBase() {
         val outcome = built(tree)
         assertTrue(requireNotNull(outcome.reviewWords).isEmpty())
         values.forEach { assertFalse(it, ReviewWordCover.shows(it)) }
-        listOf("Pick up by", "Confirm pickup", "Arrived at store").forEach { assertTrue(it, ReviewWordCover.shows(it)) }
+        listOf("Pick up by", "Confirm pickup", "Decline").forEach { assertTrue(it, ReviewWordCover.shows(it)) }
     }
 
     @Test fun `a node the address backstop selects keeps no word`() {

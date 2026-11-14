@@ -322,11 +322,13 @@ object SkeletonBuilder {
     /**
      * #1626: the words of the slots this skeleton HASHED, by the census server's slot id
      * ([ContributorSlots], `root/<child index>/…/<key>`, `windowTitle`), each one its canonical form (the value the
-     * hash was computed from) and only when [ReviewWordCover] shows it and the rules-independent address backstop
-     * ([UnknownAddressBackstop]) did not select its node. A value that any field of a selected node holds is covered
-     * everywhere in the frame (every field and the window title), compared on the census canonical form, so a note
-     * repeated outside the address block is not kept either. A withheld, coarse or shape slot holds no word, so no
-     * other screen text is kept. The pending tree is the emitted one node for node, so the path is the wire path.
+     * hash was computed from). One rule decides every field of the frame and the window title: a field is ELIGIBLE
+     * only when it was hashed, its node is outside the address block the rules-independent backstop selects
+     * ([UnknownAddressBackstop]) and [ReviewWordCover] shows it; every other field (withheld by a filter step, a PII
+     * or customer-content id, a text input, the address backstop, the cover itself, or sent as a kind or format) puts
+     * its canonical value on the frame's exclusion set, and an eligible field whose value is on that set is not kept
+     * either, wherever it sits (Sol rounds 1 and 2). No other screen text is kept. The pending tree is the emitted one
+     * node for node, so the path is the wire path.
      */
     private fun reviewWords(tree: UiNode, root: Pending, title: Field?, frame: FrameFilter): ReviewWords {
         val address = UnknownAddressBackstop.select(tree)
@@ -336,22 +338,22 @@ object SkeletonBuilder {
             node.children.forEachIndexed { i, child -> flatten(child, "$path/$i") }
         }
         flatten(root, "root")
+        val eligible = ArrayList<Pair<String, String>>()
+        val excluded = HashSet<String>()
+        fun judge(slot: String, field: Field, selected: Boolean) {
+            val canonical = field.canonical
+            if (canonical != null && !selected && frame.slot(field).h != null && ReviewWordCover.shows(canonical)) {
+                eligible += slot to canonical
+            } else {
+                excluded += canonical ?: field.trimmed
+            }
+        }
+        title?.let { judge(ContributorSlots.WINDOW_TITLE, it, selected = false) }
         // Preorder, root = 0, children in order: the backstop's own indexing.
-        val covered = HashSet<String>()
-        nodes.forEachIndexed { preorder, (node, _) ->
-            if (preorder in address) node.fields.forEach { (_, field) -> covered += field.canonical ?: field.trimmed }
-        }
-        val words = HashMap<String, String>()
-        fun keep(slot: String, field: Field) {
-            val canonical = field.canonical ?: return
-            if (canonical in covered) return
-            if (frame.slot(field).h != null && ReviewWordCover.shows(canonical)) words[slot] = canonical
-        }
-        title?.let { keep(ContributorSlots.WINDOW_TITLE, it) }
         nodes.forEachIndexed { preorder, (node, path) ->
-            if (preorder !in address) node.fields.forEach { (wire, field) -> keep("$path/$wire", field) }
+            node.fields.forEach { (wire, field) -> judge("$path/$wire", field, preorder in address) }
         }
-        return ReviewWords(words)
+        return ReviewWords(eligible.filter { (_, word) -> word !in excluded }.toMap())
     }
 
     private val DAY_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT)

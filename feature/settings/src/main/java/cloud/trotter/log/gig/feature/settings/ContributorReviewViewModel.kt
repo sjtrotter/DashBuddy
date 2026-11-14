@@ -82,9 +82,15 @@ class ContributorReviewViewModel @Inject constructor(
     private val id: String = savedState.get<String>(ARG_ID).orEmpty()
     private val state = MutableStateFlow(ReviewUiState())
 
+    /**
+     * Derived from the grant on every read (Sol round 2 S6): a status that is not ON maps to the cleared state, and the
+     * cache is dropped when the last subscriber leaves (`replayExpirationMillis = 0`), so a screen that comes back after
+     * the grant ended never sees the review it held before.
+     */
     val uiState: StateFlow<ReviewUiState> =
-        combine(state, contributor.status.map { it.shiftLive }) { s, live -> s.copy(shiftLive = live) }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReviewUiState())
+        combine(state, contributor.status) { s, status ->
+            (if (status.entry == ContributorEntry.ON) s else s.grantEnded()).copy(shiftLive = status.shiftLive)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000, replayExpirationMillis = 0), ReviewUiState())
 
     init {
         viewModelScope.launch {

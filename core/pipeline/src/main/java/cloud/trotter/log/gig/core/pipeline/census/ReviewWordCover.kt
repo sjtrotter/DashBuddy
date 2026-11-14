@@ -12,7 +12,8 @@ import cloud.trotter.log.gig.domain.privacy.PiiShapes
  * passes this check, run on the word alone; a covered word is never kept, so the review screen has nothing to show for
  * that slot and nothing that could be unmasked.
  *
- * The check is deliberately wider than the filter, because a word shown on the review screen can later be sent as
+ * Two layers: [ReviewAllowList] first (every token must be a common en/es/fr word or a word of the bundled rules), then
+ * the denylist below. The check is deliberately wider than the filter, because a word shown on the review screen can later be sent as
  * plaintext: it covers the dasher's own greeting, account and place labels, which the filter hashes (a hash is fine;
  * the word on a reviewed screen is not), a customer's note or message, a return-task line's name, any text with a colon (a label and its value),
  * and anything with a digit or an `@`. Over-covering costs a confirmation; it
@@ -22,7 +23,8 @@ object ReviewWordCover {
 
     /** True when the review may hold and show [word] (a canonical census word). */
     fun shows(word: String): Boolean = try {
-        !covers(word)
+        // The allow-list is the first layer (Sol round 2): a word with any token outside it is never held.
+        ReviewAllowList.allows(word) && !covers(word)
     } catch (_: Exception) {
         false
     }
@@ -56,6 +58,9 @@ object ReviewWordCover {
      */
     private const val COLONS = ":\uFF1A\uFE55\uFE13\u2236\uA789\u02D0\u02F8\u0589\u05C3\u0703\u0704\u1361\u1364\u1804\u1C7E\u205A\u2E2C\u303D"
 
-    /** A place after a preposition ("Dash in Riverside", "Busy near Oak Park"): a zone, city or store name. */
-    private val PLACE = Regex("""(^|\s)([Ii]n|[Aa]t|[Nn]ear|[Aa]round|[Ff]rom|[Tt]o)\s+\p{Lu}""")
+    /**
+     * A place after a preposition, in any case ("Dash in Riverside", "DASH IN SPRINGFIELD", "Busy near downtown"): a
+     * zone, city or store name. It also covers chrome such as "Arrived at store"; over-covering costs a confirmation.
+     */
+    private val PLACE = Regex("""(^|\s)(in|at|near|around|from|to)\s+\p{L}""", RegexOption.IGNORE_CASE)
 }

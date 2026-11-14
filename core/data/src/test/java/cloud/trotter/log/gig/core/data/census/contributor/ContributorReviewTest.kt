@@ -395,7 +395,7 @@ class ContributorReviewTest {
                 queue.hold(ContributorReviewQueue.HeldWord(
                     requireNotNull(cloud.trotter.census.contract.contributor.ContributorVariant.of(skeleton())), "root/0/text",
                     requireNotNull(CensusHash.of(wording)), wording,
-                ))
+                ), queue.generation)
                 val refusing = object : ContributorTransport by transport {
                     override suspend fun review(cred: Bearer.Credential, body: ByteArray): ContributorCall<ReviewCounts> =
                         if (stage == ContributorTransport.REVIEW_PATH) ContributorCall.Refused(reason).also { events += "review" }
@@ -454,5 +454,49 @@ class ContributorReviewTest {
         testScheduler.runCurrent()
         assertEquals(listOf(1, 0), seen)
         job.cancel()
+    }
+
+    @Test fun `a gate answer that arrives after Stop holds nothing`() = runTest {
+        val queue = queue()
+        val id = ready(queue)
+        transport.classes = mapOf("root/0/text" to SlotClass.CONSTANT)
+        val review = (reviewer(queue).open(id) as ReviewLoad.Ready).review
+        // Stop lands while the gate question is in flight: the contributor clears the queue, then the answer arrives.
+        val late = object : ContributorTransport by transport {
+            override suspend fun gates(cred: Bearer.Credential, body: ByteArray): ContributorCall<List<GateAnswer>> {
+                queue.clear()
+                return transport.gates(cred, body)
+            }
+        }
+        assertEquals(SendOutcome.SENT, reviewer(queue, late).send(id, setOf("root/0/text"), emptyMap(), review))
+        assertTrue("a closed answer after the clear holds nothing", queue.takeHeld().isEmpty())
+    }
+
+    @Test fun `a candidate whose gate check raced a clear is not kept`() = runTest {
+        lateinit var raced: ContributorReviewQueue
+        val clearing = object : ContributorGate {
+            override suspend fun mayUpload(): Boolean { raced.clear(); return true }
+        }
+        raced = ContributorReviewQueue(
+            File(folder.root, "census/review/raced.json"), { clearing }, flowOf(true), backgroundScope, Dispatchers.Unconfined, clock, ticks,
+        )
+        raced.offer(record())
+        assertTrue(raced.entries.first().isEmpty())
+        assertNull(raced.takeHeld().firstOrNull())
+    }
+
+    @Test fun `a grant check that fails before the words discards them`() = runTest {
+        val queue = queue()
+        val id = ready(queue)
+        transport.classes = mapOf("root/0/text" to SlotClass.CONSTANT)
+        transport.gateOpen = true
+        val review = (reviewer(queue).open(id) as ReviewLoad.Ready).review
+        val closing = object : ContributorTransport by transport {
+            override suspend fun gates(cred: Bearer.Credential, body: ByteArray): ContributorCall<List<GateAnswer>> =
+                transport.gates(cred, body).also { gate.open = false }
+        }
+        assertEquals(SendOutcome.SENT, reviewer(queue, closing).send(id, setOf("root/0/text"), emptyMap(), review))
+        assertEquals(0, transport.calls.count { it.first == ContributorTransport.WORDS_PATH })
+        assertTrue("an open word is discarded, never held again", queue.takeHeld().isEmpty())
     }
 }

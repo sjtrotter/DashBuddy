@@ -9,6 +9,8 @@ import io.kotest.property.arbitrary.arbitrary
 import io.kotest.property.checkAll
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -40,11 +42,19 @@ class ReviewWordCoverPropertyTest : SkeletonBuilderTestBase() {
     private fun RandomSource.digits(n: Int) = (1..n).joinToString("") { random.nextInt(10).toString() }
     private fun RandomSource.initial() = ('A' + random.nextInt(26)).toString()
 
+    /** Sol round 2 S11: the same label in any casing. */
+    private fun RandomSource.cased(value: String) = when (random.nextInt(4)) {
+        0 -> value
+        1 -> value.lowercase()
+        2 -> value.uppercase()
+        else -> value.mapIndexed { i, c -> if (i % 2 == 0) c.uppercaseChar() else c.lowercaseChar() }.joinToString("")
+    }
+
     /** A value the phone can detect: customer names in marked forms, addresses, codes, notes, return lines, labels. */
     private val detectable: Arb<String> = arbitrary { rs ->
         val first = rs.pick(FIRST)
         val last = rs.pick(LAST)
-        when (rs.random.nextInt(22)) {
+        when (rs.random.nextInt(24)) {
             0 -> "$first ${rs.initial()}."
             1 -> "$first ${rs.initial()}"
             2 -> "Deliver to $first"
@@ -63,8 +73,10 @@ class ReviewWordCoverPropertyTest : SkeletonBuilderTestBase() {
             15 -> "Welcome back, $first"
             16 -> "Good evening, $first"
             17 -> "Account ending in ${rs.digits(4)}"
-            18 -> "Dash in ${rs.pick(CITIES)}"
-            19 -> "Busy near ${rs.pick(ZONES)}"
+            18 -> rs.cased("Dash in ${rs.pick(CITIES)}")
+            19 -> rs.cased("Busy near ${rs.pick(ZONES)}")
+            22 -> rs.cased("Busy near downtown")
+            23 -> rs.cased("Hotspot around ${rs.pick(CITIES)}")
             20 -> "${rs.pick(listOf("Name", "Display name", "Zone", "Customer"))}${rs.pick(COLONS)}${rs.pick(listOf(first, rs.pick(CITIES)))}"
             else -> "${first.lowercase()}${rs.digits(2)}@example.com"
         }
@@ -140,5 +152,77 @@ class ReviewWordCoverPropertyTest : SkeletonBuilderTestBase() {
         val outcome = SkeletonBuilder.outcome(tree, note, meta, platform, day, SkeletonVersion.V2, collectWords = true) as SkeletonBuilder.Outcome.Built
         val words = requireNotNull(outcome.reviewWords)
         assertEquals(setOf(WORDING), words.slots.mapNotNull { words[it] }.toSet())
+    }
+
+    // ── The allow-list (Sol round 2) ─────────────────────────────────────────────────────────────────────────────────
+
+    /** A bare name or place, unmarked: only the allow-list stands between it and a review word. */
+    private val bare: Arb<String> = arbitrary { rs ->
+        when (rs.random.nextInt(5)) {
+            0 -> rs.pick(FIRST)
+            1 -> "${rs.pick(FIRST)} ${rs.pick(LAST)}"
+            2 -> rs.cased(rs.pick(CITIES))
+            3 -> "${rs.pick(STREETS)} ${rs.pick(SUFFIXES)}"
+            else -> rs.cased(rs.pick(FIRST))
+        }
+    }
+
+    private fun keptWords(value: String): Set<String> {
+        val tree = UiNode(
+            className = "android.widget.FrameLayout",
+            children = listOf(UiNode(className = "android.widget.TextView", text = WORDING), UiNode(className = "android.widget.TextView", text = value)),
+        ).restoreParents()
+        val outcome = SkeletonBuilder.outcome(tree, null, meta, platform, day, SkeletonVersion.V2, collectWords = true)
+        val words = (outcome as? SkeletonBuilder.Outcome.Built)?.reviewWords ?: return emptySet()
+        return words.slots.mapNotNull { words[it] }.toSet() - WORDING
+    }
+
+    @Test
+    fun `property - a generated name never survives, and a place survives only when every token is a common word`() = runTest {
+        checkAll(PropSeeds.samples(600), PropSeeds.config(SEED + 1), bare) { value ->
+            val kept = keptWords(value)
+            val isName = FIRST.any { value.equals(it, ignoreCase = true) || value.startsWith("$it ") }
+            if (isName) assertEquals("the name '$value' survived", emptySet<String>(), kept)
+            // Risk 12, stated: a place made only of common words ("Medical Center") can survive; nothing else can.
+            kept.forEach { word -> assertTrue("'$word' survived with a token outside the lists", ReviewAllowList.allows(word)) }
+        }
+        FIRST.forEach { assertFalse("the name '$it' is on the allow-list", ReviewAllowList.allows(it)) }
+    }
+
+    @Test
+    fun `the bundled rules' chrome is on the allow-list, and plain rule anchors survive as review words`() {
+        val anchors = ruleLiterals().filter { WORDS_ONLY.matches(it) && it.split(' ').size in 1..8 }
+        assertTrue("no rule anchors read", anchors.size > 50)
+        anchors.forEach { assertTrue("rule chrome '$it' is not on the allow-list", ReviewAllowList.allows(it)) }
+        assertTrue("the rules' brand word", ReviewAllowList.contains("doordash"))
+        // Through the builder: an anchor the denylist also passes is held as a review word.
+        val passing = anchors.filter { ReviewWordCover.shows(it) }.take(40)
+        assertTrue(passing.size >= 10)
+        passing.forEach { anchor ->
+            val tree = UiNode(className = "android.widget.FrameLayout", children = listOf(UiNode(className = "android.widget.TextView", text = anchor))).restoreParents()
+            val built = SkeletonBuilder.outcome(tree, null, meta, platform, day, SkeletonVersion.V2, collectWords = true) as SkeletonBuilder.Outcome.Built
+            val words = requireNotNull(built.reviewWords)
+            assertEquals(anchor, setOf(anchor), words.slots.mapNotNull { words[it] }.toSet())
+        }
+    }
+
+    @Test
+    fun `the common-word list is the committed one, whole`() {
+        assertTrue("the common list did not load (hash, size or encoding)", ReviewAllowList.size > 14_000)
+        listOf("the", "de", "la", "pedido", "commande", "accept").forEach { assertTrue(it, ReviewAllowList.contains(it)) }
+        assertTrue(ReviewAllowList.parse(verifyHash = true) { "#sha256=00\nthe\n".byteInputStream() }.isEmpty())
+    }
+
+    private val WORDS_ONLY = Regex("""[\p{L}]+( [\p{L}]+)*""")
+
+    /** Every `hasText` literal of the generated rules, read off disk like the corpus tests. */
+    private fun ruleLiterals(): List<String> {
+        var dir = java.io.File(".").absoluteFile.normalize()
+        while (!java.io.File(dir, "settings.gradle.kts").isFile) dir = dir.parentFile ?: error("no repo root")
+        val rules = java.io.File(dir, "core/pipeline/build/generated/assets/importMatchersRules/rules")
+        val hasText = Regex(""""hasText"\s*:\s*"([^"\\]*)"""")
+        return rules.listFiles { f -> f.extension == "json" }.orEmpty().flatMap { file ->
+            hasText.findAll(file.readText()).map { it.groupValues[1].trim() }.toList()
+        }.distinct()
     }
 }
