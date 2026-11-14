@@ -7,6 +7,7 @@ import cloud.trotter.log.gig.domain.capability.PrivacyDisclosure
 import cloud.trotter.log.gig.domain.census.CensusChoices
 import cloud.trotter.log.gig.domain.census.CensusConsent
 import cloud.trotter.log.gig.domain.census.CensusConsentReceipt
+import cloud.trotter.log.gig.domain.census.CensusDeletion
 import cloud.trotter.log.gig.domain.census.CensusLastRun
 import cloud.trotter.log.gig.domain.census.CensusRunOutcome
 import cloud.trotter.log.gig.domain.census.CensusUploadPreferences
@@ -80,6 +81,20 @@ class DevSettingsRepository @Inject constructor(
     suspend fun setCensusNextRunAtMillis(value: Long) = dataSource.setCensusNextRunAtMillis(value)
     /** A daily run consumes its target before it sends, so no retry or left-over work matches it again. */
     suspend fun clearCensusNextRunAtMillis() = dataSource.clearCensusNextRunAtMillis()
+    /** #1622: the last census deletion request; an unreadable state decodes as pending (fail closed). */
+    val censusDeletion: Flow<CensusDeletion?> = dataSource.censusDeletion.map { raw ->
+        raw?.let {
+            CensusDeletion(it.requestedAtMillis, CensusDeletion.State.fromWire(it.stateWire), it.localCleared, it.installId,
+                it.rows, it.deletedDay, CensusDeletion.Waiting.fromWire(it.waitingWire))
+        }
+    }
+    suspend fun setCensusDeletion(value: CensusDeletion) = dataSource.setCensusDeletion(
+        DevSettingsDataSource.RawCensusDeletion(
+            value.requestedAtMillis, value.state.wire, value.localCleared, value.installId, value.rows, value.deletedDay,
+            value.waiting?.wire,
+        ),
+    )
+    suspend fun clearCensusDeletion() = dataSource.clearCensusDeletion()
     val censusLastRun: Flow<CensusLastRun?> = dataSource.censusLastRun.map { raw ->
         raw?.let { (at, wire, detail, envelopes, reason) ->
             CensusLastRun(at, CensusRunOutcome.fromWire(wire), detail, envelopes, CensusEnrolRejectReason.fromWire(reason))

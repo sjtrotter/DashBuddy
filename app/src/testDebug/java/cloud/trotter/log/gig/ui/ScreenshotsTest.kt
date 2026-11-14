@@ -61,6 +61,8 @@ import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.feature.settings.CapabilityConsentScreen
 import cloud.trotter.log.gig.feature.settings.CapabilityConsentViewModel
 import cloud.trotter.log.gig.feature.settings.CensusContent
+import cloud.trotter.log.gig.feature.settings.CensusDeleteDialog
+import cloud.trotter.log.gig.feature.settings.CensusSentContent
 import cloud.trotter.log.gig.feature.settings.CensusDisclosure
 import cloud.trotter.log.gig.feature.settings.CensusPlatformRow
 import cloud.trotter.log.gig.feature.settings.CensusUiState
@@ -267,8 +269,19 @@ class ScreenshotsTest(private val theme: String) {
                 wifiOnly = true, serverHost = "census.dashbuddy.trotter.cloud", testBuild = true,
             ),
             onBack = {}, onAccept = {}, onDecline = {}, onWifiOnly = {}, onPlatform = { _, _ -> },
+            onOpenSent = {}, onDelete = {},
         )
     }
+
+    /** #1622: the delete confirmation: what is deleted, what the server cannot tie to this phone, the backups. */
+    @Test fun settingsCensusDeleteDialog() = render("settings/census-delete-dialog", window = true, assertion = {
+        text(string(SettingsR.string.census_delete_dialog_title)).assertExists()
+    }) { CensusDeleteDialog(onConfirm = {}, onDismiss = {}) }
+
+    /** #1622: what the census sent, a day with outlines, a notification and daily counts, the next upload ahead. */
+    @Test fun settingsCensusSent() = render("settings/census-sent", assertion = {
+        text(string(SettingsR.string.census_sent_title)).assertExists()
+    }) { CensusSentContent(state = ScreenshotData.censusSent(), onBack = {}) }
 
     /** #1621: the census disclosure as a Play or sideload user sees it before accepting. */
     @Test fun settingsCensusDisclosure() = censusDisclosure("settings/census-disclosure")

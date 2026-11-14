@@ -2,9 +2,11 @@ package cloud.trotter.log.gig.feature.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import cloud.trotter.log.gig.core.data.census.CensusDataDeletion
 import cloud.trotter.log.gig.core.data.settings.DevSettingsRepository
 import cloud.trotter.log.gig.domain.census.CensusChoices
 import cloud.trotter.log.gig.domain.census.CensusConsent
+import cloud.trotter.log.gig.domain.census.CensusDeletion
 import cloud.trotter.log.gig.domain.di.ReadsUnboundPlatforms
 import cloud.trotter.log.gig.domain.state.Platform
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -28,6 +30,10 @@ data class CensusUiState(
     val wifiOnly: Boolean,
     val serverHost: String,
     val testBuild: Boolean,
+    /** #1622: the last "Delete my census data" request, as stored; null before the first. */
+    val deletion: CensusDeletion? = null,
+    /** #1622: a deletion request is being made now. */
+    val deleting: Boolean = false,
 ) {
     val choices: CensusChoices
         get() = CensusChoices(platforms.filter { it.checked }.map { it.platform }.toSet(), wifiOnly)
@@ -37,6 +43,7 @@ data class CensusUiState(
 @HiltViewModel
 class CensusViewModel @Inject constructor(
     private val settings: DevSettingsRepository,
+    private val deletion: CensusDataDeletion,
     @ReadsUnboundPlatforms readsUnboundPlatforms: Boolean,
 ) : ViewModel() {
 
@@ -44,7 +51,10 @@ class CensusViewModel @Inject constructor(
 
     /** Null until the store answers; the screen shows no switch before then. */
     val uiState: StateFlow<CensusUiState?> =
-        combine(settings.censusConsent, settings.censusChoices, settings.censusBaseUrl) { consent, choices, url ->
+        combine(
+            settings.censusConsent, settings.censusChoices, settings.censusBaseUrl, settings.censusDeletion,
+            deletion.inProgress,
+        ) { consent, choices, url, request, deleting ->
             val covered = choices.platformsAmong(readable)
             CensusUiState(
                 consent = consent,
@@ -52,6 +62,8 @@ class CensusViewModel @Inject constructor(
                 wifiOnly = choices.wifiOnly,
                 serverHost = url.removePrefix("https://"),
                 testBuild = settings.censusTestBuild,
+                deletion = request,
+                deleting = deleting,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
@@ -68,6 +80,14 @@ class CensusViewModel @Inject constructor(
 
     fun setWifiOnly(wifiOnly: Boolean) {
         viewModelScope.launch { settings.setCensusWifiOnly(wifiOnly) }
+    }
+
+    /**
+     * #1622: "Delete my census data", confirmed. It runs on the application scope, so leaving the screen never
+     * cancels it; the screen shows the stored outcome.
+     */
+    fun deleteServerData() {
+        deletion.deleteAsync()
     }
 
     /** Changes one platform inside the store's edit, never from this screen's snapshot, so quick taps never overwrite each other. */

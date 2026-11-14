@@ -9,6 +9,7 @@ import cloud.trotter.log.gig.domain.capture.CensusEnvelopeSink
 import cloud.trotter.log.gig.domain.census.CensusUploadStats
 import cloud.trotter.log.gig.domain.census.HealthLedger
 import kotlinx.coroutines.test.StandardTestDispatcher
+import cloud.trotter.log.gig.domain.census.CensusDeletion
 import cloud.trotter.log.gig.domain.census.CensusLastRun
 import cloud.trotter.log.gig.domain.census.CensusRunOutcome
 import cloud.trotter.log.gig.domain.census.CensusUploadScheduler
@@ -48,6 +49,7 @@ class CensusIdentityResetterTest {
         override fun enqueueNow(wifiOnly: Boolean, replaceQueued: Boolean) { enqueued += replaceQueued }
         override fun scheduleDaily(runAtMillis: Long, wifiOnly: Boolean) = Unit
         override fun cancelManual() = Unit
+        override fun enqueueDeletion() = Unit
     }
 
     private val credentials: CensusCredentialStore = mock()
@@ -57,11 +59,13 @@ class CensusIdentityResetterTest {
     private val preferences = spy(DevSettingsRepository(DevSettingsDataSource(MemoryPreferences()), true, Dispatchers.Unconfined, "test"))
     private val scheduler = Scheduler()
     private val lock = CensusUploadLock()
+    private val deletion: CensusDataDeletion = mock()
 
     private suspend fun TestScope.resetter(scope: CoroutineScope = backgroundScope): CensusIdentityResetter {
         whenever(healthStore.load()).thenReturn(HealthLedger())
         val sink = PersistentHealthSink(healthStore, CensusUploadStats(), scope, StandardTestDispatcher(testScheduler))
-        return CensusIdentityResetter(credentials, spool, preferences, scheduler, lock, scope, sink, now = { 123L }, envelopeSink = envelopeSink)
+        return CensusIdentityResetter(credentials, spool, preferences, scheduler, lock, scope, sink, now = { 123L },
+            envelopeSink = envelopeSink, deletion = deletion)
     }
 
     @Test fun `reset clears spool and health before wiping credentials keeps the deadline records RESET and replaces queued work when enabled`() = runTest {
@@ -87,6 +91,47 @@ class CensusIdentityResetterTest {
         assertEquals(CensusLastRun(123L, CensusRunOutcome.RESET), preferences.censusLastRun.first())
         assertEquals(listOf(true), scheduler.enqueued)
         assertTrue(preferences.censusUploadEnabled.first())
+    }
+
+    private val enrolled = CensusCredentialStore.Credential("12345678-1234-4123-8123-123456789abc", "s", enrolled = true)
+
+    @Test fun `an enrolled identity is reset only after the server confirms a fresh deletion for it`() = runTest {
+        // #1622: no identity with uploads is let go undeleted.
+        whenever(credentials.current()).thenReturn(enrolled)
+        whenever(deletion.requestHoldingLock()).thenReturn(
+            CensusDeletion(1L, CensusDeletion.State.DELETED, localCleared = true, installId = enrolled.installId, rows = 3),
+        )
+        val reset = resetter()
+        assertTrue(reset.reset())
+        inOrder(deletion, credentials) {
+            verify(deletion).requestHoldingLock()
+            verify(credentials).wipe()
+        }
+    }
+
+    @Test fun `an unconfirmed deletion refuses the reset and keeps the identity`() = runTest {
+        preferences.setCensusUploadEnabled(true)
+        whenever(credentials.current()).thenReturn(enrolled)
+        for (stored in listOf(
+            CensusDeletion(1L, CensusDeletion.State.PENDING, localCleared = true, installId = enrolled.installId,
+                waiting = CensusDeletion.Waiting.NOT_YET),
+            // Confirmed, but the phone's queue is not cleared yet: still not resolved.
+            CensusDeletion(1L, CensusDeletion.State.DELETED, localCleared = false, installId = enrolled.installId, rows = 1),
+        )) {
+            whenever(deletion.requestHoldingLock()).thenReturn(stored)
+            assertFalse(resetter().reset())
+            assertEquals(CensusRunOutcome.RESET_REFUSED, preferences.censusLastRun.first()?.outcome)
+        }
+        verify(spool, never()).clear()
+        verify(credentials, never()).wipe()
+        assertTrue(scheduler.enqueued.isEmpty())
+    }
+
+    @Test fun `a pending identity resets without a deletion`() = runTest {
+        whenever(credentials.current()).thenReturn(null)
+        assertTrue(resetter().reset())
+        verify(deletion, never()).requestHoldingLock()
+        verify(credentials).wipe()
     }
 
     @Test fun `reset does not enqueue when consent is off`() = runTest {

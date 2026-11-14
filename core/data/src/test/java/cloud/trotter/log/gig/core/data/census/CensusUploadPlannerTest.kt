@@ -38,6 +38,7 @@ class CensusUploadPlannerTest {
         override fun scheduleDaily(runAtMillis: Long, wifiOnly: Boolean) { daily += runAtMillis to wifiOnly }
         var cancelled = 0
         override fun cancelManual() { cancelled++ }
+        override fun enqueueDeletion() = Unit
     }
 
     /** WorkManager refuses every schedule update. */
@@ -45,6 +46,7 @@ class CensusUploadPlannerTest {
         override fun enqueueNow(wifiOnly: Boolean, replaceQueued: Boolean) = Unit
         override fun scheduleDaily(runAtMillis: Long, wifiOnly: Boolean) = throw IllegalStateException("refused")
         override fun cancelManual() = Unit
+        override fun enqueueDeletion() = Unit
     }
 
     private val settings = DevSettingsRepository(DevSettingsDataSource(MemoryPreferences()), false, Dispatchers.Unconfined, "test")

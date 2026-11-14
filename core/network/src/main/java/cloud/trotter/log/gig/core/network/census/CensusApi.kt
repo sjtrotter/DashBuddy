@@ -23,6 +23,7 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okio.BufferedSink
 import okhttp3.Response
+import timber.log.Timber
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.Locale
@@ -40,6 +41,33 @@ interface CensusTransport {
     suspend fun policy(): PolicyResult
     suspend fun uploadSkeletons(cred: Bearer.Credential, batchId: String, itemsJson: List<String>): UploadResult
     suspend fun uploadEnvelopes(cred: Bearer.Credential, batchId: String, itemsJson: List<String>): UploadResult
+    /** #1622: `DELETE /v1/installs/me/data`, signed, empty body. The credential stays valid after a deletion. */
+    suspend fun deleteData(cred: Bearer.Credential): DeleteResult
+}
+
+/**
+ * #1622: told the exact bytes of each census request body the server read (it answered 200, 400 or 422), for the
+ * phone's "What gig.log sent" record. A failure here never changes the request's result.
+ */
+fun interface CensusSentObserver {
+    suspend fun read(path: String, body: ByteArray)
+
+    companion object {
+        val NONE = CensusSentObserver { _, _ -> }
+    }
+}
+
+/** #1622: the server's answer to "delete my census data". Only the closed fields below leave the transport. */
+sealed interface DeleteResult {
+    /** [deletedDay] is the server's UTC day, checked to be `YYYY-MM-DD`; [rows] is the count it erased. */
+    data class Deleted(val rows: Int, val deletedDay: String) : DeleteResult
+    data class Unauthorized(val serverDateMillis: Long?) : DeleteResult
+    data object Revoked : DeleteResult
+    data class RateLimited(val retryAfter: Long) : DeleteResult
+    /** 404 or 405: the server does not serve the endpoint yet (census#79 not deployed). */
+    data class NotAvailable(val status: Int) : DeleteResult
+    data class ServerUnavailable(val status: Int) : DeleteResult
+    data class TransportFailure(val failureClass: String) : DeleteResult
 }
 
 sealed interface EnrolResult {
@@ -95,20 +123,25 @@ sealed interface HealthResult {
 
 /** Factory is the injectable seam for workers; callers never configure their own HTTP logging. */
 @Singleton
-open class CensusApiFactory @Inject constructor() {
+open class CensusApiFactory @Inject constructor(private val sent: CensusSentObserver) {
     private val client by lazy { NetworkClientFactory.okHttpClient("Census", ClientProfile.Census) }
-    open fun create(baseUrl: String): CensusTransport = CensusApi(client, baseUrl)
+    open fun create(baseUrl: String): CensusTransport = CensusApi(client, baseUrl, sent)
 }
 
 /**
  * Plain OkHttp; no transport retry, redirect or body re-serialization. The worker owns retries.
- * Application request data is limited to the bearer, timestamp and signature (skeletons and health),
+ * Application request data is limited to the bearer, timestamp and signature (skeletons, health and deletion),
  * constant User-Agent `dashbuddy-census/1`, Content-Type `application/json`, and the body:
  * protocol-required installId/appVersion/schemaIds on enrol, batchId/items on skeleton upload, reports on health.
  * Enrol uses the bearer without timestamp/signature; policy is a bodyless, unauthenticated GET
- * with the same User-Agent. No other application metadata is sent.
+ * with the same User-Agent; deletion is a signed DELETE with an empty body. No other application metadata is sent.
+ * [sent] is told each upload body the server read, byte for byte (#1622).
  */
-class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTransport {
+class CensusApi(
+    client: OkHttpClient,
+    private val baseUrl: String,
+    private val sent: CensusSentObserver = CensusSentObserver.NONE,
+) : CensusTransport {
     private val client = client.newBuilder()
         .retryOnConnectionFailure(false)
         .followRedirects(false)
@@ -168,6 +201,7 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
     ): UploadResult = try {
         val bytes = batchBody(batchId, itemsJson)
         val response = execute(request(path, bytes, cred, signed = true))
+        recordRead(path, response.status, bytes)
         when (response.status) {
             200 -> {
                 val json = response.json()
@@ -202,6 +236,7 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
     override suspend fun postHealth(cred: Bearer.Credential, reportsJson: List<String>): HealthResult = try {
         val bytes = ("{\"reports\":[" + reportsJson.joinToString(",") + "]}").toByteArray(Charsets.UTF_8)
         val response = execute(request("/v1/health", bytes, cred, signed = true))
+        recordRead("/v1/health", response.status, bytes)
         when (response.status) {
             200 -> {
                 val json = response.json()
@@ -223,21 +258,56 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
         HealthResult.TransportFailure(e.failureToken())
     }
 
-    private fun request(path: String, body: ByteArray, cred: Bearer.Credential, signed: Boolean): Request {
+    override suspend fun deleteData(cred: Bearer.Credential): DeleteResult = try {
+        val response = execute(request(DELETE_DATA_PATH, ByteArray(0), cred, signed = true, method = "DELETE"))
+        when (response.status) {
+            200 -> {
+                val json = response.json()
+                val day = json.getValue("deletedDay").jsonPrimitive.content
+                if (json.getValue("status").jsonPrimitive.content == "deleted" && DAY.matches(day)) {
+                    // Parsing the day checks it is a real date, so only a date ever reaches the phone's store.
+                    DeleteResult.Deleted(json.int("rows"), java.time.LocalDate.parse(day).toString())
+                } else DeleteResult.TransportFailure("InvalidResponse")
+            }
+            401 -> if (response.isRevoked()) DeleteResult.Revoked else DeleteResult.Unauthorized(response.dateMillis)
+            429 -> DeleteResult.RateLimited(response.retryAfter)
+            404, 405 -> DeleteResult.NotAvailable(response.status)
+            else -> DeleteResult.ServerUnavailable(response.status)
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        DeleteResult.TransportFailure(e.failureToken())
+    }
+
+    /** #1622: a body the server read goes to the sent record; the record can never change the request's result. */
+    private suspend fun recordRead(path: String, status: Int, body: ByteArray) {
+        if (status != 200 && status != 400 && status != 422) return
+        try {
+            sent.read(path, body)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            Timber.tag("Census").w("census sent record failed")
+        }
+    }
+
+    private fun request(path: String, body: ByteArray, cred: Bearer.Credential, signed: Boolean, method: String = "POST"): Request {
+        val requestBody = object : RequestBody() {
+            override fun contentType() = "application/json".toMediaType()
+            override fun contentLength(): Long = body.size.toLong()
+            // retryOnConnectionFailure(false) alone still permits a 503 Retry-After: 0 replay.
+            override fun isOneShot(): Boolean = true
+            override fun writeTo(sink: BufferedSink) { sink.write(body) }
+        }
         val builder = Request.Builder().url("$baseUrl$path")
             .header("User-Agent", USER_AGENT)
             .header(CensusHeaders.AUTHORIZATION, Bearer.format(cred.installId, cred.secret))
-            .post(object : RequestBody() {
-                override fun contentType() = "application/json".toMediaType()
-                override fun contentLength(): Long = body.size.toLong()
-                // retryOnConnectionFailure(false) alone still permits a 503 Retry-After: 0 replay.
-                override fun isOneShot(): Boolean = true
-                override fun writeTo(sink: BufferedSink) { sink.write(body) }
-            })
+            .method(method, requestBody)
         if (signed) {
             val ts = (System.currentTimeMillis() / 1000).toString()
             builder.header(CensusHeaders.TIMESTAMP, ts)
-            builder.header(CensusHeaders.SIGNATURE, RequestSigner.sign(cred.secret, RequestSigner.canonical("POST", path, ts, body)))
+            builder.header(CensusHeaders.SIGNATURE, RequestSigner.sign(cred.secret, RequestSigner.canonical(method, path, ts, body)))
         }
         return builder.build()
     }
@@ -288,6 +358,8 @@ class CensusApi(client: OkHttpClient, private val baseUrl: String) : CensusTrans
             if (this is OversizedResponse) "oversized_response" else javaClass.simpleName
 
         private const val USER_AGENT = "dashbuddy-census/1"
+        const val DELETE_DATA_PATH = "/v1/installs/me/data"
+        private val DAY = Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
         fun batchId(fingerprints: List<String>): String = MessageDigest.getInstance("SHA-256")
             .digest(fingerprints.sorted().joinToString("\n").toByteArray(Charsets.UTF_8))

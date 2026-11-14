@@ -64,6 +64,14 @@ open class CensusSpool internal constructor(
     @Volatile private var initialized = false
     private var sequence = 0L
 
+    /**
+     * #1622: the clear boundary. [clear] moves it; a record handed over before a clear (its producer read the older
+     * value) is dropped by [append], even when its write runs after the clear, so nothing queued before a deletion or an
+     * identity reset can be written behind it.
+     */
+    @Volatile var generation: Long = 0L
+        private set
+
     open fun count(): Int = if (initialized) size.value else
         directory.listFiles().orEmpty().count { it.isFile && FILE_NAME.matches(it.name) }
 
@@ -76,8 +84,20 @@ open class CensusSpool internal constructor(
         emitAll(size)
     }
 
-    open suspend fun append(record: CensusRecord) = withContext(io) {
+    open suspend fun append(record: CensusRecord) = write(record, null)
+
+    /**
+     * #1622: appends only if no [clear] ran since the producer read [generation] ([CensusSpool.generation]) when it took
+     * the record; otherwise the record is dropped.
+     */
+    open suspend fun append(record: CensusRecord, generation: Long) = write(record, generation)
+
+    private suspend fun write(record: CensusRecord, generation: Long?) = withContext(io) {
         mutex.withLock {
+            if (generation != null && generation != this@CensusSpool.generation) {
+                if (!envelopes) stats.spoolDropped.incrementAndGet()
+                return@withLock
+            }
             initialize()
             val name = "${now()}-${++sequence}.json"
             val target = File(directory, name)
@@ -200,6 +220,7 @@ open class CensusSpool internal constructor(
      */
     open suspend fun clear() = withContext(io) {
         mutex.withLock {
+            generation++
             initialize()
             deleteInFlight()
             val tmp = File(inFlightFile.parentFile, "inflight.json.tmp")

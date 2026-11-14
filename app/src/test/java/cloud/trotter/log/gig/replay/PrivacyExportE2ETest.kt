@@ -10,6 +10,7 @@ import cloud.trotter.log.gig.core.data.census.CensusCredentialStore
 import cloud.trotter.log.gig.core.network.census.CensusApi
 import cloud.trotter.log.gig.core.pipeline.census.NotificationSkeletonBuilder
 import cloud.trotter.log.gig.core.pipeline.census.SkeletonBuilder
+import cloud.trotter.log.gig.domain.census.CensusSentBatch
 import cloud.trotter.log.gig.domain.pipeline.Observation
 import cloud.trotter.log.gig.domain.state.ParsedFields
 import cloud.trotter.log.gig.test.util.PrivacyExportInputs as Inputs
@@ -91,6 +92,7 @@ class PrivacyExportE2ETest {
             val credential = requireNotNull(h.credentials.current())
             h.worker()
             uploads(h, skeletons, envelopes, credential)
+            sentRecordIsTheWire(h)
             assertEquals(setOf(SkeletonSchema.SCHEMA_ID, NotificationSkeletonSchema.SCHEMA_ID),
                 h.requests.filter { it.path == "/v1/skeletons" }.flatMap { request ->
                     json("request${request.path}", request.body.toByteArray()).getValue("items").jsonArray.map { it.jsonObject.string("schemaId") }
@@ -377,6 +379,28 @@ class PrivacyExportE2ETest {
     }
 
     /** Verify exact pre-upload item bytes and the in-flight marker while those files still existed. */
+    /**
+     * #1622: "What gig.log sent" holds one entry per body the transport put on the wire, read from those exact bytes,
+     * and its file holds no word code from them.
+     */
+    private suspend fun sentRecordIsTheWire(h: PrivacyExportReplay) {
+        val paths = setOf(CensusSentBatch.SKELETONS, CensusSentBatch.HEALTH, CensusSentBatch.ENVELOPES)
+        val wire = h.requests.filter { it.path in paths }
+            .map { requireNotNull(CensusSentBatch.read(it.path, it.body.toByteArray(), 0L)) }
+        assertTrue("the run sent outlines", wire.any { it.path == CensusSentBatch.SKELETONS && it.items.isNotEmpty() })
+        val key: (CensusSentBatch) -> String = { "${it.path} ${it.items}" }
+        assertEquals(wire.map(key).sorted(), h.sentLog.batches.first().map(key).sorted())
+        val record = h.sentFile.readText(Charsets.UTF_8)
+        // Every hex token of the requests: word codes (16), batch ids (32) and fingerprints (64).
+        val tokens = h.requests.filter { it.path in paths }.flatMap { request ->
+            Regex("[0-9a-f]{16,}").findAll(request.body.utf8()).map { it.value }.toList()
+        }.toSet()
+        assertTrue("the requests carried codes, batch ids and fingerprints", tokens.any { it.length == 16 } &&
+            tokens.any { it.length == 32 } && tokens.any { it.length == 64 })
+        tokens.forEach { assertFalse("the sent record keeps no hex token from the wire", record.contains(it)) }
+        assertFalse(Regex("[0-9a-f]{16,}").containsMatchIn(record))
+    }
+
     private fun uploads(h: PrivacyExportReplay, skeletons: List<Stored>, envelopes: List<Stored>, credential: CensusCredentialStore.Credential) {
         for ((path, expected) in listOf("/v1/skeletons" to skeletons, "/v1/envelopes" to envelopes)) {
             val sent = mutableListOf<String>()

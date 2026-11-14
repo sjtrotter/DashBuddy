@@ -16,6 +16,7 @@ import cloud.trotter.log.gig.domain.model.event.EventMetadata
 import cloud.trotter.log.gig.log.StateAwareTree
 import cloud.trotter.log.gig.core.pipeline.rules.JsonRuleInterpreter
 import cloud.trotter.log.gig.core.state.StateManagerV2
+import cloud.trotter.log.gig.core.data.census.CensusDataDeletion
 import cloud.trotter.log.gig.core.data.census.CensusUploadPlanner
 import cloud.trotter.log.gig.domain.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
@@ -57,6 +58,9 @@ class GigLogApplication : Application(), Configuration.Provider {
 
     @Inject
     lateinit var censusUploadPlanner: CensusUploadPlanner
+
+    @Inject
+    lateinit var censusDataDeletion: CensusDataDeletion
 
     @Inject
     lateinit var jsonRuleInterpreter: JsonRuleInterpreter
@@ -233,6 +237,9 @@ class GigLogApplication : Application(), Configuration.Provider {
         WeeklyPlanWorker.schedule(this)
         // #1620: the census's one daily run, in every build; the worker itself checks consent.
         censusUploadPlanner.start(applicationScope)
+        // #1622: a census deletion request left unresolved (a process death mid-request, or still waiting) gets its
+        // any-network retry run queued again.
+        censusDataDeletion.reconcile()
 
         Timber.i("Background workers verified and scheduled.")
     }

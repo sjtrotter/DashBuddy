@@ -34,6 +34,13 @@ class DevSettingsDataSource @Inject constructor(
         val CENSUS_PLATFORMS = stringSetPreferencesKey("census_platforms")
         val CENSUS_NEXT_ALLOWED_AT = longPreferencesKey("census_next_allowed_at_millis")
         val CENSUS_NEXT_RUN_AT = longPreferencesKey("census_next_run_at_millis")
+        val CENSUS_DELETION_AT = longPreferencesKey("census_deletion_requested_at_millis")
+        val CENSUS_DELETION_STATE = stringPreferencesKey("census_deletion_state")
+        val CENSUS_DELETION_LOCAL_CLEARED = booleanPreferencesKey("census_deletion_local_cleared")
+        val CENSUS_DELETION_INSTALL_ID = stringPreferencesKey("census_deletion_install_id")
+        val CENSUS_DELETION_ROWS = intPreferencesKey("census_deletion_rows")
+        val CENSUS_DELETION_DAY = stringPreferencesKey("census_deletion_day")
+        val CENSUS_DELETION_WAITING = stringPreferencesKey("census_deletion_waiting")
         val CENSUS_LAST_RUN_AT = longPreferencesKey("census_last_run_at_millis")
         val CENSUS_LAST_RUN_OUTCOME = stringPreferencesKey("census_last_run_outcome")
         val CENSUS_LAST_RUN_ENVELOPES = intPreferencesKey("census_last_run_envelopes")
@@ -190,6 +197,42 @@ class DevSettingsDataSource @Inject constructor(
 
     suspend fun clearCensusNextRunAtMillis() {
         ds.edit { it.remove(Keys.CENSUS_NEXT_RUN_AT) }
+    }
+
+    data class RawCensusDeletion(
+        val requestedAtMillis: Long, val stateWire: String?, val localCleared: Boolean,
+        val installId: String? = null, val rows: Int? = null, val deletedDay: String? = null, val waitingWire: String? = null,
+    )
+
+    /** #1622: the last census deletion request, raw; the repository owns the fail-closed decode. */
+    val censusDeletion: Flow<RawCensusDeletion?> = ds.data.map { prefs ->
+        prefs[Keys.CENSUS_DELETION_AT]?.let {
+            RawCensusDeletion(it, prefs[Keys.CENSUS_DELETION_STATE], prefs[Keys.CENSUS_DELETION_LOCAL_CLEARED] ?: false,
+                prefs[Keys.CENSUS_DELETION_INSTALL_ID], prefs[Keys.CENSUS_DELETION_ROWS], prefs[Keys.CENSUS_DELETION_DAY],
+                prefs[Keys.CENSUS_DELETION_WAITING])
+        }
+    }
+
+    /** #1622: forgets the deletion record (a "nothing sent" result once the phone enrols again). */
+    suspend fun clearCensusDeletion() {
+        ds.edit { prefs ->
+            listOf(Keys.CENSUS_DELETION_AT, Keys.CENSUS_DELETION_STATE, Keys.CENSUS_DELETION_LOCAL_CLEARED,
+                Keys.CENSUS_DELETION_INSTALL_ID, Keys.CENSUS_DELETION_ROWS, Keys.CENSUS_DELETION_DAY, Keys.CENSUS_DELETION_WAITING,
+            ).forEach { prefs.remove(it) }
+        }
+    }
+
+    /** #1622: the whole deletion record in ONE edit, so a reader never sees a state with another request's figures. */
+    suspend fun setCensusDeletion(value: RawCensusDeletion) {
+        ds.edit {
+            it[Keys.CENSUS_DELETION_AT] = value.requestedAtMillis
+            if (value.stateWire != null) it[Keys.CENSUS_DELETION_STATE] = value.stateWire else it.remove(Keys.CENSUS_DELETION_STATE)
+            it[Keys.CENSUS_DELETION_LOCAL_CLEARED] = value.localCleared
+            if (value.installId != null) it[Keys.CENSUS_DELETION_INSTALL_ID] = value.installId else it.remove(Keys.CENSUS_DELETION_INSTALL_ID)
+            if (value.rows != null) it[Keys.CENSUS_DELETION_ROWS] = value.rows else it.remove(Keys.CENSUS_DELETION_ROWS)
+            if (value.deletedDay != null) it[Keys.CENSUS_DELETION_DAY] = value.deletedDay else it.remove(Keys.CENSUS_DELETION_DAY)
+            if (value.waitingWire != null) it[Keys.CENSUS_DELETION_WAITING] = value.waitingWire else it.remove(Keys.CENSUS_DELETION_WAITING)
+        }
     }
 
     suspend fun setCensusPolicy(value: Map<String, Int>, acceptedSchemaIds: Set<String>) {

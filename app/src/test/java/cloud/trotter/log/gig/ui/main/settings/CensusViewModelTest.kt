@@ -3,6 +3,7 @@ package cloud.trotter.log.gig.ui.main.settings
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
+import cloud.trotter.log.gig.core.data.census.CensusDataDeletion
 import cloud.trotter.log.gig.core.data.settings.DevSettingsRepository
 import cloud.trotter.log.gig.core.datastore.settings.DevSettingsDataSource
 import cloud.trotter.log.gig.domain.state.Platform
@@ -23,6 +24,8 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 
 /** #1621 (Sol round 1 S2): quick checkbox changes on the census screen never overwrite each other. */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -45,7 +48,9 @@ class CensusViewModelTest {
         val main = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(main)
         val repo = DevSettingsRepository(DevSettingsDataSource(SlowPreferences()), true, main, "test")
-        val vm = CensusViewModel(repo, readsUnboundPlatforms = true)
+        val deletion = mock<CensusDataDeletion>()
+        whenever(deletion.inProgress).thenReturn(MutableStateFlow(false))
+        val vm = CensusViewModel(repo, deletion, readsUnboundPlatforms = true)
         backgroundScope.launch { vm.uiState.collect {} }
         advanceUntilIdle()
 

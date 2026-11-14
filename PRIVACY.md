@@ -215,12 +215,16 @@ before others), who receives it (gig.log's census server, by host name, which al
 allowed, and for enough battery, and is skipped that day if it cannot start by then; over HTTPS), that it is not anonymous (the
 server can tell one phone's uploads apart for 30 days, not after), that the census can be stopped and its data on the
 server and on the phone deleted from Settings, and that the dasher's agreement with a delivery company is between the
-dasher and that company. The timing, Wi-Fi and HTTPS statements are built in every build (#1620, below); the 30-day
-and deletion statements wait on #1622, census#79, census#85 and census#86, so the disclosure carries one line for the
-build it runs in: in the Play and sideload builds, "This version has no delete button yet. The 30-day limit takes
-effect with the census server's next update" (`census_note_release`); in the debug build, that it can also send the
-text of unrecognized screens from a phone the census server trusts, with capture sharing on in developer options, and
-that the 30-day limit and deleting from Settings do not apply to it yet (`census_note_test_build`). The census screen
+dasher and that company. The timing, Wi-Fi and HTTPS statements are built in every build (#1620, below), and so is
+the button that asks the server to delete its census data (#1622, "What was sent, and deleting it" below). Deleting
+what gig.log keeps on the phone is #1579, and the server takes deletion requests (census#79) and holds the 30-day limit
+(census#86) only from its next deployment, so the disclosure carries one line for the build it runs in: in the Play and
+sideload builds, "Deleting what gig.log keeps on the phone isn't in this version yet; clearing the app's storage or
+uninstalling removes it. The 30-day limit and deleting the census server's data take effect with the census server's
+next update; until then a deletion request waits on this phone" (`census_note_release`); in the debug build, that it
+can also send the text of unrecognized screens from a phone the census server trusts, with capture sharing on in
+developer options, that the 30-day limit doesn't apply to it yet, and the same server-deletion and on-phone lines
+(`census_note_test_build`). The census screen
 also holds the choices: which delivery apps (default: every app the build reads) and Wi-Fi only (default on), saved as
 they change and read by every upload (below). Accept records the switch, a consent receipt bound to the census endpoint (§8) and the choices in one write;
 Not now, or turning the switch off, records a decline, and only a later Accept turns the census back on. Every upload
@@ -255,7 +259,51 @@ fingerprint (which covers its words), so frames that differ only in a
 customer's or a store's name are one variant. Later sightings of a variant that day add to a count in
 `filesDir/census/sampled.json`, which never leaves the phone and keeps two days. The test build's developer options
 keep Upload now for a manual run, which keeps to Wi-Fi only, is never skipped as late and does not move the daily time. Retention on the server follows ADR-0011's
-server-side commitments; deleting the server's census data from Settings is #1622.
+server-side commitments.
+
+**What was sent, and deleting it** (#1622, ADR-0011 §21). The census screen's "What gig.log sent"
+(`CensusSentScreen`) lists the census requests the server read (it answered 200, 400 or 422) in the last 7 days: per
+request its time and items, per item its kind (screen, notification, daily counts, or in the test build screen
+text), its delivery app, and for an outline its node count and how many values went as a word code, as a format
+template, as a coarse kind only, or withheld. The transport hands the exact bytes of each such request body to
+`CensusSentLog` (`CensusApi`, `CensusSentObserver`), which keeps only that summary (`CensusSentBatch.read`): no word
+code, format template, batch ID or other value from the request. The record is `filesDir/census/sent.json`, at most 60
+requests and 7 days (expired entries are dropped on every read, and leave the screen while it is open), excluded from
+backup and transfer with the other census files, and never uploaded. The screen also shows the stored target time of
+the next daily run, with the time left. "Delete my census data" (`CensusDataDeletion`) is separate from the switch
+and leaves the consent as it is. Its confirmation names what the server keeps: the install record, so the census ID
+keeps working, and today's quota row (counts and the IDs of today's batches, used to refuse a repeat), which the
+server keeps for 7 days; and what it cannot tie to the phone (cluster samples stored without an install ID, fleet
+totals, vocabulary already approved at k, published rules and synthetic fixtures, rows under destroyed epoch keys);
+and the server's backups (they keep the install's rows until they expire, at most 14 days later, and a restore
+re-applies the deletion first). Under the upload lock it stores the request as pending, queues its own retry run on
+any network (`CensusWorkScheduler.enqueueDeletion`, queued again at app start while a request is unresolved), cancels
+a waiting manual run, clears the skeleton queue and its in-flight batch (the queue's clear boundary also drops an
+outline handed to the queue before the clear and written after it), the debug build's envelopes and the unsent daily
+counts, then sends a signed `DELETE /v1/installs/me/data` with an empty body with the key of the one enrolled
+install ID the request binds at its first attempt. The screen shows the server's confirmation: the rows it erased and its UTC day (only a
+well-formed date is kept). Until the server has confirmed and the phone's queue is cleared, every census run sends the
+request first and sends nothing else, whatever the consent. The developer identity reset (test build only) never
+lets an enrolled identity go undeleted: it first runs a fresh deletion for it and resets only after the server
+confirms it and the phone's queue is cleared; otherwise it is refused, keeps the identity and says why ("The census
+server hasn't confirmed deleting this phone's data yet, so the ID can't be reset"). A never-enrolled identity resets
+freely. So the phone never keeps an old identity's key. A request the server does not answer, answers 404 (the deployed census server
+takes deletion requests only from its next update, census#79; until then the request waits on the phone and the
+screen says so) or answers 401 stays pending: a 401 can mean a bad signature as well as an unknown ID, so it never
+counts as deleted, and the ID is kept. On a 401 the phone's clock does not explain, it re-enrols the SAME ID with the
+SAME key (idempotent on the server; after a restore that erased the install, it re-creates it) and sends the DELETE
+once more; only the DELETE's own confirmation resolves the request, and an enrolment alone never does. With no census
+ID enrolled on the phone, no request is sent and the screen says so ("No deletion was
+sent: this phone had no census ID at the time"), a fact about the request, not a claim about the server; that line
+clears once the phone enrols again. A revoked install cannot delete: the census turns off and the credential is
+wiped, as on any revoke (the server deletes a revoked install's sightings itself). After a server restore from a backup
+older than a deletion, the server erases the whole install and answers 401 to uploads; once no deletion is pending,
+the worker re-enrols the SAME install ID with the SAME key (idempotent on the server; it also covers a passing
+signature failure), consent kept, and sends once more; if that enrolment fails it keeps the identity and tries again
+on the next run. It never mints a new identity on a 401, so every ID that uploaded stays one this phone can delete
+under: a new identity is minted only when there is no usable credential (none, or its key is lost), when a
+never-enrolled one conflicts, or by the developer reset, which deletes first. A 401 after the server already accepted
+a request from the same credential in that run is not treated so.
 
 Exports replace existing files with the same names in the chosen folder. Exported files survive uninstall and remain until deleted through that provider. “No direct gig.log upload” does not mean that a selected cloud folder keeps the files on the phone.
 
@@ -280,7 +328,7 @@ user: restoring history and vehicle/economy settings on a new phone is expected.
 store (`datastore/rule_capability_grants.preferences_pb`) and the Screen-events consent/receipt store
 (`datastore/consent_event_receipt.preferences_pb`) are excluded, so a new device re-asks consent. Debug logs
 (`app.log`, `shareable.log`, `shareable.log.1`, and rotations under `logs/`), captures, census files, census
-credentials, the developer-settings store (the census switch, its consent receipt and choices, capture sharing, the server policy cache and the next daily census time) and the recognition
+credentials, the developer-settings store (the census switch, its consent receipt and choices, capture sharing, the server policy cache, the next daily census time and a census deletion request) and the recognition
 notice store (`datastore/recognition_notices.preferences_pb`, #1560) are also excluded from both backup and transfer (`app/src/main/res/xml/backup_rules.xml`,
 `data_extraction_rules.xml`; #1236, dev ruling 2026-10-07).
 
@@ -388,6 +436,9 @@ identity export. Vehicle/default resets preserve these learned preferences.
   the logs and any captures. Android may restore the backed-up database and app/economy preferences on reinstall
   or a new phone; the excluded consent stores and debug logs do not restore. Gallery screenshots (§4) and files
   you exported (§6) live outside the app and stay until you delete them. A one-tap in-app wipe does not exist yet — tracked in #1579.
+- "What gig.log sent" keeps its summary of the census requests the server read for 7 days, at most 60 of them, in
+  `filesDir/census/sent.json` (§6): counts and delivery apps only, never uploaded, excluded from backup and transfer.
+  A census deletion request (its time, state and the server's confirmation) is kept in the developer-settings store.
 
 ## 8. Consent records
 
@@ -430,6 +481,18 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r22 (2026-11-13)** — §6: "What was sent, and deleting it" (#1622): the census screen lists the requests the
+  server read in the last 7 days, summarized on the phone from the request bytes (kinds, delivery apps, counts; no code,
+  value or batch ID), and "Delete my census data" clears the phone's census queue and asks the server to delete this
+  install's data, with what the server keeps (the install record, today's quota row for 7 days), what it cannot tie
+  to the phone and the 14-day backups stated before it is sent; a request the server has not confirmed (offline, a
+  401, or a 404 until the server's update) stays pending, bound to its install ID, and is sent before anything else;
+  a 401 retries after re-enrolling the same ID and key. The developer identity reset first deletes an enrolled
+  identity's data and resets only on the server's confirmation.
+  A 401 on an upload re-enrols the same ID with the same key, consent kept; a 401 never mints a new identity. The disclosure's per-build lines drop
+  "no delete button yet", say server deletion and the 30-day limit take effect with the server's next update, and
+  that deleting what gig.log keeps on the phone is not in this version. §7: the sent record and the deletion request. The in-app Privacy page's Census
+  section follows. Receipts created under r21 retain that revision.
 - **r21 (2026-11-13)** — §6: the census sends from every build, Play and sideload included, once the dasher accepts
   its disclosure (#1620); the Play and sideload builds bind the census sink and keep the no-op capture bus and envelope
   sink, so no screen text leaves those phones. New "When the census uploads": at most one send a day, at a random target

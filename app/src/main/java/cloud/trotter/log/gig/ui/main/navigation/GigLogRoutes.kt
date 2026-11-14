@@ -95,6 +95,8 @@ sealed class Screen(val route: String) {
     data object PrivacySettings : Screen("settings/privacy")
     /** #1621 — the census opt-in and its disclosure. */
     data object CensusSettings : Screen("settings/census")
+    /** #1622 — what the census sent in the last 7 days. */
+    data object CensusSent : Screen("settings/census/sent")
     data object Garage : Screen("settings/garage")
     data object VehicleAdd : Screen("settings/garage/add")
     data object VehicleEdit : Screen("settings/garage/vehicle/{vehicleId}") {
@@ -118,7 +120,7 @@ sealed class Screen(val route: String) {
             Dashboard.route, Analytics.route, WeeklyPlan.route, Playbook.route,
             SettingsHome.route, AboutSettings.route,
             StrategySettings.route, EvidenceSettings.route, DataExport.route,
-            ConsentSettings.route, PrivacySettings.route, CensusSettings.route,
+            ConsentSettings.route, PrivacySettings.route, CensusSettings.route, CensusSent.route,
             Garage.route, VehicleAdd.route,
             EconomySettings.route, GeneralSettings.route, DeveloperSettings.route,
             PlatformSettings.route,

@@ -1,9 +1,12 @@
 package cloud.trotter.log.gig.core.data.di
 
+import cloud.trotter.log.gig.core.data.census.CensusSentLog
 import cloud.trotter.log.gig.core.data.census.HttpCensusSink
+import cloud.trotter.log.gig.core.network.census.CensusSentObserver
 import cloud.trotter.log.gig.domain.capture.CensusSink
 import dagger.Binds
 import dagger.Module
+import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
@@ -19,4 +22,11 @@ abstract class CensusSinkModule {
     @Binds
     @Singleton
     abstract fun bindCensusSink(impl: HttpCensusSink): CensusSink
+
+    companion object {
+        /** #1622: the transport tells the phone's sent record each body the server read. */
+        @Provides
+        @Singleton
+        fun provideCensusSentObserver(log: CensusSentLog): CensusSentObserver = CensusSentObserver(log::record)
+    }
 }

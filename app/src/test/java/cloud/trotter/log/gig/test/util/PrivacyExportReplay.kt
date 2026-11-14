@@ -20,6 +20,9 @@ import cloud.trotter.log.gig.core.datastore.capability.RuleCapabilityDataSource
 import cloud.trotter.log.gig.core.datastore.settings.DevSettingsDataSource
 import cloud.trotter.log.gig.core.network.census.CensusApi
 import cloud.trotter.log.gig.core.network.census.CensusApiFactory
+import cloud.trotter.log.gig.core.network.census.CensusSentObserver
+import cloud.trotter.log.gig.core.data.census.CensusDataDeletion
+import cloud.trotter.log.gig.core.data.census.CensusSentLog
 import cloud.trotter.log.gig.core.network.census.CensusTransport
 import cloud.trotter.log.gig.core.network.di.ClientProfile
 import cloud.trotter.log.gig.core.network.di.NetworkClientFactory
@@ -184,13 +187,18 @@ class PrivacyExportReplay(
             Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(status).message("scripted")
                 .body(response.toResponseBody("application/json".toMediaType())).build()
         }.build()
-    private val apiFactory = object : CensusApiFactory() {
+    /** #1622: the production sent record, fed by the production transport's own bytes. */
+    val sentLog = CensusSentLog(context, io)
+    val sentFile: File get() = File(context.filesDir, "census/sent.json")
+    private val apiFactory = object : CensusApiFactory(CensusSentObserver(sentLog::record)) {
         override fun create(baseUrl: String): CensusTransport {
             factoryCalls++
-            return CensusApi(client, "https://census.invalid")
+            return CensusApi(client, "https://census.invalid", CensusSentObserver(sentLog::record))
         }
     }
     private val lock = CensusUploadLock()
+    private val deletion = CensusDataDeletion(credentials, skeletonSpool, envelopeSink, health, preferences, scheduling, lock,
+        apiFactory, backgroundScope, "privacy-e2e")
 
     /** Load unchanged generated assets before starting the only collectors of the production outputs. */
     suspend fun start() {
@@ -272,7 +280,7 @@ class PrivacyExportReplay(
                     CensusUploadWorker(appContext, workerParameters, preferences, credentials, skeletonSpool, apiFactory,
                         CensusUploadPlanner(preferences, scheduling, Clock.systemUTC()), unmetered, uploadStats, lock, health,
                         metadata,
-                        envelopeSpool, envelopeSink)
+                        envelopeSpool, envelopeSink, deletion)
             }).build()
         assertEquals("worker completes", ListenableWorker.Result.success(), worker.doWork())
         settle()
@@ -307,6 +315,7 @@ class PrivacyExportReplay(
         override fun enqueueNow(wifiOnly: Boolean, replaceQueued: Boolean) { requests += "now:$wifiOnly:$replaceQueued" }
         override fun scheduleDaily(runAtMillis: Long, wifiOnly: Boolean) { requests += "daily:$runAtMillis:$wifiOnly" }
         override fun cancelManual() { requests += "cancel" }
+        override fun enqueueDeletion() { requests += "delete" }
     }
 
     /** Drain writes before cancellation, including private production IO consumers, then release HTTP. */

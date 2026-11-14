@@ -325,4 +325,57 @@ class CensusApiTest {
         assertEquals(reasons.associate { it.wire to 1 } + ("unknown_reason" to 5), result.rejected)
     }
 
+    @Test fun `delete my data is a signed DELETE with an empty body and decodes only the closed fields`() = runTest {
+        respond(200, "{\"status\":\"deleted\",\"rows\":12,\"deletedDay\":\"2026-11-13\",\"completionDeadline\":\"2026-11-14\"}")
+        assertEquals(DeleteResult.Deleted(12, "2026-11-13"), api.deleteData(credential))
+        val request = requireNotNull(server.takeRequest(1, TimeUnit.SECONDS))
+        assertEquals("DELETE", request.method)
+        assertEquals("/v1/installs/me/data", request.url.encodedPath)
+        val bytes = request.body?.toByteArray() ?: ByteArray(0)
+        assertEquals(0, bytes.size)
+        val ts = requireNotNull(request.headers[CensusHeaders.TIMESTAMP])
+        assertTrue(RequestSigner.verify(credential.secret, RequestSigner.canonical("DELETE", "/v1/installs/me/data", ts, bytes),
+            requireNotNull(request.headers[CensusHeaders.SIGNATURE])))
+
+        // A day that is not a date never reaches the phone's store.
+        respond(200, "{\"status\":\"deleted\",\"rows\":1,\"deletedDay\":\"2026-13-40\"}")
+        assertTrue(api.deleteData(credential) is DeleteResult.TransportFailure)
+        respond(200, "{\"status\":\"deleted\",\"rows\":1,\"deletedDay\":\"<b>x</b>\"}")
+        assertTrue(api.deleteData(credential) is DeleteResult.TransportFailure)
+        respond(401, "{\"error\":\"unauthorized\"}")
+        assertTrue(api.deleteData(credential) is DeleteResult.Unauthorized)
+        respond(401, "{\"error\":\"revoked\"}")
+        assertEquals(DeleteResult.Revoked, api.deleteData(credential))
+        respond(429, "{\"error\":\"rate_limited\"}")
+        assertEquals(DeleteResult.RateLimited(17), api.deleteData(credential))
+        respond(503, "{\"error\":\"db_unavailable\"}")
+        assertEquals(DeleteResult.ServerUnavailable(503), api.deleteData(credential))
+    }
+
+    @Test fun `the sent observer gets the exact bytes of each body the server read, and nothing else`() = runTest {
+        val seen = mutableListOf<Pair<String, ByteArray>>()
+        val observed = CensusApi(client, server.url("/").toString().removeSuffix("/"), CensusSentObserver { path, body -> seen += path to body })
+        val items = listOf("{\"root\":{}}")
+        respond(200, accepted)
+        observed.uploadSkeletons(credential, "b1", items)
+        val wire = requireNotNull(server.takeRequest(1, TimeUnit.SECONDS)).body!!.toByteArray()
+        respond(422, "{\"rejected\":{\"bad_hash\":1}}")
+        observed.uploadSkeletons(credential, "b2", items)
+        respond(503, "{}")
+        observed.uploadSkeletons(credential, "b3", items)
+        respond(429, "{\"error\":\"budget_exhausted\"}")
+        observed.postHealth(credential, listOf("{\"day\":\"2026-11-12\"}"))
+        respond(200, "{\"status\":\"deleted\",\"rows\":0,\"deletedDay\":\"2026-11-13\"}")
+        observed.deleteData(credential)
+
+        assertEquals(listOf("/v1/skeletons", "/v1/skeletons"), seen.map { it.first })
+        assertArrayEquals(wire, seen.first().second)
+        assertArrayEquals(CensusApi.batchBody("b2", items), seen.last().second)
+    }
+
+    @Test fun `a failing sent observer never changes the result`() = runTest {
+        val failing = CensusApi(client, server.url("/").toString().removeSuffix("/"), CensusSentObserver { _, _ -> error("disk full") })
+        respond(200, accepted)
+        assertTrue(failing.uploadSkeletons(credential, "b1", emptyList()) is UploadResult.Accepted)
+    }
 }

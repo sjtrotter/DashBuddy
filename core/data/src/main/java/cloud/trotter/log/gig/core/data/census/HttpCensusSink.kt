@@ -44,7 +44,10 @@ class HttpCensusSink @Inject constructor(
     // Wait for the persisted policy snapshot before enabling publication after process restart.
     override val isEnabled: Boolean get() = enabled.value && schemas.value != null
     override val acceptedSchemaIds: Set<String> get() = schemas.value.orEmpty()
-    private val channel = Channel<CensusRecord>(
+    /** A record with the spool's clear boundary at the moment it was offered (#1622). */
+    private class Offered(val record: CensusRecord, val generation: Long)
+
+    private val channel = Channel<Offered>(
         capacity = 256,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
         onUndeliveredElement = { stats.spoolDropped.incrementAndGet() },
@@ -53,7 +56,8 @@ class HttpCensusSink @Inject constructor(
     init {
         scope.launch(io) {
             try {
-                for (record in channel) {
+                for (offered in channel) {
+                    val record = offered.record
                     if (!isEnabled) {
                         stats.spoolDropped.incrementAndGet()
                         continue
@@ -69,7 +73,7 @@ class HttpCensusSink @Inject constructor(
                             stats.sampledRepeat.incrementAndGet()
                             continue
                         }
-                        spool.append(record)
+                        spool.append(record, offered.generation)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {
@@ -85,5 +89,5 @@ class HttpCensusSink @Inject constructor(
         }
     }
 
-    override fun offer(record: CensusRecord): Boolean = channel.trySend(record).isSuccess
+    override fun offer(record: CensusRecord): Boolean = channel.trySend(Offered(record, spool.generation)).isSuccess
 }
