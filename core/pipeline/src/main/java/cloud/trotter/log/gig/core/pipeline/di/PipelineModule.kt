@@ -7,8 +7,6 @@ import cloud.trotter.log.gig.core.pipeline.PipelineStats
 import cloud.trotter.log.gig.core.pipeline.PlatformAppVersions
 import cloud.trotter.log.gig.core.pipeline.RecognitionHealthMonitor
 import cloud.trotter.log.gig.core.pipeline.ReplayMetadataProviderImpl
-import cloud.trotter.log.gig.core.pipeline.rules.JsonRuleInterpreter
-import cloud.trotter.log.gig.core.pipeline.rules.ScreenRedactionSource
 import cloud.trotter.log.gig.domain.pipeline.RecognitionIncidents
 import dagger.Binds
 import dagger.Module
@@ -27,11 +25,6 @@ abstract class PipelineModule {
 
     @Binds @Singleton
     abstract fun bindReplayMetadataProvider(impl: ReplayMetadataProviderImpl): ReplayMetadataProvider
-
-    // #598: the capture stage's rule-declared redaction seam is the interpreter
-    // that owns the loaded rulesets.
-    @Binds @Singleton
-    abstract fun bindScreenRedactionSource(impl: JsonRuleInterpreter): ScreenRedactionSource
 
     // #1560: Home reads the open recognition incidents from their one owner.
     @Binds @Singleton

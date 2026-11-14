@@ -117,12 +117,14 @@ class AccessibilityPipeline @Inject constructor(
             }
             ready
         }
-        // Classify through the unified rule engine (typed: FlowObservation, #361)
-        .map { event -> classifier.classify(event) to event }
+        // Classify through the unified rule engine (typed: FlowObservation, #361). The
+        // classifying generation rides along to the capture stage (#1568).
+        .map { event -> classifier.classifyFrame(event) to event }
 
         // Gate: drop sensitive/noise observations (pledge: never store or
         // forward) — the shared content gate (#399).
-        .filter { (obs, _) ->
+        .filter { (classified, _) ->
+            val obs = classified.observation
             val passes = passesContentGates(obs)
             if (!passes) stats.onContentGateDrop(obs.parsed)
             passes
@@ -147,7 +149,8 @@ class AccessibilityPipeline @Inject constructor(
         // content hash in a rolling seen-set (#360) — lastIdentity semantics
         // (an UNKNOWN interlude doesn't reset known-screen dedup) are preserved
         // inside FrameGate.
-        .mapNotNull { (obs, event) ->
+        .mapNotNull { (classified, event) ->
+            val obs = classified.observation
             val contentHash = when (event) {
                 is PipelineEvent.Screen -> event.tree.stableHash
                 is PipelineEvent.Click ->
@@ -180,12 +183,13 @@ class AccessibilityPipeline @Inject constructor(
             // unchecked downcasts (#361).
             val captured = when {
                 obs is Observation.Screen && event is PipelineEvent.Screen ->
-                    captureWriter.captureScreen(obs, event)
+                    captureWriter.captureScreen(obs, event, classified.redaction)
                 obs is Observation.Click && event is PipelineEvent.Click ->
                     // #438 item 2: capture with the click's own per-platform screen context —
                     // its classification (envelope context) AND the rule that produced it
-                    // (#910: the click envelope inherits that rule's `redact`).
-                    captureWriter.captureClick(obs, event, obs.screenTarget, obs.screenRuleId)
+                    // (#910: the click envelope inherits that rule's `redact`, read from the
+                    // generation that classified that screen, #1568).
+                    captureWriter.captureClick(obs, event, obs.screenTarget, obs.screenRuleId, classified.redaction)
                 else -> obs
             }
             // #1146 census publisher (ADR-0011): UNKNOWN screens only, post-admission, AFTER the capture

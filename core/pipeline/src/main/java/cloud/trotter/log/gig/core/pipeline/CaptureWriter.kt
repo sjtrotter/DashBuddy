@@ -28,18 +28,20 @@ import javax.inject.Singleton
  * mechanics now live here, and the pipelines stay orchestration-only.
  *
  * Each method returns the observation with its `captureId` stamped (null when
- * the bus deduped or skipped the write).
+ * the bus deduped or skipped the write). Rule-declared redaction comes from the
+ * `redaction` argument, the generation that classified the frame
+ * ([ObservationClassifier.classifyFrame]), never the live rules (#1568).
  */
 @Singleton
 class CaptureWriter @Inject constructor(
     private val captureBus: CaptureBus,
     private val stats: PipelineStats,
-    private val redactionSource: ScreenRedactionSource,
 ) {
 
     fun captureScreen(
         obs: Observation.Screen,
         event: PipelineEvent.Screen,
+        redaction: ScreenRedactionSource,
     ): Observation.Screen {
         // #435 item 5: a disabled bus (release NoOpCaptureBus) discards every offer,
         // so skip the full tree→DTO→JSON→reparse→pretty-print envelope build here —
@@ -90,7 +92,7 @@ class CaptureWriter @Inject constructor(
         // envelope-only — recognition, parse, the state machine, and the dedup
         // contentHash all ran / run on the ORIGINAL tree (event.tree). UNKNOWN
         // frames have no ruleId, so this consults nothing (redactedTree == event.tree).
-        val redact = obs.ruleId?.let { redactionSource.redactFor(it) }
+        val redact = obs.ruleId?.let { redaction.redactFor(it) }
         val redactedTree = redact?.apply(event.tree) ?: event.tree
         // Customer-PII text-marker backstop over the envelope-bound tree, for BOTH
         // frame classes (one marker SSOT, cross-platform DATA — principle 8):
@@ -144,12 +146,15 @@ class CaptureWriter @Inject constructor(
      *   the screen was UNKNOWN / unattributable. Drives the #910 screen-redact
      *   inheritance below; fail-OPEN by construction (a null id, a rule with no
      *   `redact`, leaves the node untouched — exactly as before #910).
+     * @param screenRedaction the generation that classified that screen; [screenRuleId] is
+     *   looked up there.
      */
     fun captureClick(
         obs: Observation.Click,
         event: PipelineEvent.Click,
         screenTarget: String?,
         screenRuleId: String?,
+        screenRedaction: ScreenRedactionSource,
     ): Observation.Click {
         // #435 item 5: skip the envelope build for a disabled bus (see captureScreen).
         if (!captureBus.isEnabled) return obs
@@ -177,7 +182,7 @@ class CaptureWriter @Inject constructor(
         // simply don't match (fail toward keeping) — the full-frame screen envelope is the
         // primary control for those; the id/text entries that name the tapped node itself
         // are what carry here.
-        val screenRedact = screenRuleId?.let { redactionSource.redactFor(it) }
+        val screenRedact = screenRuleId?.let { screenRedaction.redactFor(it) }
         val redactedNode = screenRedact?.apply(event.node) ?: event.node
         // #806 customer-PII backstop for the click node, on EVERY click (#1147 review X2),
         // mirroring the screen path: a Compose button's click-action label, hint or tooltip is
@@ -334,6 +339,7 @@ class CaptureWriter @Inject constructor(
     fun captureNotification(
         obs: Observation.Notification,
         raw: RawNotificationData,
+        redaction: ScreenRedactionSource,
     ): Observation.Notification {
         // #435 item 5: skip the envelope build for a disabled bus (see captureScreen).
         if (!captureBus.isEnabled) return obs
@@ -367,7 +373,7 @@ class CaptureWriter @Inject constructor(
         // redact is a no-op for them; their customer-PII control is the marker
         // backstop below (#806) plus the SensitiveTextMarkers drop above.
         val originalContentHash = raw.contentHash
-        val notifRedact = obs.ruleId?.let { redactionSource.notifRedactFor(it) }
+        val notifRedact = obs.ruleId?.let { redaction.notifRedactFor(it) }
         val redactedRaw = notifRedact?.apply(raw) ?: raw
         // Customer-PII notification backstop over the envelope-bound raw, for BOTH
         // frame classes (one marker SSOT — the scan covers all 5 flat text fields via

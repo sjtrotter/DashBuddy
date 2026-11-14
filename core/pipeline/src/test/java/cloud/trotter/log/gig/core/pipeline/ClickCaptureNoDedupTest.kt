@@ -30,7 +30,7 @@ import org.mockito.kotlin.whenever
 class ClickCaptureNoDedupTest {
 
     private val captureBus: CaptureBus = mock { on { isEnabled } doReturn true }
-    private val writer = CaptureWriter(captureBus, PipelineStats(), NoRedaction)
+    private val writer = CaptureWriter(captureBus, PipelineStats())
 
     private fun clickObs(t: Long) = Observation.Click(
         timestamp = t,
@@ -55,8 +55,8 @@ class ClickCaptureNoDedupTest {
             .thenReturn("cap-1")
 
         // The same button tapped twice — identical node content, identical screen.
-        writer.captureClick(clickObs(1_000L), clickEvent(1_000L), screenTarget = "offer_popup", screenRuleId = null)
-        writer.captureClick(clickObs(2_000L), clickEvent(2_000L), screenTarget = "offer_popup", screenRuleId = null)
+        writer.captureClick(clickObs(1_000L), clickEvent(1_000L), screenTarget = "offer_popup", screenRuleId = null, screenRedaction = NoRedaction)
+        writer.captureClick(clickObs(2_000L), clickEvent(2_000L), screenTarget = "offer_popup", screenRuleId = null, screenRedaction = NoRedaction)
 
         val hashCaptor = argumentCaptor<Int?>()
         verify(captureBus, times(2)).offer(

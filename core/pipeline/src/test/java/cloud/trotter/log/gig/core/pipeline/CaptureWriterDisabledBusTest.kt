@@ -32,7 +32,7 @@ class CaptureWriterDisabledBusTest {
 
     private val disabledBus: CaptureBus = mock { on { isEnabled } doReturn false }
     private val stats = PipelineStats()
-    private val writer = CaptureWriter(disabledBus, stats, NoRedaction)
+    private val writer = CaptureWriter(disabledBus, stats)
 
     private fun screenObs() = Observation.Screen(
         timestamp = 1_000L,
@@ -56,7 +56,7 @@ class CaptureWriterDisabledBusTest {
             packageName = "com.doordash.driverapp",
         )
 
-        val result = writer.captureScreen(obs, event)
+        val result = writer.captureScreen(obs, event, NoRedaction)
 
         verify(disabledBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
         assertSame("observation must pass through untouched (captureId stays null)", obs, result)
@@ -80,7 +80,7 @@ class CaptureWriterDisabledBusTest {
             packageName = "com.doordash.driverapp",
         )
 
-        val result = writer.captureClick(obs, event, screenTarget = "offer_popup", screenRuleId = null)
+        val result = writer.captureClick(obs, event, screenTarget = "offer_popup", screenRuleId = null, screenRedaction = NoRedaction)
 
         verify(disabledBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
         assertSame("observation must pass through untouched (captureId stays null)", obs, result)
@@ -104,7 +104,7 @@ class CaptureWriterDisabledBusTest {
             packageName = "com.doordash.driverapp", postTime = 1_000L, isClearable = true,
         )
 
-        val result = writer.captureNotification(obs, raw)
+        val result = writer.captureNotification(obs, raw, NoRedaction)
 
         verify(disabledBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
         assertSame("observation must pass through untouched (captureId stays null)", obs, result)

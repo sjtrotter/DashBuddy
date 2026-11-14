@@ -27,7 +27,7 @@ class ChatIdRuntimeScrubEnvelopeTest {
     }
 
     private val bus = RecordingBus()
-    private val writer = CaptureWriter(bus, PipelineStats(), NoRedaction)
+    private val writer = CaptureWriter(bus, PipelineStats())
 
     private fun capture(vararg nodes: UiNode): String {
         val tree = UiNode(className = "android.widget.LinearLayout", children = nodes.toList()).restoreParents()
@@ -42,6 +42,7 @@ class ChatIdRuntimeScrubEnvelopeTest {
                 snapshot = TreeSnapshot(tree = tree, packageName = "com.doordash.driverapp"),
                 packageName = "com.doordash.driverapp",
             ),
+            NoRedaction,
         )
         return bus.envelopes.last()
     }
@@ -107,6 +108,7 @@ class ChatIdRuntimeScrubEnvelopeTest {
                 snapshot = TreeSnapshot(tree = tree, packageName = "com.doordash.driverapp"),
                 packageName = "com.doordash.driverapp",
             ),
+            NoRedaction,
         )
         assertTrue("the sensitive frame must be dropped", bus.envelopes.size == before)
     }
@@ -122,6 +124,7 @@ class ChatIdRuntimeScrubEnvelopeTest {
             PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
             screenTarget = screenRuleId?.let { "chat_conversation" },
             screenRuleId = screenRuleId,
+            screenRedaction = NoRedaction,
         )
         return bus.envelopes.single()
     }

@@ -282,7 +282,7 @@ object RuleCompiler {
         // #293 item 3: typed id/priority — a missing/mistyped field is a
         // RuleCompileException naming the field, never a raw NPE/CCE from `!!`.
         val id = requireStringField(obj, "id", ruleId = null)
-        val priority = requireIntField(obj, "priority", ruleId = id)
+        val priority = requirePriority(obj, id)
 
         // #293 item 5: unknown top-level rule keys (the `"overridable"` typo,
         // `"if_"`) are a typed reject naming them, not a silent default.

@@ -14,6 +14,7 @@ import cloud.trotter.log.gig.core.pipeline.census.NotificationSkeletonBuilder.Re
 import cloud.trotter.log.gig.core.pipeline.census.SkeletonPublisher
 import cloud.trotter.log.gig.core.pipeline.notification.input.NotificationSource
 import cloud.trotter.log.gig.core.pipeline.rules.JsonRuleInterpreter
+import cloud.trotter.log.gig.core.pipeline.rules.RuleGeneration
 import cloud.trotter.log.gig.core.pipeline.rules.ScreenRedactionSource
 import cloud.trotter.log.gig.domain.capture.CaptureBus
 import cloud.trotter.log.gig.domain.capture.CensusRecord
@@ -53,7 +54,7 @@ class NotificationPipelineCensusTest {
         }
         val bus: CaptureBus = mock { on { isEnabled } doReturn captureEnabled }
         val interpreter: JsonRuleInterpreter = mock {
-            on { notificationRuleset } doReturn TestRulesetFactory.notificationRuleset
+            on { generation } doReturn RuleGeneration(notifications = TestRulesetFactory.notificationRuleset)
             on { isLoaded } doReturn true
         }
         val source = NotificationSource()
@@ -75,7 +76,7 @@ class NotificationPipelineCensusTest {
         }
         val pipeline = NotificationPipeline(source, NotificationFilter(prefs),
             ObservationClassifier(interpreter, mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY }, PlatformAppVersions.NONE),
-            CaptureWriter(bus, stats, object : ScreenRedactionSource { override fun redactFor(ruleId: String) = null }),
+            CaptureWriter(bus, stats),
             prefs, stats, SkeletonPublisher(sink, stats, NoOpCensusEnvelopeSink))
     }
 

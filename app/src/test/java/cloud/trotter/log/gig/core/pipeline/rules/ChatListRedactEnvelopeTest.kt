@@ -34,9 +34,10 @@ class ChatListRedactEnvelopeTest {
 
     private val ruleset = TestRulesetFactory.screenRuleset
     private val bus = RecordingBus()
-    private val writer = CaptureWriter(bus, PipelineStats(), object : ScreenRedactionSource {
+    private val redaction = object : ScreenRedactionSource {
         override fun redactFor(ruleId: String): CompiledRedact? = ruleset.ruleById(ruleId)?.redact
-    })
+    }
+    private val writer = CaptureWriter(bus, PipelineStats())
 
     @Test
     fun `a recognized chat list masks the customer name with the customerNameHash hex and the message plain`() {
@@ -60,6 +61,7 @@ class ChatListRedactEnvelopeTest {
                 snapshot = TreeSnapshot(tree = tree, packageName = "com.doordash.driverapp"),
                 packageName = "com.doordash.driverapp",
             ),
+            redaction,
         )
         val envelope = bus.envelopes.single()
         assertTrue(envelope, !envelope.contains("Riley"))

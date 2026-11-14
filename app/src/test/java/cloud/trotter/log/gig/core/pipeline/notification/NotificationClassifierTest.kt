@@ -8,6 +8,7 @@ import cloud.trotter.log.gig.domain.capture.ReplayMetadataProvider
 import cloud.trotter.log.gig.core.pipeline.ObservationClassifier
 import cloud.trotter.log.gig.core.pipeline.PipelineEvent
 import cloud.trotter.log.gig.core.pipeline.rules.JsonRuleInterpreter
+import cloud.trotter.log.gig.core.pipeline.rules.RuleGeneration
 import cloud.trotter.log.gig.test.util.TestRulesetFactory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -27,7 +28,7 @@ class NotificationClassifierTest {
 
     private val classifier = ObservationClassifier(
         mock<JsonRuleInterpreter> {
-            on { notificationRuleset } doReturn TestRulesetFactory.notificationRuleset
+            on { generation } doReturn RuleGeneration(notifications = TestRulesetFactory.notificationRuleset)
         },
         mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
         PlatformAppVersions.NONE,

@@ -71,7 +71,7 @@ class ScrubDiagnosticSurvivesSinkTest {
         val recording = RecordingTree()
         Timber.plant(recording)
         try {
-            CaptureWriter(SinkBus, PipelineStats(), NoRedact).captureClick(
+            CaptureWriter(SinkBus, PipelineStats()).captureClick(
                 Observation.Click(
                     timestamp = 1_000L, captureId = null, ruleId = null,
                     metadata = ReplayMetadata.EMPTY, flow = null, modeHint = null,
@@ -84,6 +84,7 @@ class ScrubDiagnosticSurvivesSinkTest {
                 ),
                 screenTarget = null,
                 screenRuleId = null,
+                screenRedaction = NoRedact,
             )
         } finally {
             Timber.uproot(recording)

@@ -6,6 +6,7 @@ import cloud.trotter.log.gig.core.pipeline.PlatformAppVersions
 import cloud.trotter.log.gig.core.pipeline.SensitiveTextMarkers
 import cloud.trotter.log.gig.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.log.gig.core.pipeline.rules.JsonRuleInterpreter
+import cloud.trotter.log.gig.core.pipeline.rules.RuleGeneration
 import cloud.trotter.log.gig.core.pipeline.rules.Ruleset
 import cloud.trotter.log.gig.domain.capture.ReplayMetadata
 import cloud.trotter.log.gig.domain.capture.ReplayMetadataProvider
@@ -62,7 +63,7 @@ class SensitiveSurfaceBlockTest {
     private val screenRuleset: Ruleset<UiNode> by lazy { TestRulesetFactory.screenRuleset }
 
     private val classifier = ObservationClassifier(
-        mock<JsonRuleInterpreter> { on { screenRuleset } doReturn TestRulesetFactory.screenRuleset },
+        mock<JsonRuleInterpreter> { on { generation } doReturn RuleGeneration(screens = TestRulesetFactory.screenRuleset) },
         mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
         PlatformAppVersions.NONE,
     )

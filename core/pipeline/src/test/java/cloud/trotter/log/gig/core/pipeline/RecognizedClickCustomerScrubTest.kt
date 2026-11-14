@@ -31,7 +31,7 @@ class RecognizedClickCustomerScrubTest {
         ): String { offered += envelopeJson; return captureId }
     }
     private val stats = PipelineStats()
-    private val writer = CaptureWriter(bus, stats, NoRedaction)
+    private val writer = CaptureWriter(bus, stats)
 
     private fun recognizedClick(node: UiNode): String = recognizedClickOrNull(node)!!
 
@@ -46,6 +46,7 @@ class RecognizedClickCustomerScrubTest {
             PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
             screenTarget = "offer_popup",
             screenRuleId = "doordash.screen.offer_popup",
+            screenRedaction = NoRedaction,
         )
         return offered.singleOrNull()
     }

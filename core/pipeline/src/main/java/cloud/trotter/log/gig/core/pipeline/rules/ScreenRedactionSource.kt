@@ -1,10 +1,10 @@
 package cloud.trotter.log.gig.core.pipeline.rules
 
 /**
- * Narrow read seam (#598) the capture stage uses to fetch a recognized screen
- * rule's compiled `redact` directives, without depending on the whole rule
- * interpreter. Implemented by [JsonRuleInterpreter] (Hilt-bound); tests pass a
- * stub.
+ * Narrow read seam (#598) the capture stage uses to fetch a recognized rule's
+ * compiled `redact` directives. Implemented by [RuleGeneration]: the capture stage
+ * is handed the generation that classified the frame (#1568), never the live one.
+ * Tests pass a stub.
  */
 interface ScreenRedactionSource {
     /**

@@ -28,6 +28,16 @@ internal fun requireIntField(obj: JsonObject, field: String, ruleId: String?): I
 }
 
 /**
+ * A rule's priority (#293 item 3), refused below zero for every source, bundled and remote (#1568). The
+ * schema has always said `minimum: 0`; the compiler is the gate a remote rule set actually meets.
+ */
+internal fun requirePriority(obj: JsonObject, ruleId: String): Int {
+    val priority = requireIntField(obj, "priority", ruleId)
+    if (priority < 0) throw ruleError(ruleId, "'priority' must be 0 or more, got: $priority")
+    return priority
+}
+
+/**
  * A rule-authoring-level error (missing/mistyped id or priority, unknown
  * key, bad platform prefix) — tagged isolable: worst case is one surface
  * degrading to UNKNOWN. The isolation loop's sensitive belt still rejects
