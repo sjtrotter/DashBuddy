@@ -76,6 +76,8 @@
     <string name="census_review_ask_cancel">Annuler</string>
     <string name="census_review_screen_asked">Envoyé au développeur. Le serveur du recensement le supprime avant le %1$s.</string>
     <string name="census_review_screen_asked_unconfirmed">Envoyé au développeur, mais gig.log n\'a pas pu confirmer que le serveur a gardé le même schéma que celui de cet écran. Le serveur du recensement le supprime avant le %1$s.</string>
+    <string name="census_review_screen_asked_unread">Envoyé au développeur, mais gig.log n\'a pas pu lire la confirmation du serveur. Le serveur du recensement le supprime après 3 jours.</string>
+    <string name="census_review_screen_asked_unknown">gig.log n\'a pas pu savoir si cet écran est parvenu au développeur, donc il ne l\'enverra pas de nouveau. S\'il est arrivé, le serveur du recensement le supprime après 3 jours.</string>
     <string name="census_review_ask_later">Le serveur du recensement est en pause ou les questions au développeur d\'aujourd\'hui sont épuisées. Rien n\'a été envoyé ; réessayez plus tard.</string>
     <string name="census_review_ask_unreachable">gig.log n\'a pas pu joindre le serveur du recensement. Rien n\'a été envoyé ; réessayez plus tard.</string>
     <string name="census_review_ask_refused">Le serveur du recensement n\'a pas pu accepter cet écran, donc rien n\'a été envoyé au développeur.</string>

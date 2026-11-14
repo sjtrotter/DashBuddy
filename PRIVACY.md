@@ -419,9 +419,13 @@ counts, drafts from or backs it up unless the developer approves a cleaned-up co
 `expiresDay`, 3 UTC days after receipt. The phone hashes the exact bytes it sent and compares them with the server's
 `artifactSha256`: on a match the screen says it went to the developer and the day the server deletes it by; on a
 mismatch it says gig.log could not confirm the server kept the same outline, logs a WARN with no content, and never
-sends it again. Either way the candidate and its words leave the queue, and no review is sent for it. A refusal
-(`422 bad_artifact`, `503 quarantine_unconfigured`, the server paused, today's quota spent, no network) sends nothing
-and keeps the candidate, and the screen says which; `403 grant_required` or `401 revoked` stops the session as for
+sends it again. Either way the candidate and its words leave the queue, and no review is sent for it. When the
+server may hold the item but the phone cannot confirm it (a 200 whose answer cannot be read; a connection that failed
+after it was made; a 5xx with no known error; the screen left while the request was out), the candidate is retired the
+same way, never sent again, the screen says gig.log couldn't read the confirmation or couldn't tell whether it reached
+the developer, and a WARN with no content records it. A definite refusal (`422 bad_artifact`, `503
+quarantine_unconfigured`, the server paused, today's quota spent, or no connection made at all) sends nothing and keeps
+the candidate, and the screen says which; `403 grant_required` or `401 revoked` stops the session as for
 Send. The request is not listed under "What gig.log sent". The INFO log says only how many confirmations, labels and
 words went and whether a note was picked.
 

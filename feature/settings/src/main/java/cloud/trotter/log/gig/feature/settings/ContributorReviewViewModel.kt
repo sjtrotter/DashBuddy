@@ -42,10 +42,8 @@ data class ReviewUiState(
     val failure: SendOutcome? = null,
     /** #1627: the last Ask the developer that sent nothing. */
     val askFailure: AskRefusal? = null,
-    /** #1627: after Ask the developer: the UTC day the server deletes the item by. */
-    val askedExpiresDay: String? = null,
-    /** #1627: the server's hash of what it sealed did not match the phone's. */
-    val askUnconfirmed: Boolean = false,
+    /** #1627: how the last Ask the developer that reached (or may have reached) the server went; set in ASKED. */
+    val asked: AskOutcome? = null,
     val shiftLive: Boolean = false,
 ) {
     val canSend: Boolean get() = phase == ReviewPhase.READY && (confirmed.isNotEmpty() || roles.isNotEmpty())
@@ -88,13 +86,9 @@ internal fun ReviewUiState.sent(outcome: SendOutcome): ReviewUiState {
 /** #1627: an Ask the developer's outcome, unless the grant ended while it ran. */
 internal fun ReviewUiState.asked(outcome: AskOutcome): ReviewUiState {
     if (phase != ReviewPhase.ASKING) return this
-    fun done(expiresDay: String, unconfirmed: Boolean) = copy(
-        phase = ReviewPhase.ASKED, review = null, confirmed = emptySet(), roles = emptyMap(),
-        askedExpiresDay = expiresDay, askUnconfirmed = unconfirmed,
-    )
+    fun done() = copy(phase = ReviewPhase.ASKED, review = null, confirmed = emptySet(), roles = emptyMap(), asked = outcome)
     return when (outcome) {
-        is AskOutcome.Sent -> done(outcome.expiresDay, unconfirmed = false)
-        is AskOutcome.Unconfirmed -> done(outcome.expiresDay, unconfirmed = true)
+        is AskOutcome.Sent, is AskOutcome.Unconfirmed, AskOutcome.ReceiptUnreadable, AskOutcome.MaybeSent -> done()
         is AskOutcome.NotSent -> when (outcome.reason) {
             AskRefusal.NOT_FOUND -> copy(phase = ReviewPhase.NOT_FOUND, review = null)
             AskRefusal.NOT_ALLOWED, AskRefusal.INSTALL_REVOKED -> grantEnded()

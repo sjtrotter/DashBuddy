@@ -46,6 +46,7 @@ import cloud.trotter.census.contract.contributor.ContributorRole
 import cloud.trotter.census.contract.contributor.ContributorSlots
 import cloud.trotter.census.contract.contributor.QuarantineNote
 import cloud.trotter.census.contract.contributor.SlotClass
+import cloud.trotter.log.gig.core.data.census.contributor.AskOutcome
 import cloud.trotter.log.gig.core.data.census.contributor.AskRefusal
 import cloud.trotter.log.gig.core.data.census.contributor.ClassesState
 import cloud.trotter.log.gig.core.data.census.contributor.ReviewRow
@@ -138,10 +139,12 @@ fun ContributorReviewContent(
 @Composable
 private fun phaseMessage(state: ReviewUiState): String? = when {
     state.phase == ReviewPhase.SENT -> stringResource(R.string.census_review_screen_sent)
-    state.phase == ReviewPhase.ASKED -> stringResource(
-        if (state.askUnconfirmed) R.string.census_review_screen_asked_unconfirmed else R.string.census_review_screen_asked,
-        endDay(state.askedExpiresDay),
-    )
+    state.phase == ReviewPhase.ASKED -> when (val asked = state.asked) {
+        is AskOutcome.Sent -> stringResource(R.string.census_review_screen_asked, endDay(asked.expiresDay))
+        is AskOutcome.Unconfirmed -> stringResource(R.string.census_review_screen_asked_unconfirmed, endDay(asked.expiresDay))
+        AskOutcome.ReceiptUnreadable -> stringResource(R.string.census_review_screen_asked_unread)
+        AskOutcome.MaybeSent, is AskOutcome.NotSent, null -> stringResource(R.string.census_review_screen_asked_unknown)
+    }
     state.phase == ReviewPhase.DELETED -> stringResource(R.string.census_review_screen_deleted)
     state.phase == ReviewPhase.NOT_ALLOWED -> stringResource(R.string.census_review_screen_not_allowed)
     state.phase == ReviewPhase.NOT_FOUND -> stringResource(R.string.census_review_screen_gone)

@@ -439,15 +439,24 @@ class CensusApi(
                 "paused" -> ContributorCall.Refused(ContributorRefusal.PAUSED, response.retryAfter)
                 "release_unavailable" -> ContributorCall.Refused(ContributorRefusal.RELEASE_UNAVAILABLE, response.retryAfter)
                 "quarantine_unconfigured" -> ContributorCall.Refused(ContributorRefusal.QUARANTINE_UNCONFIGURED)
-                else -> ContributorCall.Refused(ContributorRefusal.SERVER_UNAVAILABLE, response.retryAfter)
+                "db_unavailable" -> ContributorCall.Refused(ContributorRefusal.SERVER_UNAVAILABLE, response.retryAfter)
+                else -> ContributorCall.Refused(ContributorRefusal.OUTCOME_UNKNOWN, response.retryAfter)
             }
+            in 500..599 -> ContributorCall.Refused(ContributorRefusal.OUTCOME_UNKNOWN)
             else -> ContributorCall.Refused(ContributorRefusal.SERVER_UNAVAILABLE)
         }
     } catch (e: CancellationException) {
         throw e
-    } catch (_: Exception) {
-        ContributorCall.Refused(ContributorRefusal.TRANSPORT_FAILURE)
+    } catch (e: Exception) {
+        // Sol round 1 S1: only a failure to connect proves nothing left the phone.
+        ContributorCall.Refused(if (e.beforeSending()) ContributorRefusal.TRANSPORT_FAILURE else ContributorRefusal.OUTCOME_UNKNOWN)
     }
+
+    /** A failure that happens before any request byte can leave: no address, no connection, no TLS session. */
+    private fun Exception.beforeSending(): Boolean =
+        this is java.net.UnknownHostException || this is java.net.ConnectException ||
+            this is java.net.NoRouteToHostException || this is javax.net.ssl.SSLHandshakeException ||
+            this is javax.net.ssl.SSLPeerUnverifiedException
 
     /** A slot id from the server is held to the slot grammar, so nothing else reaches the phone's state. */
     private fun slotId(obj: JsonObject): String =

@@ -23,8 +23,10 @@ import cloud.trotter.log.gig.domain.census.contributor.ContributorGate
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 /** #1626: what a review row's slot sends: its public hash, `withheld`, a format template or a coarse kind. */
@@ -104,7 +106,17 @@ sealed interface AskOutcome {
      * the screen described. Recorded (a WARN line) and never retried.
      */
     data class Unconfirmed(val expiresDay: String) : AskOutcome
-    /** Nothing was quarantined. */
+    /**
+     * Sol round 1 S1: the server answered 200 but its receipt could not be read: the item is stored, unverified, with no
+     * known deletion day. The candidate is retired (a retry would store a second copy).
+     */
+    data object ReceiptUnreadable : AskOutcome
+    /**
+     * Sol round 1 S1: the request may have reached the server (the connection failed after it was made, a 5xx with no
+     * known error, or the ask was cancelled mid-request). The candidate is retired rather than invite a second copy.
+     */
+    data object MaybeSent : AskOutcome
+    /** Nothing was quarantined: a definite refusal, or no connection was made. */
     data class NotSent(val reason: AskRefusal) : AskOutcome
 }
 
@@ -328,7 +340,7 @@ class ContributorReviewer internal constructor(
         }
         var cleared = open
         var artifact = ContributorRequests.artifact(item, confirmations, tags, words, cleared)
-        var answer = quarantine(api, cred, artifact, note) ?: return@run refused(AskRefusal.NOT_ALLOWED)
+        var answer = quarantine(api, cred, artifact, note, id) ?: return@run refused(AskRefusal.NOT_ALLOWED)
         // census#81: `409 gate_closed` stored nothing; the words go as their hashes instead, once.
         if (answer is ContributorCall.Refused && answer.reason == ContributorRefusal.GATE_CLOSED &&
             ContributorRequests.openWords(confirmations, words, cleared).isNotEmpty()
@@ -336,37 +348,64 @@ class ContributorReviewer internal constructor(
             Timber.tag(TAG).w("census quarantine gate closed; asking again with hashes only")
             cleared = emptySet()
             artifact = ContributorRequests.artifact(item, confirmations, tags, words, cleared)
-            answer = quarantine(api, cred, artifact, note) ?: return@run refused(AskRefusal.NOT_ALLOWED)
+            answer = quarantine(api, cred, artifact, note, id) ?: return@run refused(AskRefusal.NOT_ALLOWED)
         }
         val receipt = when (answer) {
             is ContributorCall.Ok -> answer.value
-            is ContributorCall.Refused -> {
-                stopOn(answer.reason)
-                return@run refused(askRefusalOf(answer.reason))
+            is ContributorCall.Refused -> when (answer.reason) {
+                // Sol round 1 S1: the server may hold it; retire the candidate rather than invite a second copy.
+                ContributorRefusal.INVALID_RESPONSE -> return@run retire(id, "receipt_unreadable", AskOutcome.ReceiptUnreadable)
+                ContributorRefusal.OUTCOME_UNKNOWN -> return@run retire(id, "outcome_unknown", AskOutcome.MaybeSent)
+                else -> {
+                    stopOn(answer.reason)
+                    return@run refused(askRefusalOf(answer.reason))
+                }
             }
         }
-        // The item is stored: the candidate goes whether or not its hash matches.
-        queue.remove(id)
-        if (sha256OrNull(artifact) != receipt.artifactSha256) {
-            Timber.tag(TAG).w("census quarantine unconfirmed cause=hash_mismatch")
-            return@run AskOutcome.Unconfirmed(receipt.expiresDay)
+        val sentWords = ContributorRequests.openWords(confirmations, words, cleared).size
+        // Sol round 1 S2: the item is stored; the hash check, its record and the removal finish even if the screen leaves.
+        withContext(NonCancellable) {
+            queue.remove(id)
+            if (sha256OrNull(artifact) != receipt.artifactSha256) {
+                Timber.tag(TAG).w("census quarantine unconfirmed cause=hash_mismatch")
+                AskOutcome.Unconfirmed(receipt.expiresDay)
+            } else {
+                Timber.tag(TAG).i(
+                    "census quarantine sent confirmations=%d roles=%d words=%d note=%b",
+                    confirmations.size, tags.size, sentWords, note != null,
+                )
+                AskOutcome.Sent(receipt.expiresDay)
+            }
         }
-        Timber.tag(TAG).i(
-            "census quarantine sent confirmations=%d roles=%d words=%d note=%b",
-            confirmations.size, tags.size, ContributorRequests.openWords(confirmations, words, cleared).size, note != null,
-        )
-        AskOutcome.Sent(receipt.expiresDay)
     }
 
-    /** One quarantine request, `mayUpload` checked right before it; null when the gate closed. Caller holds the lock. */
+    /**
+     * One quarantine request for [id], `mayUpload` checked right before it; null when the gate closed. Caller holds the
+     * lock. A cancellation while the request is out may come after the server stored it, so the candidate is retired
+     * before the cancellation goes on.
+     */
     private suspend fun quarantine(
         api: ContributorTransport,
         cred: Bearer.Credential,
         artifact: ByteArray,
         note: QuarantineNote?,
+        id: String,
     ): ContributorCall<QuarantineReceipt>? {
         if (!gate.mayUpload()) return null
-        return api.quarantine(cred, ContributorRequests.quarantine(artifact, note))
+        val body = ContributorRequests.quarantine(artifact, note)
+        return try {
+            api.quarantine(cred, body)
+        } catch (e: CancellationException) {
+            retire(id, "cancelled", AskOutcome.MaybeSent)
+            throw e
+        }
+    }
+
+    /** The server may hold the item: the candidate leaves the queue, the WARN names only the [cause]. Not cancellable. */
+    private suspend fun retire(id: String, cause: String, outcome: AskOutcome): AskOutcome = withContext(NonCancellable) {
+        queue.remove(id)
+        Timber.tag(TAG).w("census quarantine unverified cause=%s", cause)
+        outcome
     }
 
     private fun askRefusalOf(reason: ContributorRefusal): AskRefusal = when (reason) {

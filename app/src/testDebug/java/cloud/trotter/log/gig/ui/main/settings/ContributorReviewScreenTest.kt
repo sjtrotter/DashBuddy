@@ -15,6 +15,7 @@ import androidx.compose.ui.test.performClick
 import cloud.trotter.census.contract.contributor.ContributorRole
 import cloud.trotter.census.contract.contributor.QuarantineNote
 import cloud.trotter.census.contract.contributor.SlotClass
+import cloud.trotter.log.gig.core.data.census.contributor.AskOutcome
 import cloud.trotter.log.gig.core.data.census.contributor.ClassesState
 import cloud.trotter.log.gig.core.data.census.contributor.ReviewRow
 import cloud.trotter.log.gig.core.data.census.contributor.ScreenReview
@@ -220,9 +221,22 @@ class ContributorReviewScreenTest {
     }
 
     @Test fun `after asking the screen says it went to the developer and when the server deletes it`() {
-        show(ReviewUiState(phase = ReviewPhase.ASKED, askedExpiresDay = "2026-11-17"), asked = mutableListOf())
+        show(ReviewUiState(phase = ReviewPhase.ASKED, asked = AskOutcome.Sent("2026-11-17")), asked = mutableListOf())
         compose.onNodeWithText("Sent to the developer", substring = true).assertExists()
         compose.onNodeWithText("2026", substring = true).assertExists()
         compose.onNodeWithTag(TAG_ASK_BUTTON).assertDoesNotExist()
+    }
+
+    @Test fun `an unreadable receipt and an unknown outcome are said as such`() {
+        val state = mutableStateOf(ReviewUiState(phase = ReviewPhase.ASKED, asked = AskOutcome.ReceiptUnreadable))
+        compose.setContent {
+            GigLogTheme {
+                ContributorReviewContent(state = state.value, onBack = {}, onToggle = {}, onRole = { _, _ -> }, onSend = {}, onDelete = {})
+            }
+        }
+        compose.onNodeWithText(string(SettingsR.string.census_review_screen_asked_unread)).assertExists()
+        state.value = ReviewUiState(phase = ReviewPhase.ASKED, asked = AskOutcome.MaybeSent)
+        compose.waitForIdle()
+        compose.onNodeWithText(string(SettingsR.string.census_review_screen_asked_unknown)).assertExists()
     }
 }

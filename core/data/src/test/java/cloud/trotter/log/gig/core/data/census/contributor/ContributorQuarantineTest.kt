@@ -37,6 +37,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -383,5 +384,49 @@ class ContributorQuarantineTest {
         val bytes = ContributorRequests.artifact(skeleton(), listOf(c), emptyList(), words, setOf(c))
         assertFalse(bytes.decodeToString().contains("Riley"))
         assertTrue(bytes.decodeToString().endsWith("\"words\":[]}"))
+    }
+
+    @Test fun `an unreadable receipt or an unknown outcome retires the candidate and is never resent`() = runTest {
+        for ((refusal, expected) in listOf(
+            ContributorRefusal.INVALID_RESPONSE to AskOutcome.ReceiptUnreadable,
+            ContributorRefusal.OUTCOME_UNKNOWN to AskOutcome.MaybeSent,
+        )) {
+            server.artifacts.clear()
+            val queue = queue(refusal.name)
+            val (id, review) = opened(queue)
+            server.gateOpen = true
+            server.quarantineAnswers.addLast(ContributorCall.Refused(refusal))
+            assertEquals("$refusal", expected, reviewer(queue).ask(id, confirmBoth, tags, null, review))
+            assertEquals("$refusal: one request, no retry", 1, server.artifacts.size)
+            assertTrue("$refusal: the candidate is retired", queue.entries.first().isEmpty())
+            assertNull(queue.wordsFor(id))
+        }
+    }
+
+    @Test fun `leaving the screen right after the server stored it still retires the candidate`() = runTest {
+        val queue = queue()
+        val (id, review) = opened(queue)
+        server.reportedSha = "0".repeat(64)
+        var job: kotlinx.coroutines.Job? = null
+        server.beforeQuarantine = { job?.cancel() }
+        job = launch { reviewer(queue).ask(id, emptySet(), tags, null, review) }
+        job.join()
+        assertTrue(job.isCancelled)
+        assertEquals(1, server.artifacts.size)
+        assertTrue("the stored item's candidate is gone", queue.entries.first().isEmpty())
+    }
+
+    @Test fun `a cancellation while the request is out retires the candidate`() = runTest {
+        val queue = queue()
+        val (id, review) = opened(queue)
+        val hanging = object : ContributorTransport by server {
+            override suspend fun quarantine(cred: Bearer.Credential, body: ByteArray): ContributorCall<QuarantineReceipt> =
+                kotlinx.coroutines.awaitCancellation()
+        }
+        val job = launch { reviewer(queue, hanging).ask(id, emptySet(), tags, null, review) }
+        testScheduler.runCurrent()
+        job.cancel()
+        job.join()
+        assertTrue(queue.entries.first().isEmpty())
     }
 }

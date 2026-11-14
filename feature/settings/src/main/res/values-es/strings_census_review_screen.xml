@@ -76,6 +76,8 @@
     <string name="census_review_ask_cancel">Cancelar</string>
     <string name="census_review_screen_asked">Enviado al desarrollador. El servidor del censo lo borra antes del %1$s.</string>
     <string name="census_review_screen_asked_unconfirmed">Enviado al desarrollador, pero gig.log no pudo confirmar que el servidor guardó el mismo esquema que mostraba esta pantalla. El servidor del censo lo borra antes del %1$s.</string>
+    <string name="census_review_screen_asked_unread">Enviado al desarrollador, pero gig.log no pudo leer la confirmación del servidor. El servidor del censo lo borra a los 3 días.</string>
+    <string name="census_review_screen_asked_unknown">gig.log no pudo saber si esta pantalla llegó al desarrollador, así que no la volverá a enviar. Si llegó, el servidor del censo la borra a los 3 días.</string>
     <string name="census_review_ask_later">El servidor del censo está en pausa o ya se usaron las preguntas de hoy al desarrollador. No se envió nada; inténtalo más tarde.</string>
     <string name="census_review_ask_unreachable">gig.log no pudo conectar con el servidor del censo. No se envió nada; inténtalo más tarde.</string>
     <string name="census_review_ask_refused">El servidor del censo no pudo aceptar esta pantalla, así que no se envió nada al desarrollador.</string>

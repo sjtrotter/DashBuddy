@@ -61,8 +61,16 @@ enum class ContributorRefusal {
     BAD_ARTIFACT,
     /** #1627 `503 quarantine_unconfigured`: the server has no operator key to seal to; nothing was stored. */
     QUARANTINE_UNCONFIGURED,
+    /** An answer with no known error that cannot have stored anything (a 4xx or an unexpected status below 500). */
     SERVER_UNAVAILABLE,
+    /** No connection was made (the host was not found, the connection or TLS handshake failed): nothing was sent. */
     TRANSPORT_FAILURE,
+    /**
+     * #1627 (Sol round 1 S1): the request may have reached the server and been stored: the connection failed after it
+     * was made (a timeout or reset while sending or waiting), or a 5xx came back without a known error.
+     */
+    OUTCOME_UNKNOWN,
+    /** A 200 whose body could not be read: the server took the request. */
     INVALID_RESPONSE,
 }
 

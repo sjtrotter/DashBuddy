@@ -59,11 +59,16 @@ class ReviewUiStateTest {
         val asking = ready.copy(phase = ReviewPhase.ASKING)
         val sent = asking.asked(AskOutcome.Sent("2026-11-17"))
         assertEquals(ReviewPhase.ASKED, sent.phase)
-        assertEquals("2026-11-17", sent.askedExpiresDay)
-        assertFalse(sent.askUnconfirmed)
+        assertEquals(AskOutcome.Sent("2026-11-17"), sent.asked)
         assertNull(sent.review)
         assertEquals(emptySet<String>(), sent.confirmed)
-        assertEquals(true, asking.asked(AskOutcome.Unconfirmed("2026-11-17")).askUnconfirmed)
+        // Sol round 1 S1: an unverified or possible send leaves the screen too; it is never offered again.
+        listOf(AskOutcome.Unconfirmed("2026-11-17"), AskOutcome.ReceiptUnreadable, AskOutcome.MaybeSent).forEach {
+            val after = asking.asked(it)
+            assertEquals(ReviewPhase.ASKED, after.phase)
+            assertEquals(it, after.asked)
+            assertNull(after.review)
+        }
         listOf(AskRefusal.LATER, AskRefusal.UNREACHABLE, AskRefusal.REFUSED, AskRefusal.UNCONFIGURED).forEach {
             val kept = asking.asked(AskOutcome.NotSent(it))
             assertEquals(ReviewPhase.READY, kept.phase)

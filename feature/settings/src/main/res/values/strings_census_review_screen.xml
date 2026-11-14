@@ -76,6 +76,8 @@
     <string name="census_review_ask_cancel">Cancel</string>
     <string name="census_review_screen_asked">Sent to the developer. The census server deletes it by %1$s.</string>
     <string name="census_review_screen_asked_unconfirmed">Sent to the developer, but gig.log couldn\'t confirm that the server kept the same outline this screen showed. The census server deletes it by %1$s.</string>
+    <string name="census_review_screen_asked_unread">Sent to the developer, but gig.log couldn\'t read the server\'s confirmation. The census server deletes it after 3 days.</string>
+    <string name="census_review_screen_asked_unknown">gig.log couldn\'t tell whether this screen reached the developer, so it won\'t send it again. If it arrived, the census server deletes it after 3 days.</string>
     <string name="census_review_ask_later">The census server is paused or today\'s questions for the developer are used up. Nothing was sent; try again later.</string>
     <string name="census_review_ask_unreachable">gig.log couldn\'t reach the census server. Nothing was sent; try again later.</string>
     <string name="census_review_ask_refused">The census server couldn\'t take this screen, so nothing was sent to the developer.</string>

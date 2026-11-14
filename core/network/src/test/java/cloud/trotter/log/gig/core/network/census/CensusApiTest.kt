@@ -500,4 +500,25 @@ class CensusApiTest {
         respond(403, "{\"error\":\"grant_required\"}")
         assertEquals(ContributorCall.Refused(ContributorRefusal.GRANT_REQUIRED), api.quarantine(credential, body))
     }
+
+    @Test fun `a failure to connect proves nothing was sent, any later failure or an unknown 5xx may have stored it`() = runTest {
+        val body = "{}".toByteArray()
+        fun failing(e: java.io.IOException) = CensusApi(
+            OkHttpClient.Builder().addInterceptor { throw e }.build(), server.url("/").toString().removeSuffix("/"),
+        )
+        listOf(java.net.ConnectException(), java.net.UnknownHostException(), javax.net.ssl.SSLHandshakeException("x")).forEach {
+            assertEquals(ContributorCall.Refused(ContributorRefusal.TRANSPORT_FAILURE), failing(it).quarantine(credential, body))
+        }
+        listOf(java.net.SocketTimeoutException(), java.io.IOException("unexpected end of stream")).forEach {
+            assertEquals(ContributorCall.Refused(ContributorRefusal.OUTCOME_UNKNOWN), failing(it).quarantine(credential, body))
+        }
+        respond(502, "<html>bad gateway</html>")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.OUTCOME_UNKNOWN), api.quarantine(credential, body))
+        respond(500, "{\"error\":\"internal_error\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.OUTCOME_UNKNOWN), api.quarantine(credential, body))
+        respond(503, "{\"error\":\"db_unavailable\"}")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.SERVER_UNAVAILABLE, 17), api.quarantine(credential, body))
+        respond(404, "")
+        assertEquals(ContributorCall.Refused(ContributorRefusal.SERVER_UNAVAILABLE), api.quarantine(credential, body))
+    }
 }

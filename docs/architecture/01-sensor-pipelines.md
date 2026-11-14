@@ -1104,7 +1104,12 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   empty `words`; `422 bad_artifact`, `503 quarantine_unconfigured`, `paused`, `budget_exhausted` and transport failures
   keep the candidate (`AskOutcome.NotSent`); `GRANT_REQUIRED`/`INSTALL_REVOKED` stop the session through `abort`. On
   200 the candidate is removed; `sha256OrNull(artifact)` equal to `artifactSha256` is `AskOutcome.Sent(expiresDay)`,
-  otherwise `Unconfirmed` (WARN `census quarantine unconfirmed cause=hash_mismatch`, never resent). The screen's ASKED
+  otherwise `Unconfirmed` (WARN `census quarantine unconfirmed cause=hash_mismatch`, never resent); the removal, hash
+  check and WARN run in `NonCancellable` (Sol round 1 S2). Sol round 1 S1: the transport tells a failure to connect
+  (`TRANSPORT_FAILURE`: unknown host, refused connection, TLS handshake) from one after it (`OUTCOME_UNKNOWN`: a
+  timeout or reset, a 5xx with no known error); `OUTCOME_UNKNOWN`, an unreadable 200 (`INVALID_RESPONSE`) and a
+  cancellation while the request is out retire the candidate (`AskOutcome.MaybeSent`, `ReceiptUnreadable`; WARN
+  `census quarantine unverified cause=<token>`) instead of inviting a second copy. The screen's ASKED
   phase shows the server's `expiresDay` ("deletes it by", 00:00 UTC that day). WARN `census quarantine gate closed;
   asking again with hashes only` on a 409; INFO `census quarantine sent
   confirmations=<n> roles=<n> words=<n> note=<bool>`. `ContributorQuarantineTest` canonicalizes like the server's
