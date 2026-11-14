@@ -37,7 +37,7 @@ class WindowTitleScrubTest {
 
     private val bus = SinkBus()
     private val stats = PipelineStats()
-    private val writer = CaptureWriter(bus, stats, NoRedaction)
+    private val writer = CaptureWriter(bus, stats)
 
     private fun event(title: String?) = PipelineEvent.Screen(
         timestamp = 1_000L,
@@ -70,7 +70,7 @@ class WindowTitleScrubTest {
 
     @Test
     fun `a sensitive marker in the window title drops the capture on an UNKNOWN frame`() {
-        writer.captureScreen(unknown(), event("Available balance: \$152.10"))
+        writer.captureScreen(unknown(), event("Available balance: \$152.10"), NoRedaction)
         assertEquals(0, bus.envelopes.size)
         assertEquals(1L, stats.scrubbedUnknownCaptureCount)
     }
@@ -78,7 +78,7 @@ class WindowTitleScrubTest {
     @Test
     fun `a RECOGNIZED frame with a sensitive title is captured, title null`() {
         // The rule vetted the tree; dropping on a constant title would erase the surface.
-        writer.captureScreen(recognized(), event("Available balance: \$152.10"))
+        writer.captureScreen(recognized(), event("Available balance: \$152.10"), NoRedaction)
         assertEquals(1, bus.envelopes.size)
         assertNull(persistedTitle())
         assertEquals(0L, stats.scrubbedUnknownCaptureCount)
@@ -86,35 +86,35 @@ class WindowTitleScrubTest {
 
     @Test
     fun `a name-shaped title is captured with the title null`() {
-        writer.captureScreen(unknown(), event("Brandy S"))
+        writer.captureScreen(unknown(), event("Brandy S"), NoRedaction)
         assertNull(persistedTitle())
         assertTrue("no plaintext anywhere in the envelope", "Brandy" !in bus.envelopes.single())
     }
 
     @Test
     fun `an address title is captured with the title null`() {
-        writer.captureScreen(recognized(), event("123 Main St"))
+        writer.captureScreen(recognized(), event("123 Main St"), NoRedaction)
         assertNull(persistedTitle())
         assertTrue("123 Main St" !in bus.envelopes.single())
     }
 
     @Test
     fun `an app-supplied redaction token does not make a title trusted`() {
-        writer.captureScreen(unknown(), event("Message from Brandy S [redacted"))
+        writer.captureScreen(unknown(), event("Message from Brandy S [redacted"), NoRedaction)
         assertNull(persistedTitle())
         assertTrue("Brandy" !in bus.envelopes.single())
     }
 
     @Test
     fun `a benign chrome title is not persisted either`() {
-        writer.captureScreen(unknown(), event("Dasher"))
+        writer.captureScreen(unknown(), event("Dasher"), NoRedaction)
         assertNull(persistedTitle())
         assertEquals(0L, stats.scrubbedUnknownCaptureCount)
     }
 
     @Test
     fun `a null title stays null`() {
-        writer.captureScreen(unknown(), event(null))
+        writer.captureScreen(unknown(), event(null), NoRedaction)
         assertNull(persistedTitle())
     }
 }

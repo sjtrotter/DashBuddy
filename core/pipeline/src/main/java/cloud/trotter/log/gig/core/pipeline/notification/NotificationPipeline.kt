@@ -57,12 +57,13 @@ class NotificationPipeline @Inject constructor(
         .filter { raw -> filter.isRelevant(raw) }
         .map { raw ->
             val event = PipelineEvent.Notification(raw.postTime, raw)
-            classifier.classify(event) to raw
+            classifier.classifyFrame(event) to raw
         }
         // Gate: drop sensitive/noise observations (pledge: never store or
         // forward) — the shared content gate, symmetric with the
         // accessibility pipeline (#399).
-        .filter { (obs, _) ->
+        .filter { (classified, _) ->
+            val obs = classified.observation
             val passes = passesContentGates(obs)
             if (!passes) stats.onContentGateDrop(obs.parsed)
             passes
@@ -87,7 +88,8 @@ class NotificationPipeline @Inject constructor(
         // spam, so it keeps the old pure-identity dedup instead. This does
         // NOT affect UNKNOWN suppression, which always reads `raw.contentHash`
         // directly regardless of `isOngoing`.
-        .mapNotNull { (obs, raw) ->
+        .mapNotNull { (classified, raw) ->
+            val obs = classified.observation
             if (!frameGate.admit(obs, raw.contentHash, mixNotificationContent = !raw.isOngoing)) {
                 stats.onDuplicateSuppressed()
                 return@mapNotNull null
@@ -96,7 +98,7 @@ class NotificationPipeline @Inject constructor(
             // accessibility pipeline's. A push that reposts on a timer must not be able to
             // multiply one rotted rule into a hundred counts.
             obs.parseShortfalls.forEach { stats.onParseShortfall(it) }
-            val captured = captureWriter.captureNotification(obs, raw)
+            val captured = captureWriter.captureNotification(obs, raw, classified.redaction)
             skeletonPublisher.publish(captured, raw)
             captured
         }

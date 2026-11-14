@@ -19,15 +19,22 @@ import timber.log.Timber
  * For click rules, `TInput` is [UiNode] (single node, no bindings).
  * For notification rules, `TInput` is `RawNotificationData`.
  */
-class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
+class Ruleset<TInput>(
+    rules: List<CompiledRule<TInput>>,
+    /**
+     * Rules evaluated before every rule in [rules], priority-ordered (#1568): a generation's
+     * bundled guard, its bundled `overrideable: false` rules, which no remote rule can precede.
+     */
+    guard: List<CompiledRule<TInput>> = emptyList(),
+) {
 
-    private val sorted: List<CompiledRule<TInput>> = rules.sortedBy { it.priority }
+    private val sorted: List<CompiledRule<TInput>> = (guard + rules).sortedBy { it.priority }
 
     /**
-     * Match-time evaluation order (#419): the NON-overrideable rules
-     * ([CompiledRule.overrideable] == false), priority-ordered, THEN the
+     * Match-time evaluation order (#419): the [guard] rules, then the NON-overrideable
+     * rules ([CompiledRule.overrideable] == false), priority-ordered, THEN the
      * overrideable rules, priority-ordered. Partitioned ONCE at construction,
-     * never per-frame.
+     * never per-frame. A ruleset with no guard is the two-partition order of #419.
      *
      * This makes `overrideable: false` structurally real. Previously the
      * sensitive-screen block relied only on priority-0-first + unique-priority +
@@ -46,8 +53,8 @@ class Ruleset<TInput>(rules: List<CompiledRule<TInput>>) {
      * deliberate last-resort that specific recognition is meant to override, so it
      * stays in the overrideable partition and keeps its last position.
      */
-    private val evalOrder: List<CompiledRule<TInput>> =
-        sorted.filterNot { it.overrideable } + sorted.filter { it.overrideable }
+    private val evalOrder: List<CompiledRule<TInput>> = guard.sortedBy { it.priority } +
+        rules.sortedBy { it.priority }.let { r -> r.filterNot { it.overrideable } + r.filter { it.overrideable } }
 
     /**
      * [evalOrder] pre-partitioned by the rule-id platform namespace (#435 item 1).

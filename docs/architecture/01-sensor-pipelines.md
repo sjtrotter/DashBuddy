@@ -21,6 +21,9 @@ package (not the event's), so our own overlay is dropped (#4 / PR #334). Frame a
 assembly is the shared `CaptureWriter` (#361), which also applies **rule-declared capture
 redaction** (#598): a recognized rule's `redact` block masks customer name/address/gate-code node
 text in the serialized envelope only, so recognized captures are PII-hashed-at-edge on disk. The
+block is read from the rule generation that classified the frame, carried from the classifier
+(`Classified`), never from the live rules, so a rules swap between classify and capture cannot
+change a frame's mask (#1568; `02-rule-engine.md`, batch loader). The
 mask is `[redacted:<4hex>]` (#623) — the first 4 hex of the sha256 of the stripped/trimmed (and,
 for a customer-NAME entry flagged `normalize: customerName`, canonical-key-**normalized**, #733)
 customer token, so two customers redact distinctly (per-customer replay fidelity) without
@@ -375,7 +378,8 @@ rule's redact and audits its raw-tree hits (one: the #994 decoy on a recognized 
 (marker and PII in different nodes — a `user_name_label` reading `"Delivery for"` beside a BARE
 `user_name`): (1) a **click envelope inherits the SCREEN rule's `redact`** —
 `Observation.Click.screenRuleId` (stamped from the classifier's per-platform screen-context cache)
-drives the same `redactFor` lookup, applied to recognized AND UNKNOWN clicks, envelope-only (the
+drives the same `redactFor` lookup, in the rule generation that classified that screen (#1568, kept
+in the same cache entry, never the live rules), applied to recognized AND UNKNOWN clicks, envelope-only (the
 dedup `contentHash` stays on the original node), fail-OPEN; (2) `CustomerTextMarkers.ID_MARKERS` —
 an enumerated, cross-platform-DATA list of view-id suffixes whose node VALUE is customer PII
 (`customer_name`/`user_name`/`address_line_1`/`address_line_2`, + `arriving_at_title` #993 and

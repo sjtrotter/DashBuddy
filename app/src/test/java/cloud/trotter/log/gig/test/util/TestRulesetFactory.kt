@@ -1,19 +1,24 @@
 package cloud.trotter.log.gig.test.util
 
+import android.content.Context
+import android.content.res.AssetManager
+import cloud.trotter.log.gig.core.pipeline.rules.JsonRuleInterpreter
+import cloud.trotter.log.gig.core.pipeline.rules.RuleGeneration
+import cloud.trotter.log.gig.core.pipeline.rules.Ruleset
+import cloud.trotter.log.gig.domain.capability.RuleCapabilityGrants
 import cloud.trotter.log.gig.domain.model.accessibility.UiNode
 import cloud.trotter.log.gig.domain.model.notification.RawNotificationData
-import cloud.trotter.log.gig.core.pipeline.rules.CompiledRule
-import cloud.trotter.log.gig.core.pipeline.rules.RuleCompiler
-import cloud.trotter.log.gig.core.pipeline.rules.RuleContext
-import cloud.trotter.log.gig.core.pipeline.rules.Ruleset
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
+import kotlinx.coroutines.runBlocking
+import org.mockito.kotlin.any
+import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import java.io.File
+import kotlin.concurrent.thread
 
 /**
  * Shared test helper that loads and compiles all production rule files
- * from the `:core:pipeline` module's assets without requiring an Android Context.
+ * from the `:core:pipeline` module's generated assets without a device.
  *
  * Replaces the deleted TestMatcherFactory / TestParserFactory — JSON rules
  * are now the single source of truth.
@@ -47,35 +52,45 @@ object TestRulesetFactory {
             )
     }
 
-    private val allRules by lazy {
+    /**
+     * An [AssetManager] serving the generated rule files at `rules/`, the path the production loader
+     * reads. [transform] rewrites a file's text by name (default: unchanged).
+     */
+    fun generatedAssets(transform: (file: String, json: String) -> String = { _, json -> json }): AssetManager {
         val dir = File(rulesDir)
-        val allScreens = mutableListOf<CompiledRule<UiNode>>()
-        val allClicks = mutableListOf<CompiledRule<UiNode>>()
-        val allNotifications = mutableListOf<CompiledRule<RawNotificationData>>()
-
-        // sorted for deterministic merge order, mirroring the runtime loader's sorted-first-wins (#633/#642)
-        dir.listFiles { f -> f.extension == "json" }?.sortedBy { it.name }?.forEach { file ->
-            val root = Json.parseToJsonElement(file.readText()).jsonObject
-            root["screens"]?.jsonArray
-                ?.let { allScreens += RuleCompiler.compileRules<UiNode>(it, RuleContext.SCREEN) }
-            root["clicks"]?.jsonArray
-                ?.let { allClicks += RuleCompiler.compileRules<UiNode>(it, RuleContext.CLICK) }
-            root["notifications"]?.jsonArray
-                ?.let { allNotifications += RuleCompiler.compileRules<RawNotificationData>(it, RuleContext.NOTIFICATION) }
+        val assets = mock<AssetManager>()
+        whenever(assets.list("rules")).thenReturn(dir.list())
+        whenever(assets.open(any<String>())).thenAnswer {
+            val file = File(dir, it.getArgument<String>(0).removePrefix("rules/"))
+            transform(file.name, file.readText()).byteInputStream()
         }
-
-        Triple(allScreens, allClicks, allNotifications)
+        return assets
     }
 
-    val screenRuleset: Ruleset<UiNode> by lazy {
-        Ruleset(allRules.first)
+    /**
+     * The shipped rules as the app loads them (#1568): the real [JsonRuleInterpreter.loadDefaults]
+     * over the generated files, so the corpus suites read the generation the batch loader builds.
+     */
+    val generation: RuleGeneration by lazy {
+        // Built on its own thread: Mockito's stubbing state is per thread, and the first read is
+        // often the argument of a caller's `on { generation } doReturn ...`, where creating the
+        // loader's mocks would leave that stubbing unfinished.
+        var built: Result<RuleGeneration>? = null
+        thread { built = runCatching { loadBundled() } }.join()
+        built!!.getOrThrow()
     }
 
-    val clickRuleset: Ruleset<UiNode> by lazy {
-        Ruleset(allRules.second)
+    private fun loadBundled(): RuleGeneration {
+        val assets = generatedAssets()
+        val context = mock<Context> { on { this.assets } doReturn assets }
+        val interpreter = JsonRuleInterpreter(context, mock<RuleCapabilityGrants>())
+        runBlocking { interpreter.loadDefaults() }
+        return interpreter.generation ?: error("the bundled rules did not load")
     }
 
-    val notificationRuleset: Ruleset<RawNotificationData> by lazy {
-        Ruleset(allRules.third)
-    }
+    val screenRuleset: Ruleset<UiNode> get() = generation.screens
+
+    val clickRuleset: Ruleset<UiNode> get() = generation.clicks
+
+    val notificationRuleset: Ruleset<RawNotificationData> get() = generation.notifications
 }

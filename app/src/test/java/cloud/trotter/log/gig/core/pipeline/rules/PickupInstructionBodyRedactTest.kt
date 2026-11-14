@@ -128,9 +128,10 @@ class PickupInstructionBodyRedactTest {
         assertEquals("doordash.screen.pickup_arrival", match?.ruleId)
 
         val bus = RecordingBus()
-        val writer = CaptureWriter(bus, PipelineStats(), object : ScreenRedactionSource {
+        val redaction = object : ScreenRedactionSource {
             override fun redactFor(ruleId: String): CompiledRedact? = ruleset.ruleById(ruleId)?.redact
-        })
+        }
+        val writer = CaptureWriter(bus, PipelineStats())
         writer.captureScreen(
             Observation.Screen(
                 timestamp = 1_000L, captureId = null, ruleId = match!!.ruleId, metadata = ReplayMetadata.EMPTY,
@@ -141,6 +142,7 @@ class PickupInstructionBodyRedactTest {
                 snapshot = TreeSnapshot(tree = tree, packageName = "com.doordash.driverapp"),
                 packageName = "com.doordash.driverapp",
             ),
+            redaction,
         )
         val envelope = bus.envelopes.single()
         assertFalse(envelope.contains("Jane"))

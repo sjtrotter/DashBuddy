@@ -51,6 +51,17 @@ object ParsedFieldsFactory {
     )
 
     /**
+     * Customer-text fields per shape (#1568): the parse fields that carry a customer's name or
+     * address. A rule from a remote source must end each one's transform chain in `sha256` and
+     * declare a non-empty `redact` ([RemoteRuleAdmission]). A field inside a collection
+     * (`timeline` → `tasks[].nameHash`) is named by its own key.
+     */
+    val CUSTOMER_FIELDS_BY_SHAPE: Map<String, Set<String>> = mapOf(
+        "task" to setOf("customerNameHash", "customerAddressHash"),
+        "timeline" to setOf("nameHash"),
+    )
+
+    /**
      * "At least one of" constraints per shape. Each entry is a set of field names
      * where at least one must be present. Platforms may use different field names
      * for the same concept (e.g. DoorDash: deliveryTimeText, Uber: timeToCompleteMinutes).

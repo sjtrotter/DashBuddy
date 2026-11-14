@@ -3,6 +3,7 @@ package cloud.trotter.log.gig.core.pipeline
 import cloud.trotter.log.gig.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.log.gig.core.pipeline.rules.CompiledRedact
 import cloud.trotter.log.gig.core.pipeline.rules.JsonRuleInterpreter
+import cloud.trotter.log.gig.core.pipeline.rules.RuleGeneration
 import cloud.trotter.log.gig.core.pipeline.rules.ScreenRedactionSource
 import cloud.trotter.log.gig.domain.capture.CaptureBus
 import cloud.trotter.log.gig.domain.capture.ReplayMetadata
@@ -36,7 +37,7 @@ class UnknownAddressBackstopFixtureTest {
     private val pkg = "com.doordash.driverapp"
 
     private val classifier = ObservationClassifier(
-        mock<JsonRuleInterpreter> { on { screenRuleset } doReturn TestRulesetFactory.screenRuleset },
+        mock<JsonRuleInterpreter> { on { generation } doReturn RuleGeneration(screens = TestRulesetFactory.screenRuleset) },
         mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
         PlatformAppVersions.NONE,
     )
@@ -87,7 +88,7 @@ class UnknownAddressBackstopFixtureTest {
             assertEquals("$name must classify UNKNOWN under master's rules", UNKNOWN_TARGET, obs.target)
 
             val bus = RecordingBus()
-            CaptureWriter(bus, stats, noRedaction).captureScreen(obs, event(tree))
+            CaptureWriter(bus, stats).captureScreen(obs, event(tree), noRedaction)
             val json = bus.envelope
             assertNotNull("$name must still be captured for triage", json)
             json!!
@@ -105,7 +106,7 @@ class UnknownAddressBackstopFixtureTest {
         val tree = load(CODE_RENDER)
         assertTrue("teeth: the fixture carries the bare code", code.containsMatchIn(UiNodeSchema.serialize(tree)))
         val bus = RecordingBus()
-        CaptureWriter(bus, PipelineStats(), noRedaction).captureScreen(classifier.classify(event(tree)), event(tree))
+        CaptureWriter(bus, PipelineStats()).captureScreen(classifier.classify(event(tree)), event(tree), noRedaction)
         assertFalse("the bare 3-digit code persisted", code.containsMatchIn(bus.envelope!!))
     }
 

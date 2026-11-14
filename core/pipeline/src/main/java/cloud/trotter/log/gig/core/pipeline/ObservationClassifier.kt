@@ -15,6 +15,8 @@ import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.core.pipeline.rules.DedupeTokens
 import cloud.trotter.log.gig.core.pipeline.rules.JsonRuleInterpreter
 import cloud.trotter.log.gig.core.pipeline.rules.ParsedFieldsFactory
+import cloud.trotter.log.gig.core.pipeline.rules.RuleGeneration
+import cloud.trotter.log.gig.core.pipeline.rules.ScreenRedactionSource
 import cloud.trotter.log.gig.core.pipeline.rules.TransformRegistry
 import timber.log.Timber
 import java.time.Clock
@@ -88,12 +90,13 @@ class ObservationClassifier @Inject constructor(
     private val lastScreenContexts = ConcurrentHashMap<String, ScreenContext>()
 
     /**
-     * A platform's last non-sensitive screen classification AND the rule that produced
-     * it, cached as ONE value (principle 5): the two are written and read together, and
-     * two parallel maps could drift into a click carrying one screen's target with
-     * another screen's redact block.
+     * A platform's last non-sensitive screen classification, the rule that produced it and
+     * the generation that rule came from, cached as ONE value (principle 5): they are written
+     * and read together, and parallel maps could drift into a click carrying one screen's
+     * target with another screen's redact block. The click envelope masks with [rules], the
+     * screen's own generation, whatever went live since (#1568).
      */
-    private data class ScreenContext(val target: String, val ruleId: String?)
+    private data class ScreenContext(val target: String, val ruleId: String?, val rules: RuleGeneration)
 
     /** THIS platform's last non-sensitive screen context, or null when unattributable. */
     private fun screenContextFor(platformWire: String?): ScreenContext? =
@@ -106,19 +109,33 @@ class ObservationClassifier @Inject constructor(
 
     // Typed entry points (#361): each event subtype returns its observation
     // subtype, so pipelines never downcast classify results.
-    fun classify(event: PipelineEvent.Screen): Observation.Screen =
+    fun classify(event: PipelineEvent.Screen): Observation.Screen = classifyFrame(event).observation
+
+    fun classify(event: PipelineEvent.Click): Observation.Click = classifyFrame(event).observation
+
+    fun classify(event: PipelineEvent.Notification): Observation.Notification = classifyFrame(event).observation
+
+    fun classify(event: PipelineEvent): Observation.FlowObservation = classifyFrame(event).observation
+
+    /**
+     * The observation plus the redaction source its capture must use (#1568): the generation
+     * that classified a screen or notification, or for a click the generation that classified
+     * the screen it landed on. The pipelines capture with it, so a generation swap between
+     * classification and capture cannot mask a frame with another generation's rules.
+     */
+    fun classifyFrame(event: PipelineEvent.Screen): Classified<Observation.Screen> =
         prepared(event) { wire, now -> classifyScreen(event, wire, now) }
 
-    fun classify(event: PipelineEvent.Click): Observation.Click =
+    fun classifyFrame(event: PipelineEvent.Click): Classified<Observation.Click> =
         prepared(event) { wire, now -> classifyClick(event, wire, now) }
 
-    fun classify(event: PipelineEvent.Notification): Observation.Notification =
+    fun classifyFrame(event: PipelineEvent.Notification): Classified<Observation.Notification> =
         prepared(event) { wire, _ -> classifyNotification(event, wire) }
 
-    fun classify(event: PipelineEvent): Observation.FlowObservation = when (event) {
-        is PipelineEvent.Screen -> classify(event)
-        is PipelineEvent.Click -> classify(event)
-        is PipelineEvent.Notification -> classify(event)
+    fun classifyFrame(event: PipelineEvent): Classified<Observation.FlowObservation> = when (event) {
+        is PipelineEvent.Screen -> classifyFrame(event)
+        is PipelineEvent.Click -> classifyFrame(event)
+        is PipelineEvent.Notification -> classifyFrame(event)
     }
 
     /**
@@ -147,15 +164,19 @@ class ObservationClassifier @Inject constructor(
         event: PipelineEvent.Screen,
         platformWire: String?,
         now: Long,
-    ): Observation.Screen {
-        val ruleset = interpreter.screenRuleset
-        if (ruleset == null) {
+    ): Classified<Observation.Screen> {
+        val generation = interpreter.generation
+        if (generation == null) {
             // Fail-closed invariant fired (rulesets not loaded) — a real WARN (#551 P7).
             Timber.tag("Classifier").w("no screen ruleset loaded")
-            return makeScreenObservation(
-                now, metadataFor(event.packageName), UNKNOWN_TARGET, null, null, ParsedFields.None, null,
+            return Classified(
+                makeScreenObservation(
+                    now, metadataFor(event.packageName), UNKNOWN_TARGET, null, null, ParsedFields.None, null,
+                ),
+                RuleGeneration.EMPTY,
             )
         }
+        val ruleset = generation.screens
 
         // #1036 — the shortfalls this classification observes ride the observation to the
         // pipeline's post-admission block, the one place they may be counted (review R3: a frame
@@ -168,9 +189,12 @@ class ObservationClassifier @Inject constructor(
             Timber.tag("Classifier").v("SCREEN: UNKNOWN")
             // An UNKNOWN frame can still carry shortfalls: a branch that matched, parsed nothing
             // and was then discarded by its own `Skip` validator leaves no other trace at all.
-            return makeScreenObservation(
-                now, metadataFor(event.packageName), UNKNOWN_TARGET, null, null, ParsedFields.None, null,
-                parseShortfalls = shortfalls.toList(),
+            return Classified(
+                makeScreenObservation(
+                    now, metadataFor(event.packageName), UNKNOWN_TARGET, null, null, ParsedFields.None, null,
+                    parseShortfalls = shortfalls.toList(),
+                ),
+                generation,
             )
         }
 
@@ -202,10 +226,10 @@ class ObservationClassifier @Inject constructor(
         // frame's platform (#438 item 2). An Unknown/null-platform frame (null wire)
         // is skipped so it can't clobber a real platform's screen context.
         if (obs.parsed !is ParsedFields.SensitiveFields && platformWire != null) {
-            obs.target?.let { lastScreenContexts[platformWire] = ScreenContext(it, obs.ruleId) }
+            obs.target?.let { lastScreenContexts[platformWire] = ScreenContext(it, obs.ruleId, generation) }
         }
 
-        return obs
+        return Classified(obs, generation)
     }
 
     private fun makeScreenObservation(
@@ -245,16 +269,17 @@ class ObservationClassifier @Inject constructor(
         event: PipelineEvent.Click,
         platformWire: String?,
         now: Long,
-    ): Observation.Click {
+    ): Classified<Observation.Click> {
         // Gate this click against ITS OWN platform's last screen (#438 item 2).
         val screenContext = screenContextFor(platformWire)
         val screenTarget = screenContext?.target
-        val ruleset = interpreter.clickRuleset
+        val screenRules = screenContext?.rules ?: RuleGeneration.EMPTY
+        val ruleset = interpreter.generation?.clicks
         if (ruleset != null) {
             val result = ruleset.matchFirst(event.node, platformWire, screenTarget)
             if (result != null) {
                 val parsed = ParsedFields.ClickFields(intent = result.intent)
-                return Observation.Click(
+                return Classified(Observation.Click(
                     timestamp = now,
                     captureId = null,
                     ruleId = result.ruleId,
@@ -267,7 +292,7 @@ class ObservationClassifier @Inject constructor(
                     transitionOverrides = result.transitionOverrides,
                     screenTarget = screenTarget,
                     screenRuleId = screenContext?.ruleId,
-                )
+                ), screenRules)
             }
         }
 
@@ -277,7 +302,7 @@ class ObservationClassifier @Inject constructor(
         val nodeText = event.node.text?.takeIf { it.isNotBlank() }
         // #1131: raw node text and IDs must never enter the diagnostic firehose.
         Timber.tag("Classifier").d("UNKNOWN click")
-        return Observation.Click(
+        return Classified(Observation.Click(
             timestamp = now,
             captureId = null,
             ruleId = null,
@@ -292,36 +317,38 @@ class ObservationClassifier @Inject constructor(
             target = UNKNOWN_TARGET,
             screenTarget = screenTarget,
             screenRuleId = screenContext?.ruleId,
-        )
+        ), screenRules)
     }
 
     // ── Notification ────────────────────────────────────────────────────
 
-    private fun classifyNotification(event: PipelineEvent.Notification, platformWire: String?): Observation.Notification {
-        val ruleset = interpreter.notificationRuleset
+    private fun classifyNotification(
+        event: PipelineEvent.Notification,
+        platformWire: String?,
+    ): Classified<Observation.Notification> {
+        val generation = interpreter.generation ?: RuleGeneration.EMPTY
+        val ruleset = generation.notifications
         val shortfalls = mutableListOf<ParseShortfall>()
-        if (ruleset != null) {
-            // #1036 — the second parse-bearing path: a push rule's anchors are the platform's own
-            // WORDING, which rots the same way a view id does.
-            val result = ruleset.matchFirst(event.raw, platformWire) { shortfalls += it }
-            if (result != null) {
-                val parsed = ParsedFieldsFactory.create(
-                    result.shape ?: "notification", result.fields,
-                )
-                return Observation.Notification(
-                    timestamp = event.raw.postTime,
-                    captureId = null,
-                    ruleId = result.ruleId,
-                    metadata = metadataFor(event.raw.packageName),
-                    flow = result.flow,
-                    modeHint = result.modeHint,
-                    parsed = parsed,
-                    target = result.intent,
-                    effects = DedupeTokens.resolve(result.effects, parsed),
-                    transitionOverrides = result.transitionOverrides,
-                    parseShortfalls = shortfalls.toList(),
-                )
-            }
+        // #1036 — the second parse-bearing path: a push rule's anchors are the platform's own
+        // WORDING, which rots the same way a view id does.
+        val result = ruleset.matchFirst(event.raw, platformWire) { shortfalls += it }
+        if (result != null) {
+            val parsed = ParsedFieldsFactory.create(
+                result.shape ?: "notification", result.fields,
+            )
+            return Classified(Observation.Notification(
+                timestamp = event.raw.postTime,
+                captureId = null,
+                ruleId = result.ruleId,
+                metadata = metadataFor(event.raw.packageName),
+                flow = result.flow,
+                modeHint = result.modeHint,
+                parsed = parsed,
+                target = result.intent,
+                effects = DedupeTokens.resolve(result.effects, parsed),
+                transitionOverrides = result.transitionOverrides,
+                parseShortfalls = shortfalls.toList(),
+            ), generation)
         }
 
         // Unknown notification — preserve raw text for future analysis
@@ -334,7 +361,7 @@ class ObservationClassifier @Inject constructor(
             // #1131: keep the diagnostic without persisting notification payloads.
             Timber.tag("Classifier").d("UNKNOWN notification")
         }
-        return Observation.Notification(
+        return Classified(Observation.Notification(
             timestamp = event.raw.postTime,
             captureId = null,
             ruleId = null,
@@ -348,6 +375,12 @@ class ObservationClassifier @Inject constructor(
             target = UNKNOWN_TARGET,
             // As on the screen path: a `Skip`ped all-null branch is the only trace of its own rot.
             parseShortfalls = shortfalls.toList(),
-        )
+        ), generation)
     }
 }
+
+/** An observation and the redaction source its capture must use ([ObservationClassifier.classifyFrame]). */
+data class Classified<out O : Observation.FlowObservation>(
+    val observation: O,
+    val redaction: ScreenRedactionSource,
+)

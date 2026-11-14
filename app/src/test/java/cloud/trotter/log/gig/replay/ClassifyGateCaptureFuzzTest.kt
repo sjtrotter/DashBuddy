@@ -8,6 +8,7 @@ import cloud.trotter.log.gig.core.pipeline.CaptureWriter
 import cloud.trotter.log.gig.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.log.gig.core.pipeline.rules.CompiledRedact
 import cloud.trotter.log.gig.core.pipeline.rules.JsonRuleInterpreter
+import cloud.trotter.log.gig.core.pipeline.rules.RuleGeneration
 import cloud.trotter.log.gig.core.pipeline.rules.ScreenRedactionSource
 import cloud.trotter.log.gig.domain.capture.CaptureBus
 import cloud.trotter.log.gig.domain.capture.ReplayMetadata
@@ -71,7 +72,7 @@ class ClassifyGateCaptureFuzzTest {
 
     private val classifier = ObservationClassifier(
         mock<JsonRuleInterpreter> {
-            on { screenRuleset } doReturn TestRulesetFactory.screenRuleset
+            on { generation } doReturn RuleGeneration(screens = TestRulesetFactory.screenRuleset)
         },
         mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
         PlatformAppVersions.NONE,
@@ -146,10 +147,10 @@ class ClassifyGateCaptureFuzzTest {
     fun `property - adversarial trees never crash classify or capture, and never leak an UNKNOWN sensitive frame`() = runTest {
         checkAll(PropSeeds.samples(200), PropSeeds.config(SEED), treeArb) { tree ->
             val bus = RecordingBus()
-            val writer = CaptureWriter(bus, PipelineStats(), noRedaction)
+            val writer = CaptureWriter(bus, PipelineStats())
 
             val obs = classifier.classify(event(tree)) // must not throw
-            writer.captureScreen(obs, event(tree))      // must not throw
+            writer.captureScreen(obs, event(tree), noRedaction) // must not throw
 
             // Fail-closed invariant: a toxic UNKNOWN frame is always dropped before the bus.
             if (obs.target == UNKNOWN_TARGET && bus.offered) {

@@ -69,7 +69,6 @@ import okio.ByteString
 import okio.ByteString.Companion.toByteString
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import timber.log.Timber
@@ -143,7 +142,7 @@ class PrivacyExportReplay(
     private val source = AccessibilitySource(stats)
     private val service = mock<AccessibilityService>()
     private val notifications = NotificationSource()
-    private val writer = CaptureWriter(bus, stats, interpreter)
+    private val writer = CaptureWriter(bus, stats)
     private val publisher = SkeletonPublisher(sink, stats, envelopeSink)
     private val accessibility = AccessibilityPipeline(ContentChangedPipeline(source, platforms, stats),
         StateChangedPipeline(source, platforms, stats), WindowsChangedPipeline(source, platforms, stats),
@@ -342,12 +341,7 @@ class PrivacyExportReplay(
     }
 
     private fun generatedAssets(app: Context): Context {
-        val dir = File(TestRulesetFactory.rulesDir)
-        val assets = mock<AssetManager>()
-        whenever(assets.list("rules")).thenReturn(dir.list())
-        whenever(assets.open(any<String>())).thenAnswer {
-            File(dir, it.getArgument<String>(0).removePrefix("rules/")).inputStream()
-        }
+        val assets = TestRulesetFactory.generatedAssets()
         return object : ContextWrapper(app) { override fun getAssets(): AssetManager = assets }
     }
 }

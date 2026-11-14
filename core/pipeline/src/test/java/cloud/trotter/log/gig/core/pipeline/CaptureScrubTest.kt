@@ -32,7 +32,7 @@ class CaptureScrubTest {
 
     private val captureBus: CaptureBus = mock { on { isEnabled } doReturn true }
     private val stats = PipelineStats()
-    private val writer = CaptureWriter(captureBus, stats, NoRedaction)
+    private val writer = CaptureWriter(captureBus, stats)
 
     private fun screenEvent(tree: UiNode) = PipelineEvent.Screen(
         timestamp = 1_000L,
@@ -58,7 +58,7 @@ class CaptureScrubTest {
     @Test
     fun `UNKNOWN screen with sensitive text is never offered to the capture bus`() {
         val toxic = UiNode(children = listOf(UiNode(text = "Available balance: \$152.10")))
-        writer.captureScreen(unknownObs(), screenEvent(toxic))
+        writer.captureScreen(unknownObs(), screenEvent(toxic), NoRedaction)
 
         verify(captureBus, never()).offer(any(), any(), any(), any(), any(), any())
         assertEquals(1L, stats.scrubbedUnknownCaptureCount)
@@ -67,7 +67,7 @@ class CaptureScrubTest {
     @Test
     fun `benign UNKNOWN screen still captures for triage`() {
         val benign = UiNode(children = listOf(UiNode(text = "Some new promo screen")))
-        writer.captureScreen(unknownObs(), screenEvent(benign))
+        writer.captureScreen(unknownObs(), screenEvent(benign), NoRedaction)
 
         verify(captureBus, times(1)).offer(any(), any(), any(), any(), any(), any())
         assertEquals(0L, stats.scrubbedUnknownCaptureCount)
@@ -77,7 +77,7 @@ class CaptureScrubTest {
     fun `recognized screens are not scrubbed - the rule gate already vetted them`() {
         val tree = UiNode(children = listOf(UiNode(text = "ending in 1234")))
         val recognized = unknownObs().copy(ruleId = "doordash.screen.test", target = "idle_map")
-        writer.captureScreen(recognized, screenEvent(tree))
+        writer.captureScreen(recognized, screenEvent(tree), NoRedaction)
 
         verify(captureBus, times(1)).offer(any(), any(), any(), any(), any(), any())
         assertTrue(stats.scrubbedUnknownCaptureCount == 0L)
@@ -106,6 +106,7 @@ class CaptureScrubTest {
             PipelineEvent.Click(timestamp = 1_000L, node = toxic, packageName = "com.doordash.driverapp"),
             screenTarget = null,
             screenRuleId = null,
+            screenRedaction = NoRedaction,
         )
 
         verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
@@ -120,6 +121,7 @@ class CaptureScrubTest {
             PipelineEvent.Click(timestamp = 1_000L, node = benign, packageName = "com.doordash.driverapp"),
             screenTarget = null,
             screenRuleId = null,
+            screenRedaction = NoRedaction,
         )
 
         verify(captureBus, times(1)).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
@@ -141,6 +143,7 @@ class CaptureScrubTest {
         PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
         screenTarget = "side_nav_drawer",
         screenRuleId = null,
+        screenRedaction = NoRedaction,
     )
 
     @Test
@@ -201,7 +204,7 @@ class CaptureScrubTest {
     @Test
     fun `UNKNOWN notification with a sensitive marker ONLY in an action label is scrubbed`() {
         val toxic = rawNotif(title = "New promo", actionLabels = listOf("Cash out"))
-        writer.captureNotification(unknownNotifObs(), toxic)
+        writer.captureNotification(unknownNotifObs(), toxic, NoRedaction)
 
         verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
         assertEquals(1L, stats.scrubbedUnknownCaptureCount)
@@ -210,7 +213,7 @@ class CaptureScrubTest {
     @Test
     fun `benign UNKNOWN notification with clean action labels still captures for triage`() {
         val benign = rawNotif(title = "New promo", actionLabels = listOf("Accept", "Decline"))
-        writer.captureNotification(unknownNotifObs(), benign)
+        writer.captureNotification(unknownNotifObs(), benign, NoRedaction)
 
         verify(captureBus, times(1)).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
         assertEquals(0L, stats.scrubbedUnknownCaptureCount)
@@ -229,7 +232,7 @@ class CaptureScrubTest {
 
     @Test
     fun `UNKNOWN notification with a customer marker in the title is scrubbed`() {
-        writer.captureNotification(unknownNotifObs(), rawNotif(title = "Message from Jane"))
+        writer.captureNotification(unknownNotifObs(), rawNotif(title = "Message from Jane"), NoRedaction)
         val json = offeredEnvelope()
         assertFalse("leaked customer name scrubbed", json.contains("Jane"))
         assertTrue("field became [redacted]", json.contains("[redacted]"))
@@ -242,7 +245,7 @@ class CaptureScrubTest {
     @Test
     fun `UNKNOWN notification with a customer marker in the body is scrubbed`() {
         val raw = rawNotif(title = "New order").copy(text = "Meet at door for Jane Q Doe")
-        writer.captureNotification(unknownNotifObs(), raw)
+        writer.captureNotification(unknownNotifObs(), raw, NoRedaction)
         val json = offeredEnvelope()
         assertFalse("leaked customer name scrubbed", json.contains("Jane Q Doe"))
         assertTrue("field became [redacted]", json.contains("[redacted]"))
@@ -252,7 +255,7 @@ class CaptureScrubTest {
     @Test
     fun `UNKNOWN notification with a customer marker ONLY in an action label is scrubbed`() {
         val raw = rawNotif(title = "New order", actionLabels = listOf("Message from Bob", "Dismiss"))
-        writer.captureNotification(unknownNotifObs(), raw)
+        writer.captureNotification(unknownNotifObs(), raw, NoRedaction)
         val json = offeredEnvelope()
         assertFalse("leaked customer name scrubbed", json.contains("Bob"))
         assertTrue("action label became [redacted]", json.contains("[redacted]"))
@@ -268,6 +271,7 @@ class CaptureScrubTest {
             PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
             screenTarget = null,
             screenRuleId = null,
+            screenRedaction = NoRedaction,
         )
         val json = offeredEnvelope()
         assertFalse("leaked customer name scrubbed", json.contains("Jane D."))
@@ -305,7 +309,7 @@ class CaptureScrubTest {
 
     @Test
     fun `UNKNOWN screen with a bare customer_name-user_name node is scrubbed by id (#910)`() {
-        writer.captureScreen(unknownObs(), screenEvent(deliveryForCard()))
+        writer.captureScreen(unknownObs(), screenEvent(deliveryForCard()), NoRedaction)
 
         val json = offeredEnvelope()
         assertFalse("bare customer name scrubbed", json.contains("Testname Q"))
@@ -336,6 +340,7 @@ class CaptureScrubTest {
             // No screen redact available here (the #910 B path is tested separately) —
             // this is the id backstop standing alone.
             screenRuleId = null,
+            screenRedaction = NoRedaction,
         )
 
         val json = offeredEnvelope()
@@ -353,7 +358,7 @@ class CaptureScrubTest {
             ruleId = "doordash.screen.test",
             target = "pickup_navigation",
         )
-        writer.captureScreen(recognized, screenEvent(deliveryForCard()))
+        writer.captureScreen(recognized, screenEvent(deliveryForCard()), NoRedaction)
 
         assertTrue("recognized frame is not id-scrubbed", offeredEnvelope().contains("Testname Q"))
         assertEquals(0L, stats.unknownCustomerScrubCount)
@@ -367,6 +372,7 @@ class CaptureScrubTest {
             PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
             screenTarget = null,
             screenRuleId = null,
+            screenRedaction = NoRedaction,
         )
         assertTrue(offeredEnvelope().contains("Some new button"))
         assertEquals(0L, stats.unknownCustomerScrubCount)
@@ -379,7 +385,7 @@ class CaptureScrubTest {
             UiNode(className = "android.widget.TextView", text = "Chat"),
             UiNode(className = "android.widget.EditText", text = draft),
         ))
-        writer.captureScreen(unknownObs(), screenEvent(tree))
+        writer.captureScreen(unknownObs(), screenEvent(tree), NoRedaction)
 
         // The argumentCaptor helper verifies exactly one offer: the frame is captured, not dropped.
         val json = offeredEnvelope()
@@ -404,7 +410,7 @@ class CaptureScrubTest {
 
     @Test
     fun `UNKNOWN screen with an id-less address block is captured with the block masked and counted (#1116)`() {
-        writer.captureScreen(unknownObs(), screenEvent(addressSheet()))
+        writer.captureScreen(unknownObs(), screenEvent(addressSheet()), NoRedaction)
 
         val json = offeredEnvelope()
         assertFalse("street scrubbed", json.contains("Sample Ridge"))
@@ -419,7 +425,7 @@ class CaptureScrubTest {
     @Test
     fun `the address-block backstop is UNKNOWN-only - a recognized frame keeps its rule's decisions (#1116)`() {
         val recognized = unknownObs().copy(ruleId = "doordash.screen.test", target = "pickup_navigation")
-        writer.captureScreen(recognized, screenEvent(addressSheet()))
+        writer.captureScreen(recognized, screenEvent(addressSheet()), NoRedaction)
 
         assertTrue("recognized frame is not address-scrubbed", offeredEnvelope().contains("Sample Ridge"))
         assertEquals(0L, stats.unknownCustomerScrubCount)
@@ -436,6 +442,7 @@ class CaptureScrubTest {
             PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
             screenTarget = null,
             screenRuleId = null,
+            screenRedaction = NoRedaction,
         )
         val json = offeredEnvelope()
         assertFalse("street scrubbed", json.contains("Other Lane"))
@@ -447,7 +454,7 @@ class CaptureScrubTest {
     @Test
     fun `a disabled capture bus never builds an envelope for an address block (#1116 release posture)`() {
         val disabled: CaptureBus = mock { on { isEnabled } doReturn false }
-        CaptureWriter(disabled, stats, NoRedaction).captureScreen(unknownObs(), screenEvent(addressSheet()))
+        CaptureWriter(disabled, stats).captureScreen(unknownObs(), screenEvent(addressSheet()), NoRedaction)
 
         verify(disabled, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
         assertEquals(0L, stats.unknownCustomerScrubCount)
@@ -459,7 +466,7 @@ class CaptureScrubTest {
     @Test
     fun `UNKNOWN screen masks only the name of a return task line (#1116)`() {
         val tree = UiNode(children = listOf(UiNode(text = "Return Avery K to Sample Store"), UiNode(text = "Close sheet")))
-        writer.captureScreen(unknownObs(), screenEvent(tree))
+        writer.captureScreen(unknownObs(), screenEvent(tree), NoRedaction)
 
         val json = offeredEnvelope()
         assertFalse("name scrubbed", json.contains("Avery K"))
@@ -470,7 +477,7 @@ class CaptureScrubTest {
     @Test
     fun `UNKNOWN screen with Return to dash chrome is untouched (#1116)`() {
         val tree = UiNode(children = listOf(UiNode(text = "Return to dash"), UiNode(text = "Return to dash to keep earning")))
-        writer.captureScreen(unknownObs(), screenEvent(tree))
+        writer.captureScreen(unknownObs(), screenEvent(tree), NoRedaction)
 
         val json = offeredEnvelope()
         assertTrue(json.contains("\"Return to dash\""))
@@ -486,6 +493,7 @@ class CaptureScrubTest {
             PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
             screenTarget = null,
             screenRuleId = null,
+            screenRedaction = NoRedaction,
         )
         val json = offeredEnvelope()
         assertFalse(json.contains("Jordan T"))
@@ -495,7 +503,7 @@ class CaptureScrubTest {
     @Test
     fun `the return-line gate is UNKNOWN-only (#1116)`() {
         val recognized = unknownObs().copy(ruleId = "doordash.screen.test", target = "timeline")
-        writer.captureScreen(recognized, screenEvent(UiNode(children = listOf(UiNode(text = "Return Avery K to Sample Store")))))
+        writer.captureScreen(recognized, screenEvent(UiNode(children = listOf(UiNode(text = "Return Avery K to Sample Store")))), NoRedaction)
         assertTrue("a recognized frame keeps its rule's decisions", offeredEnvelope().contains("Avery K"))
     }
 
@@ -556,6 +564,7 @@ class CaptureScrubTest {
             PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
             screenTarget = null,
             screenRuleId = null,
+            screenRedaction = NoRedaction,
         )
         val json = offeredEnvelope()
         assertFalse(json.contains("Sample Ridge"))

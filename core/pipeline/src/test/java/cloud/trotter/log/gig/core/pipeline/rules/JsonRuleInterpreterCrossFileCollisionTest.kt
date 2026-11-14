@@ -15,16 +15,16 @@ import org.mockito.kotlin.mock
 import timber.log.Timber
 
 /**
- * #633 — cross-FILE rule-id collision hardening. [acceptNonCollidingFiles] skips a
- * LATER file that re-declares an id an EARLIER file already claimed, matching the
- * malformed-file-skip policy. This is the across-files complement to the within-file
+ * #633 — cross-FILE rule-id collision hardening. [dropCollidingRules] drops each rule of a
+ * LATER file that re-declares an id an EARLIER file already kept; since #1568 the rest of
+ * that file loads. This is the across-files complement to the within-file
  * dup-id reject (#624, [JsonRuleInterpreterDupIdTest]).
  *
  * The shadow it prevents: [Ruleset.byId] is last-wins, so merging a later file that
  * re-uses an id would make the capture-redaction lookup (`redactFor`) resolve to the
  * WRONG rule's `redact` block while priority-ordered [Ruleset.matchFirst] still
  * recognizes with the earlier rule — a customer-PII node could ship raw. Keeping only
- * the earlier file makes byId and matchFirst agree.
+ * the earlier rule makes byId and matchFirst agree.
  *
  * loadSingle touches neither the Context nor the grant store, so both are mocked.
  */
@@ -46,7 +46,7 @@ class JsonRuleInterpreterCrossFileCollisionTest {
     @After fun uproot() = Timber.uprootAll()
 
     /** A file re-declaring [sharedId], with a distinctive redact [keepPrefix] marker. */
-    private fun fileDeclaring(platform: String, sharedId: String, keepPrefix: String, ownId: String) = """
+    private fun fileDeclaring(platform: String, sharedId: String, keepPrefix: String, ownId: String, ownPriority: Int) = """
         {
           "format_version": 2,
           "platform_id": "$platform",
@@ -57,7 +57,7 @@ class JsonRuleInterpreterCrossFileCollisionTest {
               "require": { "exists": { "hasText": "Deliver to" } },
               "redact": [ { "find": { "hasTextStartsWith": "Deliver to " }, "keepPrefix": ["$keepPrefix"] } ]
             },
-            { "id": "$ownId", "priority": 9102, "require": { "exists": { "hasText": "X" } } }
+            { "id": "$ownId", "priority": $ownPriority, "require": { "exists": { "hasText": "X" } } }
           ]
         }
     """.trimIndent()
@@ -73,28 +73,25 @@ class JsonRuleInterpreterCrossFileCollisionTest {
     """.trimIndent()
 
     @Test
-    fun `later file colliding on a rule id is skipped, earlier file and other platform survive`() {
+    fun `a later rule colliding on a rule id is dropped, the rest of its file and other platforms survive`() {
         val shared = "doordash.screen.shared"
         val alpha = interpreter.loadSingle(
-            fileDeclaring("doordash.driver", shared, "ALPHA ", "doordash.screen.alpha_only"), "alpha.json",
+            fileDeclaring("doordash.driver", shared, "ALPHA ", "doordash.screen.alpha_only", 9102), "alpha.json",
         )!!
         // Later file re-declares `shared` with a DIFFERENT redact (the would-be shadow).
         val beta = interpreter.loadSingle(
-            fileDeclaring("doordash.driver", shared, "BETA ", "doordash.screen.beta_only"), "beta.json",
+            fileDeclaring("doordash.driver", shared, "BETA ", "doordash.screen.beta_only", 9103), "beta.json",
         )!!
         // A disjoint, different platform that must keep loading.
         val gamma = interpreter.loadSingle(disjointFile("uber.driver", "uber.screen.gamma_only"), "gamma.json")!!
 
-        val accepted = acceptNonCollidingFiles(
+        val accepted = dropCollidingRules(
             listOf("alpha.json" to alpha, "beta.json" to beta, "gamma.json" to gamma),
         )
 
-        // The LATER colliding file (beta) is dropped whole; earlier + disjoint survive.
-        assertEquals(listOf("alpha.json", "gamma.json"), accepted.map { it.first })
-
-        // An ERROR names the colliding id + both files, and leaks no rule text / PII.
-        val err = logs.entries.singleOrNull { it.priority == Log.ERROR }
-        assertNotNull("a cross-file collision must log exactly one ERROR", err)
+        // A WARN names the colliding id + both files, and leaks no rule text / PII.
+        val err = logs.entries.singleOrNull { it.priority == Log.WARN }
+        assertNotNull("a cross-file collision must log exactly one WARN", err)
         assertTrue(err!!.message.contains(shared))
         assertTrue(err.message.contains("beta.json"))
         assertTrue(err.message.contains("alpha.json"))
@@ -106,8 +103,8 @@ class JsonRuleInterpreterCrossFileCollisionTest {
         val survivor = screens.ruleById(shared)
         assertNotNull(survivor)
         assertEquals(listOf("ALPHA "), survivor!!.redact.entries.single().keepPrefix)
-        // beta contributed nothing at all — not even its own unique rule.
-        assertNull(screens.ruleById("doordash.screen.beta_only"))
+        // beta's own unique rule still loads; only the colliding rule was dropped.
+        assertNotNull(screens.ruleById("doordash.screen.beta_only"))
         // the other platform still loaded.
         assertNotNull(screens.ruleById("uber.screen.gamma_only"))
     }
@@ -124,7 +121,7 @@ class JsonRuleInterpreterCrossFileCollisionTest {
     """.trimIndent()
 
     @Test
-    fun `later file colliding on a same-platform section priority is skipped`() {
+    fun `a later rule colliding on a same-platform section priority is dropped`() {
         // #438 item 3: two DIFFERENT files for the SAME platform declare the SAME
         // screen priority with DISTINCT ids. compileRules' per-file check can't see
         // it (different files); the post-merge gate rejects the later file.
@@ -135,12 +132,10 @@ class JsonRuleInterpreterCrossFileCollisionTest {
             fileWithPriority("doordash.driver", "doordash.screen.b", 7777), "beta.json",
         )!!
 
-        val accepted = acceptNonCollidingFiles(listOf("alpha.json" to alpha, "beta.json" to beta))
+        val accepted = dropCollidingRules(listOf("alpha.json" to alpha, "beta.json" to beta))
 
-        // Later colliding file dropped whole; earlier survives.
-        assertEquals(listOf("alpha.json"), accepted.map { it.first })
-        val err = logs.entries.singleOrNull { it.priority == Log.ERROR }
-        assertNotNull("a priority collision must log exactly one ERROR", err)
+        val err = logs.entries.singleOrNull { it.priority == Log.WARN }
+        assertNotNull("a priority collision must log exactly one WARN", err)
         assertTrue(err!!.message.contains("7777"))
         assertTrue(err.message.contains("beta.json"))
         assertTrue(err.message.contains("alpha.json"))
@@ -161,12 +156,11 @@ class JsonRuleInterpreterCrossFileCollisionTest {
             fileWithPriority("uber.driver", "uber.screen.a", 5555), "uber.json",
         )!!
 
-        val accepted = acceptNonCollidingFiles(listOf("dd.json" to dd, "uber.json" to uber))
+        val accepted = dropCollidingRules(listOf("dd.json" to dd, "uber.json" to uber))
 
-        assertEquals(listOf("dd.json", "uber.json"), accepted.map { it.first })
         assertTrue(
-            "cross-platform priority reuse must not log an ERROR",
-            logs.entries.none { it.priority == Log.ERROR },
+            "cross-platform priority reuse must not log a WARN",
+            logs.entries.none { it.priority == Log.WARN },
         )
         val screens = Ruleset(accepted.flatMap { it.second.screens })
         assertNotNull(screens.ruleById("doordash.screen.a"))
@@ -178,10 +172,9 @@ class JsonRuleInterpreterCrossFileCollisionTest {
         val one = interpreter.loadSingle(disjointFile("doordash.driver", "doordash.screen.one"), "one.json")!!
         val two = interpreter.loadSingle(disjointFile("uber.driver", "uber.screen.two"), "two.json")!!
 
-        val accepted = acceptNonCollidingFiles(listOf("one.json" to one, "two.json" to two))
+        val accepted = dropCollidingRules(listOf("one.json" to one, "two.json" to two))
 
-        assertEquals(listOf("one.json", "two.json"), accepted.map { it.first })
-        assertTrue("disjoint ids must not log an ERROR", logs.entries.none { it.priority == Log.ERROR })
+        assertTrue("disjoint ids must not log a WARN", logs.entries.none { it.priority == Log.WARN })
 
         val screens: Ruleset<UiNode> = Ruleset(accepted.flatMap { it.second.screens })
         assertNotNull(screens.ruleById("doordash.screen.one"))

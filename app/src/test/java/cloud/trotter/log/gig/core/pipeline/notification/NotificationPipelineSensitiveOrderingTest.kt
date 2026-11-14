@@ -10,6 +10,7 @@ import cloud.trotter.log.gig.core.pipeline.CaptureWriter
 import cloud.trotter.log.gig.core.pipeline.ObservationClassifier
 import cloud.trotter.log.gig.core.pipeline.PipelineStats
 import cloud.trotter.log.gig.core.pipeline.rules.JsonRuleInterpreter
+import cloud.trotter.log.gig.core.pipeline.rules.RuleGeneration
 import cloud.trotter.log.gig.core.pipeline.rules.ScreenRedactionSource
 import cloud.trotter.log.gig.core.pipeline.notification.input.NotificationSource
 import cloud.trotter.log.gig.domain.capture.CaptureBus
@@ -62,7 +63,7 @@ class NotificationPipelineSensitiveOrderingTest {
     }
     private val classifier = ObservationClassifier(
         mock<JsonRuleInterpreter> {
-            on { notificationRuleset } doReturn TestRulesetFactory.notificationRuleset
+            on { generation } doReturn RuleGeneration(notifications = TestRulesetFactory.notificationRuleset)
             on { isLoaded } doReturn true
         },
         mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
@@ -73,10 +74,7 @@ class NotificationPipelineSensitiveOrderingTest {
         source = source,
         filter = NotificationFilter(platformPrefs),
         classifier = classifier,
-        captureWriter = CaptureWriter(
-            captureBus, PipelineStats(),
-            object : ScreenRedactionSource { override fun redactFor(ruleId: String) = null },
-        ),
+        captureWriter = CaptureWriter(captureBus, PipelineStats()),
         platformPreferences = platformPrefs,
         stats = PipelineStats(),
         skeletonPublisher = SkeletonPublisher(censusSink, PipelineStats(), NoOpCensusEnvelopeSink),

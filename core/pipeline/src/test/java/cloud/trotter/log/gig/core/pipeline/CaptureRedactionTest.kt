@@ -73,7 +73,7 @@ class CaptureRedactionTest {
         override fun redactFor(ruleId: String): CompiledRedact? = redact.takeIf { ruleId == forRuleId }
     }
 
-    private fun writer(source: ScreenRedactionSource) = CaptureWriter(captureBus, stats, source)
+    private val writer = CaptureWriter(captureBus, stats)
 
     private fun screenEvent(tree: UiNode) = PipelineEvent.Screen(
         timestamp = 1_000L,
@@ -117,8 +117,11 @@ class CaptureRedactionTest {
                 UiNode(text = "Directions"),
             ),
         )
-        writer(sourceFor("doordash.screen.dropoff_navigation", dropoffRedact))
-            .captureScreen(recognizedObs("doordash.screen.dropoff_navigation", "dropoff_navigation"), screenEvent(tree))
+        writer.captureScreen(
+            recognizedObs("doordash.screen.dropoff_navigation", "dropoff_navigation"),
+            screenEvent(tree),
+            sourceFor("doordash.screen.dropoff_navigation", dropoffRedact),
+        )
 
         val json = capturedEnvelope()
         // PII gone, marker kept, address masked whole, unrelated node intact.
@@ -151,11 +154,11 @@ class CaptureRedactionTest {
                 UiNode(viewIdResourceName = "com.doordash:id/textView_prism_button_title", text = "Submit"),
             ),
         )
-        writer(sourceFor("doordash.screen.dropoff_pin_keypad", pinKeypadRedact))
-            .captureScreen(
-                recognizedObs("doordash.screen.dropoff_pin_keypad", "dropoff_pin_keypad"),
-                screenEvent(tree),
-            )
+        writer.captureScreen(
+            recognizedObs("doordash.screen.dropoff_pin_keypad", "dropoff_pin_keypad"),
+            screenEvent(tree),
+            sourceFor("doordash.screen.dropoff_pin_keypad", pinKeypadRedact),
+        )
 
         val json = capturedEnvelope()
         // The PIN must be gone AND must carry NO `<4hex>` suffix: a 4-digit space (10 000
@@ -180,8 +183,11 @@ class CaptureRedactionTest {
         val tree = UiNode(
             children = listOf(UiNode(text = "Deliver to Jane Q. Doe")),
         )
-        writer(sourceFor("doordash.screen.dropoff_navigation", dropoffRedact))
-            .captureScreen(recognizedObs("doordash.screen.dropoff_navigation", "dropoff_navigation"), screenEvent(tree))
+        writer.captureScreen(
+            recognizedObs("doordash.screen.dropoff_navigation", "dropoff_navigation"),
+            screenEvent(tree),
+            sourceFor("doordash.screen.dropoff_navigation", dropoffRedact),
+        )
 
         val hashCap = argumentCaptor<Int?>()
         org.mockito.kotlin.verify(captureBus).offer(
@@ -197,8 +203,11 @@ class CaptureRedactionTest {
         // Non-PII text (no customer marker) → nothing to mask, backstop is inert.
         val tree = UiNode(children = listOf(UiNode(text = "Nearby high pay")))
         // Source returns null for this ruleId → no redaction.
-        writer(sourceFor("some.other.rule", dropoffRedact))
-            .captureScreen(recognizedObs("doordash.screen.idle_map", "idle_map"), screenEvent(tree))
+        writer.captureScreen(
+            recognizedObs("doordash.screen.idle_map", "idle_map"),
+            screenEvent(tree),
+            sourceFor("some.other.rule", dropoffRedact),
+        )
 
         val json = capturedEnvelope()
         assertTrue("no redact + no marker → text persists", json.contains("Nearby high pay"))
@@ -217,11 +226,11 @@ class CaptureRedactionTest {
                 UiNode(text = "Directions"),
             ),
         )
-        writer(sourceFor("some.other.rule", dropoffRedact))
-            .captureScreen(
-                recognizedObs("doordash.screen.dropoff_navigation", "dropoff_navigation"),
-                screenEvent(tree),
-            )
+        writer.captureScreen(
+            recognizedObs("doordash.screen.dropoff_navigation", "dropoff_navigation"),
+            screenEvent(tree),
+            sourceFor("some.other.rule", dropoffRedact),
+        )
 
         val json = capturedEnvelope()
         assertFalse("leaked customer name scrubbed by backstop", json.contains("Jane Q. Doe"))
@@ -248,7 +257,7 @@ class CaptureRedactionTest {
             ),
         )
         val obs = recognizedObs(UNKNOWN_TARGET, UNKNOWN_TARGET).copy(ruleId = null)
-        writer(sourceFor("x", dropoffRedact)).captureScreen(obs, screenEvent(tree))
+        writer.captureScreen(obs, screenEvent(tree), sourceFor("x", dropoffRedact))
 
         val json = capturedEnvelope()
         assertFalse("leaked customer name scrubbed", json.contains("Jane D."))
@@ -276,7 +285,7 @@ class CaptureRedactionTest {
             .thenReturn("cap-1")
         val tree = UiNode(children = listOf(UiNode(text = "Deliver to Jane Q. Doe")))
         val obs = recognizedObs(UNKNOWN_TARGET, UNKNOWN_TARGET).copy(ruleId = null)
-        writer(sourceFor("x", dropoffRedact)).captureScreen(obs, screenEvent(tree))
+        writer.captureScreen(obs, screenEvent(tree), sourceFor("x", dropoffRedact))
 
         val json = capturedEnvelope()
         assertFalse("leaked customer name scrubbed", json.contains("Jane Q. Doe"))
@@ -292,7 +301,7 @@ class CaptureRedactionTest {
             .thenReturn("cap-1")
         val tree = UiNode(children = listOf(UiNode(text = "Some benign promo")))
         val obs = recognizedObs(UNKNOWN_TARGET, UNKNOWN_TARGET).copy(ruleId = null)
-        writer(sourceFor("x", dropoffRedact)).captureScreen(obs, screenEvent(tree))
+        writer.captureScreen(obs, screenEvent(tree), sourceFor("x", dropoffRedact))
         assertTrue(capturedEnvelope().contains("Some benign promo"))
         assertEquals(0L, stats.unknownCustomerScrubCount)
         assertEquals(0L, stats.redactBackstopScrubCount)
@@ -309,7 +318,7 @@ class CaptureRedactionTest {
             override fun redactFor(ruleId: String): CompiledRedact =
                 throw AssertionError("UNKNOWN path must not consult redaction source")
         }
-        writer(throwing).captureScreen(obs, screenEvent(tree))
+        writer.captureScreen(obs, screenEvent(tree), throwing)
         assertTrue(capturedEnvelope().contains("Some benign promo"))
     }
 }

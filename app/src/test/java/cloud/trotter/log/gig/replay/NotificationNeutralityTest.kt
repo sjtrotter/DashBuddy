@@ -5,6 +5,7 @@ import cloud.trotter.log.gig.core.pipeline.ObservationClassifier
 import cloud.trotter.log.gig.core.pipeline.PipelineEvent
 import cloud.trotter.log.gig.core.pipeline.PlatformAppVersions
 import cloud.trotter.log.gig.core.pipeline.rules.JsonRuleInterpreter
+import cloud.trotter.log.gig.core.pipeline.rules.RuleGeneration
 import cloud.trotter.log.gig.core.state.AppEffect
 import cloud.trotter.log.gig.core.state.CrossPlatformRegionStepper
 import cloud.trotter.log.gig.core.state.EffectMap
@@ -56,7 +57,7 @@ import java.io.File
 class NotificationNeutralityTest {
     private val classifier = ObservationClassifier(
         mock<JsonRuleInterpreter> {
-            on { notificationRuleset } doReturn TestRulesetFactory.notificationRuleset
+            on { generation } doReturn RuleGeneration(notifications = TestRulesetFactory.notificationRuleset)
         },
         mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
         PlatformAppVersions.NONE,

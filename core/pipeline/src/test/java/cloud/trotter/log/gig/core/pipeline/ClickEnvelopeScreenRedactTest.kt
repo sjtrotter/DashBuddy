@@ -66,7 +66,7 @@ class ClickEnvelopeScreenRedactTest {
     }
 
     private val stats = PipelineStats()
-    private val writer = CaptureWriter(bus, stats, CustomerNameRedaction)
+    private val writer = CaptureWriter(bus, stats)
 
     /** The fielded shape: the tapped row subtree, one bare customer name + merchant. */
     private fun row() = UiNode(
@@ -101,6 +101,7 @@ class ClickEnvelopeScreenRedactTest {
             PipelineEvent.Click(timestamp = 1_000L, node = node, packageName = "com.doordash.driverapp"),
             screenTarget = "pickup_post_arrival_multi",
             screenRuleId = screenRuleId,
+            screenRedaction = CustomerNameRedaction,
         )
         return offered.single()
     }

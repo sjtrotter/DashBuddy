@@ -78,12 +78,9 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.mockito.kotlin.any
 import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
-import org.mockito.kotlin.whenever
 import org.robolectric.Shadows.shadowOf
-import java.io.File
 import java.time.Clock
 
 /**
@@ -532,13 +529,7 @@ class E2ESessionReplay(
          * that path — the loader, compiler and capability enumeration run unchanged.
          */
         private fun generatedRuleAssets(app: Context, transform: (String, String) -> String): Context {
-            val dir = File(TestRulesetFactory.rulesDir)
-            val assets = mock<AssetManager>()
-            whenever(assets.list("rules")).thenReturn(dir.list())
-            whenever(assets.open(any<String>())).thenAnswer {
-                val file = File(dir, it.getArgument<String>(0).removePrefix("rules/"))
-                transform(file.name, file.readText()).byteInputStream()
-            }
+            val assets = TestRulesetFactory.generatedAssets(transform)
             return object : ContextWrapper(app) {
                 override fun getAssets(): AssetManager = assets
             }

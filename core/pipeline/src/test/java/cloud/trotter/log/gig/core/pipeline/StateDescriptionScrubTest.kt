@@ -82,8 +82,7 @@ class StateDescriptionScrubTest {
         override fun redactFor(ruleId: String): CompiledRedact? = redact.takeIf { ruleId == forRuleId }
     }
 
-    private fun writer(source: ScreenRedactionSource = NoRedaction) =
-        CaptureWriter(captureBus, stats, source)
+    private val writer = CaptureWriter(captureBus, stats)
 
     private fun capturedEnvelope(): String {
         val cap = argumentCaptor<String>()
@@ -140,8 +139,11 @@ class StateDescriptionScrubTest {
             ),
         )
 
-        writer(sourceFor("doordash.screen.dropoff_navigation", addressRedact))
-            .captureScreen(obs("doordash.screen.dropoff_navigation", "dropoff_navigation"), screenEvent(tree))
+        writer.captureScreen(
+            obs("doordash.screen.dropoff_navigation", "dropoff_navigation"),
+            screenEvent(tree),
+            sourceFor("doordash.screen.dropoff_navigation", addressRedact),
+        )
 
         val json = capturedEnvelope()
         assertFalse("street address must not persist in text", json.contains("123 Secret St"))
@@ -226,7 +228,7 @@ class StateDescriptionScrubTest {
             ),
         )
 
-        writer().captureScreen(obs(null, UNKNOWN_TARGET), screenEvent(tree))
+        writer.captureScreen(obs(null, UNKNOWN_TARGET), screenEvent(tree), NoRedaction)
 
         val json = capturedEnvelope()
         assertFalse("customer name must not persist", json.contains("Jane Q. Doe"))
@@ -281,7 +283,7 @@ class StateDescriptionScrubTest {
     @Test
     fun `an UNKNOWN screen whose sensitive marker rides stateDescription is never offered to the bus`() {
         val toxic = UiNode(children = listOf(UiNode(stateDescription = "Routing Number 021000021")))
-        writer().captureScreen(obs(null, UNKNOWN_TARGET), screenEvent(toxic))
+        writer.captureScreen(obs(null, UNKNOWN_TARGET), screenEvent(toxic), NoRedaction)
 
         verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
         assertEquals(1L, stats.scrubbedUnknownCaptureCount)
@@ -290,11 +292,12 @@ class StateDescriptionScrubTest {
     @Test
     fun `an UNKNOWN click whose sensitive marker rides stateDescription is never offered to the bus`() {
         val toxic = UiNode(text = "Confirm", stateDescription = "Transfer out", isClickable = true)
-        writer().captureClick(
+        writer.captureClick(
             unknownClickObs(),
             PipelineEvent.Click(timestamp = 1_000L, node = toxic, packageName = "com.doordash.driverapp"),
             screenTarget = null,
             screenRuleId = null,
+            NoRedaction,
         )
 
         verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
@@ -305,7 +308,7 @@ class StateDescriptionScrubTest {
     fun `a benign state value still captures - the widened scan is not a blanket drop`() {
         busAcceptsOffer()
         val benign = UiNode(children = listOf(UiNode(text = "Dash now", stateDescription = "Not selected")))
-        writer().captureScreen(obs(null, UNKNOWN_TARGET), screenEvent(benign))
+        writer.captureScreen(obs(null, UNKNOWN_TARGET), screenEvent(benign), NoRedaction)
 
         verify(captureBus, times(1)).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
         assertEquals(0L, stats.scrubbedUnknownCaptureCount)
@@ -326,7 +329,7 @@ class StateDescriptionScrubTest {
                 UiNode(paneTitle = "Deliver to Jane Q. Doe"),
             ),
         )
-        writer().captureScreen(obs(null, UNKNOWN_TARGET), screenEvent(tree))
+        writer.captureScreen(obs(null, UNKNOWN_TARGET), screenEvent(tree), NoRedaction)
 
         val json = capturedEnvelope()
         assertFalse("customer name in the pane title must not persist", json.contains("Jane Q. Doe"))
@@ -340,7 +343,7 @@ class StateDescriptionScrubTest {
         val toxic = UiNode(
             children = listOf(UiNode(text = "Continue", clickActionLabel = "Transfer out", hasClickAction = true)),
         )
-        writer().captureScreen(obs(null, UNKNOWN_TARGET), screenEvent(toxic))
+        writer.captureScreen(obs(null, UNKNOWN_TARGET), screenEvent(toxic), NoRedaction)
 
         verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
         assertEquals(1L, stats.scrubbedUnknownCaptureCount)
@@ -360,8 +363,11 @@ class StateDescriptionScrubTest {
                 UiNode(text = "Directions"),
             ),
         )
-        writer(sourceFor("doordash.screen.dropoff_navigation", addressRedact))
-            .captureScreen(obs("doordash.screen.dropoff_navigation", "dropoff_navigation"), screenEvent(tree))
+        writer.captureScreen(
+            obs("doordash.screen.dropoff_navigation", "dropoff_navigation"),
+            screenEvent(tree),
+            sourceFor("doordash.screen.dropoff_navigation", addressRedact),
+        )
 
         val json = capturedEnvelope()
         assertFalse("the address must not persist in any field", json.contains("Secret St"))
@@ -374,7 +380,7 @@ class StateDescriptionScrubTest {
         val tree = UiNode(
             children = listOf(UiNode(viewIdResourceName = "com.doordash:id/user_name", text = "Jane Q. Doe")),
         )
-        writer().captureScreen(obs(null, UNKNOWN_TARGET), screenEvent(tree))
+        writer.captureScreen(obs(null, UNKNOWN_TARGET), screenEvent(tree), NoRedaction)
 
         val json = capturedEnvelope()
         assertFalse(json.contains("Jane Q. Doe"))
@@ -399,18 +405,23 @@ class StateDescriptionScrubTest {
 
     @Test
     fun `the Transfer-amount UNKNOWN screen with a role is still dropped`() {
-        writer().captureScreen(obs(null, UNKNOWN_TARGET), screenEvent(UiNode(children = listOf(transferTree()))))
+        writer.captureScreen(
+            obs(null, UNKNOWN_TARGET),
+            screenEvent(UiNode(children = listOf(transferTree()))),
+            NoRedaction,
+        )
         verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
         assertEquals(1L, stats.scrubbedUnknownCaptureCount)
     }
 
     @Test
     fun `the Transfer-amount UNKNOWN click with a role is still dropped`() {
-        writer().captureClick(
+        writer.captureClick(
             unknownClickObs(),
             PipelineEvent.Click(timestamp = 1_000L, node = transferTree(), packageName = "com.doordash.driverapp"),
             screenTarget = null,
             screenRuleId = null,
+            NoRedaction,
         )
         verify(captureBus, never()).offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())
         assertEquals(1L, stats.scrubbedUnknownCaptureCount)

@@ -45,7 +45,7 @@ class NotificationRedactionTest {
         override fun notifRedactFor(ruleId: String): CompiledNotifRedact? = redact.takeIf { ruleId == forRuleId }
     }
 
-    private fun writer(source: ScreenRedactionSource) = CaptureWriter(captureBus, stats, source)
+    private val writer = CaptureWriter(captureBus, stats)
 
     private fun raw(
         title: String? = null,
@@ -111,8 +111,11 @@ class NotificationRedactionTest {
             tickerText = "The gate code is 4412, leave at door",
             channelId = "dasher-notification-channel-inapp-chat",
         )
-        writer(sourceFor("doordash.notification.customer_message", customerMessageRedact))
-            .captureNotification(obs("doordash.notification.customer_message", "customer_message"), message)
+        writer.captureNotification(
+            obs("doordash.notification.customer_message", "customer_message"),
+            message,
+            sourceFor("doordash.notification.customer_message", customerMessageRedact),
+        )
 
         val json = capturedEnvelope()
         assertFalse("sender name gone", json.contains("Jennifer"))
@@ -129,8 +132,11 @@ class NotificationRedactionTest {
             channelId = "dasher-notification-channel-inapp-chat",
         )
         val originalHash = message.contentHash
-        writer(sourceFor("doordash.notification.customer_message", customerMessageRedact))
-            .captureNotification(obs("doordash.notification.customer_message", "customer_message"), message)
+        writer.captureNotification(
+            obs("doordash.notification.customer_message", "customer_message"),
+            message,
+            sourceFor("doordash.notification.customer_message", customerMessageRedact),
+        )
 
         val hashCap = argumentCaptor<Int?>()
         org.mockito.kotlin.verify(captureBus).offer(any(), any(), anyOrNull(), any(), any(), hashCap.capture())
@@ -145,8 +151,11 @@ class NotificationRedactionTest {
             text = "Adam's order is ready for pickup at 7-Eleven.",
             channelId = "dasher-notification-channel-delivery-update",
         )
-        writer(sourceFor("doordash.notification.order_ready", orderReadyRedact))
-            .captureNotification(obs("doordash.notification.order_ready", "order_ready_for_pickup"), ready)
+        writer.captureNotification(
+            obs("doordash.notification.order_ready", "order_ready_for_pickup"),
+            ready,
+            sourceFor("doordash.notification.order_ready", orderReadyRedact),
+        )
 
         val json = capturedEnvelope()
         assertFalse("customer name gone", json.contains("Adam"))
@@ -159,8 +168,11 @@ class NotificationRedactionTest {
         whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())).thenReturn("cap-1")
         val newOrder = raw(title = "You have a new order!", text = "Tap to view", channelId = "new-order")
         // notifRedactFor returns null for this rule id.
-        writer(sourceFor("doordash.notification.customer_message", customerMessageRedact))
-            .captureNotification(obs("doordash.notification.new_order", "new_order"), newOrder)
+        writer.captureNotification(
+            obs("doordash.notification.new_order", "new_order"),
+            newOrder,
+            sourceFor("doordash.notification.customer_message", customerMessageRedact),
+        )
 
         val json = capturedEnvelope()
         assertTrue(json.contains("You have a new order!"))
@@ -181,8 +193,7 @@ class NotificationRedactionTest {
         // Uber trip_at_dropoff push with the customer ADDRESS after the lead-in, but the
         // rule shipped NO redact block (noRedactSource) — the backstop is the only net.
         val leak = raw(title = "Leave the order at 123 Main St, Apt 4")
-        writer(noRedactSource)
-            .captureNotification(obs("uber.notification.trip_at_dropoff", "trip_at_dropoff"), leak)
+        writer.captureNotification(obs("uber.notification.trip_at_dropoff", "trip_at_dropoff"), leak, noRedactSource)
 
         val json = capturedEnvelope()
         assertFalse("leaked address gone", json.contains("123 Main St"))
@@ -194,8 +205,11 @@ class NotificationRedactionTest {
     fun `#632 backstop scrubs a forgotten DoorDash chat name`() {
         whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())).thenReturn("cap-1")
         val leak = raw(title = "Message from Jennifer", text = "The gate code is 4412")
-        writer(noRedactSource)
-            .captureNotification(obs("doordash.notification.customer_message", "customer_message"), leak)
+        writer.captureNotification(
+            obs("doordash.notification.customer_message", "customer_message"),
+            leak,
+            noRedactSource,
+        )
 
         val json = capturedEnvelope()
         assertFalse("customer name gone", json.contains("Jennifer"))
@@ -207,8 +221,7 @@ class NotificationRedactionTest {
         whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())).thenReturn("cap-1")
         val leak = raw(title = "Leave the order at 123 Main St")
         val originalHash = leak.contentHash
-        writer(noRedactSource)
-            .captureNotification(obs("uber.notification.trip_at_dropoff", "trip_at_dropoff"), leak)
+        writer.captureNotification(obs("uber.notification.trip_at_dropoff", "trip_at_dropoff"), leak, noRedactSource)
 
         val hashCap = argumentCaptor<Int?>()
         org.mockito.kotlin.verify(captureBus).offer(any(), any(), anyOrNull(), any(), any(), hashCap.capture())
@@ -223,8 +236,11 @@ class NotificationRedactionTest {
             text = "secret body",
             channelId = "dasher-notification-channel-inapp-chat",
         )
-        writer(sourceFor("doordash.notification.customer_message", customerMessageRedact))
-            .captureNotification(obs("doordash.notification.customer_message", "customer_message"), message)
+        writer.captureNotification(
+            obs("doordash.notification.customer_message", "customer_message"),
+            message,
+            sourceFor("doordash.notification.customer_message", customerMessageRedact),
+        )
 
         // The rule redacted; the backstop found nothing to scrub.
         assertEquals(0L, stats.notifRedactBackstopScrubCount)
@@ -238,8 +254,7 @@ class NotificationRedactionTest {
     fun `#632 backstop does not scrub store-only text`() {
         whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())).thenReturn("cap-1")
         val storeOnly = raw(title = "Order confirmed", text = "Your delivery from H-E-B")
-        writer(noRedactSource)
-            .captureNotification(obs("doordash.notification.some_promo", "some_promo"), storeOnly)
+        writer.captureNotification(obs("doordash.notification.some_promo", "some_promo"), storeOnly, noRedactSource)
 
         assertTrue("store kept", capturedEnvelope().contains("H-E-B"))
         assertEquals(0L, stats.notifRedactBackstopScrubCount)
@@ -253,8 +268,11 @@ class NotificationRedactionTest {
         // prefixes STORES on trip_en_route_pickup; either way the prefix scan cannot fire
         // and the rule's own `redact` is the primary control. Synthetic bare-address shape.)
         val residual = raw(title = "123 Main Street, Austin")
-        writer(noRedactSource)
-            .captureNotification(obs("uber.notification.trip_en_route_dropoff", "trip_en_route_dropoff"), residual)
+        writer.captureNotification(
+            obs("uber.notification.trip_en_route_dropoff", "trip_en_route_dropoff"),
+            residual,
+            noRedactSource,
+        )
 
         // Honest residual: the prefix backstop does NOT fire here; the rule's
         // `redact { title {} }` is the primary control for this shape.
@@ -270,8 +288,11 @@ class NotificationRedactionTest {
     fun `#632 backstop scrubs a marker-bearing action label`() {
         whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())).thenReturn("cap-1")
         val leak = raw(title = "New message", actionLabels = listOf("Message from Jennifer", "Dismiss"))
-        writer(noRedactSource)
-            .captureNotification(obs("doordash.notification.customer_message", "customer_message"), leak)
+        writer.captureNotification(
+            obs("doordash.notification.customer_message", "customer_message"),
+            leak,
+            noRedactSource,
+        )
 
         val json = capturedEnvelope()
         assertFalse("leaked name gone", json.contains("Jennifer"))
@@ -284,8 +305,7 @@ class NotificationRedactionTest {
     fun `#632 backstop leaves clean action labels untouched`() {
         whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())).thenReturn("cap-1")
         val benign = raw(title = "You have a new order!", actionLabels = listOf("Accept", "Decline"))
-        writer(noRedactSource)
-            .captureNotification(obs("doordash.notification.new_order", "new_order"), benign)
+        writer.captureNotification(obs("doordash.notification.new_order", "new_order"), benign, noRedactSource)
 
         val json = capturedEnvelope()
         assertTrue(json.contains("Accept"))
@@ -298,8 +318,11 @@ class NotificationRedactionTest {
         whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull())).thenReturn("cap-1")
         val leak = raw(title = "New message", actionLabels = listOf("Message from Jennifer"))
         val originalHash = leak.contentHash
-        writer(noRedactSource)
-            .captureNotification(obs("doordash.notification.customer_message", "customer_message"), leak)
+        writer.captureNotification(
+            obs("doordash.notification.customer_message", "customer_message"),
+            leak,
+            noRedactSource,
+        )
 
         val hashCap = argumentCaptor<Int?>()
         org.mockito.kotlin.verify(captureBus).offer(any(), any(), anyOrNull(), any(), any(), hashCap.capture())
@@ -317,7 +340,7 @@ class NotificationRedactionTest {
             override fun notifRedactFor(ruleId: String): CompiledNotifRedact =
                 throw AssertionError("UNKNOWN path must not consult redaction source")
         }
-        writer(throwing).captureNotification(obs(null, UNKNOWN_TARGET), benign)
+        writer.captureNotification(obs(null, UNKNOWN_TARGET), benign, throwing)
         assertTrue(capturedEnvelope().contains("50% off"))
     }
 }

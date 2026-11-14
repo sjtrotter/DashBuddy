@@ -9,6 +9,7 @@ import cloud.trotter.log.gig.domain.capture.ReplayMetadataProvider
 import cloud.trotter.log.gig.core.pipeline.ObservationClassifier
 import cloud.trotter.log.gig.core.pipeline.PipelineEvent
 import cloud.trotter.log.gig.core.pipeline.rules.JsonRuleInterpreter
+import cloud.trotter.log.gig.core.pipeline.rules.RuleGeneration
 import cloud.trotter.log.gig.test.util.TestRulesetFactory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -23,7 +24,7 @@ class ClickClassifierTest {
 
     private val classifier = ObservationClassifier(
         mock<JsonRuleInterpreter> {
-            on { clickRuleset } doReturn TestRulesetFactory.clickRuleset
+            on { generation } doReturn RuleGeneration(clicks = TestRulesetFactory.clickRuleset)
         },
         mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
         PlatformAppVersions.NONE,
@@ -47,8 +48,9 @@ class ClickClassifierTest {
      * Prime (or clear) a platform's cached screen context so rules with a `screenIs`
      * constraint can match (#438 item 2 — the classifier keys screen targets per
      * platform wire). #910 turned the cache value into a `ScreenContext(target,
-     * ruleId)` pair — the click envelope now inherits the screen RULE's redact — so
-     * this reflects the nested value type rather than a bare String.
+     * ruleId)` pair — the click envelope now inherits the screen RULE's redact — and
+     * #1568 added the screen's generation, so this reflects the nested value type
+     * rather than a bare String.
      */
     private fun primeScreenContext(wire: String, target: String?) {
         @Suppress("UNCHECKED_CAST")
@@ -59,7 +61,7 @@ class ClickClassifierTest {
         if (target == null) return
         val ctor = Class.forName("cloud.trotter.log.gig.core.pipeline.ObservationClassifier\u0024ScreenContext")
             .declaredConstructors.first().apply { isAccessible = true }
-        contexts[wire] = ctor.newInstance(target, null)
+        contexts[wire] = ctor.newInstance(target, null, RuleGeneration.EMPTY)
     }
 
     private fun classifyClick(node: UiNode, screenTarget: String? = null): Observation.Click {

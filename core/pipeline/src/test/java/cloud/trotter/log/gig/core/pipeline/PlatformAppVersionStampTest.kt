@@ -95,7 +95,7 @@ class PlatformAppVersionStampTest {
         whenever(captureBus.offer(any(), any(), anyOrNull(), any(), any(), anyOrNull()))
             .thenReturn("cap-1")
         val bus = captureBus
-        CaptureWriter(bus, PipelineStats(), noRedaction).captureScreen(
+        CaptureWriter(bus, PipelineStats()).captureScreen(
             Observation.Screen(
                 timestamp = 1_000L,
                 captureId = null,
@@ -107,6 +107,7 @@ class PlatformAppVersionStampTest {
                 target = "offer",
             ),
             screenEvent(),
+            noRedaction,
         )
         val cap = argumentCaptor<String>()
         org.mockito.kotlin.verify(bus).offer(any(), any(), anyOrNull(), any(), cap.capture(), anyOrNull())

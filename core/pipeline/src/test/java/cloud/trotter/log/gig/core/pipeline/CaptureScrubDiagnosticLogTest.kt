@@ -54,7 +54,7 @@ class CaptureScrubDiagnosticLogTest {
     }
 
     private val recorder = Recorder()
-    private val writer = CaptureWriter(SinkBus, PipelineStats(), NoRedaction)
+    private val writer = CaptureWriter(SinkBus, PipelineStats())
 
     @Before fun plant() = Timber.plant(recorder)
 
@@ -98,6 +98,7 @@ class CaptureScrubDiagnosticLogTest {
         writer.captureScreen(
             screenObs(),
             screenEvent(UiNode(children = listOf(UiNode(text = "Available Balance: \$152.10")))),
+            NoRedaction,
         )
         writer.captureClick(
             clickObs(),
@@ -108,14 +109,16 @@ class CaptureScrubDiagnosticLogTest {
             ),
             screenTarget = null,
             screenRuleId = null,
+            screenRedaction = NoRedaction,
         )
-        writer.captureNotification(notifObs(), rawNotif(title = "Promo", actionLabels = listOf("Cash out")))
+        writer.captureNotification(notifObs(), rawNotif(title = "Promo", actionLabels = listOf("Cash out")), NoRedaction)
 
         // --- CustomerTextMarkers backstop scrubs (same shape; pre-emptively id-ified) ---
-        writer.captureScreen(screenObs(), screenEvent(UiNode(text = "Deliver to Jane D.")))
+        writer.captureScreen(screenObs(), screenEvent(UiNode(text = "Deliver to Jane D.")), NoRedaction)
         writer.captureScreen(
             screenObs(ruleId = "doordash.screen.test", target = "dropoff_reminder"),
             screenEvent(UiNode(text = "Deliver to Jane D.")),
+            NoRedaction,
         )
         writer.captureClick(
             clickObs(),
@@ -126,11 +129,13 @@ class CaptureScrubDiagnosticLogTest {
             ),
             screenTarget = null,
             screenRuleId = null,
+            screenRedaction = NoRedaction,
         )
-        writer.captureNotification(notifObs(), rawNotif(title = "Message from Jane"))
+        writer.captureNotification(notifObs(), rawNotif(title = "Message from Jane"), NoRedaction)
         writer.captureNotification(
             notifObs(ruleId = "doordash.notif.test", target = "chat_message"),
             rawNotif(title = "Message from Jane"),
+            NoRedaction,
         )
     }
 

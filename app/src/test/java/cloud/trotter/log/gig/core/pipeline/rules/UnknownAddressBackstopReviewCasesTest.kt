@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.core.pipeline.rules
 
+import cloud.trotter.log.gig.core.pipeline.rules.RuleGeneration
 import cloud.trotter.log.gig.core.pipeline.CaptureWriter
 import cloud.trotter.log.gig.core.pipeline.CustomerTextMarkers
 import cloud.trotter.log.gig.core.pipeline.ObservationClassifier
@@ -40,7 +41,7 @@ class UnknownAddressBackstopReviewCasesTest {
     private val pkg = "com.doordash.driverapp"
 
     private val classifier = ObservationClassifier(
-        mock<JsonRuleInterpreter> { on { screenRuleset } doReturn ruleset },
+        mock<JsonRuleInterpreter> { on { generation } doReturn RuleGeneration(screens = ruleset) },
         mock<ReplayMetadataProvider> { on { current() } doReturn ReplayMetadata.EMPTY },
         PlatformAppVersions.NONE,
     )
@@ -109,7 +110,7 @@ class UnknownAddressBackstopReviewCasesTest {
     private fun persist(tree: UiNode): Pair<String?, String> {
         val obs = classifier.classify(event(tree))
         val bus = RecordingBus()
-        CaptureWriter(bus, PipelineStats(), rulesetRedaction).captureScreen(obs, event(tree))
+        CaptureWriter(bus, PipelineStats()).captureScreen(obs, event(tree), rulesetRedaction)
         return obs.target to bus.envelope!!
     }
 

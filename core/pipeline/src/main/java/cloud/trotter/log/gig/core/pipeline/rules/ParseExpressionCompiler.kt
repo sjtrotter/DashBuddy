@@ -29,6 +29,25 @@ internal object ParseExpressionCompiler {
      *  compiling, its only consumer. */
     private const val MAX_EACH_SIZE = 50
 
+    /**
+     * The screen parse-expression selector keys in the order `compileParseExpression` tests them:
+     * an object carrying two of them compiles as the first (#1568). [RemoteRuleAdmission] reads
+     * this to judge the expression the compiler will actually build; `ParseSelectorOrderPinTest`
+     * pins it to the dispatch below.
+     */
+    val SCREEN_SELECTORS = listOf(
+        "literal", "findAll", "each", "presence", "conditionalEnum", "find", "textAfterLabel",
+        "siblingOf", "join", "coalesce", "read",
+    )
+
+    /**
+     * Every key `compileNotifParseExpression` reads (#1568). A notification expression is a
+     * `literal`, or a read of the field named by `from`; any other key is ignored, so
+     * [RemoteRuleAdmission] refuses a notification customer field that carries one.
+     * `ParseSelectorOrderPinTest` pins this to that function.
+     */
+    val NOTIFICATION_KEYS = setOf("literal", "from", "find", "group", "transform", "fallback")
+
     // ==========================================================================
     //  Screen parse block compiler
     // ==========================================================================
