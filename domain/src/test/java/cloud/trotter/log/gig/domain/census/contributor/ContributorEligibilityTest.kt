@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.ZonedDateTime
 
 /** #1625: the eligibility rule at each threshold, one input below it at a time. */
@@ -21,7 +22,7 @@ class ContributorEligibilityTest {
 
     private fun inputs(
         censusOn: Boolean = true,
-        enrolledDaysAgo: Long? = 7,
+        enrolledDaysAgo: Long? = 8,
         activeDays: Int = 3,
         endedShifts: Int = 2,
     ) = ContributorEligibility.Inputs(
@@ -35,10 +36,16 @@ class ContributorEligibilityTest {
 
     @Test fun `every threshold met is eligible`() = assertTrue(eligible(inputs()))
 
-    @Test fun `census enrolled 6 days ago is not, 7 days is`() {
-        assertFalse(eligible(inputs(enrolledDaysAgo = 6)))
-        assertFalse(eligible(inputs().copy(enrolledAtMillis = now - 7 * day + 1)))
-        assertTrue(eligible(inputs(enrolledDaysAgo = 7)))
+    @Test fun `census enrolled 7 UTC days ago is not, 8 is, as the server counts`() {
+        assertFalse(eligible(inputs(enrolledDaysAgo = 7)))
+        assertTrue(eligible(inputs(enrolledDaysAgo = 8)))
+        // UTC calendar days, not 24-hour spans: 23:59 on the 5th to 00:01 on the 13th is 8 days; 00:01 on the 6th is 7.
+        val at = { d: Int, h: Int, m: Int -> ZonedDateTime.of(2026, 11, d, h, m, 0, 0, ZoneOffset.UTC).toInstant().toEpochMilli() }
+        val justAfter = at(13, 0, 1)
+        val active = (0..2).map { ShiftSpan(justAfter - it * day - 60_000L, justAfter - it * day) }
+        val base = ContributorEligibility.Inputs(true, null, active, endedShifts = 2)
+        assertTrue(ContributorEligibility.eligible(base.copy(enrolledAtMillis = at(5, 23, 59)), justAfter, ZoneOffset.UTC))
+        assertFalse(ContributorEligibility.eligible(base.copy(enrolledAtMillis = at(6, 0, 1)), justAfter, ZoneOffset.UTC))
     }
 
     @Test fun `active on 2 of the last 7 days is not, 3 is`() {

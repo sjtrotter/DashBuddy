@@ -309,9 +309,10 @@ a request from the same credential in that run is not treated so.
 
 **Screen reviews (the contributor tier)** (#1625, ADR-0011 §15). Separate from the census switch and off unless the
 dasher accepts an invitation. Eligibility is worked out on the phone from what it already holds
-(`ContributorEligibility`, `ContributorEligibilityReader`): the census on, this phone's census ID enrolled at least 7
-days ago (`CensusCredentialStore.enrolledAtMillis`, the phone's clock at enrolment; an ID enrolled before this was
-recorded counts from the first time it is read), a recorded shift on at least 3 of the last 7 local days, and at least
+(`ContributorEligibility`, `ContributorEligibilityReader`): the census on, this phone's census ID enrolled at least 8
+UTC calendar days ago, the census server's own rule, so the phone never invites an install the server would refuse
+(`CensusCredentialStore.enrolledAtMillis`, the phone's clock at enrolment; an ID enrolled before this was recorded
+counts from the first time it is read), a recorded shift on at least 3 of the last 7 local days, and at least
 2 ended shifts, both from the analytics read model (`ContributorActivityDao`: shift start and end times and a count,
 nothing else). Recognition is not an input. Only the answer is used, and only a yes is ever sent; the counts never
 leave the phone. The invitation is offered only when the last running shift ends, 30 seconds later so the shift is
@@ -335,8 +336,13 @@ days and the phone's time it arrived, in its own store (`census_contributor`, ex
 401 or a 5xx stores nothing. `CensusContributor.mayUpload` is the check every contributor upload makes first (#1626):
 true only with the census on, a grant issued to the phone's current census ID, no deletion request since the grant
 arrived, and today's UTC day before the grant's expiry day. A check that fails ends the grant on the phone, and so does
-a change to the census consent, the census ID or a deletion request (`CensusContributor.watch`), the dasher's Stop
-reviewing, and a state read that answers expired, revoked or none; every end clears the reviews waiting on the phone
+a change to the census consent, the census ID or a deletion request (`CensusContributor.watch`), the start of the
+grant's expiry day (the watch waits for that instant, and the screens show the end from their own clock), the
+dasher's Stop reviewing, and a state read that answers expired, revoked or none; a `401 revoked` on either grant route
+ends it and turns the census off with its ID forgotten, as any census revoke does (`CensusInstallRevocation`). A grant
+response that arrives after the dasher declined, stopped, or turned the census off is discarded: the phone never
+stores it, so nothing is sent under it, and it lapses on the server after 30 days (the server offers no way for the
+phone to give a grant back); every end clears the reviews waiting on the phone
 (`PendingContributorReviews`, which holds none until #1626). An ended grant is not renewed by itself: an expired one
 is offered again after a later shift. The grant request is not listed under "What gig.log sent".
 
@@ -564,12 +570,13 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 ## Revision history
 
 - **r24 (2026-11-13)** — §6: screen reviews, the contributor tier (#1625): eligibility worked out on the phone (census
-  on, a census ID 7 days old, a shift on 3 of the last 7 days, 2 ended shifts; recognition is not an input), only a yes
+  on, a census ID 8 UTC days old, a shift on 3 of the last 7 days, 2 ended shifts; recognition is not an input), only a yes
   sent (`{"eligible":true}`), never the counts; the invitation only when a shift ends, once until answered, Not now for
   14 days, No thanks until Settings; the reviewer screen's second disclosure, including the server's 30-day log of
   which screens gig.log asked about, tied to the reviewer permission; the grant stored with its census ID and expiry,
   checked before any contributor upload, and ended by expiry, a revocation, Stop, the census off, a new census ID or a
-  deletion request, which clears pending reviews; no renewal without asking. §7: the contributor record and the
+  deletion request, which clears pending reviews; a grant response arriving after a decline is discarded; a `401
+  revoked` on a grant route turns the census off as any revoke does; no renewal without asking. §7: the contributor record and the
   enrolment time. §8: the screen-review receipt, and the bug report lists it. The in-app Privacy page gains a Screen
   reviews section (`privacy_census_review_*`). Receipts created under r23 retain that revision.
 - **r23 (2026-11-13)** — §7: Delete everything on this phone (#1579): one confirmation naming what goes and what

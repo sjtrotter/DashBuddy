@@ -3,6 +3,7 @@ package cloud.trotter.log.gig.domain.census.contributor
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
 
 /** #1625: one recorded shift as eligibility reads it: its start, and its end (or its last activity while open). */
 data class ShiftSpan(val startedAtMillis: Long, val lastAtMillis: Long)
@@ -15,8 +16,12 @@ data class ShiftSpan(val startedAtMillis: Long, val lastAtMillis: Long)
  * to recognize, so no recognition ratio can raise or lower eligibility.
  */
 object ContributorEligibility {
-    /** The census ID enrolled at least this many days ago (the server's own check is 8 UTC days). */
-    const val MIN_ENROLLED_DAYS = 7
+    /**
+     * The census ID enrolled at least this many UTC calendar days ago: the server's own quarantine (census
+     * `VocabularyEligibility`: the enrolment's UTC day plus 8 is today or earlier), so the phone never invites an install
+     * the server would refuse. A `403 install_too_new` still covers a skewed phone clock.
+     */
+    const val MIN_ENROLLED_UTC_DAYS = 8
 
     /** The activity window: today and the days before it, local calendar days. */
     const val ACTIVE_WINDOW_DAYS = 7
@@ -26,8 +31,6 @@ object ContributorEligibility {
 
     /** Ended shifts gig.log recorded, all time. */
     const val MIN_ENDED_SHIFTS = 2
-
-    private const val DAY_MILLIS = 86_400_000L
 
     data class Inputs(
         val censusOn: Boolean,
@@ -41,7 +44,7 @@ object ContributorEligibility {
     fun eligible(inputs: Inputs, nowMillis: Long, zone: ZoneId): Boolean {
         val enrolledAt = inputs.enrolledAtMillis ?: return false
         return inputs.censusOn &&
-            nowMillis - enrolledAt >= MIN_ENROLLED_DAYS * DAY_MILLIS &&
+            !day(enrolledAt, ZoneOffset.UTC).plusDays(MIN_ENROLLED_UTC_DAYS.toLong()).isAfter(day(nowMillis, ZoneOffset.UTC)) &&
             activeDays(inputs.shifts, nowMillis, zone) >= MIN_ACTIVE_DAYS &&
             inputs.endedShifts >= MIN_ENDED_SHIFTS
     }

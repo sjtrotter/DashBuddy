@@ -2,6 +2,7 @@ package cloud.trotter.log.gig.core.data.census.contributor
 
 import cloud.trotter.log.gig.core.data.census.CensusCredentialStore
 import cloud.trotter.log.gig.core.data.census.CensusDataDeletion
+import cloud.trotter.log.gig.core.data.census.CensusInstallRevocation
 import cloud.trotter.log.gig.core.data.census.CensusUploadLock
 import cloud.trotter.log.gig.core.data.settings.DevSettingsRepository
 import cloud.trotter.log.gig.core.datastore.census.ContributorDataSource
@@ -21,21 +22,6 @@ import cloud.trotter.log.gig.domain.census.contributor.InvitationAnswer
 import cloud.trotter.log.gig.domain.census.contributor.PendingContributorReviews
 import cloud.trotter.log.gig.domain.census.contributor.ShiftActivity
 import cloud.trotter.log.gig.domain.di.ApplicationScope
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.mapLatest
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.withLock
-import timber.log.Timber
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -44,6 +30,26 @@ import java.time.ZoneOffset
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
+import timber.log.Timber
 
 /** #1625: what the Census screen's "Screen reviews" row and the reviewer screen show. Holds no eligibility count. */
 data class ContributorStatus(
@@ -68,6 +74,10 @@ enum class GrantRequestOutcome {
     NO_CENSUS_ID,
     /** A shift is running, or the phone is not eligible now: nothing was sent. */
     NOT_OPEN,
+    /** The dasher declined, stopped, or the census changed while the request waited: its answer was not used. */
+    SUPERSEDED,
+    /** `401 revoked`: the census ID itself is revoked; the census is off and the ID forgotten. */
+    INSTALL_REVOKED,
 }
 
 /**
@@ -97,6 +107,9 @@ class CensusContributor internal constructor(
     private val appVersion: String,
     private val clock: Clock,
     private val zone: () -> ZoneId,
+    private val revokeInstall: suspend () -> Unit,
+    /** Re-reads the time-dependent status (eligibility, a grant's expiry) without any other state change. */
+    private val ticks: Flow<Unit>,
 ) : ContributorGate {
     @Inject constructor(
         store: ContributorDataSource,
@@ -111,8 +124,9 @@ class CensusContributor internal constructor(
         @ApplicationScope scope: CoroutineScope,
         @Named("appVersionName") appVersion: String,
         clock: Clock,
+        revocation: CensusInstallRevocation,
     ) : this(store, reader::eligible, shifts, settings, credentials, deletion, lock, apis, pendingReviews, scope,
-        appVersion, clock, ZoneId::systemDefault)
+        appVersion, clock, ZoneId::systemDefault, revocation::apply, minuteTicks())
 
     private val requestingFlow = MutableStateFlow(false)
     private val outcomeFlow = MutableStateFlow<GrantRequestOutcome?>(null)
@@ -124,7 +138,9 @@ class CensusContributor internal constructor(
     val lastOutcome: StateFlow<GrantRequestOutcome?> = outcomeFlow.asStateFlow()
 
     val status: Flow<ContributorStatus> =
-        combine(store.record, settings.censusConsent, shifts.shiftLive) { record, consent, live -> Triple(record, consent, live) }
+        combine(store.record, settings.censusConsent, shifts.shiftLive, ticks) { record, consent, live, _ ->
+            Triple(record, consent, live)
+        }
             .mapLatest { (record, consent, live) ->
                 val now = clock.millis()
                 val today = todayUtc()
@@ -193,8 +209,9 @@ class CensusContributor internal constructor(
         } catch (_: CensusCredentialStore.Transient) {
             return GrantRequestOutcome.UNREACHABLE
         } ?: return GrantRequestOutcome.NO_CENSUS_ID
-        // The decision is recorded before the request, whatever the server answers.
-        store.update { it.copy(receipt = receipt(now, granted = true)) }
+        // The decision is recorded before the request, whatever the server answers. The generation it is made under is
+        // what the response must still find: a decline, Stop or any end in the meantime outranks it.
+        val generation = store.update { it.copy(receipt = receipt(now, granted = true)) }.generation
         val result = try {
             apis.create(settings.censusBaseUrl.first()).requestContributorGrant(credential.bearer())
         } catch (e: CancellationException) {
@@ -202,26 +219,56 @@ class CensusContributor internal constructor(
         } catch (_: Exception) {
             GrantResult.TransportFailure("Exception")
         }
-        return when (result) {
-            is GrantResult.Granted -> {
-                val grant = ContributorGrant(credential.installId, result.grantedDay, result.expiresDay, now)
-                store.update { it.granted(grant, now) }
-                GrantRequestOutcome.GRANTED
-            }
-            GrantResult.InstallTooNew -> refuse(GrantRefusal.INSTALL_TOO_NEW, now, GrantRequestOutcome.INSTALL_TOO_NEW)
-            GrantResult.NotEligible -> refuse(GrantRefusal.NOT_ELIGIBLE, now, GrantRequestOutcome.NOT_ELIGIBLE)
-            GrantResult.GrantRevoked -> refuse(GrantRefusal.GRANT_REVOKED, now, GrantRequestOutcome.GRANT_REVOKED)
-            // The POST never answers these; a state read does. Either way nothing was granted.
-            GrantResult.Expired, GrantResult.None, GrantResult.InstallRevoked, is GrantResult.Unauthorized,
-            is GrantResult.RateLimited, is GrantResult.ServerUnavailable, is GrantResult.TransportFailure ->
-                GrantRequestOutcome.UNREACHABLE
+        if (result == GrantResult.InstallRevoked) {
+            revokeHoldingLock()
+            return GrantRequestOutcome.INSTALL_REVOKED
         }
+        val outcome = when (result) {
+            is GrantResult.Granted -> GrantRequestOutcome.GRANTED
+            GrantResult.InstallTooNew -> GrantRequestOutcome.INSTALL_TOO_NEW
+            GrantResult.NotEligible -> GrantRequestOutcome.NOT_ELIGIBLE
+            GrantResult.GrantRevoked -> GrantRequestOutcome.GRANT_REVOKED
+            // The POST never answers these; a state read does. Either way nothing was granted.
+            else -> return GrantRequestOutcome.UNREACHABLE
+        }
+        // Consent and the census ID can change outside the lock while the request waits; both must still stand.
+        val stands = settings.censusConsent.first() == CensusConsent.ON &&
+            credentials.installId.first() == credential.installId
+        var applied = false
+        store.update { record ->
+            if (!stands || record.generation != generation) return@update record
+            applied = true
+            when (result) {
+                is GrantResult.Granted ->
+                    record.granted(ContributorGrant(credential.installId, result.grantedDay, result.expiresDay, now), now)
+                GrantResult.InstallTooNew -> record.refused(GrantRefusal.INSTALL_TOO_NEW, now)
+                GrantResult.NotEligible -> record.refused(GrantRefusal.NOT_ELIGIBLE, now)
+                else -> record.refused(GrantRefusal.GRANT_REVOKED, now)
+            }
+        }
+        if (!applied) {
+            // A grant the server issued after the dasher declined is never used: nothing on the phone holds it, so no
+            // contributor upload can run under it, and it lapses on the server after its 30 days.
+            Timber.tag(TAG).i("census contributor response superseded")
+            return GrantRequestOutcome.SUPERSEDED
+        }
+        if (result == GrantResult.GrantRevoked) clearPendingReviews()
+        return outcome
     }
 
-    private suspend fun refuse(refusal: GrantRefusal, now: Long, outcome: GrantRequestOutcome): GrantRequestOutcome {
-        store.update { it.refused(refusal, now) }
-        if (refusal == GrantRefusal.GRANT_REVOKED) clearPendingReviews()
-        return outcome
+    /** `401 revoked` on a grant route: the census ID itself is revoked. The caller holds [CensusUploadLock]. */
+    private suspend fun revokeHoldingLock() {
+        val now = clock.millis()
+        store.update { it.ended(ContributorEnd.INSTALL_REVOKED, now) }
+        clearPendingReviews()
+        try {
+            revokeInstall()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            Timber.tag(TAG).w("census contributor install revocation failed")
+        }
+        Timber.tag(TAG).w("census contributor ended reason=install_revoked")
     }
 
     /** The screen's answers run on the application scope: the screen closes on Not now and No thanks. */
@@ -257,34 +304,54 @@ class CensusContributor internal constructor(
     /**
      * Reads the grant's state on the server (`GET /v1/contributor/grant`), as the server's client guide asks before
      * each review session, and ends the phone's grant when the server says it expired, was revoked or is gone. A
-     * granted answer only updates the days of the grant the phone already holds: it never creates one, so a grant the
-     * dasher stopped stays stopped. Returns [mayUpload] afterwards. Takes no lock.
+     * `401 revoked` is the census ID itself revoked: the grant ends and the census goes off with the ID forgotten, as on
+     * any census revoke. A granted answer only updates the days of the grant the phone already holds: it never creates
+     * one, so a grant the dasher stopped stays stopped. Returns [mayUpload] afterwards. Takes [CensusUploadLock]: call it
+     * before a review session, never from inside an upload that holds the lock.
      */
     suspend fun refresh(): Boolean = guarded(false) {
-        val grant = store.record.first().grant ?: return@guarded false
-        if (!reconcile()) return@guarded false
-        val credential = credentials.current()?.takeIf { it.installId == grant.installId } ?: return@guarded reconcile()
-        when (val result = apis.create(settings.censusBaseUrl.first()).contributorGrant(credential.bearer())) {
-            is GrantResult.Granted -> store.update { record ->
-                if (record.grant == grant) record.copy(grant = grant.copy(grantedDay = result.grantedDay, expiresDay = result.expiresDay))
-                else record
+        lock.mutex.withLock {
+            val grant = store.record.first().grant ?: return@withLock false
+            if (!reconcile()) return@withLock false
+            val credential = credentials.current()?.takeIf { it.installId == grant.installId } ?: return@withLock reconcile()
+            when (val result = apis.create(settings.censusBaseUrl.first()).contributorGrant(credential.bearer())) {
+                is GrantResult.Granted -> store.update { record ->
+                    if (record.grant == grant) {
+                        record.copy(grant = grant.copy(grantedDay = result.grantedDay, expiresDay = result.expiresDay))
+                    } else record
+                }
+                GrantResult.Expired -> end(grant, ContributorEnd.EXPIRED)
+                GrantResult.GrantRevoked -> end(grant, ContributorEnd.REVOKED)
+                GrantResult.None -> end(grant, ContributorEnd.SERVER_NONE)
+                GrantResult.InstallRevoked -> revokeHoldingLock()
+                else -> Unit
             }
-            GrantResult.Expired -> end(grant, ContributorEnd.EXPIRED)
-            GrantResult.GrantRevoked -> end(grant, ContributorEnd.REVOKED)
-            GrantResult.None -> end(grant, ContributorEnd.SERVER_NONE)
-            else -> Unit
+            reconcile()
         }
-        reconcile()
     }
 
-    /** App start: ends a grant whenever what it stands on changes (consent, census ID, a deletion request). */
+    /**
+     * App start: ends a grant whenever what it stands on changes (consent, census ID, a deletion request), and at the
+     * instant its expiry day begins, with no other change needed.
+     */
     fun watch(): Job = scope.launch {
-        combine(store.record, settings.censusConsent, credentials.installId, settings.censusDeletion) { record, _, _, _ ->
-            record.grant
-        }.catch { e ->
-            // mayUpload checks again before any upload, so a watch that stops leaves nothing open.
-            Timber.tag(TAG).w("census contributor watch stopped cause=%s", e.javaClass.simpleName)
-        }.collect { grant -> if (grant != null) guarded(false) { reconcile() } }
+        launch {
+            combine(store.record, settings.censusConsent, credentials.installId, settings.censusDeletion) { record, _, _, _ ->
+                record.grant
+            }.catch { e ->
+                // mayUpload checks again before any upload, so a watch that stops leaves nothing open.
+                Timber.tag(TAG).w("census contributor watch stopped cause=%s", e.javaClass.simpleName)
+            }.collect { grant -> if (grant != null) guarded(false) { reconcile() } }
+        }
+        launch {
+            store.record.map { it.grant }.distinctUntilChanged().catch { e ->
+                Timber.tag(TAG).w("census contributor expiry watch stopped cause=%s", e.javaClass.simpleName)
+            }.collectLatest { grant ->
+                val endsAt = grant?.expiresAtMillis() ?: return@collectLatest
+                delay((endsAt - clock.millis()).coerceAtLeast(0))
+                guarded(false) { reconcile() }
+            }
+        }
     }
 
     /** True when a live grant stands after the check; a grant that no longer stands is ended with its reason. */
@@ -335,5 +402,13 @@ class CensusContributor internal constructor(
 
     private companion object {
         const val TAG = "Census"
+
+        /** Once a minute, from the first collection on. */
+        fun minuteTicks(): Flow<Unit> = flow {
+            while (true) {
+                emit(Unit)
+                delay(60_000L)
+            }
+        }
     }
 }

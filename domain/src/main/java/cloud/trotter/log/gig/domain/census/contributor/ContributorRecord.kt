@@ -3,6 +3,7 @@ package cloud.trotter.log.gig.domain.census.contributor
 import cloud.trotter.log.gig.domain.capability.ConsentReceipt
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
+import java.time.ZoneOffset
 
 /**
  * #1625: the server's contributor grant for one census install ID (`POST /v1/contributor/grant`). [grantedDay] and
@@ -19,6 +20,16 @@ data class ContributorGrant(
     /** Live on [todayUtc] when that day is before [expiresDay]. An unreadable day is not live (fail closed). */
     fun liveOn(todayUtc: LocalDate): Boolean =
         runCatching { todayUtc.isBefore(LocalDate.parse(expiresDay)) }.getOrDefault(false)
+
+    /** The instant the grant stops working: the start of [expiresDay], UTC. Null when the day cannot be read. */
+    fun expiresAtMillis(): Long? = expiryMillis(expiresDay)
+
+    companion object {
+        /** The start of a server UTC day (`YYYY-MM-DD`) in epoch millis; null when it cannot be read. */
+        fun expiryMillis(day: String?): Long? = day?.let {
+            runCatching { LocalDate.parse(it).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() }.getOrNull()
+        }
+    }
 }
 
 /** #1625: the dasher's answer to the reviewer invitation. Accept is not an answer here: a grant records it. */
@@ -47,6 +58,9 @@ enum class ContributorEnd {
 
     /** The census was turned off, or its consent no longer stands. */
     CENSUS_OFF,
+
+    /** The server revoked this phone's census ID itself (`401 revoked`): the census is off and the ID forgotten. */
+    INSTALL_REVOKED,
 
     /** The dasher asked to delete their census data; the server deletes a live grant with it. */
     DATA_DELETED,
@@ -89,6 +103,11 @@ data class ContributorRecord(
     val ended: ContributorEnd? = null,
     /** The last refused grant request; cleared by a grant. */
     val refusal: GrantRefusal? = null,
+    /**
+     * Moves on every decision that must outrank a grant request already in flight: an answer, Stop, or any end. A grant
+     * request captures it before sending; a response that finds it moved is discarded.
+     */
+    val generation: Long = 0,
 ) {
     fun granted(grant: ContributorGrant, nowMillis: Long) = copy(
         grant = grant, answer = InvitationAnswer.NONE, answeredAtMillis = nowMillis, invitedAtMillis = null,
@@ -105,6 +124,7 @@ data class ContributorRecord(
 
     /** The grant ends for [reason]; only the dasher's Stop is a "No thanks". */
     fun ended(reason: ContributorEnd, nowMillis: Long, receipt: ConsentReceipt? = null) = copy(
+        generation = generation + 1,
         grant = null,
         ended = reason,
         invitedAtMillis = null,
@@ -115,6 +135,7 @@ data class ContributorRecord(
     )
 
     fun answered(answer: InvitationAnswer, nowMillis: Long, receipt: ConsentReceipt? = null) = copy(
+        generation = generation + 1,
         answer = answer, answeredAtMillis = nowMillis, invitedAtMillis = null, receipt = receipt ?: this.receipt,
     )
 }

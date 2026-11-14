@@ -27,13 +27,21 @@ import cloud.trotter.log.gig.domain.census.contributor.ContributorEntry
 import cloud.trotter.log.gig.domain.census.contributor.GrantRefusal
 import cloud.trotter.log.gig.domain.census.contributor.InvitationAnswer
 import cloud.trotter.log.gig.domain.census.contributor.ShiftActivity
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -53,6 +61,7 @@ import java.time.ZoneOffset
  * [cloud.trotter.log.gig.domain.census.contributor.ContributorEligibility]'s (tested at each boundary there); here it is
  * a switch.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(manifest = Config.NONE)
 class CensusContributorTest {
@@ -68,10 +77,12 @@ class CensusContributorTest {
         override fun reset() = Unit
     }
 
+    /** [millis], plus [virtual] (a test's scheduler time, for the tests where time alone moves). */
     private class MutableClock(var millis: Long) : Clock() {
+        var virtual: () -> Long = { 0L }
         override fun getZone(): ZoneId = ZoneOffset.UTC
         override fun withZone(zone: ZoneId): Clock = this
-        override fun instant(): Instant = Instant.ofEpochMilli(millis)
+        override fun instant(): Instant = Instant.ofEpochMilli(millis + virtual())
     }
 
     /** Answers the grant routes only; any other census request fails the test. */
@@ -80,8 +91,11 @@ class CensusContributorTest {
         val stateResults = ArrayDeque<GrantResult>()
         var grantRequests = 0
         var stateReads = 0
+        /** When set, the next grant request waits on it: a response that arrives late. */
+        var delayed: CompletableDeferred<GrantResult>? = null
         override suspend fun requestContributorGrant(cred: Bearer.Credential): GrantResult {
             grantRequests++
+            delayed?.let { delayed = null; return it.await() }
             return grantResults.removeFirst()
         }
         override suspend fun contributorGrant(cred: Bearer.Credential): GrantResult {
@@ -107,6 +121,8 @@ class CensusContributorTest {
     private val credentials = CensusCredentialStore(MemoryPreferences(), XorSealer())
     private val settingsSource = DevSettingsDataSource(MemoryPreferences())
     private var deletionClear = true
+    private var installRevocations = 0
+    private val tick = MutableStateFlow(0)
 
     private fun TestScope.contributor(): Pair<CensusContributor, DevSettingsRepository> {
         val settings = DevSettingsRepository(settingsSource, true, StandardTestDispatcher(testScheduler), "0.234.0")
@@ -127,6 +143,8 @@ class CensusContributorTest {
             appVersion = "0.234.0",
             clock = clock,
             zone = { ZoneOffset.UTC },
+            revokeInstall = { installRevocations++ },
+            ticks = tick.map { },
         )
         return contributor to settings
     }
@@ -366,5 +384,129 @@ class CensusContributorTest {
         clock.millis = start + 400 * day
         assertNull(contributor.inviteAfterShift())
         assertEquals(ContributorEntry.OFF, contributor.status.first().entry)
+    }
+
+    // ── Sol round 1 ──────────────────────────────────────────────────────────────────────────────────────────────
+
+    /** S1: Accept waits, a shift starts, the dasher says No thanks; the late grant must not undo the decline. */
+    @Test fun `a late grant after No thanks is discarded and nothing can upload`() = runTest {
+        val (contributor, settings) = contributor()
+        enrolled(settings)
+        val late = CompletableDeferred<GrantResult>()
+        transport.delayed = late
+        val accept = async { contributor.accept() }
+        runCurrent()
+        assertEquals(1, transport.grantRequests)
+
+        shiftLive.value = true
+        contributor.noThanks()
+        late.complete(granted())
+
+        assertEquals(GrantRequestOutcome.SUPERSEDED, accept.await())
+        val record = store.record.first()
+        assertNull(record.grant)
+        assertEquals(InvitationAnswer.NO_THANKS, record.answer)
+        assertFalse(contributor.mayUpload())
+    }
+
+    @Test fun `a late grant after the census is turned off is discarded`() = runTest {
+        val (contributor, settings) = contributor()
+        enrolled(settings)
+        val late = CompletableDeferred<GrantResult>()
+        transport.delayed = late
+        val accept = async { contributor.accept() }
+        runCurrent()
+
+        settings.declineCensus()
+        late.complete(granted())
+
+        assertEquals(GrantRequestOutcome.SUPERSEDED, accept.await())
+        assertNull(store.record.first().grant)
+        assertFalse(contributor.mayUpload())
+    }
+
+    @Test fun `a late refusal after Stop does not overwrite the Stop`() = runTest {
+        val (contributor, settings) = contributor()
+        enrolled(settings)
+        val late = CompletableDeferred<GrantResult>()
+        transport.delayed = late
+        val accept = async { contributor.accept() }
+        runCurrent()
+
+        contributor.stop()
+        late.complete(GrantResult.InstallTooNew)
+
+        assertEquals(GrantRequestOutcome.SUPERSEDED, accept.await())
+        assertNull(store.record.first().refusal)
+        assertEquals(ContributorEnd.STOPPED, store.record.first().ended)
+    }
+
+    /** S2: a 401 revoked on the state read is the census ID revoked: the grant ends and the census revoke runs. */
+    @Test fun `install revoked on the state read ends the grant and revokes the census install`() = runTest {
+        val (contributor, settings) = contributor()
+        enrolled(settings)
+        transport.grantResults += granted()
+        contributor.accept()
+        transport.stateResults += GrantResult.InstallRevoked
+
+        assertFalse(contributor.refresh())
+
+        val record = store.record.first()
+        assertNull(record.grant)
+        assertEquals(ContributorEnd.INSTALL_REVOKED, record.ended)
+        assertEquals(1, pendingCleared)
+        assertEquals(1, installRevocations)
+        assertFalse(contributor.mayUpload())
+    }
+
+    @Test fun `install revoked on the grant request runs the census revoke`() = runTest {
+        val (contributor, settings) = contributor()
+        enrolled(settings)
+        transport.grantResults += GrantResult.InstallRevoked
+        assertEquals(GrantRequestOutcome.INSTALL_REVOKED, contributor.accept())
+        assertEquals(1, installRevocations)
+        assertNull(store.record.first().grant)
+    }
+
+    /** S3: the grant ends at the start of its expiry day with nothing else changing. */
+    @Test fun `the watch ends the grant at its expiry instant with no other change`() = runTest {
+        val (contributor, settings) = contributor()
+        enrolled(settings)
+        transport.grantResults += granted(expires = "2026-11-15")
+        contributor.accept()
+        clock.virtual = { testScheduler.currentTime }
+        contributor.watch()
+        runCurrent()
+        val endsAt = Instant.parse("2026-11-15T00:00:00Z").toEpochMilli()
+
+        advanceTimeBy(endsAt - start - 1_000)
+        runCurrent()
+        assertNotNull(store.record.first().grant)
+
+        advanceTimeBy(2_000)
+        runCurrent()
+        val record = store.record.first()
+        assertNull(record.grant)
+        assertEquals(ContributorEnd.EXPIRED, record.ended)
+        assertEquals(1, pendingCleared)
+    }
+
+    @Test fun `a collected status leaves ON when the clock passes expiry and a tick arrives`() = runTest {
+        val (contributor, settings) = contributor()
+        enrolled(settings)
+        transport.grantResults += granted(expires = "2026-11-15")
+        contributor.accept()
+        val seen = mutableListOf<ContributorEntry>()
+        backgroundScope.launch { contributor.status.collect { seen += it.entry } }
+        runCurrent()
+        assertEquals(ContributorEntry.ON, seen.last())
+
+        clock.millis = Instant.parse("2026-11-15T00:00:01Z").toEpochMilli()
+        runCurrent()
+        assertEquals("no state changed, so nothing re-read yet", ContributorEntry.ON, seen.last())
+
+        tick.value++
+        runCurrent()
+        assertNotEquals(ContributorEntry.ON, seen.last())
     }
 }

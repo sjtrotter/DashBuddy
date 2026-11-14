@@ -46,7 +46,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.log.gig.domain.census.CensusConsent
+import cloud.trotter.log.gig.core.designsystem.time.rememberNow
 import cloud.trotter.log.gig.domain.census.contributor.ContributorEntry
+import cloud.trotter.log.gig.domain.census.contributor.ContributorGrant
 import cloud.trotter.log.gig.domain.state.Platform
 
 /**
@@ -163,12 +165,18 @@ fun CensusContent(
             TextButton(onClick = { showDisclosure = true }, modifier = Modifier.padding(horizontal = 8.dp)) {
                 Text(stringResource(R.string.census_read_disclosure))
             }
-            if (state.reviewer != ContributorEntry.HIDDEN) {
+            val now by rememberNow()
+            // A grant past the start of its expiry day reads as off at that instant (Reactive UI rule 2).
+            val endsAt = ContributorGrant.expiryMillis(state.reviewerEndsDay)
+            val reviewer = if (state.reviewer == ContributorEntry.ON && (endsAt == null || now >= endsAt)) {
+                ContributorEntry.OFF
+            } else state.reviewer
+            if (reviewer != ContributorEntry.HIDDEN) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.census_review_row_label)) },
                     supportingContent = {
                         Text(
-                            when (state.reviewer) {
+                            when (reviewer) {
                                 ContributorEntry.ON -> stringResource(R.string.census_review_row_on, endDay(state.reviewerEndsDay))
                                 ContributorEntry.INVITED -> stringResource(R.string.census_review_row_invited)
                                 else -> stringResource(R.string.census_review_row_off)

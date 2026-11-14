@@ -36,9 +36,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cloud.trotter.log.gig.core.data.census.contributor.GrantRequestOutcome
+import cloud.trotter.log.gig.core.designsystem.time.rememberNow
 import cloud.trotter.log.gig.domain.census.contributor.ContributorEligibility
 import cloud.trotter.log.gig.domain.census.contributor.ContributorEnd
 import cloud.trotter.log.gig.domain.census.contributor.ContributorEntry
+import cloud.trotter.log.gig.domain.census.contributor.ContributorGrant
 import cloud.trotter.log.gig.domain.census.contributor.ContributorInvitation
 import cloud.trotter.log.gig.domain.census.contributor.GrantRefusal
 import cloud.trotter.log.gig.domain.census.contributor.InvitationAnswer
@@ -83,6 +85,10 @@ fun ContributorContent(
     onNoThanks: () -> Unit,
     onStop: () -> Unit,
 ) {
+    // A grant stops working at the start of its expiry day (UTC): the screen says so at that instant, whatever the
+    // data layer has caught up to (Reactive UI rule 2: the state holds the anchor, the screen derives the value).
+    val now by rememberNow()
+    val shown = state?.let { atNow(it, now) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -97,9 +103,9 @@ fun ContributorContent(
                 },
             )
         },
-        bottomBar = { if (state != null) ContributorButtons(state, onAccept, onNotNow, onNoThanks, onStop) },
+        bottomBar = { if (shown != null) ContributorButtons(shown, onAccept, onNotNow, onNoThanks, onStop) },
     ) { padding ->
-        if (state == null) return@Scaffold
+        if (shown == null) return@Scaffold
         Column(
             Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
         ) {
@@ -109,7 +115,7 @@ fun ContributorContent(
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.semantics { heading() },
             )
-            statusLines(state).forEach { line ->
+            statusLines(shown).forEach { line ->
                 Spacer(Modifier.height(8.dp))
                 Text(line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
             }
@@ -199,7 +205,7 @@ private fun statusLines(state: ContributorUiState): List<String> {
                 } else {
                     stringResource(
                         R.string.census_review_status_not_open,
-                        ContributorEligibility.MIN_ENROLLED_DAYS,
+                        ContributorEligibility.MIN_ENROLLED_UTC_DAYS,
                         ContributorEligibility.MIN_ENDED_SHIFTS,
                         ContributorEligibility.MIN_ACTIVE_DAYS,
                         ContributorEligibility.ACTIVE_WINDOW_DAYS,
@@ -209,6 +215,13 @@ private fun statusLines(state: ContributorUiState): List<String> {
         }
     }
     return lines.distinct()
+}
+
+/** [state] at [nowMillis]: a grant past the start of its expiry day reads as ended, before the record says so. */
+internal fun atNow(state: ContributorUiState, nowMillis: Long): ContributorUiState {
+    val endsAt = ContributorGrant.expiryMillis(state.expiresDay)
+    if (state.entry != ContributorEntry.ON || (endsAt != null && nowMillis < endsAt)) return state
+    return state.copy(entry = ContributorEntry.OFF, canAccept = false, expiresDay = null, ended = ContributorEnd.EXPIRED)
 }
 
 /** The outcomes the record does not keep: the server unreachable, a deletion waiting, no census ID yet. */
@@ -232,6 +245,7 @@ private fun recordLine(state: ContributorUiState): String? = when {
         ContributorEnd.EXPIRED -> stringResource(R.string.census_review_status_expired)
         ContributorEnd.DATA_DELETED -> stringResource(R.string.census_review_status_deleted)
         ContributorEnd.CENSUS_OFF -> stringResource(R.string.census_review_status_census_off)
+        ContributorEnd.INSTALL_REVOKED -> stringResource(R.string.census_review_status_install_revoked)
         ContributorEnd.ID_CHANGED -> stringResource(R.string.census_review_status_id_changed)
         ContributorEnd.SERVER_NONE -> stringResource(R.string.census_review_status_server_none)
         ContributorEnd.REVOKED -> stringResource(R.string.census_review_status_revoked)

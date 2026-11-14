@@ -1002,7 +1002,7 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   dialog's "stays" list: exports and gallery screenshots). A refused clear drops the commitment and shows Couldn't
   delete.
   **Contributor tier: eligibility, invitation, grant (#1625, ADR-0011 §15):** `ContributorEligibility` (`:domain`) is
-  the one owner of the thresholds (census ON, census id enrolled ≥ 7 days by `CensusCredentialStore.enrolledAtMillis`,
+  the one owner of the thresholds (census ON, census id enrolled ≥ 8 UTC calendar days by `CensusCredentialStore.enrolledAtMillis`, the server's own quarantine,
   a shift on ≥ 3 of the last 7 local days, ≥ 2 ended shifts, from `ContributorActivityDao` over `session_records`);
   recognition is never an input. `ContributorEligibilityReader` fails closed (any unreadable input is not eligible).
   Only a yes leaves the phone: `CensusTransport.requestContributorGrant` has no parameter and always sends
@@ -1022,7 +1022,16 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   grant's `obtainedAtMillis`) followed, or whose UTC expiry day has come; `refresh()` (the state GET, #1626 calls it
   before a review session) ends it on expired / revoked / none and never creates a grant the phone does not hold.
   Every end clears `PendingContributorReviews` (a no-op binding until #1626). An expired grant is re-offered after a
-  later shift, never renewed silently. INFO lines: `census contributor invited`, `request outcome=<token>`,
+  later shift, never renewed silently. **Late responses (Sol S1):** `ContributorRecord.generation` moves on every answer,
+  Stop and end; Accept captures it before the POST, and at the response re-checks it, census consent and the census id;
+  any change discards the response (`SUPERSEDED`): a grant the server issued after a decline is never stored, so nothing
+  uploads under it, and it lapses on the server (the API has no route for a phone to drop its own grant). **Install
+  revoked (S2):** `401 revoked` on the POST or the state GET ends the grant (`INSTALL_REVOKED`), clears pending reviews
+  and runs `CensusInstallRevocation` (census off, envelopes invalidated, health reset, credential wiped, `revoked` last
+  run), the worker's revoke steps; `refresh()` takes `CensusUploadLock` for this. **Time (S3):** `watch()` also sleeps
+  until the grant's expiry instant (start of its UTC expiry day, by the injected clock) and ends it then; `status`
+  re-reads on a one-minute tick; the reviewer screen and the Census row derive "on" from `rememberNow()` against
+  `ContributorGrant.expiryMillis`. INFO lines: `census contributor invited`, `request outcome=<token>`,
   `ended reason=<token>`; no count, id or day.
   **Identity reset + run status (#1185):** when the server no longer knows an enrolled install (alpha
   database reset, withdrawn install) uploads 401 and, since #1622, the worker re-enrols the same identity itself; the developer screen's **Reset

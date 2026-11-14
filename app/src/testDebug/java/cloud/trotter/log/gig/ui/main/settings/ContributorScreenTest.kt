@@ -1,5 +1,6 @@
 package cloud.trotter.log.gig.ui.main.settings
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -11,6 +12,7 @@ import cloud.trotter.census.contract.auth.Bearer
 import cloud.trotter.census.contract.auth.InstallSecret
 import cloud.trotter.log.gig.core.data.census.CensusCredentialStore
 import cloud.trotter.log.gig.core.data.census.CensusDataDeletion
+import cloud.trotter.log.gig.core.data.census.CensusInstallRevocation
 import cloud.trotter.log.gig.core.data.census.CensusUploadLock
 import cloud.trotter.log.gig.core.data.census.contributor.CensusContributor
 import cloud.trotter.log.gig.core.data.census.contributor.ContributorEligibilityReader
@@ -20,6 +22,7 @@ import cloud.trotter.log.gig.core.database.analytics.ShiftSpanRow
 import cloud.trotter.log.gig.core.datastore.census.ContributorDataSource
 import cloud.trotter.log.gig.core.datastore.settings.DevSettingsDataSource
 import cloud.trotter.log.gig.core.designsystem.theme.GigLogTheme
+import cloud.trotter.log.gig.core.designsystem.time.LocalNowProvider
 import cloud.trotter.log.gig.core.network.census.CensusApiFactory
 import cloud.trotter.log.gig.core.network.census.CensusSentObserver
 import cloud.trotter.log.gig.core.network.census.CensusTransport
@@ -37,7 +40,9 @@ import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.feature.settings.CensusContent
 import cloud.trotter.log.gig.feature.settings.CensusPlatformRow
 import cloud.trotter.log.gig.feature.settings.CensusUiState
+import cloud.trotter.log.gig.feature.settings.ContributorContent
 import cloud.trotter.log.gig.feature.settings.ContributorScreen
+import cloud.trotter.log.gig.feature.settings.ContributorUiState
 import cloud.trotter.log.gig.feature.settings.ContributorViewModel
 import cloud.trotter.log.gig.feature.settings.R as SettingsR
 import kotlinx.coroutines.CoroutineScope
@@ -147,9 +152,13 @@ class ContributorScreenTest {
             object : CensusApiFactory(CensusSentObserver.NONE) {
                 override fun create(baseUrl: String): CensusTransport = transport
             },
-            {}, CoroutineScope(Dispatchers.Unconfined), "0.234.0", FixedClock(now),
+            {}, CoroutineScope(Dispatchers.Unconfined), "0.234.0", FixedClock(now), mock<CensusInstallRevocation>(),
         )
-        compose.setContent { GigLogTheme { ContributorScreen(onBack = { closed++ }, viewModel = ContributorViewModel(contributor)) } }
+        compose.setContent {
+            CompositionLocalProvider(LocalNowProvider provides FixedClock(now)) {
+                GigLogTheme { ContributorScreen(onBack = { closed++ }, viewModel = ContributorViewModel(contributor)) }
+            }
+        }
         compose.waitForIdle()
     }
 
@@ -257,6 +266,43 @@ class ContributorScreenTest {
         compose.onNodeWithText(string(SettingsR.string.census_review_row_invited)).performScrollTo().performClick()
         compose.waitForIdle()
         assertEquals(1, opened)
+    }
+
+    /** S3: the screen ends "Reviewing is on" at the grant's expiry instant from its own clock, no state change needed. */
+    @Test fun `the grant's end shows at its expiry instant with no other change`() {
+        val endsAt = Instant.parse("2026-12-13T00:00:00Z").toEpochMilli()
+        val wall = MovingClock(endsAt - 1_000)
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            CompositionLocalProvider(LocalNowProvider provides wall) {
+                GigLogTheme {
+                    ContributorContent(
+                        state = ContributorUiState(
+                            entry = ContributorEntry.ON, canAccept = false, shiftLive = false,
+                            answer = InvitationAnswer.NONE, expiresDay = "2026-12-13", ended = null, refusal = null,
+                        ),
+                        onBack = {}, onAccept = {}, onNotNow = {}, onNoThanks = {}, onStop = {},
+                    )
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(2_000)
+        text("Reviewing is on.").assertExists()
+        compose.onNodeWithText(string(SettingsR.string.census_review_stop)).assertExists()
+
+        wall.millis = endsAt + 1_000
+        compose.mainClock.advanceTimeBy(2_000)
+
+        text("Reviewing is on.").assertDoesNotExist()
+        text(string(SettingsR.string.census_review_status_expired)).assertExists()
+        compose.onNodeWithText(string(SettingsR.string.census_review_stop)).assertDoesNotExist()
+    }
+
+    private class MovingClock(var millis: Long) : Clock() {
+        override fun getZone(): ZoneId = ZoneOffset.UTC
+        override fun withZone(zone: ZoneId): Clock = this
+        override fun instant(): Instant = Instant.ofEpochMilli(millis)
+        override fun millis(): Long = millis
     }
 
     private companion object {
