@@ -47,7 +47,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.doSuspendableAnswer
 import org.mockito.kotlin.mock
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -122,11 +122,19 @@ class CensusContributorTest {
     private val settingsSource = DevSettingsDataSource(MemoryPreferences())
     private var deletionClear = true
     private var installRevocations = 0
+    /** When set, clearing the pending reviews waits on it. */
+    private var reviewsGate: CompletableDeferred<Unit>? = null
+    /** When true, clearing the pending reviews fails. */
+    private var failClear = false
+    /** When set, the deletion check before a request waits on it. */
+    private var deletionGate: CompletableDeferred<Boolean>? = null
     private val tick = MutableStateFlow(0)
 
     private fun TestScope.contributor(): Pair<CensusContributor, DevSettingsRepository> {
         val settings = DevSettingsRepository(settingsSource, true, StandardTestDispatcher(testScheduler), "0.234.0")
-        val deletion = mock<CensusDataDeletion> { on { resumePending() } doReturn deletionClear }
+        val deletion = mock<CensusDataDeletion> {
+            on { resumePending() } doSuspendableAnswer { deletionGate?.await() ?: deletionClear }
+        }
         val contributor = CensusContributor(
             store = store,
             eligibility = { _, _ -> eligible },
@@ -138,7 +146,11 @@ class CensusContributorTest {
             apis = object : CensusApiFactory(CensusSentObserver.NONE) {
                 override fun create(baseUrl: String): CensusTransport = transport
             },
-            pendingReviews = { pendingCleared++ },
+            pendingReviews = {
+                reviewsGate?.await()
+                if (failClear) error("clear failed")
+                pendingCleared++
+            },
             scope = backgroundScope,
             appVersion = "0.234.0",
             clock = clock,
@@ -509,4 +521,106 @@ class CensusContributorTest {
         runCurrent()
         assertNotEquals(ContributorEntry.ON, seen.last())
     }
+
+    // ── Sol round 2 ──────────────────────────────────────────────────────────────────────────────────────────────
+
+    /** S1 (a): census off, then on again, while the answer is held: the press was decided under the old consent. */
+    @Test fun `a late grant after the census goes off and on again is discarded`() = runTest {
+        val (contributor, settings) = contributor()
+        enrolled(settings)
+        val late = CompletableDeferred<GrantResult>()
+        transport.delayed = late
+        val accept = async { contributor.accept() }
+        runCurrent()
+        assertEquals(1, transport.grantRequests)
+
+        settings.declineCensus()
+        settings.setCensusUploadEnabled(true)
+        late.complete(granted())
+
+        assertEquals(GrantRequestOutcome.SUPERSEDED, accept.await())
+        assertNull(store.record.first().grant)
+        assertFalse(contributor.mayUpload())
+    }
+
+    /** S1 (b): a No thanks while the waiting deletion is sent is not adopted as the request's baseline. */
+    @Test fun `No thanks while the deletion is sent stops the request before it is sent`() = runTest {
+        val (contributor, settings) = contributor()
+        enrolled(settings)
+        transport.grantResults += granted()
+        val gate = CompletableDeferred<Boolean>()
+        deletionGate = gate
+        val accept = async { contributor.accept() }
+        runCurrent()
+
+        contributor.noThanks()
+        gate.complete(true)
+
+        assertEquals(GrantRequestOutcome.SUPERSEDED, accept.await())
+        assertEquals("nothing was sent", 0, transport.grantRequests)
+        assertNull(store.record.first().grant)
+        assertEquals(InvitationAnswer.NO_THANKS, store.record.first().answer)
+    }
+
+    /** S1: the version the screen showed when Accept was pressed is the one that counts, not a later read. */
+    @Test fun `a press decided under an older version sends nothing`() = runTest {
+        val (contributor, settings) = contributor()
+        enrolled(settings)
+        transport.grantResults += granted()
+        val pressed = contributor.decisionVersion()
+        settings.declineCensus()
+        settings.setCensusUploadEnabled(true)
+
+        assertEquals(GrantRequestOutcome.SUPERSEDED, contributor.accept(pressed))
+        assertEquals(0, transport.grantRequests)
+    }
+
+    /** S5: the expiry clean-up finishes even though ending the grant re-emits into the watch that started it. */
+    @Test fun `the expiry clean-up is not cut short by its own grant change`() = runTest {
+        val (contributor, settings) = contributor()
+        enrolled(settings)
+        transport.grantResults += granted(expires = "2026-11-15")
+        contributor.accept()
+        clock.virtual = { testScheduler.currentTime }
+        val gate = CompletableDeferred<Unit>()
+        reviewsGate = gate
+        contributor.watch()
+        runCurrent()
+
+        advanceTimeBy(Instant.parse("2026-11-15T00:00:01Z").toEpochMilli() - start)
+        runCurrent()
+        assertNull(store.record.first().grant)
+        assertTrue("the clear is still running", store.record.first().reviewsClearPending)
+        assertEquals(0, pendingCleared)
+
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(1, pendingCleared)
+        assertFalse(store.record.first().reviewsClearPending)
+    }
+
+    /** S5: a clear that failed stays marked, runs again at the next start and blocks uploads until it succeeds. */
+    @Test fun `a failed clear is run again at start and blocks uploads meanwhile`() = runTest {
+        val (contributor, settings) = contributor()
+        enrolled(settings)
+        transport.grantResults += granted()
+        contributor.accept()
+        failClear = true
+        contributor.stop()
+        assertTrue(store.record.first().reviewsClearPending)
+        assertEquals(0, pendingCleared)
+
+        // A new grant cannot upload while the old reviews are not cleared.
+        transport.grantResults += granted()
+        contributor.accept()
+        assertFalse(contributor.mayUpload())
+
+        failClear = false
+        contributor().first.watch()
+        runCurrent()
+        assertEquals(1, pendingCleared)
+        assertFalse(store.record.first().reviewsClearPending)
+        assertTrue(contributor.mayUpload())
+    }
 }
+

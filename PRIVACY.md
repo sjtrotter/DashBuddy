@@ -340,10 +340,13 @@ a change to the census consent, the census ID or a deletion request (`CensusCont
 grant's expiry day (the watch waits for that instant, and the screens show the end from their own clock), the
 dasher's Stop reviewing, and a state read that answers expired, revoked or none; a `401 revoked` on either grant route
 ends it and turns the census off with its ID forgotten, as any census revoke does (`CensusInstallRevocation`). A grant
-response that arrives after the dasher declined, stopped, or turned the census off is discarded: the phone never
+request is decided under what was stored when Accept was pressed (the dasher's answers, every census consent change
+including off then on, the census ID and any deletion request); if any of it changed before the request is sent,
+nothing is sent, and a response that arrives after such a change is discarded: the phone never
 stores it, so nothing is sent under it, and it lapses on the server after 30 days (the server offers no way for the
 phone to give a grant back); every end clears the reviews waiting on the phone
-(`PendingContributorReviews`, which holds none until #1626). An ended grant is not renewed by itself: an expired one
+(`PendingContributorReviews`, which holds none until #1626); a clear that fails is marked in the record and run again
+at the next start, and no contributor upload runs until it succeeds. An ended grant is not renewed by itself: an expired one
 is offered again after a later shift. The grant request is not listed under "What gig.log sent".
 
 Exports replace existing files with the same names in the chosen folder. Exported files survive uninstall and remain until deleted through that provider. “No direct gig.log upload” does not mean that a selected cloud folder keeps the files on the phone.

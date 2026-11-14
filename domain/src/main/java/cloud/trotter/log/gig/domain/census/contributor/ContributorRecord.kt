@@ -108,6 +108,11 @@ data class ContributorRecord(
      * request captures it before sending; a response that finds it moved is discarded.
      */
     val generation: Long = 0,
+    /**
+     * Set with every end (and a `grant_revoked` refusal) in the same write, cleared only after the reviews waiting on the
+     * phone are cleared: a clear a process death or a cancellation cut short is run again (app start, the next check).
+     */
+    val reviewsClearPending: Boolean = false,
 ) {
     fun granted(grant: ContributorGrant, nowMillis: Long) = copy(
         grant = grant, answer = InvitationAnswer.NONE, answeredAtMillis = nowMillis, invitedAtMillis = null,
@@ -119,12 +124,14 @@ data class ContributorRecord(
         return copy(
             refusal = refusal, answeredAtMillis = nowMillis, invitedAtMillis = null,
             grant = if (revoked) null else grant, ended = if (revoked) ContributorEnd.REVOKED else ended,
+            reviewsClearPending = reviewsClearPending || refusal == GrantRefusal.GRANT_REVOKED,
         )
     }
 
     /** The grant ends for [reason]; only the dasher's Stop is a "No thanks". */
     fun ended(reason: ContributorEnd, nowMillis: Long, receipt: ConsentReceipt? = null) = copy(
         generation = generation + 1,
+        reviewsClearPending = true,
         grant = null,
         ended = reason,
         invitedAtMillis = null,

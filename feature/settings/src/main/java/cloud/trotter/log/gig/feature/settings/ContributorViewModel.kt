@@ -3,6 +3,7 @@ package cloud.trotter.log.gig.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.log.gig.core.data.census.contributor.CensusContributor
+import cloud.trotter.log.gig.core.data.census.contributor.DecisionVersion
 import cloud.trotter.log.gig.core.data.census.contributor.GrantRequestOutcome
 import cloud.trotter.log.gig.domain.census.contributor.ContributorEnd
 import cloud.trotter.log.gig.domain.census.contributor.ContributorEntry
@@ -30,6 +31,8 @@ data class ContributorUiState(
     val refusal: GrantRefusal?,
     val requesting: Boolean = false,
     val outcome: GrantRequestOutcome? = null,
+    /** What an Accept pressed now is decided under; null until the store answers. */
+    val version: DecisionVersion? = null,
 )
 
 @HiltViewModel
@@ -49,12 +52,14 @@ class ContributorViewModel @Inject constructor(private val contributor: CensusCo
                 refusal = record.refusal,
                 requesting = requesting,
                 outcome = outcome,
+                version = status.version,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** Accept: the grant request runs on the application scope, so leaving the screen cannot cut it short. */
     fun accept() {
-        contributor.acceptAsync()
+        val version = uiState.value?.version ?: return
+        contributor.acceptAsync(version)
     }
 
     /** Not now, No thanks and Stop also run on the application scope: Not now and No thanks close the screen. */

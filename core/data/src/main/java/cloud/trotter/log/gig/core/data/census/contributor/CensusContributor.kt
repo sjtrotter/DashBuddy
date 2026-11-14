@@ -36,6 +36,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,6 +52,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 /** #1625: what the Census screen's "Screen reviews" row and the reviewer screen show. Holds no eligibility count. */
@@ -60,6 +62,23 @@ data class ContributorStatus(
     /** Eligible, no shift running and no live grant: the reviewer screen may offer Accept. */
     val canAccept: Boolean,
     val shiftLive: Boolean,
+    /** What an Accept pressed now is decided under; the screen passes it to [CensusContributor.acceptAsync]. */
+    val version: DecisionVersion,
+)
+
+/**
+ * #1625: everything a grant request is decided under, read from stored state when Accept is pressed. A request whose
+ * version has changed by the time it would send, or by the time its answer would be stored, is dropped: an answer or
+ * Stop moves [generation]; every census consent write (off or on, a decline, a server revoke) moves [consent], the
+ * stored sequence; a new endpoint, a new census ID and a new deletion request move the rest. Every part is read from
+ * what is stored, so a change and its reversal (off, then on) still leave a different version.
+ */
+data class DecisionVersion(
+    val generation: Long,
+    val consent: Long,
+    val endpoint: String,
+    val installId: String?,
+    val deletionRequestedAt: Long?,
 )
 
 /** #1625: how one Accept went. Each says what happened; the 403 answers are also stored on the record. */
@@ -139,11 +158,21 @@ class CensusContributor internal constructor(
     /** The last Accept's outcome in this process, for the reviewer screen; null before one. */
     val lastOutcome: StateFlow<GrantRequestOutcome?> = outcomeFlow.asStateFlow()
 
+    private val versions: Flow<Pair<ContributorRecord, DecisionVersion>> = combine(
+        store.record, settings.censusConsentSeq, settings.censusBaseUrl, credentials.installId, settings.censusDeletion,
+    ) { record, consent, endpoint, installId, deletion ->
+        record to DecisionVersion(record.generation, consent, endpoint, installId, deletion?.requestedAtMillis)
+    }
+
+    /** The version as stored now. */
+    suspend fun decisionVersion(): DecisionVersion = versions.first().second
+
     val status: Flow<ContributorStatus> =
-        combine(store.record, settings.censusConsent, shifts.shiftLive, ticks) { record, consent, live, _ ->
-            Triple(record, consent, live)
+        combine(versions, settings.censusConsent, shifts.shiftLive, ticks) { (record, version), consent, live, _ ->
+            Triple(record to version, consent, live)
         }
-            .mapLatest { (record, consent, live) ->
+            .mapLatest { (recordVersion, consent, live) ->
+                val (record, version) = recordVersion
                 val now = clock.millis()
                 val today = todayUtc()
                 val censusOn = consent == CensusConsent.ON
@@ -153,6 +182,7 @@ class CensusContributor internal constructor(
                     entry = ContributorInvitation.entry(record, censusOn, eligible, live, now, today),
                     canAccept = eligible && !live && record.grant?.liveOn(today) != true,
                     shiftLive = live,
+                    version = version,
                 )
             }
 
@@ -177,13 +207,18 @@ class CensusContributor internal constructor(
         offered
     }
 
-    /** Accept on the reviewer screen. Runs on the application scope, so leaving the screen cannot cut it short. */
-    fun acceptAsync(): Job = scope.launch { accept() }
+    /**
+     * Accept on the reviewer screen, decided under [version] (the screen's, as shown when pressed). Runs on the
+     * application scope, so leaving the screen cannot cut it short.
+     */
+    fun acceptAsync(version: DecisionVersion): Job = scope.launch { accept(version) }
 
-    suspend fun accept(): GrantRequestOutcome {
+    /** [version] is what the press was decided under; null reads it now, before any wait. */
+    suspend fun accept(version: DecisionVersion? = null): GrantRequestOutcome {
         requestingFlow.value = true
         try {
-            val outcome = lock.mutex.withLock { requestHoldingLock() }
+            val pressed = version ?: decisionVersion()
+            val outcome = lock.mutex.withLock { requestHoldingLock(pressed) }
             outcomeFlow.value = outcome
             Timber.tag(TAG).i("census contributor request outcome=%s", outcome.name.lowercase())
             return outcome
@@ -192,7 +227,7 @@ class CensusContributor internal constructor(
         }
     }
 
-    private suspend fun requestHoldingLock(): GrantRequestOutcome {
+    private suspend fun requestHoldingLock(pressed: DecisionVersion): GrantRequestOutcome {
         val now = clock.millis()
         if (shifts.shiftLive.first() || !eligibility(now, zone())) return GrantRequestOutcome.NOT_OPEN
         // A waiting deletion request goes before anything else, and while it waits nothing else is sent.
@@ -211,9 +246,11 @@ class CensusContributor internal constructor(
         } catch (_: CensusCredentialStore.Transient) {
             return GrantRequestOutcome.UNREACHABLE
         } ?: return GrantRequestOutcome.NO_CENSUS_ID
-        // The decision is recorded before the request, whatever the server answers. The generation it is made under is
-        // what the response must still find: a decline, Stop or any end in the meantime outranks it.
-        val generation = store.update { it.copy(receipt = receipt(now, granted = true)) }.generation
+        // Anything decided since the press (a decline while the deletion was sent, the census off and on again) wins:
+        // nothing is sent.
+        if (decisionVersion() != pressed || credential.installId != pressed.installId) return superseded()
+        // The decision is recorded before the request, whatever the server answers; a receipt moves no version.
+        store.update { it.copy(receipt = receipt(now, granted = true)) }
         val result = try {
             apis.create(settings.censusBaseUrl.first()).requestContributorGrant(credential.bearer())
         } catch (e: CancellationException) {
@@ -233,12 +270,11 @@ class CensusContributor internal constructor(
             // The POST never answers these; a state read does. Either way nothing was granted.
             else -> return GrantRequestOutcome.UNREACHABLE
         }
-        // Consent and the census ID can change outside the lock while the request waits; both must still stand.
-        val stands = settings.censusConsent.first() == CensusConsent.ON &&
-            credentials.installId.first() == credential.installId
+        // The same version must still stand when the answer arrives; the generation is checked inside the write.
+        val stands = decisionVersion().copy(generation = pressed.generation) == pressed
         var applied = false
         store.update { record ->
-            if (!stands || record.generation != generation) return@update record
+            if (!stands || record.generation != pressed.generation) return@update record
             applied = true
             when (result) {
                 is GrantResult.Granted ->
@@ -248,18 +284,20 @@ class CensusContributor internal constructor(
                 else -> record.refused(GrantRefusal.GRANT_REVOKED, now)
             }
         }
-        if (!applied) {
-            // A grant the server issued after the dasher declined is never used: nothing on the phone holds it, so no
-            // contributor upload can run under it, and it lapses on the server after its 30 days.
-            Timber.tag(TAG).i("census contributor response superseded")
-            return GrantRequestOutcome.SUPERSEDED
-        }
-        if (result == GrantResult.GrantRevoked) clearPendingReviews()
+        // A grant the server issued after the dasher declined is never used: nothing on the phone holds it, so no
+        // contributor upload can run under it, and it lapses on the server after its 30 days.
+        if (!applied) return superseded()
+        if (result == GrantResult.GrantRevoked) withContext(NonCancellable) { clearPendingReviews() }
         return outcome
     }
 
+    private fun superseded(): GrantRequestOutcome {
+        Timber.tag(TAG).i("census contributor request superseded")
+        return GrantRequestOutcome.SUPERSEDED
+    }
+
     /** `401 revoked` on a grant route: the census ID itself is revoked. The caller holds [CensusUploadLock]. */
-    private suspend fun revokeHoldingLock() {
+    private suspend fun revokeHoldingLock() = withContext(NonCancellable) {
         val now = clock.millis()
         store.update { it.ended(ContributorEnd.INSTALL_REVOKED, now) }
         clearPendingReviews()
@@ -291,7 +329,7 @@ class CensusContributor internal constructor(
     }
 
     /** Stop reviewing: the grant ends on the phone now, recorded as a declined receipt and a No thanks. */
-    suspend fun stop() {
+    suspend fun stop() = withContext(NonCancellable) {
         val now = clock.millis()
         store.update { it.ended(ContributorEnd.STOPPED, now, receipt(now, granted = false)) }
         clearPendingReviews()
@@ -302,7 +340,7 @@ class CensusContributor internal constructor(
      * [ContributorGate]: true only while a grant stands. A grant that no longer stands is ended here. Takes no lock, so
      * an upload that holds the census upload lock can call it.
      */
-    override suspend fun mayUpload(): Boolean = guarded(false) { reconcile() }
+    override suspend fun mayUpload(): Boolean = guarded(false) { reviewsCleared() && reconcile() }
 
     /**
      * Reads the grant's state on the server (`GET /v1/contributor/grant`), as the server's client guide asks before
@@ -338,6 +376,8 @@ class CensusContributor internal constructor(
      * instant its expiry day begins, with no other change needed.
      */
     fun watch(): Job = scope.launch {
+        // A clear that a process death or a failure left outstanding runs again first.
+        guarded(false) { reviewsCleared() }
         launch {
             combine(store.record, settings.censusConsent, credentials.installId, settings.censusDeletion) { record, _, _, _ ->
                 record.grant
@@ -373,21 +413,36 @@ class CensusContributor internal constructor(
     }
 
     /** Ends [grant] (only that one: a newer grant stays) and clears the reviews waiting on the phone. */
-    private suspend fun end(grant: ContributorGrant, reason: ContributorEnd) {
+    /**
+     * Ends [grant] (only that one: a newer grant stays) and clears the reviews waiting on the phone, as one unit no
+     * cancellation splits: ending the grant re-emits into the expiry watch's `collectLatest`, which must not cut the
+     * clear short. The end's write also sets [ContributorRecord.reviewsClearPending], so a clear that still fails is run
+     * again.
+     */
+    private suspend fun end(grant: ContributorGrant, reason: ContributorEnd) = withContext(NonCancellable) {
         val now = clock.millis()
         store.update { record -> if (record.grant == grant) record.ended(reason, now) else record }
         clearPendingReviews()
         Timber.tag(TAG).i("census contributor ended reason=%s", reason.name.lowercase())
     }
 
+    /** Clears the reviews waiting on the phone, then (only on success) the record's pending-clear mark. */
     private suspend fun clearPendingReviews() {
         try {
             pendingReviews.clear()
+            store.update { it.copy(reviewsClearPending = false) }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            Timber.tag(TAG).w("census contributor pending reviews clear failed")
+            Timber.tag(TAG).w("census contributor pending reviews clear failed; it runs again")
         }
+    }
+
+    /** True when no clear is outstanding, running an outstanding one first. */
+    private suspend fun reviewsCleared(): Boolean {
+        if (!store.record.first().reviewsClearPending) return true
+        withContext(NonCancellable) { clearPendingReviews() }
+        return !store.record.first().reviewsClearPending
     }
 
     private fun receipt(now: Long, granted: Boolean) = ConsentReceipt(now, appVersion, PrivacyDisclosure.REVISION, granted)

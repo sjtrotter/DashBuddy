@@ -1021,10 +1021,14 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   consent is off, whose install id is not the current enrolled id, that a deletion request (`requestedAtMillis` ≥ the
   grant's `obtainedAtMillis`) followed, or whose UTC expiry day has come; `refresh()` (the state GET, #1626 calls it
   before a review session) ends it on expired / revoked / none and never creates a grant the phone does not hold.
-  Every end clears `PendingContributorReviews` (a no-op binding until #1626). An expired grant is re-offered after a
-  later shift, never renewed silently. **Late responses (Sol S1):** `ContributorRecord.generation` moves on every answer,
-  Stop and end; Accept captures it before the POST, and at the response re-checks it, census consent and the census id;
-  any change discards the response (`SUPERSEDED`): a grant the server issued after a decline is never stored, so nothing
+  Every end clears `PendingContributorReviews` (a no-op binding until #1626) inside `NonCancellable`, and its write sets
+  `reviewsClearPending`, cleared only after the clear succeeds; `watch()` re-runs an outstanding clear at start and
+  `mayUpload()` runs it first and is false while it fails (Sol S5). An expired grant is re-offered after a
+  later shift, never renewed silently. **Late responses (Sol S1):** a `DecisionVersion` is captured when Accept is pressed (the
+  screen passes the one it showed): `ContributorRecord.generation` (moves on every answer, Stop and end),
+  `census_consent_seq` (moves in the same edit as every census switch write: on, off, a decline, a server revoke), the
+  endpoint, the census id and the latest deletion request time. It is checked after the deletion wait, before the POST
+  (nothing is sent if it moved) and again before the answer is stored; any change gives `SUPERSEDED`: a grant the server issued after a decline is never stored, so nothing
   uploads under it, and it lapses on the server (the API has no route for a phone to drop its own grant). **Install
   revoked (S2):** `401 revoked` on the POST or the state GET ends the grant (`INSTALL_REVOKED`), clears pending reviews
   and runs `CensusInstallRevocation` (census off, envelopes invalidated, health reset, credential wiped; the contributor
