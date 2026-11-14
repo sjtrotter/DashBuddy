@@ -183,6 +183,48 @@ class ContributorReviewPrivacyTest {
         assertTrue(transport.calls.isEmpty())
     }
 
+    @Test fun `with every slot constant and every gate open, confirming every row sends no detectable value`() = runTest {
+        // Sol round 1: a return-task line, labels with no space or a full-width colon, a note repeated beside an
+        // address block.
+        val values = listOf(
+            "Return Riley K to Sample Store", "Display name:Sam", "Zone：Springfield", "Customer:Avery",
+            "Leave by porch", "Hi, Jordan", "Dash in Testville",
+        )
+        val tree = UiNode(
+            className = "android.widget.FrameLayout", viewIdResourceName = "com.doordash.driverapp:id/root",
+            children = listOf(
+                UiNode(text = wording, className = "android.widget.TextView"),
+                UiNode(
+                    className = "android.widget.LinearLayout",
+                    children = listOf(
+                        UiNode(text = "1234 Sample Ridge Dr", contentDescription = "Leave by porch", className = "android.widget.TextView"),
+                        UiNode(text = "Testville, TX 78000", className = "android.widget.TextView"),
+                    ),
+                ),
+            ) + values.map { UiNode(text = it, className = "android.widget.TextView") } +
+                values.map { UiNode(contentDescription = it, className = "android.widget.Button") },
+        )
+        val built = SkeletonBuilder.outcome(tree, "Leave by porch", ReplayMetadata(engineVersion = 1), Platform.DoorDash,
+            LocalDate.parse("2026-11-13"), SkeletonVersion.V2, collectWords = true) as SkeletonBuilder.Outcome.Built
+        val record = CensusRecord(Platform.DoorDash, built.skeleton.fingerprint, built.json, built.itemBytes, null, reviewWords = built.reviewWords)
+        val transport = Recording { SlotClass.CONSTANT }.apply { open = true }
+        val queue = ContributorReviewQueue(context, { gate }, ContributorDataSource(memoryPreferences()), backgroundScope, Dispatchers.Unconfined, clock)
+        queue.offer(record)
+        queue.uploaded(listOf(record.skeletonJson))
+        clock.millis += 86_400_000L
+        val id = queue.entries.first().single().id
+        val reviewer = reviewerFor(queue, transport)
+        val review = (reviewer.open(id) as ReviewLoad.Ready).review
+        assertEquals(listOf(wording), review.rows.mapNotNull { it.word }.distinct())
+        val confirmable = review.rows.filter { it.confirmable }.map { it.slot }.toSet()
+        assertEquals(SendOutcome.SENT, reviewer.send(id, confirmable, emptyMap(), review))
+        assertTrue(transport.calls.any { it.first == ContributorTransport.WORDS_PATH })
+        transport.calls.forEach { (path, body) ->
+            values.forEach { value -> assertFalse("'$value' left in $path", body.contains(value)) }
+            values.mapNotNull { CensusHash.of(it) }.forEach { assertFalse("a hash of a covered value left in $path", body.contains(it)) }
+        }
+    }
+
     private fun assertCustomerNeverSent(transport: Recording) {
         transport.calls.forEach { (path, body) ->
             customer.forEach { value -> assertFalse("'$value' left in $path", body.contains(value.trim('"'))) }
@@ -204,7 +246,11 @@ class ContributorReviewPrivacyTest {
         val apis = object : CensusApiFactory(CensusSentObserver.NONE) {
             override fun contributor(baseUrl: String): ContributorTransport = transport
         }
-        return ContributorReviewer(queue, gate, CensusUploadLock(), credentials, settings, apis)
+        // The real contributor's gate and state read, standing in as this test's gate.
+        val contributor: cloud.trotter.log.gig.core.data.census.contributor.CensusContributor = mock()
+        whenever(contributor.mayUpload()).thenAnswer { gate.open }
+        whenever(contributor.refresh()).thenAnswer { gate.open }
+        return ContributorReviewer(queue, contributor, CensusUploadLock(), credentials, settings, apis)
     }
 
     private fun memoryPreferences() = object : androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences> {

@@ -38,7 +38,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -101,6 +106,8 @@ class ContributorReviewQueue internal constructor(
     scope: CoroutineScope,
     private val io: CoroutineDispatcher,
     private val clock: Clock,
+    /** Re-reads expiry with no other change; once a minute in the app. */
+    ticks: Flow<Unit> = minuteTicks(),
 ) : PendingContributorReviews, ContributorReviewIntake, UploadedSkeletons {
     @Inject constructor(
         @ApplicationContext context: Context,
@@ -133,21 +140,52 @@ class ContributorReviewQueue internal constructor(
         .catch { emit(false) }
         .stateIn(scope, SharingStarted.Eagerly, false)
 
-    /** Every stored candidate, oldest first. Loads the store on first collection. */
-    val entries: Flow<List<ReviewCandidate>> = state.asStateFlow()
-        .map { it.entries }
+    /**
+     * Every live candidate, oldest first. Loads the store on first collection; a candidate past [KEEP_DAYS] is never
+     * emitted, and the clock alone ([ticks]) drops it, with its words, from the store too.
+     */
+    val entries: Flow<List<ReviewCandidate>> = combine(state.asStateFlow(), ticks) { file, _ -> file.entries }
         .onStart { load() }
+        .onEach { if (it.any(::expired)) prune() }
+        .map { list -> list.filterNot(::expired) }
+        .distinctUntilChanged()
 
     override val wantsCandidates: Boolean
         get() = grant.value && state.value.entries.count { it.day == todayUtc().toString() } < MAX_PER_DAY
 
     /** The words held for [id], or null when none are (never collected, or lost to a process death). */
-    suspend fun wordsFor(id: String): ReviewWords? = mutex.withLock { words[id] }
+    suspend fun wordsFor(id: String): ReviewWords? {
+        prune()
+        return mutex.withLock { words[id] }
+    }
 
+    /** A live candidate: one past [KEEP_DAYS] is dropped here, never returned. */
     suspend fun candidate(id: String): ReviewCandidate? {
-        load()
+        prune()
         return state.value.entries.firstOrNull { it.id == id }
     }
+
+    /** #1626 (Sol S8): the session stopped on a revocation; its words go, the sanitized candidate stays. */
+    suspend fun dropWords(id: String) {
+        mutex.withLock { words.remove(id) }
+    }
+
+    /** Drops expired candidates and their words from memory and the store. */
+    private suspend fun prune() {
+        load()
+        mutex.withLock {
+            val current = state.value
+            val next = pruned(current)
+            if (next == current) return@withLock
+            save(next)
+            words.keys.retainAll(next.entries.map { it.id }.toSet())
+        }
+    }
+
+    private fun expired(candidate: ReviewCandidate): Boolean = !recent(candidate.day, todayUtc())
+
+    private fun recent(day: String, today: LocalDate): Boolean =
+        runCatching { !LocalDate.parse(day).isBefore(today.minusDays(KEEP_DAYS)) }.getOrDefault(false)
 
     override suspend fun offer(record: CensusRecord) {
         val reviewWords = record.reviewWords ?: return
@@ -182,7 +220,7 @@ class ContributorReviewQueue internal constructor(
 
     override suspend fun uploaded(itemsJson: List<String>) {
         if (itemsJson.isEmpty()) return
-        load()
+        prune()
         val shas = itemsJson.mapNotNull { sha256OrNull(it) }.toSet()
         mutex.withLock {
             val current = state.value
@@ -241,7 +279,7 @@ class ContributorReviewQueue internal constructor(
         if (loaded) return
         mutex.withLock {
             if (loaded) return@withLock
-            state.value = withContext(io) {
+            val read = withContext(io) {
                 try {
                     if (file.isFile) json.decodeFromString(QueueFile.serializer(), file.readText(Charsets.UTF_8)) else QueueFile()
                 } catch (e: CancellationException) {
@@ -251,7 +289,11 @@ class ContributorReviewQueue internal constructor(
                     QueueFile()
                 }
             }
+            state.value = read
             loaded = true
+            // What was stored before a restart is held to the same expiry as anything kept since.
+            val live = pruned(read)
+            if (live != read) save(live)
         }
     }
 
@@ -280,10 +322,8 @@ class ContributorReviewQueue internal constructor(
 
     private fun pruned(current: QueueFile): QueueFile {
         val today = todayUtc()
-        val oldest = today.minusDays(KEEP_DAYS)
-        fun recent(day: String) = runCatching { !LocalDate.parse(day).isBefore(oldest) }.getOrDefault(false)
         return current.copy(
-            entries = current.entries.filter { recent(it.day) },
+            entries = current.entries.filter { recent(it.day, today) },
             done = current.done.filter { it.day == today.toString() },
         )
     }
@@ -302,5 +342,12 @@ class ContributorReviewQueue internal constructor(
         private const val MAX_HELD_VARIANTS = 6
 
         private val json = Json { ignoreUnknownKeys = false }
+
+        private fun minuteTicks(): Flow<Unit> = flow {
+            while (true) {
+                emit(Unit)
+                delay(60_000L)
+            }
+        }
     }
 }

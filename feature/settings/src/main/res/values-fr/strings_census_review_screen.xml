@@ -9,7 +9,7 @@
     <string name="census_review_waiting_upload">En attente de l\'envoi quotidien du recensement</string>
 
     <string name="census_review_screen_title">Vérifier un écran</string>
-    <string name="census_review_screen_intro">Chaque ligne est ce que gig.log envoie sur un texte de cet écran : un code à sens unique, un format ou un type, jamais le texte lui-même. Les lignes masquées restent masquées.</string>
+    <string name="census_review_screen_intro">Chaque ligne est ce que gig.log envoie sur un texte de cet écran : un code à sens unique, un format ou un type. Un mot que vous confirmez comme texte propre de l\'app part en texte, et seulement après que d\'autres livreurs l\'ont aussi confirmé. Les lignes masquées restent masquées.</string>
     <string name="census_review_screen_loading">Interrogation du serveur du recensement</string>
     <string name="census_review_screen_shift">Vous pourrez vérifier à la fin de votre service.</string>
     <string name="census_review_screen_tomorrow">Revenez demain. Le serveur du recensement vérifie les mots d\'un écran le lendemain du jour où il le reçoit.</string>

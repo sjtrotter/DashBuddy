@@ -540,6 +540,20 @@ class CensusUploadWorkerTest {
         assertTrue(h.queued.isEmpty())
     }
 
+    @Test fun `only a batch accepted with no rejected item marks its skeletons stored for review`() = runTest {
+        val h = harness()
+        h.initialize()
+        val clean = h.queueBatch(1)
+        h.queue(2)
+        h.api.uploads += UploadResult.Accepted(1, 0, emptyMap(), CensusBudget(200, 1000, 30, 300))
+        h.api.uploads += UploadResult.Accepted(1, 0, mapOf("bad_hash" to 1), CensusBudget(199, 1000, 29, 300))
+        h.api.uploads += UploadResult.Duplicate
+        assertEquals(ListenableWorker.Result.success(), h.worker().doWork())
+        assertEquals(3, h.api.batches.size)
+        // The mixed answer proves no item of its batch; a duplicate proves the batch landed, not each item.
+        assertEquals(listOf(clean.map { it.itemJson }), h.uploaded)
+    }
+
     @Test fun `accepted duplicate and batch quality remove items and count outcomes`() = runTest {
         val h = harness()
         h.initialize()

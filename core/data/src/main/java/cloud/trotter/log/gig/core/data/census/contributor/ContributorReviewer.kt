@@ -109,42 +109,73 @@ class ContributorReviewer internal constructor(
     private val lock: CensusUploadLock,
     private val credential: suspend () -> Bearer.Credential?,
     private val transport: suspend () -> ContributorTransport,
+    /** The grant's state read (`CensusContributor.refresh`); it takes the upload lock, so it runs only outside it. */
+    private val refresh: suspend () -> Unit,
 ) {
     @Inject constructor(
         queue: ContributorReviewQueue,
-        gate: ContributorGate,
+        contributor: CensusContributor,
         lock: CensusUploadLock,
         credentials: CensusCredentialStore,
         settings: DevSettingsRepository,
         apis: CensusApiFactory,
     ) : this(
         queue,
-        gate,
+        contributor,
         lock,
         { credentials.current()?.bearer() },
         { apis.contributor(settings.censusBaseUrl.first()) },
+        { contributor.refresh() },
     )
 
-    suspend fun open(id: String): ReviewLoad = lock.mutex.withLock {
-        if (!gate.mayUpload()) return@withLock ReviewLoad.NotAllowed
+    /**
+     * The server said the grant is gone (`403 grant_required`) or the census ID is revoked (`401 revoked`) mid-session:
+     * the session stops where it is. Thrown inside the lock, handled outside it ([abort]).
+     */
+    private class Aborted(val revoked: Boolean) : Exception()
+
+    /**
+     * After [Aborted]: the grant's state read runs first (outside the lock; it ends the grant and clears the queue when
+     * the server says so), then the session's words and every held word are dropped whatever it found.
+     */
+    private suspend fun abort(id: String, revoked: Boolean) {
+        Timber.tag(TAG).w("census review stopped cause=%s", if (revoked) "install_revoked" else "grant_required")
+        try {
+            refresh()
+        } finally {
+            queue.dropWords(id)
+            queue.takeHeld()
+        }
+    }
+
+    suspend fun open(id: String): ReviewLoad = try {
+        lock.mutex.withLock { openHoldingLock(id) }
+    } catch (a: Aborted) {
+        abort(id, a.revoked)
+        ReviewLoad.NotAllowed
+    }
+
+    private suspend fun openHoldingLock(id: String): ReviewLoad {
+        if (!gate.mayUpload()) return ReviewLoad.NotAllowed
         val cred = safeCredential()
         val api = transport()
         // Every session first asks again about the words held since an earlier Send, whichever screen it opens.
         if (cred != null) retryHeld(cred, api)
-        val entry = queue.candidate(id) ?: return@withLock ReviewLoad.NotFound
-        if (!entry.readyOn(queue.todayUtc())) return@withLock ReviewLoad.NotReady
-        val item = CensusSkeletonSchema.deserialize(entry.skeletonJson) as? UiSkeletonDto ?: return@withLock ReviewLoad.NotFound
-        val variant = ContributorVariant.of(item) ?: return@withLock ReviewLoad.NotFound
+        val entry = queue.candidate(id) ?: return ReviewLoad.NotFound
+        if (!entry.readyOn(queue.todayUtc())) return ReviewLoad.NotReady
+        val item = CensusSkeletonSchema.deserialize(entry.skeletonJson) as? UiSkeletonDto ?: return ReviewLoad.NotFound
+        val variant = ContributorVariant.of(item) ?: return ReviewLoad.NotFound
         val slots = ContributorSlots.slots(item)
         val (classes, state) = when {
             cred == null || slots.isEmpty() -> emptyMap<String, SlotClass>() to ClassesState.UNREACHABLE
-            !gate.mayUpload() -> return@withLock ReviewLoad.NotAllowed
+            !gate.mayUpload() -> return ReviewLoad.NotAllowed
             else -> {
                 val ids = slots.map { it.id }.take(ContributorRequests.MAX_CLASS_SLOTS)
                 when (val answer = api.classes(cred, ContributorRequests.classes(variant, ids))) {
                     is ContributorCall.Ok -> answer.value.bySlot.filterKeys { it in ids.toSet() } to ClassesState.LOADED
                     is ContributorCall.Refused -> when (answer.reason) {
-                        ContributorRefusal.GRANT_REQUIRED -> return@withLock ReviewLoad.NotAllowed
+                        ContributorRefusal.GRANT_REQUIRED -> throw Aborted(revoked = false)
+                        ContributorRefusal.INSTALL_REVOKED -> throw Aborted(revoked = true)
                         ContributorRefusal.RELEASE_UNAVAILABLE -> emptyMap<String, SlotClass>() to ClassesState.RELEASE_UNAVAILABLE
                         else -> emptyMap<String, SlotClass>() to ClassesState.UNREACHABLE
                     }
@@ -165,7 +196,7 @@ class ContributorReviewer internal constructor(
                 word = if (value == SlotValue.Hashed && slotClass == SlotClass.CONSTANT) words?.get(slot.id) else null,
             )
         }
-        ReviewLoad.Ready(ScreenReview(entry.id, entry.day, rows, state, wordsKept = words != null))
+        return ReviewLoad.Ready(ScreenReview(entry.id, entry.day, rows, state, wordsKept = words != null))
     }
 
     /**
@@ -173,11 +204,19 @@ class ContributorReviewer internal constructor(
      * word) and [roles] (any slot of the skeleton). The candidate leaves the queue once the server took the review.
      */
     suspend fun send(id: String, confirmed: Set<String>, roles: Map<String, ContributorRole>, shown: ScreenReview): SendOutcome =
-        lock.mutex.withLock {
-            if (!gate.mayUpload()) return@withLock SendOutcome.NOT_ALLOWED
-            val entry = queue.candidate(id) ?: return@withLock SendOutcome.NOT_FOUND
-            val item = CensusSkeletonSchema.deserialize(entry.skeletonJson) as? UiSkeletonDto ?: return@withLock SendOutcome.NOT_FOUND
-            val variant = ContributorVariant.of(item) ?: return@withLock SendOutcome.NOT_FOUND
+        try {
+            lock.mutex.withLock { sendHoldingLock(id, confirmed, roles, shown) }
+        } catch (a: Aborted) {
+            abort(id, a.revoked)
+            if (a.revoked) SendOutcome.INSTALL_REVOKED else SendOutcome.NOT_ALLOWED
+        }
+
+    private suspend fun sendHoldingLock(id: String, confirmed: Set<String>, roles: Map<String, ContributorRole>, shown: ScreenReview): SendOutcome =
+        run {
+            if (!gate.mayUpload()) return@run SendOutcome.NOT_ALLOWED
+            val entry = queue.candidate(id) ?: return@run SendOutcome.NOT_FOUND
+            val item = CensusSkeletonSchema.deserialize(entry.skeletonJson) as? UiSkeletonDto ?: return@run SendOutcome.NOT_FOUND
+            val variant = ContributorVariant.of(item) ?: return@run SendOutcome.NOT_FOUND
             val slots = ContributorSlots.slots(item).associateBy { it.id }
             val confirmable = shown.rows.filter { it.confirmable }.map { it.slot }.toSet()
             val confirmations = confirmed
@@ -187,12 +226,17 @@ class ContributorReviewer internal constructor(
                 .take(ContributorRequests.MAX_GATE_ITEMS)
             val tags = roles.filterKeys { it in slots }.toSortedMap().toList()
                 .take(ContributorRequests.MAX_REVIEW_ITEMS - confirmations.size)
-            if (confirmations.isEmpty() && tags.isEmpty()) return@withLock SendOutcome.NOTHING_TO_SEND
-            val cred = safeCredential() ?: return@withLock SendOutcome.UNREACHABLE
+            if (confirmations.isEmpty() && tags.isEmpty()) return@run SendOutcome.NOTHING_TO_SEND
+            val cred = safeCredential() ?: return@run SendOutcome.UNREACHABLE
             val api = transport()
+            // Checked again right before the request: the grant may have ended while the credential was read.
+            if (!gate.mayUpload()) return@run SendOutcome.NOT_ALLOWED
             when (val answer = api.review(cred, ContributorRequests.review(variant, confirmations, tags))) {
                 is ContributorCall.Ok -> Unit
-                is ContributorCall.Refused -> return@withLock outcomeOf(answer.reason)
+                is ContributorCall.Refused -> {
+                    stopOn(answer.reason)
+                    return@run outcomeOf(answer.reason)
+                }
             }
             Timber.tag(TAG).i("census review sent confirmations=%d roles=%d", confirmations.size, tags.size)
             val words = queue.wordsFor(id)
@@ -225,6 +269,7 @@ class ContributorReviewer internal constructor(
                 val asked = chunk.map { Confirmation(it.slot, it.hash) }
                 val answer = api.gates(cred, ContributorRequests.gates(variant, asked))
                 if (answer !is ContributorCall.Ok) {
+                    (answer as ContributorCall.Refused).reason.let(::stopOn)
                     chunk.forEach { queue.hold(it) }
                     continue
                 }
@@ -247,7 +292,10 @@ class ContributorReviewer internal constructor(
                             send.filter { it.slot in closedAgain }.forEach { queue.hold(it) }
                             Timber.tag(TAG).i("census review words accepted=%d", sent.value.count { it.status == WordStatus.ACCEPTED })
                         }
-                        is ContributorCall.Refused -> send.forEach { queue.hold(it) }
+                        is ContributorCall.Refused -> {
+                            stopOn(sent.reason)
+                            send.forEach { queue.hold(it) }
+                        }
                     }
                 }
             }
@@ -260,6 +308,12 @@ class ContributorReviewer internal constructor(
         throw e
     } catch (_: Exception) {
         null
+    }
+
+    /** A refusal that ends the session: no more requests, and [abort] runs outside the lock. */
+    private fun stopOn(reason: ContributorRefusal) {
+        if (reason == ContributorRefusal.GRANT_REQUIRED) throw Aborted(revoked = false)
+        if (reason == ContributorRefusal.INSTALL_REVOKED) throw Aborted(revoked = true)
     }
 
     private fun outcomeOf(reason: ContributorRefusal): SendOutcome = when (reason) {

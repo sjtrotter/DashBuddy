@@ -9,7 +9,7 @@
     <string name="census_review_waiting_upload">Esperando el envío diario del censo</string>
 
     <string name="census_review_screen_title">Revisar una pantalla</string>
-    <string name="census_review_screen_intro">Cada fila es lo que gig.log envía sobre un texto de esta pantalla: un código de un solo sentido, un formato o un tipo, nunca el texto en sí. Las filas tapadas siguen tapadas.</string>
+    <string name="census_review_screen_intro">Cada fila es lo que gig.log envía sobre un texto de esta pantalla: un código de un solo sentido, un formato o un tipo. Una palabra que confirmes como texto propio de la app se envía como texto, y solo después de que otros conductores también la confirmen. Las filas tapadas siguen tapadas.</string>
     <string name="census_review_screen_loading">Consultando al servidor del censo</string>
     <string name="census_review_screen_shift">Puedes revisar cuando termine tu turno.</string>
     <string name="census_review_screen_tomorrow">Vuelve mañana. El servidor del censo comprueba las palabras de una pantalla el día después de recibirla.</string>

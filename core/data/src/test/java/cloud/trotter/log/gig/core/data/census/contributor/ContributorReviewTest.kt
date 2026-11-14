@@ -27,6 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -134,10 +135,20 @@ class ContributorReviewTest {
 
     private fun TestScope.queue() = ContributorReviewQueue(
         File(folder.root, "census/review/queue.json"), { gate }, flowOf(true), backgroundScope, Dispatchers.Unconfined, clock,
+        ticks,
     )
 
-    private fun reviewer(queue: ContributorReviewQueue) =
-        ContributorReviewer(queue, gate, CensusUploadLock(), { credential }, { transport })
+    private val tick = kotlinx.coroutines.flow.MutableStateFlow(0)
+    private val ticks = kotlinx.coroutines.flow.flow { tick.collect { emit(Unit) } }
+
+    /** What happened, in order: `refresh` from the reviewer, the transport's calls are in [Recording.calls]. */
+    private val events = mutableListOf<String>()
+
+    private fun reviewer(
+        queue: ContributorReviewQueue,
+        api: ContributorTransport = transport,
+        cred: suspend () -> Bearer.Credential? = { credential },
+    ) = ContributorReviewer(queue, gate, CensusUploadLock(), cred, { api }, { events += "refresh" })
 
     /** A candidate the server stored yesterday, so today's release covers it. */
     private suspend fun ready(queue: ContributorReviewQueue, item: UiSkeletonDto = skeleton()): String {
@@ -217,7 +228,7 @@ class ContributorReviewTest {
             override suspend fun review(cred: Bearer.Credential, body: ByteArray): ContributorCall<ReviewCounts> =
                 transport.review(cred, body).also { reviews++; realGate.open = false }
         }
-        val gated = ContributorReviewer(queue, gate, CensusUploadLock(), { credential }, { closing })
+        val gated = reviewer(queue, closing)
         assertEquals(SendOutcome.SENT, gated.send(id, setOf("root/0/text"), emptyMap(), review))
         assertEquals(1, reviews)
         assertEquals(listOf(ContributorTransport.REVIEW_PATH), transport.calls.map { it.first })
@@ -323,7 +334,7 @@ class ContributorReviewTest {
             override suspend fun review(cred: Bearer.Credential, body: ByteArray): ContributorCall<ReviewCounts> =
                 ContributorCall.Refused(ContributorRefusal.PAUSED, 3600)
         }
-        val reviewer = ContributorReviewer(queue, gate, CensusUploadLock(), { credential }, { paused })
+        val reviewer = reviewer(queue, paused)
         val review = (reviewer.open(id) as ReviewLoad.Ready).review
         assertEquals(SendOutcome.LATER, reviewer.send(id, emptySet(), mapOf("root/3/text" to ContributorRole.TIP), review))
         assertEquals(1, queue.entries.first().size)
@@ -358,5 +369,90 @@ class ContributorReviewTest {
         val review = (reviewer(restarted).open(id) as ReviewLoad.Ready).review
         assertFalse(review.wordsKept)
         assertTrue(review.rows.none { it.word != null })
+    }
+
+    @Test fun `the gate closing while the credential is read sends no review`() = runTest {
+        val queue = queue()
+        val id = ready(queue)
+        val review = (reviewer(queue).open(id) as ReviewLoad.Ready).review
+        transport.calls.clear()
+        val closing = reviewer(queue, cred = { gate.open = false; credential })
+        assertEquals(SendOutcome.NOT_ALLOWED, closing.send(id, emptySet(), mapOf("root/3/text" to ContributorRole.TIP), review))
+        assertTrue(transport.calls.isEmpty())
+        assertEquals(1, queue.entries.first().size)
+    }
+
+    @Test fun `a revocation mid-session stops it, runs the state read, then drops the words`() = runTest {
+        for (reason in listOf(ContributorRefusal.GRANT_REQUIRED, ContributorRefusal.INSTALL_REVOKED)) {
+            for (stage in listOf(ContributorTransport.REVIEW_PATH, ContributorTransport.GATES_PATH)) {
+                events.clear()
+                transport.calls.clear()
+                val queue = queue()
+                val id = ready(queue, skeleton("com.doordash.driverapp:id/${reason.name.lowercase()}_${stage.length}"))
+                transport.classes = mapOf("root/0/text" to SlotClass.CONSTANT)
+                val review = (reviewer(queue).open(id) as ReviewLoad.Ready).review
+                // A word held from an earlier session must go too.
+                queue.hold(ContributorReviewQueue.HeldWord(
+                    requireNotNull(cloud.trotter.census.contract.contributor.ContributorVariant.of(skeleton())), "root/0/text",
+                    requireNotNull(CensusHash.of(wording)), wording,
+                ))
+                val refusing = object : ContributorTransport by transport {
+                    override suspend fun review(cred: Bearer.Credential, body: ByteArray): ContributorCall<ReviewCounts> =
+                        if (stage == ContributorTransport.REVIEW_PATH) ContributorCall.Refused(reason).also { events += "review" }
+                        else transport.review(cred, body)
+                    override suspend fun gates(cred: Bearer.Credential, body: ByteArray): ContributorCall<List<GateAnswer>> =
+                        ContributorCall.Refused(reason).also { events += "gates" }
+                    override suspend fun words(cred: Bearer.Credential, body: ByteArray): ContributorCall<List<WordAnswer>> =
+                        error("no word after a revocation")
+                }
+                val outcome = reviewer(queue, refusing).send(id, setOf("root/0/text"), emptyMap(), review)
+                val expected = if (reason == ContributorRefusal.INSTALL_REVOKED) SendOutcome.INSTALL_REVOKED else SendOutcome.NOT_ALLOWED
+                assertEquals("$reason at $stage", expected, outcome)
+                assertEquals("$reason at $stage", "refresh", events.last())
+                assertNull(queue.wordsFor(id))
+                assertTrue(queue.takeHeld().isEmpty())
+                assertEquals(0, transport.calls.count { it.first == ContributorTransport.WORDS_PATH })
+            }
+        }
+    }
+
+    @Test fun `a revocation on the classes read stops the session`() = runTest {
+        val queue = queue()
+        val id = ready(queue)
+        val refusing = object : ContributorTransport by transport {
+            override suspend fun classes(cred: Bearer.Credential, body: ByteArray): ContributorCall<SlotClasses> =
+                ContributorCall.Refused(ContributorRefusal.INSTALL_REVOKED)
+        }
+        assertEquals(ReviewLoad.NotAllowed, reviewer(queue, refusing).open(id))
+        assertEquals(listOf("refresh"), events)
+        assertNull(queue.wordsFor(id))
+    }
+
+    @Test fun `a candidate past 7 days never opens, is never listed, and leaves the store`() = runTest {
+        val queue = queue()
+        val id = ready(queue)
+        assertEquals(1, queue.entries.first().size)
+        clock.millis += 8 * day // the skeleton's day is now 9 days back
+        assertNull(queue.candidate(id))
+        assertEquals(ReviewLoad.NotFound, reviewer(queue).open(id))
+        assertTrue(queue.entries.first().isEmpty())
+        assertNull(queue.wordsFor(id))
+        assertTrue(folder.root.walkTopDown().none { it.isFile && it.readText().contains(id) })
+        // Stored before a restart: a new queue over the same file drops it at load.
+        val stale = queue()
+        assertTrue(stale.entries.first().isEmpty())
+    }
+
+    @Test fun `the clock alone drops an expired candidate from a collected list`() = runTest {
+        val queue = queue()
+        ready(queue)
+        val seen = mutableListOf<Int>()
+        val job = backgroundScope.launch { queue.entries.collect { seen += it.size } }
+        testScheduler.runCurrent()
+        clock.millis += 8 * day
+        tick.value++
+        testScheduler.runCurrent()
+        assertEquals(listOf(1, 0), seen)
+        job.cancel()
     }
 }

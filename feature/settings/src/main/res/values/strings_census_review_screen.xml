@@ -9,7 +9,7 @@
     <string name="census_review_waiting_upload">Waiting for the daily census upload</string>
 
     <string name="census_review_screen_title">Review a screen</string>
-    <string name="census_review_screen_intro">Each row is what gig.log sends about one text on this screen: a one-way code, a format or a kind, never the text itself. Covered rows stay covered.</string>
+    <string name="census_review_screen_intro">Each row is what gig.log sends about one text on this screen: a one-way code, a format or a kind. A word you confirm as the app\'s own wording is sent as text, and only after other drivers confirm it too. Covered rows stay covered.</string>
     <string name="census_review_screen_loading">Asking the census server</string>
     <string name="census_review_screen_shift">You can review after your shift ends.</string>
     <string name="census_review_screen_tomorrow">Come back tomorrow. The census server checks a screen\'s words the day after it receives the screen.</string>

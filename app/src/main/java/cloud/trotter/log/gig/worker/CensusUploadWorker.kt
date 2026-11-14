@@ -559,7 +559,9 @@ class CensusUploadWorker @AssistedInject constructor(
                         Timber.tag(TAG).w("census envelopes rejected reasons=%s", result.rejected)
                     }
                 } else {
-                    reportUploaded(items)
+                    // #1626 (Sol S7): the answer has no per-item results, so only a batch with no rejected item proves
+                    // that every item in it was stored.
+                    if (result.rejected.isEmpty()) reportUploaded(items)
                     record.accepted += result.accepted
                     record.duplicate += result.duplicate
                     record.rejected += result.rejected.values.sum()
@@ -572,7 +574,7 @@ class CensusUploadWorker @AssistedInject constructor(
             UploadResult.Duplicate -> {
                 removeBatch(ids, spool)
                 if (!envelopes) {
-                    reportUploaded(items)
+                    // A duplicate answer proves the batch landed, not that each of its items passed: nothing is marked.
                     record.duplicate += items.size
                     stats.duplicate.addAndGet(items.size.toLong())
                     Timber.tag(TAG).i("census duplicate=%d", items.size)

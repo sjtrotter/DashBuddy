@@ -341,10 +341,14 @@ internal class CensusWorkerHarness(scope: CoroutineScope, io: CoroutineDispatche
         }.also { envelopes += it }
     }
 
+    /** #1626: the skeleton items the worker reported as stored, per report. */
+    val uploaded = mutableListOf<List<String>>()
+    private val uploadedSkeletons = cloud.trotter.log.gig.domain.census.contributor.UploadedSkeletons { uploaded += it }
+
     fun worker(tags: List<String> = emptyList()): CensusUploadWorker = TestListenableWorkerBuilder<CensusUploadWorker>(RuntimeEnvironment.getApplication())
         .setWorkerFactory(object : WorkerFactory() {
             override fun createWorker(appContext: Context, workerClassName: String, workerParameters: WorkerParameters): ListenableWorker =
-                CensusUploadWorker(appContext, workerParameters, preferences, credentials, spool, factory, planner, network, stats, lock, healthSink, metadataProvider, envelopeSpool, envelopeSink, deletion)
+                CensusUploadWorker(appContext, workerParameters, preferences, credentials, spool, factory, planner, network, stats, lock, healthSink, metadataProvider, envelopeSpool, envelopeSink, deletion, uploadedSkeletons)
         }).setTags(tags).build()
 }
 
