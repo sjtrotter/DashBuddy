@@ -199,7 +199,7 @@ traffic for every host with no exception, and `HttpsEndpointGuardTest` checks th
 | Google MPG search | manual button press | Google in the user's browser (`VehicleCard`) | entered vehicle year, make and model plus `mpg`; browser cookies/account settings apply |
 | Text-to-speech (`TtsEffectHandler`) | used for spoken offers | your phone's text-to-speech engine | the offer sentence; the engine may use the network under its own terms |
 | UNKNOWN screen/notification census (every build: Play, sideload and debug, #1620; see "The census opt-in" and "When the census uploads" below) | off | gig.log's census server, built into the app (§2.1); turning the census on enrols the install | a **skeleton** of an admitted UNKNOWN screen or platform notification: screen view classes/ids, or a grammar-bounded notification channel id and five filtered slots; text slots carry coarse kinds or hashes under a k-anonymity gate, never source text — see `docs/adr/ADR-0011-unknown-census-privacy-model.md` — plus daily recognition-health counts per platform and app version, sent with this install's ID. Once the server lists `uinode.skeleton.v2` (and `notification.skeleton.v2`) as accepted, a skeleton also carries: for a money figure, 12-hour clock time, distance, minute count or item count, its format with the digits removed, from a closed list (`$#.##`, `#:## AM/PM`, `#.# mi`, `# min(s)`, `# item(s)`; AM and PM are one class, and the value never leaves); each node's click and visibility flags; and a notification's action labels as filtered slots of the same kinds as any text slot (a hash of a short chrome-like label, a coarse kind such as `digits` or `mixed`, a format template, or `withheld`; never the label). The skeleton's day is the UTC day. At most one skeleton of each layout and format is kept a UTC day, and only from the delivery apps the census choices cover (below). |
-| Screen reviews, the contributor tier (every build, #1625; see "Screen reviews" below) | off; offered only by invitation | the same census server, under this install's census ID | to accept, one signed `POST /v1/contributor/grant` whose whole body is `{"eligible":true}`: a yes, never a count; later a bodyless signed `GET` of the grant's state before each review session. Reviewing a screen (#1626), only while the grant stands, each request signed and sent under the census upload lock: `POST /v1/contributor/classes` (the screen's variant: its public fingerprint, kind, delivery-app version, hash domain, filter revision and layout id, and the slot ids of its own skeleton, never a value), `POST /v1/contributor/review` (the variant, each confirmed slot with that slot's public census hash, and each label as a slot and a role from the server's closed list; never a word or a value), `POST /v1/contributor/gates` (the variant and the confirmed slot and hash pairs), and `POST /v1/contributor/words` (a confirmed word in plain text, with its slot and hash, only after `gates` answered open for that exact slot and hash). Ask the developer is not built in this version |
+| Screen reviews, the contributor tier (every build, #1625; see "Screen reviews" below) | off; offered only by invitation | the same census server, under this install's census ID | to accept, one signed `POST /v1/contributor/grant` whose whole body is `{"eligible":true}`: a yes, never a count; later a bodyless signed `GET` of the grant's state before each review session. Reviewing a screen (#1626), only while the grant stands, each request signed and sent under the census upload lock: `POST /v1/contributor/classes` (the screen's variant: its public fingerprint, kind, delivery-app version, hash domain, filter revision and layout id, and the slot ids of its own skeleton, never a value), `POST /v1/contributor/review` (the variant, each confirmed slot with that slot's public census hash, and each label as a slot and a role from the server's closed list; never a word or a value), `POST /v1/contributor/gates` (the variant and the confirmed slot and hash pairs), and `POST /v1/contributor/words` (a confirmed word in plain text, with its slot and hash, only after `gates` answered open for that exact slot and hash). Ask the developer (#1627): `POST /v1/contributor/quarantine` with the artifact (the screen's outbound skeleton, the dasher's confirmations as slot and public hash, the labels, and only the words `gates` answered open for in that same request; base64url) and an optional note from the server's closed list |
 | Share UNKNOWN captures (debug build only, §2.1; `censusShareCaptures`, trusted installs) | off | the same census server, only while its operator has marked this install trusted | the **text** of UNKNOWN screens (`CensusUploadWorker.uploadEnvelopes`). An UNKNOWN screen gets no rule redaction — only the marker and address-block backstops (§3) — so a capture can still contain customer details, and the operator can read them. The switch says exactly this (`developer_settings_census_share_captures_explainer`). |
 | Bug-report export | manual | a folder/provider the user chooses (`DataExportViewModel.exportLog`) | INFO+ milestones checked against known sensitive markers before writing; matches are replaced, but unknown sensitive details can escape filtering. Then the consent receipts (§8). A cloud provider may upload the file. gig.log does not deliver it to the developer. |
 | CSV export | manual | a folder/provider the user chooses (`DataExportViewModel` → `CsvExporter`) | all recorded sessions and deliveries, including merchant names and which saved vehicle drove each dash (its id and label — the dasher's own text), plus deductible miles per vehicle per tax year and logged expenses and fill-ups (amounts, categories, the dasher’s own labels, gallons and the app's tracked miles at the fill-up, plus the saved vehicle id and label for car-care and gas receipts), including voided entries. No customer data or customer/address hashes. A cloud provider may upload the files. |
@@ -327,8 +327,7 @@ goes as its one-way code and the word itself only after other drivers confirm it
 outline as the review shows it, which only the developer can open and the server deletes after 3 days; to accept,
 gig.log sends a yes and never the counts, and the server gives a 30-day reviewer permission and, while the dasher
 reviews, keeps a log of which screens gig.log asked it about, tied to that permission, for up to 30 days; they can
-stop at any time; their agreement with a delivery company is between them and that company. The screen also says
-Ask the developer is not in this version. Accept (`CensusContributor.accept`) runs under the census upload lock: a
+stop at any time; their agreement with a delivery company is between them and that company. Accept (`CensusContributor.accept`) runs under the census upload lock: a
 waiting deletion request is sent first and, while it waits, nothing else is; with no enrolled census ID nothing is
 sent. It records a consent receipt (§8), then sends the one request. A grant is stored with its install ID, its UTC
 days and the phone's time it arrived, in its own store (`census_contributor`, excluded from backup and transfer). A
@@ -357,7 +356,7 @@ UNKNOWN screen it builds as `uinode.skeleton.v2`, the words of the slots the ske
 let through as possible app wording), keyed by the census server's slot id (`SkeletonBuilder.reviewWords`,
 `ReviewWords`). A word is kept only if every one of its words is on an allow-list (`ReviewAllowList`): the 5,000 most frequent
 lowercase words of English, Spanish and French (Google Books Ngram, CC BY 3.0; capitalized entries, the proper nouns,
-left out; `census/review-common-words.txt`), or a word of the on-screen text the bundled recognition rules match
+left out; `census/review-common-words.txt`, credited in `THIRD_PARTY_NOTICES.md`), or a word of the on-screen text the bundled recognition rules match
 (generated from `matchers/` at build time). A name or place outside both lists is never held; one that is also a
 common word ("Grace", "Will", "Main") is not caught by the list and is a stated residual risk. The word must also pass
 the review's own cover (`ReviewWordCover`): no customer marker,
@@ -399,6 +398,32 @@ stops the session, runs the grant's state read, then drops the screen's words an
 clears its rows, words and choices whenever the grant stops standing, even while it is not shown. A word whose grant
 check fails is dropped, never held, and an answer that arrives after the reviews were cleared holds nothing. Review requests are not listed under "What gig.log sent". The INFO log says only how many
 confirmations, labels and accepted words went, never a slot, hash or word.
+
+**Ask the developer** (#1627, ADR-0011 §15, census#81 "Quarantine"). On a review that is ready (so only while the grant
+stands), Ask the developer opens a sheet that says what goes (the screen's outline as the rows show it, with the
+dasher's confirmations and labels; covered rows stay covered; a confirmed word goes as its one-way code unless other
+drivers confirmed it), that only the developer can open it and that the census server deletes it after 3 days, and
+offers one optional note from the server's closed list ("might show a customer's details", "might show my own details",
+"not sure what this screen is"). Send first reads the grant's state (`refresh`, outside the lock), then
+`ContributorReviewer.ask` runs under the census upload lock and checks `mayUpload` first and again before every
+request. When the dasher confirmed a slot and the phone still holds its word, it asks `gates` for the confirmed slot and
+hash pairs; then it sends `POST /v1/contributor/quarantine` with the artifact `ContributorRequests.artifact` builds,
+in the server's canonical form: `{"skeleton":…,"confirmations":[…],"roles":[…],"words":[…]}`, where the skeleton is
+the candidate's outbound skeleton as stored (hashes, kinds, formats, `withheld`; never screen text), the confirmations
+are slot and public hash for rows shown confirmable, the roles are slot and role, and `words` holds only a word whose
+gate `gates` answered open for that exact slot and hash in the same request and whose census hash is its slot's hash;
+every other confirmed slot stays a hash. No `gates` answer means no word. The server refuses a word whose gate is
+closed (`409 gate_closed`, nothing stored); the phone then sends the artifact once more with no words. The server
+validates the artifact, seals its canonical form to the developer's public key (it cannot read it back), never clusters,
+counts, drafts from or backs it up unless the developer approves a cleaned-up copy, and deletes it at 00:00 UTC on its
+`expiresDay`, 3 UTC days after receipt. The phone hashes the exact bytes it sent and compares them with the server's
+`artifactSha256`: on a match the screen says it went to the developer and the day the server deletes it by; on a
+mismatch it says gig.log could not confirm the server kept the same outline, logs a WARN with no content, and never
+sends it again. Either way the candidate and its words leave the queue, and no review is sent for it. A refusal
+(`422 bad_artifact`, `503 quarantine_unconfigured`, the server paused, today's quota spent, no network) sends nothing
+and keeps the candidate, and the screen says which; `403 grant_required` or `401 revoked` stops the session as for
+Send. The request is not listed under "What gig.log sent". The INFO log says only how many confirmations, labels and
+words went and whether a note was picked.
 
 Exports replace existing files with the same names in the chosen folder. Exported files survive uninstall and remain until deleted through that provider. “No direct gig.log upload” does not mean that a selected cloud folder keeps the files on the phone.
 
@@ -627,6 +652,12 @@ under `core/pipeline/`, the consent model under `docs/design/rule-capability-con
 
 ## Revision history
 
+- **r26 (2026-11-14)** — §6: Ask the developer (#1627): the quarantine request and what its artifact holds (the
+  outbound skeleton, confirmations as hashes, labels, and only words whose gate answered open in the same request),
+  the closed note list, sealed to the developer's key, deleted after 3 days, never counted, the phone's hash check,
+  and what each refusal does. The in-app Privacy page's Screen reviews section describes Ask the developer and the
+  reviewer screen no longer says it is not in this version; the Privacy page links the open-source notices
+  (`THIRD_PARTY_NOTICES.md`). Receipts created under r25 retain that revision.
 - **r25 (2026-11-14)** — §6: reviewing a screen (#1626): while a reviewer permission is stored, the words of the slots
   a v2 skeleton hashed are kept in memory only, after the review's own cover (customer, sensitive and address
   backstops, the dasher's greeting, account and place labels, notes, labelled values, digits); a review candidate is
