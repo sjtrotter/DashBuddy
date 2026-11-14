@@ -88,8 +88,14 @@ import java.time.ZoneOffset
 
 internal class CensusMemoryPreferences : DataStore<Preferences> {
     override val data = MutableStateFlow(emptyPreferences())
-    override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
-        transform(data.value).also { data.value = it }
+    /** A write whose result matches fails once, as a full disk or a process death mid-write would leave it. */
+    var failOnce: ((Preferences) -> Boolean)? = null
+    override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences {
+        val next = transform(data.value)
+        failOnce?.let { if (it(next)) { failOnce = null; throw java.io.IOException("write failed") } }
+        data.value = next
+        return next
+    }
 }
 
 internal class FakeCensusApi : CensusTransport {
@@ -161,7 +167,7 @@ internal class RecordingCensusScheduler : CensusUploadScheduler {
  * [CensusUploadWorkerTest] and [CensusDeletionWorkerTest].
  */
 internal class CensusWorkerHarness(scope: CoroutineScope, io: CoroutineDispatcher) {
-    private val memory = CensusMemoryPreferences()
+    val memory = CensusMemoryPreferences()
     val preferences = spy(DevSettingsRepository(DevSettingsDataSource(memory), true, Dispatchers.Unconfined, "test"))
     val credentials: CensusCredentialStore = mock()
     val spool: CensusSpool = mock()

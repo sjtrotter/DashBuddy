@@ -72,6 +72,16 @@
         <item quantity="many">Le serveur du recensement a supprimé %1$d enregistrements.</item>
         <item quantity="other">Le serveur du recensement a supprimé %1$d enregistrements.</item>
     </plurals>
+    <plurals name="census_delete_status_done_days">
+        <item quantity="one">Le serveur du recensement a supprimé %1$d enregistrement au total ; la dernière suppression a été confirmée le %2$s.</item>
+        <item quantity="many">Le serveur du recensement a supprimé %1$d enregistrements au total ; la dernière suppression a été confirmée le %2$s.</item>
+        <item quantity="other">Le serveur du recensement a supprimé %1$d enregistrements au total ; la dernière suppression a été confirmée le %2$s.</item>
+    </plurals>
+    <plurals name="census_delete_status_some_not_possible">
+        <item quantity="one">%1$d identifiant du recensement de ce téléphone n\'était plus utilisable, donc aucune suppression n\'a été envoyée pour lui.</item>
+        <item quantity="many">%1$d identifiants du recensement de ce téléphone n\'étaient plus utilisables, donc aucune suppression n\'a été envoyée pour eux.</item>
+        <item quantity="other">%1$d identifiants du recensement de ce téléphone n\'étaient plus utilisables, donc aucune suppression n\'a été envoyée pour eux.</item>
+    </plurals>
     <string name="census_delete_status_nothing">Aucune demande de suppression n\'a été envoyée : ce téléphone n\'avait pas d\'identifiant du recensement à ce moment-là.</string>
     <string name="census_delete_status_not_possible">L\'identifiant du recensement de ce téléphone n\'est plus utilisable, donc gig.log n\'a pas pu envoyer la demande.</string>
     <string name="census_delete_dialog_title">Supprimer les données du recensement ?</string>

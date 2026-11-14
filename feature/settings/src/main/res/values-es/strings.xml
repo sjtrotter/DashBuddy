@@ -72,6 +72,16 @@
         <item quantity="many">El servidor del censo borró %1$d registros.</item>
         <item quantity="other">El servidor del censo borró %1$d registros.</item>
     </plurals>
+    <plurals name="census_delete_status_done_days">
+        <item quantity="one">El servidor del censo borró %1$d registro en total; el último borrado se confirmó el %2$s.</item>
+        <item quantity="many">El servidor del censo borró %1$d registros en total; el último borrado se confirmó el %2$s.</item>
+        <item quantity="other">El servidor del censo borró %1$d registros en total; el último borrado se confirmó el %2$s.</item>
+    </plurals>
+    <plurals name="census_delete_status_some_not_possible">
+        <item quantity="one">%1$d identificador del censo de este teléfono ya no se podía usar, así que no se envió ningún borrado para él.</item>
+        <item quantity="many">%1$d identificadores del censo de este teléfono ya no se podían usar, así que no se envió ningún borrado para ellos.</item>
+        <item quantity="other">%1$d identificadores del censo de este teléfono ya no se podían usar, así que no se envió ningún borrado para ellos.</item>
+    </plurals>
     <string name="census_delete_status_nothing">No se envió ninguna solicitud de borrado: este teléfono no tenía identificador del censo en ese momento.</string>
     <string name="census_delete_status_not_possible">El identificador del censo de este teléfono ya no se puede usar, así que gig.log no pudo enviar la solicitud.</string>
     <string name="census_delete_dialog_title">¿Borrar los datos del censo?</string>

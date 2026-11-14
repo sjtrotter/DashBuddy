@@ -283,8 +283,10 @@ outline handed to the queue before the clear and written after it), the debug bu
 counts, then sends a signed `DELETE /v1/installs/me/data` with an empty body under each install ID the request is
 bound to at its first attempt: the identities a developer identity reset retired, then the current enrolled one, each
 with its own key. The identity reset keeps an enrolled identity's ID and sealed key in the credential store (at most
-four, never used to upload, excluded from backup like the current one) for exactly this, and drops it once a deletion
-under it is confirmed. The screen shows the server's confirmation: the rows it erased and its UTC day (only a
+four, never used to upload, excluded from backup like the current one) for exactly this, and drops it only after the
+confirmation under it is saved (a forget that fails is finished on a later load). Each ID keeps its own outcome and
+confirmation day; an ID whose key is gone is reported on its own and the others are still sent, and the screen shows
+the total with the last confirmation day when the days differ. The screen shows the server's confirmation: the rows it erased and its UTC day (only a
 well-formed date is kept). Until the server has confirmed and the phone's queue is cleared, every census run sends the
 request first and sends nothing else, whatever the consent, and the developer identity reset is refused, so the
 request is never sent under another ID. A request the server does not answer, answers 404 (the deployed census server

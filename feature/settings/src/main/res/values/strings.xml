@@ -249,6 +249,14 @@
         <item quantity="one">The census server deleted %1$d record.</item>
         <item quantity="other">The census server deleted %1$d records.</item>
     </plurals>
+    <plurals name="census_delete_status_done_days">
+        <item quantity="one">The census server deleted %1$d record in all; the last deletion was confirmed on %2$s.</item>
+        <item quantity="other">The census server deleted %1$d records in all; the last deletion was confirmed on %2$s.</item>
+    </plurals>
+    <plurals name="census_delete_status_some_not_possible">
+        <item quantity="one">%1$d census ID on this phone could no longer be used, so no deletion was sent for it.</item>
+        <item quantity="other">%1$d census IDs on this phone could no longer be used, so no deletion was sent for them.</item>
+    </plurals>
     <string name="census_delete_status_nothing">No deletion was sent: this phone had no census ID at the time.</string>
     <string name="census_delete_status_not_possible">This phone\'s census ID can no longer be used, so gig.log couldn\'t send the request.</string>
     <string name="census_delete_dialog_title">Delete census data?</string>

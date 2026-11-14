@@ -944,8 +944,11 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   BEFORE the first attempt, cancels a waiting manual run, clears the skeleton spool and in-flight marker, invalidates
   the envelope sink and resets the health ledger, then sends a signed `DELETE /v1/installs/me/data` with an empty
   body under each install id the request binds at its first attempt (`CensusCredentialStore.retiredIds()`, then the
-  current enrolled id), each with its own key; an id leaves the list only on its own 200, and a retired key is then
-  forgotten. `CensusIdentityResetter` calls `retire()`, not `wipe()`: an enrolled identity's id and sealed key move
+  current enrolled id), each a `CensusDeletion.Target` with its own outcome, rows and server day; a target turns
+  `DELETED` only on its own 200, and that confirmation is saved BEFORE its retired key is forgotten, the forget being an
+  idempotent cleanup (`forgetConfirmedKeys`) re-run on every load, so no interruption leaves a pending target without
+  its key; a target whose key is gone is `NOT_POSSIBLE` alone and the others go on. The screen shows the total rows
+  and one day only when all confirmations share it, else the total and the last confirmation day. `CensusIdentityResetter` calls `retire()`, not `wipe()`: an enrolled identity's id and sealed key move
   to `retired_json` (at most four, never used to upload; `wipe()` now clears only the current identity). A 401 the
   clock does not explain gets one recovery per attempt: `POST /v1/enroll` with the SAME id and key (idempotent; after
   a restore that erased the install it re-creates it), then the DELETE again; only that DELETE's 200 resolves. `CensusSpool.generation` is

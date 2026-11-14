@@ -8,6 +8,7 @@ import cloud.trotter.log.gig.core.network.census.EnrolResult
 import cloud.trotter.log.gig.core.network.census.PolicyResult
 import cloud.trotter.log.gig.domain.capture.CensusEnvelopeSink
 import cloud.trotter.log.gig.domain.census.CensusDeletion
+import cloud.trotter.log.gig.domain.census.CensusDeletion.Outcome
 import cloud.trotter.log.gig.domain.census.CensusDeletion.State
 import cloud.trotter.log.gig.domain.census.CensusUploadScheduler
 import cloud.trotter.log.gig.domain.di.ApplicationScope
@@ -104,7 +105,15 @@ class CensusDataDeletion internal constructor(
                     runCatching { scheduler.enqueueDeletion() }
                     runCatching { scheduler.cancelManual() }
                     Timber.tag(TAG).i("census deletion requested")
-                    attempt(request)
+                    try {
+                        attempt(request)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // A store write failed mid-request: what was saved stands, and the queued run resumes from it.
+                        Timber.tag(TAG).w("census deletion attempt failed")
+                        runCatching { preferences.censusDeletion.first() }.getOrNull() ?: request
+                    }
                 }
             }
         } finally {
@@ -119,6 +128,7 @@ class CensusDataDeletion internal constructor(
      */
     suspend fun resumePending(): Boolean {
         val stored = preferences.censusDeletion.first() ?: return true
+        forgetConfirmedKeys(stored)
         if (stored.resolved) return true
         return withContext(NonCancellable) { attempt(stored) }.resolved
     }
@@ -144,26 +154,29 @@ class CensusDataDeletion internal constructor(
 
     /**
      * Binds the request to its install IDs at the first attempt (the retired ones, then the current enrolled one), then
-     * deletes under each in turn with its own key. An ID leaves the list only on the server's confirmation.
+     * deletes under each pending one with its own key. Each confirmation is saved BEFORE its retired key is forgotten,
+     * and forgetting is an idempotent cleanup ([forgetConfirmedKeys]) re-run on every load, so no interruption can
+     * leave a pending ID without its key. An ID whose key is gone is not possible on its own; the others go on.
      */
     private suspend fun send(request: CensusDeletion): CensusDeletion {
         var current = request
-        if (current.installIds == null) {
+        if (current.targets == null) {
             val ids = try {
                 credentials.retiredIds() + listOfNotNull(credentials.current()?.installId)
             } catch (_: CensusCredentialStore.Unusable) {
-                return finish(current.copy(state = State.NOT_POSSIBLE, waiting = null))
+                return finish(current.copy(state = State.NOT_POSSIBLE, targets = emptyList(), waiting = null))
             } catch (_: CensusCredentialStore.Transient) {
                 Timber.tag(TAG).i("census deletion pending cause=keystore")
                 return finish(current.copy(waiting = CensusDeletion.Waiting.UNREACHABLE))
             }
             // No census ID at all (never enrolled, or enrolment unconfirmed): nothing is sent. This is a fact about
             // the request, not about the server.
-            if (ids.isEmpty()) return finish(current.copy(state = State.NOTHING_SENT, installIds = emptyList(), waiting = null))
-            current = finish(current.copy(installIds = ids.distinct()))
+            if (ids.isEmpty()) return finish(current.copy(state = State.NOTHING_SENT, targets = emptyList(), waiting = null))
+            current = finish(current.copy(targets = ids.distinct().map { CensusDeletion.Target(it) }))
         }
         val api = apis.create(preferences.censusBaseUrl.first())
-        for (id in requireNotNull(current.installIds)) {
+        for (target in requireNotNull(current.targets).filter { it.outcome == Outcome.PENDING }) {
+            val id = target.installId
             var retired = false
             val credential = try {
                 credentials.current()?.takeIf { it.installId == id } ?: credentials.retired(id)?.also { retired = true }
@@ -174,19 +187,17 @@ class CensusDataDeletion internal constructor(
                 return finish(current.copy(waiting = CensusDeletion.Waiting.UNREACHABLE))
             }
             if (credential == null) {
-                // The key for an ID on the request is gone (a revoke elsewhere, or a lost Keystore key).
+                // This ID's key is gone (a revoke elsewhere, or a lost Keystore key): only this ID is not possible.
                 Timber.tag(TAG).w("census deletion: an identity's key is gone")
-                return finish(current.copy(state = State.NOT_POSSIBLE, waiting = null))
+                current = finish(current.with(target.copy(outcome = Outcome.NOT_POSSIBLE)))
+                continue
             }
             when (val result = deleteWithRecovery(api, credential)) {
                 is DeleteResult.Deleted -> {
                     Timber.tag(TAG).i("census deleted rows=%d", result.rows)
-                    if (retired) credentials.forgetRetired(id)
-                    current = finish(current.copy(
-                        installIds = current.installIds.orEmpty() - id,
-                        rows = (current.rows ?: 0) + result.rows,
-                        deletedDay = result.deletedDay,
-                    ))
+                    // The confirmation is saved first; only then is the retired key forgotten.
+                    current = finish(current.with(target.copy(outcome = Outcome.DELETED, rows = result.rows, day = result.deletedDay)))
+                    if (retired) forgetRetiredQuietly(id)
                 }
                 is DeleteResult.Unauthorized -> {
                     // A bad signature, a skewed clock or an ID the server no longer knows all answer 401: never conclude.
@@ -194,13 +205,13 @@ class CensusDataDeletion internal constructor(
                     return finish(current.copy(waiting = CensusDeletion.Waiting.UNCONFIRMED))
                 }
                 DeleteResult.Revoked -> {
-                    // As the worker's revoke: switch off first, then forget the identity.
+                    // As the worker's revoke: switch off first, then forget the identity. Other IDs go on.
                     preferences.setCensusUploadEnabled(false)
                     envelopeSink.invalidate()
                     preferences.setCensusShareCaptures(false)
-                    if (retired) credentials.forgetRetired(id) else credentials.wipe()
+                    current = finish(current.with(target.copy(outcome = Outcome.NOT_POSSIBLE)))
+                    if (retired) forgetRetiredQuietly(id) else credentials.wipe()
                     Timber.tag(TAG).w("census deletion: revoked")
-                    return finish(current.copy(state = State.NOT_POSSIBLE, waiting = null))
                 }
                 is DeleteResult.NotAvailable -> {
                     Timber.tag(TAG).i("census deletion pending cause=not_available status=%d", result.status)
@@ -212,7 +223,32 @@ class CensusDataDeletion internal constructor(
                 }
             }
         }
-        return finish(current.copy(state = State.DELETED, waiting = null))
+        val anyDeleted = current.targets.orEmpty().any { it.outcome == Outcome.DELETED }
+        return finish(current.copy(state = if (anyDeleted) State.DELETED else State.NOT_POSSIBLE, waiting = null))
+    }
+
+    private fun CensusDeletion.with(target: CensusDeletion.Target): CensusDeletion =
+        copy(targets = targets.orEmpty().map { if (it.installId == target.installId) target else it })
+
+    /**
+     * The idempotent half of a confirmation: a retired key whose ID the server confirmed is forgotten. Re-run on every
+     * load, so a forget that failed (or a process death after the confirmation was saved) is finished later. Never throws.
+     */
+    private suspend fun forgetConfirmedKeys(stored: CensusDeletion) {
+        val confirmed = stored.targets.orEmpty().filter { it.outcome == Outcome.DELETED }.map { it.installId }
+        if (confirmed.isEmpty()) return
+        val retired = runCatching { credentials.retiredIds() }.getOrNull() ?: return
+        confirmed.filter { it in retired }.forEach { forgetRetiredQuietly(it) }
+    }
+
+    private suspend fun forgetRetiredQuietly(id: String) {
+        try {
+            credentials.forgetRetired(id)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            Timber.tag(TAG).w("census deletion: a confirmed identity's key could not be forgotten yet")
+        }
     }
 
     /**

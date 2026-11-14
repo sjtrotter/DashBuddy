@@ -1,5 +1,7 @@
 package cloud.trotter.log.gig.domain.census
 
+import kotlinx.serialization.Serializable
+
 /**
  * #1622: the dasher's last request to delete the census data the server holds for this phone
  * (`DELETE /v1/installs/me/data`). Stored on the phone so a request made offline survives process death and is sent
@@ -8,19 +10,14 @@ package cloud.trotter.log.gig.domain.census
 data class CensusDeletion(
     val requestedAtMillis: Long,
     val state: State,
-    /** Rows the server erased, summed over the confirmations so far. */
-    val rows: Int? = null,
-    /** The UTC day the server deleted them, `YYYY-MM-DD`, from its confirmation ([State.DELETED] only). */
-    val deletedDay: String? = null,
     /** False until the phone's census queue, envelopes and unsent daily counts are cleared for this request. */
     val localCleared: Boolean = false,
     /**
-     * The census install IDs still to delete, bound at the first attempt: the identities an identity reset retired,
-     * then the current enrolled one. Each is only ever sent with its own key; an ID leaves the list when the server
-     * confirms it. If the phone no longer holds a key on the list, the request cannot be sent ([State.NOT_POSSIBLE]).
-     * Null before the first attempt.
+     * The census install IDs to delete, bound at the first attempt: the identities an identity reset retired, then the
+     * current enrolled one, each with its own outcome. Each is only ever sent with its own key. Null before the first
+     * attempt; empty when the phone held no census ID ([State.NOTHING_SENT]).
      */
-    val installIds: List<String>? = null,
+    val targets: List<Target>? = null,
     /** Why a [State.PENDING] request has not gone through yet, for the screen; null before the first attempt. */
     val waiting: Waiting? = null,
 ) {
@@ -61,6 +58,38 @@ data class CensusDeletion(
             fun fromWire(wire: String?): Waiting? = entries.firstOrNull { it.wire == wire }
         }
     }
+
+    /** One install ID of the request and the server's confirmation for it. */
+    @Serializable
+    data class Target(
+        val installId: String,
+        val outcome: Outcome = Outcome.PENDING,
+        /** Rows the server erased under this ID, from its confirmation. */
+        val rows: Int? = null,
+        /** The server's UTC day of that confirmation, `YYYY-MM-DD`. */
+        val day: String? = null,
+    ) {
+        override fun toString(): String = "Target(${installId.take(8)}…, $outcome, rows=$rows, day=$day)"
+    }
+
+    @Serializable
+    enum class Outcome {
+        PENDING,
+        /** The server confirmed the deletion under this ID. */
+        DELETED,
+        /** The phone no longer holds this ID's key (revoked, or the key was lost): nothing can be sent for it. */
+        NOT_POSSIBLE,
+    }
+
+    /** Rows erased across the confirmed IDs. */
+    val rows: Int get() = targets.orEmpty().sumOf { it.rows ?: 0 }
+
+    /** The confirmed IDs' days, oldest first, distinct. */
+    val confirmedDays: List<String> get() =
+        targets.orEmpty().filter { it.outcome == Outcome.DELETED }.mapNotNull { it.day }.distinct().sorted()
+
+    /** IDs the phone could send nothing for. */
+    val notPossibleCount: Int get() = targets.orEmpty().count { it.outcome == Outcome.NOT_POSSIBLE }
 
     val pending: Boolean get() = state == State.PENDING
 
