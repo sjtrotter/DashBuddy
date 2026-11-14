@@ -67,6 +67,7 @@ class JsonRuleInterpreterReplaceSurvivalTest {
 
     @Test
     fun `a replacement that omits sensitive rules is rejected and the previous block survives`() = runTest {
+        interpreter.loadBundled(listOf(TestBundledFloor.uber))
         interpreter.load(load(goodBundle, "good"))
         assertTrue("good bundle should be live", interpreter.isLoaded)
         assertEquals(
@@ -87,6 +88,7 @@ class JsonRuleInterpreterReplaceSurvivalTest {
 
     @Test
     fun `a replacement that keeps sensitive rules loads normally`() = runTest {
+        interpreter.loadBundled(listOf(TestBundledFloor.uber))
         interpreter.load(load(goodBundle, "good"))
         // Same platform, still ships the sensitive rule → allowed to swap.
         interpreter.load(load(goodBundle, "good-again"))

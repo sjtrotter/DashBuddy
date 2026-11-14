@@ -49,7 +49,9 @@ internal object RemoteRuleAdmission {
     /**
      * Every (field name, spec) the rule parses that its shape marks as customer text, read from the
      * raw JSON the way the compiler resolves it: a branch's own `parse` block, else the rule's, and
-     * the block's `as`, else the rule's. Nested `extract` blocks count under the same shape.
+     * the block's `as`, else the rule's. Fields nested in any sub-expression (`extract` blocks,
+     * `coalesce` arms, `join` parts) count under the same shape, whichever selector the compiler
+     * picks, so discovery can only over-find.
      */
     private fun customerFieldSpecs(raw: JsonObject): List<Pair<String, JsonElement>> {
         val ruleParse = raw["parse"] as? JsonObject
@@ -69,26 +71,40 @@ internal object RemoteRuleAdmission {
 
     private fun fieldSpecs(fields: JsonObject?, names: Set<String>): List<Pair<String, JsonElement>> =
         fields.orEmpty().flatMap { (name, spec) ->
-            val own = if (name in names) listOf(name to spec) else emptyList()
-            own + fieldSpecs((spec as? JsonObject)?.get("extract") as? JsonObject, names)
+            (if (name in names) listOf(name to spec) else emptyList()) + nestedSpecs(spec, names)
         }
 
+    private fun nestedSpecs(spec: JsonElement, names: Set<String>): List<Pair<String, JsonElement>> {
+        val obj = spec as? JsonObject ?: return emptyList()
+        val alternatives = listOfNotNull(obj["coalesce"], obj["join"]).flatMap { (it as? JsonArray).orEmpty() }
+        return fieldSpecs(obj["extract"] as? JsonObject, names) + alternatives.flatMap { nestedSpecs(it, names) }
+    }
+
     /**
-     * True when the value [spec] produces is a `sha256` output: a `coalesce` whose every arm is, or a
-     * read whose `transform` ends in `sha256`. Constants and the collection, enum and presence forms
-     * are never a hashed read.
+     * True when the value [spec] produces is a `sha256` output, judged on the expression the compiler
+     * selects ([ParseExpressionCompiler.SCREEN_SELECTORS]): a `coalesce` whose every arm is, or a read
+     * whose `transform` ends in `sha256`. A spec naming two selectors is refused outright, and
+     * constants and the collection, enum and presence forms are never a hashed read.
      */
     private fun hashesLast(spec: JsonElement): Boolean {
         val obj = spec as? JsonObject ?: return false
-        val arms = obj["coalesce"]
-        if (arms != null) return arms is JsonArray && arms.isNotEmpty() && arms.all { hashesLast(it) }
-        if (NON_READ_FORMS.any { it in obj }) return false
-        val last = when (val transform = obj["transform"]) {
-            is JsonArray -> transform.lastOrNull()
-            else -> transform
+        // `read` also rides inside the read forms, so it never conflicts with another selector.
+        if (ParseExpressionCompiler.SCREEN_SELECTORS.count { it != "read" && it in obj } > 1) return false
+        return when (ParseExpressionCompiler.SCREEN_SELECTORS.firstOrNull { it in obj }) {
+            "coalesce" -> {
+                val arms = obj["coalesce"] as? JsonArray
+                arms != null && arms.isNotEmpty() && arms.all { hashesLast(it) }
+            }
+            in HASHED_READ_FORMS -> {
+                val last = when (val transform = obj["transform"]) {
+                    is JsonArray -> transform.lastOrNull()
+                    else -> transform
+                }
+                last is JsonPrimitive && last.isString && last.content == "sha256"
+            }
+            else -> false
         }
-        return last is JsonPrimitive && last.isString && last.content == "sha256"
     }
 
-    private val NON_READ_FORMS = setOf("literal", "conditionalEnum", "presence", "each", "findAll")
+    private val HASHED_READ_FORMS = setOf("find", "textAfterLabel", "siblingOf", "join", "read")
 }

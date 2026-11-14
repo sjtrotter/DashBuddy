@@ -8,6 +8,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -50,14 +51,17 @@ class RuleGenerationTest {
 
     private fun remote(json: String) = RuleFile.Remote(TestRulesetSigning.verified(json, "test:rules", signingKey))
 
+    private fun assemble(files: Array<out RuleFile>) =
+        RuleGenerationAssembler.assemble(files.filterIsInstance<RuleFile.Bundled>(), files.filterIsInstance<RuleFile.Remote>())
+
     private fun prepared(vararg files: RuleFile): RuleGeneration {
-        val result = interpreter.prepareGeneration(files.toList())
+        val result = assemble(files)
         if (result !is GenerationResult.Prepared) fail("expected a prepared generation, got $result")
         return (result as GenerationResult.Prepared).generation
     }
 
     private fun rejected(vararg files: RuleFile): String {
-        val result = interpreter.prepareGeneration(files.toList())
+        val result = assemble(files)
         if (result !is GenerationResult.Rejected) fail("expected a rejection, got $result")
         return (result as GenerationResult.Rejected).reason
     }
@@ -69,6 +73,7 @@ class RuleGenerationTest {
 
     @Test
     fun `a generation with one compile-isolated rule is rejected and the last good one stays live`() = runTest {
+        interpreter.loadBundled(listOf(bundledFile))
         interpreter.load(TestRulesetSigning.verified(file(known, bundledIdle), "test:rules", signingKey))
         val live = interpreter.generation
         assertNotNull(live)
@@ -82,12 +87,51 @@ class RuleGenerationTest {
     }
 
     @Test
-    fun `a bundled file keeps the per-rule isolation the APK's own rules have`() {
+    fun `a bundled generation with one compile-isolated rule is rejected and nothing goes live`() = runTest {
         val typo = """{ "id": "doordash.screen.typo", "priority": 20, "overridable": true,
             "require": { "exists": { "hasText": "x" } } }"""
-        val generation = prepared(RuleFile.Bundled("rules/doordash.json", file(known, bundledIdle, typo)))
-        assertNull(generation.screens.ruleById("doordash.screen.typo"))
-        assertNotNull(generation.screens.ruleById("doordash.screen.idle_map"))
+        val broken = RuleFile.Bundled("rules/doordash.json", file(known, bundledIdle, typo))
+        assertTrue(rejected(broken).contains("doordash.screen.typo"))
+
+        interpreter.loadBundled(listOf(broken))
+        assertFalse("the readiness gate stays closed", interpreter.isLoaded)
+        assertTrue("no floor, so no remote generation either", interpreter.prepareGeneration(listOf(remote(file(known)))) is GenerationResult.Rejected)
+    }
+
+    @Test
+    fun `a bundled file that fails to compile rejects the bundled generation`() {
+        val other = RuleFile.Bundled("rules/uber.json", "{ not json")
+        assertTrue(rejected(bundledFile, other).contains("rules/uber.json"))
+    }
+
+    @Test
+    fun `a bundled rule that collides with an earlier file's rule is dropped, not its file`() {
+        val sameId = rule("doordash.screen.idle_map", 11, "Dash Now")
+        val ownBlock = rule("doordash.screen.sensitive.second", 1, "Bank Account", "sensitive", overrideable = false)
+        val later = RuleFile.Bundled("rules/doordash_more.json", file(sameId, ownBlock))
+        val generation = prepared(bundledFile, later)
+        assertEquals(10, generation.screens.ruleById("doordash.screen.idle_map")?.priority)
+        assertEquals("doordash.screen.sensitive.second", generation.winner("Bank Account"))
+    }
+
+    // ── The bundled floor ──────────────────────────────────────────────
+
+    @Test
+    fun `remote rules are always prepared on the live bundled floor`() = runTest {
+        interpreter.loadBundled(listOf(bundledFile))
+        val hollowKnown = rule("doordash.screen.sensitive.known", 0, "never rendered", "sensitive", overrideable = false)
+        val result = interpreter.prepareGeneration(listOf(remote(file(hollowKnown, rule("doordash.screen.other", 11, "Other")))))
+        val generation = (result as GenerationResult.Prepared).generation
+
+        assertEquals("doordash.screen.sensitive.known", generation.winner("Available Balance"))
+        assertEquals("doordash.screen.sensitive.catchall", generation.winner("Routing Number"))
+    }
+
+    @Test
+    fun `a remote preparation before the bundled floor exists is rejected`() = runTest {
+        assertTrue(interpreter.prepareGeneration(listOf(remote(file(known)))) is GenerationResult.Rejected)
+        interpreter.load(TestRulesetSigning.verified(file(known), "test:rules", signingKey))
+        assertNull(interpreter.generation)
     }
 
     // ── Admission ──────────────────────────────────────────────────────
@@ -119,8 +163,8 @@ class RuleGenerationTest {
         val negative = rule("doordash.screen.early", -1, "Dash Now")
         assertTrue(rejected(bundledFile, remote(file(known, negative))).contains("doordash.screen.early"))
 
-        val generation = prepared(RuleFile.Bundled("rules/doordash.json", file(known, negative, bundledIdle)))
-        assertNull("the bundled rule is skipped, not loaded", generation.screens.ruleById("doordash.screen.early"))
+        val bundledNegative = RuleFile.Bundled("rules/doordash.json", file(known, negative, bundledIdle))
+        assertTrue("a bundled one rejects the bundled generation", rejected(bundledNegative).contains("doordash.screen.early"))
 
         val sensitiveNegative = rule("doordash.screen.sensitive.early", -1, "x", "sensitive", overrideable = false)
         try {
@@ -200,7 +244,7 @@ class RuleGenerationTest {
         val offer = """{ "id": "doordash.screen.offer_card", "priority": 30, "enables": ["accept_offer"],
             "bind": { "acceptButton": { "find": { "hasText": "Accept" } } },
             "require": { "exists": { "hasText": "Accept" } } }"""
-        val result = interpreter.prepareGeneration(listOf(bundledFile, remote(file(offer))))
+        val result = RuleGenerationAssembler.assemble(listOf(bundledFile), listOf(remote(file(offer))))
         val capabilities = (result as GenerationResult.Prepared).capabilities
         assertEquals(listOf("test:rules"), capabilities.map { it.source }.distinct())
     }
@@ -254,5 +298,28 @@ class RuleGenerationTest {
     fun `a remote rule that hashes its customer fields and redacts them is admitted`() {
         val generation = prepared(bundledFile, remote(file(known, taskRule(hashed))))
         assertNotNull(generation.screens.ruleById("doordash.screen.dropoff"))
+    }
+
+    @Test
+    fun `a customer field inside a coalesce arm's extract is checked too`() {
+        val timeline = """{ "id": "doordash.screen.timeline", "priority": 41,
+            "require": { "exists": { "hasText": "Timeline" } },
+            "parse": { "as": "timeline", "fields": { "tasks": { "coalesce": [ {
+              "each": { "hasTextStartsWith": "Deliver to " },
+              "extract": { "nameHash": { "find": { "hasTextStartsWith": "Deliver to " }, "read": "text" } } } ] } } } }"""
+        val reason = rejected(bundledFile, remote(file(known, timeline)))
+        assertTrue(reason, reason.contains("nameHash"))
+    }
+
+    @Test
+    fun `a customer field naming a raw selector beside a hashed one is refused`() {
+        val address = """{ "find": { "hasIdSuffix": "address_line_1" }, "read": "text",
+            "coalesce": [ { "find": { "hasIdSuffix": "address_line_1" }, "read": "text", "transform": "sha256" } ] }"""
+        val rule = """{ "id": "doordash.screen.dropoff_address", "priority": 42,
+            "require": { "exists": { "hasIdSuffix": "address_line_1" } },
+            "redact": [ { "find": { "hasIdSuffix": "address_line_1" } } ],
+            "parse": { "as": "task", "fields": { "phase": "DROPOFF", "customerAddressHash": $address } } }"""
+        val reason = rejected(bundledFile, remote(file(known, rule)))
+        assertTrue(reason, reason.contains("customerAddressHash"))
     }
 }

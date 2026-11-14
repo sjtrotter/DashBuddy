@@ -3,6 +3,7 @@ package cloud.trotter.log.gig.core.pipeline
 import android.content.Context
 import cloud.trotter.log.gig.core.pipeline.accessibility.TreeSnapshot
 import cloud.trotter.log.gig.core.pipeline.rules.JsonRuleInterpreter
+import cloud.trotter.log.gig.core.pipeline.rules.TestBundledFloor
 import cloud.trotter.log.gig.core.pipeline.rules.TestRulesetSigning
 import cloud.trotter.log.gig.domain.capability.RuleCapabilityGrants
 import cloud.trotter.log.gig.domain.capture.CaptureBus
@@ -71,8 +72,10 @@ class GenerationSwapCaptureTest {
         """.trimIndent()
     }
 
-    private suspend fun goLive(withRedact: Boolean) =
+    private suspend fun goLive(withRedact: Boolean) {
+        if (!interpreter.isLoaded) interpreter.loadBundled(listOf(TestBundledFloor.uber))
         interpreter.load(TestRulesetSigning.verified(generation(withRedact), "test:rules", signingKey))
+    }
 
     private val note = UiNode(viewIdResourceName = "com.doordash.driverapp:id/order_note", text = "Zebra42")
     private val tree = UiNode(children = listOf(UiNode(text = "Order"), note)).restoreParents()

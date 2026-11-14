@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.mockito.kotlin.mock
@@ -100,57 +101,71 @@ class LoadAtomicityTest {
     // Compiles, but ships NO sensitive rule → sensitive-coverage reject in load().
     private val noSensitiveFile = file(screenRule("doordash.screen.idle", 10))
 
+    /** An interpreter on the uber floor; the floor's own load is the one reconcile before the test. */
+    private suspend fun onFloor(grants: RecordingGrants) = interpreter(grants).also {
+        it.loadBundled(listOf(TestBundledFloor.uber))
+        assertEquals(1, grants.reconcileCalls.size)
+    }
+
     @Test
     fun `a dup-id whole-file reject reconciles NO capabilities and loads no rules`() = runTest {
         val grants = RecordingGrants()
-        val interp = interpreter(grants)
+        val interp = onFloor(grants)
+        val floor = interp.generation
         interp.load(verified(dupIdFile, "cdn:rules/doordash"))
 
-        assertFalse("a rejected file must not go live", interp.isLoaded)
-        assertTrue(
-            "reconcile ran for a rejected file — a fail-open grant leak (calls=${grants.reconcileCalls.size})",
-            grants.reconcileCalls.isEmpty(),
+        assertSame("a rejected file must not go live", floor, interp.generation)
+        assertEquals(
+            "reconcile ran for a rejected file — a fail-open grant leak",
+            1, grants.reconcileCalls.size,
         )
     }
 
     @Test
     fun `a sensitive-coverage reject reconciles NO capabilities and loads no rules`() = runTest {
         val grants = RecordingGrants()
-        val interp = interpreter(grants)
+        val interp = onFloor(grants)
+        val floor = interp.generation
         interp.load(verified(noSensitiveFile, "cdn:rules/doordash"))
 
-        assertFalse("a coverage-rejected file must not go live", interp.isLoaded)
-        assertTrue(
-            "reconcile ran despite the sensitive-coverage reject (calls=${grants.reconcileCalls.size})",
-            grants.reconcileCalls.isEmpty(),
-        )
+        assertSame("a coverage-rejected file must not go live", floor, interp.generation)
+        assertEquals("reconcile ran despite the sensitive-coverage reject", 1, grants.reconcileCalls.size)
     }
 
     @Test
     fun `a valid file goes live and reconciles exactly once (positive control)`() = runTest {
         val grants = RecordingGrants()
-        val interp = interpreter(grants)
+        val interp = onFloor(grants)
         interp.load(verified(validFile, "cdn:rules/doordash"))
 
-        assertTrue("a valid bundle must go live", interp.isLoaded)
-        assertNotNull(interp.screenRuleset)
-        assertEquals("valid load reconciles exactly once", 1, grants.reconcileCalls.size)
+        assertNotNull("a valid bundle must go live", interp.screenRuleset?.ruleById("doordash.screen.sensitive"))
+        assertEquals("valid load reconciles exactly once", 2, grants.reconcileCalls.size)
     }
 
     @Test
     fun `a bad load after a good one keeps the previous bundle and does not re-reconcile`() = runTest {
         val grants = RecordingGrants()
-        val interp = interpreter(grants)
+        val interp = onFloor(grants)
 
         interp.load(verified(validFile, "cdn:rules/doordash"))
         val goodRuleset = interp.screenRuleset
-        assertEquals(1, grants.reconcileCalls.size)
+        assertEquals(2, grants.reconcileCalls.size)
 
         // The failing load must be a no-op on the live state.
         interp.load(verified(dupIdFile, "cdn:rules/doordash"))
 
         assertTrue("previous good bundle must remain live", interp.isLoaded)
         assertEquals("live ruleset must be unchanged by the rejected load", goodRuleset, interp.screenRuleset)
-        assertEquals("no extra reconcile from the rejected load", 1, grants.reconcileCalls.size)
+        assertEquals("no extra reconcile from the rejected load", 2, grants.reconcileCalls.size)
+    }
+
+    @Test
+    fun `a remote file before any bundled generation is refused`() = runTest {
+        val grants = RecordingGrants()
+        val interp = interpreter(grants)
+        interp.load(verified(validFile, "cdn:rules/doordash"))
+
+        assertFalse("no remote generation without the bundled floor", interp.isLoaded)
+        assertTrue(grants.reconcileCalls.isEmpty())
     }
 }

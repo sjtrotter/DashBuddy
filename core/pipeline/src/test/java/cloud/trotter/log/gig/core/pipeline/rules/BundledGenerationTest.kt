@@ -1,7 +1,5 @@
 package cloud.trotter.log.gig.core.pipeline.rules
 
-import android.content.Context
-import cloud.trotter.log.gig.domain.capability.RuleCapabilityGrants
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -9,14 +7,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import org.mockito.kotlin.mock
 import java.io.File
 
 /**
  * #1568: the shipped rules through the batch loader. A bundled file that fails to compile, or a
- * bundled rule the compiler isolates, would quietly thin recognition on the device (bundled files
- * keep the per-file policy, since nothing older stands behind them), so CI holds the shipped set
- * to zero of either. The corpus suites in `:app` read this same path through `TestRulesetFactory`.
+ * bundled rule the compiler isolates, rejects the whole bundled generation, and with nothing older
+ * to fall back to the app would recognize nothing, so CI holds the shipped set to zero of either.
+ * The corpus suites in `:app` read this same path through `TestRulesetFactory`.
  */
 class BundledGenerationTest {
 
@@ -46,8 +43,7 @@ class BundledGenerationTest {
 
     @Test
     fun `the bundled generation carries every shipped rule`() {
-        val interpreter = JsonRuleInterpreter(mock<Context>(), mock<RuleCapabilityGrants>())
-        val result = interpreter.prepareGeneration(shipped.map { (path, json) -> RuleFile.Bundled(path, json) })
+        val result = RuleGenerationAssembler.assemble(shipped.map { (path, json) -> RuleFile.Bundled(path, json) }, emptyList())
         val generation = (result as GenerationResult.Prepared).generation
 
         fun count(section: String) = shipped.sumOf { (_, json) ->

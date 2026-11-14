@@ -469,9 +469,13 @@ key. Bundled assets are exempt (the APK signature covers them). Signing tooling:
 Before #1568, `loadDefaults` merged the bundled files and `load` swapped in one verified file, each with its own
 checks, and `CaptureWriter` fetched a recognized rule's `redact` block from the live rules by rule id. A swap between
 classification and capture would have masked a frame with another rule set's block. Now every load goes through one
-path, `JsonRuleInterpreter.prepareGeneration(files)` then `activate(prepared)`; `loadDefaults` prepares the bundled
-`assets/rules/` files, and `load(verified)` prepares those same files plus one signature-verified remote file. The
-rules live in `RuleGenerationAssembler`; no network code exists yet (the rules feed is #640).
+path, `RuleGenerationAssembler.assemble(bundled, remote)`, and goes live in one step. `loadDefaults` assembles the
+bundled `assets/rules/` files; when that generation goes live its files become the **bundled floor**.
+`prepareGeneration(remote)` and `load(verified)` take remote files only and assemble them on that floor, so a caller
+cannot leave the bundled blocks out, and both refuse until the floor exists. Preparing, capability reconciliation and
+publishing run under one `Mutex`, so a load suspended in reconciliation cannot be overtaken by another and leave one
+generation live with the other's capabilities (`ActivationSerializationTest`). No network code exists yet (the rules
+feed is #640).
 
 - **Generation.** `RuleGeneration` is one immutable set of screen, click and notification rulesets, and it is the
   redaction source (`ScreenRedactionSource`). `ObservationClassifier.classifyFrame` reads the live generation once
@@ -479,12 +483,11 @@ rules live in `RuleGenerationAssembler`; no network code exists yet (the rules f
   longer holds a redaction source of its own. A click carries the generation that classified its screen, stored
   with the per-platform screen context, so the #910 click-envelope inheritance masks with the same block the screen
   envelope used. `GenerationSwapCaptureTest` forces a swap between classify and capture on all three paths.
-- **Bundled versus remote.** Bundled files keep the policy they always had, because nothing older stands behind
-  them: a file that fails to compile or collides with an earlier one (#633/#438) is skipped, and a non-sensitive
-  rule with an authoring error is isolated (#293). `BundledGenerationTest` holds the shipped set to zero skipped
-  files and zero isolated rules. Remote content is all or nothing: a remote file that fails to compile, has any
-  isolated rule, names no known platform (`Platform.fromWire`, never `Unknown`), or carries a refused rule rejects
-  the generation, and the live one stays.
+- **Every file is all or nothing**, bundled or remote: a file that fails to compile or has any rule the compiler
+  isolated (#293) rejects the generation, and the live one stays. A bundled rejection at startup leaves nothing live,
+  so the #432 readiness gate stays closed (fail closed); `BundledGenerationTest` holds the shipped set to zero
+  failed files and zero isolated rules so that cannot ship. A remote file that names no known platform
+  (`Platform.fromWire`, never `Unknown`) or carries a refused rule rejects it too.
 - **Protected rules** are the bundled rules whose every compiled branch has the sensitive shape (`isSensitiveShape`),
   decided by shape and never by an id substring. This supersedes the design-r3 round-3 amendment that let a remote
   rule replace a bundled `.sensitive.` catch-all by id. A remote rule with a protected id is dropped with a WARN and
@@ -502,14 +505,20 @@ rules live in `RuleGenerationAssembler`; no network code exists yet (the rules f
 - **Customer fields.** `ParsedFieldsFactory.CUSTOMER_FIELDS_BY_SHAPE` (task `customerNameHash` and
   `customerAddressHash`, timeline `tasks[].nameHash`) sits beside `REQUIRED_FIELDS_BY_SHAPE`. A remote rule that
   parses one must end its transform chain in `sha256` (a `coalesce` on every arm) and declare a non-empty `redact`.
+  Discovery walks every sub-expression (`extract` blocks, `coalesce` arms, `join` parts), so a field hidden under a
+  `coalesce` is still found. The hash check judges the expression the compiler selects, using
+  `ParseExpressionCompiler.SCREEN_SELECTORS` (its dispatch order, pinned by `ParseSelectorOrderPinTest`), and a
+  customer field naming two selectors (a raw `find` beside a hashed `coalesce`) is refused.
   This stops a customer field being parsed unhashed. It cannot stop a signed hostile rule routing a customer's text
   into a field stored as-is, such as `storeName`, because the rule chooses what each field means (ADR-0013 X2).
 - **Catch-all rules (ADR-0013 X5).** "A remote set can add blocks but never remove or pre-empt one" holds for the
   protected group 1, `sensitive.known`. The `sensitive.catchall` rules are protected from removal, but they are
   overrideable at priority 999 and 998 by design, so any more specific rule, bundled or remote, can pre-empt them.
   Review is the control there.
-- **Effective checks.** The #633 id and #438 priority checks run on the effective generation: a remote rule that
-  collides with a rule already in it is dropped with a WARN, not its file. The coverage check follows: a platform
+- **Effective checks.** The #633 id and #438 priority checks run per rule (`dropCollidingRules`, formerly
+  `acceptNonCollidingFiles`, which skipped the whole later file and so could take a sensitive guard with one
+  duplicate): a bundled rule that collides with an earlier bundled file's rule, or a remote rule that collides with a
+  kept bundled rule, is dropped with a WARN and the rest of its file loads. The coverage check follows: a platform
   whose screens include remote rules and no sensitive rule rejects the generation (#419); a bundled-only platform
   without one has its screen rules excluded (#432). The #432 frame gate is unchanged: nothing classifies until a
   generation is live. Capabilities are enumerated from the live rules, stamped with their file's source, and land

@@ -30,7 +30,7 @@ class RuleGeneration(
     }
 }
 
-/** One rules file offered to [JsonRuleInterpreter.prepareGeneration]. */
+/** One rules file of a generation: bundled (the APK's own) or remote (signature-verified). */
 sealed class RuleFile(val source: String, internal val json: String) {
 
     /** A file shipped in the APK's `assets/rules/`; only the interpreter reads these. */

@@ -29,6 +29,17 @@ internal object ParseExpressionCompiler {
      *  compiling, its only consumer. */
     private const val MAX_EACH_SIZE = 50
 
+    /**
+     * The screen parse-expression selector keys in the order `compileParseExpression` tests them:
+     * an object carrying two of them compiles as the first (#1568). [RemoteRuleAdmission] reads
+     * this to judge the expression the compiler will actually build; `ParseSelectorOrderPinTest`
+     * pins it to the dispatch below.
+     */
+    val SCREEN_SELECTORS = listOf(
+        "literal", "findAll", "each", "presence", "conditionalEnum", "find", "textAfterLabel",
+        "siblingOf", "join", "coalesce", "read",
+    )
+
     // ==========================================================================
     //  Screen parse block compiler
     // ==========================================================================

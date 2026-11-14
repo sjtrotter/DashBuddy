@@ -8,6 +8,8 @@ import cloud.trotter.log.gig.domain.state.Platform
 import cloud.trotter.log.gig.domain.model.notification.RawNotificationData
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -15,18 +17,20 @@ import javax.inject.Singleton
 /**
  * Singleton that owns the live rule generation (#1568).
  *
- * Every load goes through one path: [prepareGeneration] compiles and checks a whole generation
- * ([RuleGenerationAssembler] holds the rules) without touching the live one, and [activate] makes a
- * prepared generation live in one step. [loadDefaults] prepares the bundled `assets/rules/` files;
- * [load] prepares the bundled files plus one signature-verified remote file. A rejected generation
- * leaves the live one in place.
+ * Every load goes through one path: a generation is compiled and checked whole
+ * ([RuleGenerationAssembler] holds the rules) without touching the live one, then made live in
+ * one step. [loadDefaults] loads the bundled `assets/rules/` files, which become the trusted
+ * bundled floor; [prepareGeneration] builds every remote candidate on that floor, so a caller
+ * cannot drop the bundled blocks by leaving them out, and it refuses until the floor exists.
+ * Preparing, reconciling capabilities and publishing run under one lock, so two loads cannot
+ * leave one generation live with the other's capabilities.
  *
  * Security checks applied before parsing, per file:
  * - File size ≤ [MAX_RULE_FILE_BYTES] (1 MB)
  * - [RuleCompiler.MAX_DEPTH] caps nesting depth during compilation
  * - [RuleCompiler.MAX_REGEX_LENGTH] caps regex patterns during compilation
  *
- * Consent (#417, #843): [activate] reconciles the generation's action capabilities into
+ * Consent (#417, #843): activation reconciles the generation's action capabilities into
  * [RuleCapabilityGrants] BEFORE the generation goes live. Reconcile grants nothing; every
  * capability, bundled or remote, lands undecided until the dasher answers.
  */
@@ -44,9 +48,12 @@ class JsonRuleInterpreter @Inject constructor(
     @Volatile
     private var current: RuleGeneration? = null
 
-    /** The bundled files [loadDefaults] read, which every remote generation is built on. */
+    /** The bundled files of the live bundled generation, the floor every remote candidate is built on. */
     @Volatile
-    private var bundledFiles: List<RuleFile.Bundled> = emptyList()
+    private var bundledFloor: List<RuleFile.Bundled>? = null
+
+    /** Held across prepare, reconcile and publish. */
+    private val activation = Mutex()
 
     val generation: RuleGeneration? get() = current
     val screenRuleset: Ruleset<UiNode>? get() = current?.screens
@@ -80,13 +87,23 @@ class JsonRuleInterpreter @Inject constructor(
             Timber.tag("Rules").w("JsonRuleInterpreter: no rule files found in $RULES_DIR/")
             return
         }
-        bundledFiles = files
-        prepareAndActivate(files)
+        loadBundled(files)
+    }
+
+    /** Prepare [files] as a bundled-only generation; when it goes live, they become the bundled floor. */
+    internal suspend fun loadBundled(files: List<RuleFile.Bundled>) {
+        activation.withLock {
+            val result = RuleGenerationAssembler.assemble(files, emptyList())
+            if (result is GenerationResult.Prepared) {
+                publish(result)
+                bundledFloor = files
+            }
+        }
     }
 
     /**
-     * Prepare the bundled files plus one **signature-verified** remote file and make the result
-     * live (the side-load path today; the rules feed, #640, later).
+     * Prepare one **signature-verified** remote file on the bundled floor and make the result live
+     * (the side-load path today; the rules feed, #640, later).
      *
      * Fail-closed BY CONSTRUCTION (#416): a remote file is a [RuleFile.Remote], built only from a
      * [VerifiedRulesetBytes], which [RulesetVerifier] mints ONLY after a detached signature over the
@@ -94,18 +111,34 @@ class JsonRuleInterpreter @Inject constructor(
      * skip this: they load via [loadDefaults], already covered by the APK signature.
      */
     suspend fun load(verified: VerifiedRulesetBytes) {
-        prepareAndActivate(bundledFiles + RuleFile.Remote(verified))
+        activation.withLock {
+            val result = prepareOnFloor(listOf(RuleFile.Remote(verified)))
+            if (result is GenerationResult.Prepared) publish(result)
+        }
     }
 
     /**
-     * Compile and check [files] as one generation, without touching the live one. Rejected when a
-     * remote file fails any check; see [RuleGenerationAssembler] for the whole list.
+     * Compile and check [remote] on the bundled floor as one generation, without touching the live
+     * one. Rejected before [loadDefaults] has made a bundled generation live, and when a file fails
+     * any check; see [RuleGenerationAssembler] for the whole list.
      */
-    fun prepareGeneration(files: List<RuleFile>): GenerationResult =
-        RuleGenerationAssembler.assemble(files) { compileRuleFile(it.json, it.source) }
+    fun prepareGeneration(remote: List<RuleFile.Remote>): GenerationResult = prepareOnFloor(remote)
 
     /** Reconcile [prepared]'s capabilities, then make its generation live. */
     suspend fun activate(prepared: GenerationResult.Prepared) {
+        activation.withLock { publish(prepared) }
+    }
+
+    private fun prepareOnFloor(remote: List<RuleFile.Remote>): GenerationResult {
+        val floor = bundledFloor
+        if (floor == null) {
+            Timber.tag("Rules").e("Rules generation rejected: no bundled rules are live yet")
+            return GenerationResult.Rejected("no bundled rules are live yet")
+        }
+        return RuleGenerationAssembler.assemble(floor, remote)
+    }
+
+    private suspend fun publish(prepared: GenerationResult.Prepared) {
         reconcileCapabilities(prepared.capabilities)
         current = prepared.generation
         Timber.tag("Rules").i(
@@ -113,11 +146,6 @@ class JsonRuleInterpreter @Inject constructor(
             prepared.bundledFiles, prepared.remoteFiles, prepared.generation.screens.ruleCount,
             prepared.generation.clicks.ruleCount, prepared.generation.notifications.ruleCount,
         )
-    }
-
-    private suspend fun prepareAndActivate(files: List<RuleFile>) {
-        val result = prepareGeneration(files)
-        if (result is GenerationResult.Prepared) activate(result)
     }
 
     /**
@@ -180,83 +208,64 @@ fun missingSensitivePlatforms(screens: List<CompiledRule<UiNode>>): Set<Platform
  */
 private data class PriorityKey(val platform: Platform, val section: String, val priority: Int)
 
-private fun bundlePriorityKeys(bundle: JsonRuleInterpreter.CompiledRuleBundle): List<PriorityKey> =
-    bundle.screens.map { PriorityKey(Platform.fromRuleId(it.id), "screens", it.priority) } +
-        bundle.clicks.map { PriorityKey(Platform.fromRuleId(it.id), "clicks", it.priority) } +
-        bundle.notifications.map { PriorityKey(Platform.fromRuleId(it.id), "notifications", it.priority) }
+private fun priorityKey(rule: CompiledRule<*>, section: String) =
+    PriorityKey(Platform.fromRuleId(rule.id), section, rule.priority)
 
 /**
- * Post-merge cross-file collision policy (#633 rule-id + #438 item 3 priority). Given
- * per-file compiled bundles in LOAD ORDER, return only the files that don't collide with
- * an EARLIER-accepted file on EITHER:
+ * Post-merge cross-file collision policy (#633 rule id + #438 item 3 priority), applied per rule
+ * since #1568. Given per-file compiled bundles in LOAD ORDER, drop each rule that collides with a
+ * rule an EARLIER file kept, on EITHER:
  *  - a top-level rule id ([CompiledRule.id]), or
  *  - a (platform, section, priority) tuple — priority uniqueness enforced POST-MERGE per
  *    (platform, screens|clicks|notifications), not just per file.
- * A colliding file is SKIPPED WHOLE and logged at ERROR (lost coverage), never merged.
+ * The colliding rule is dropped with a WARN; the rest of its file loads. Before #1568 the whole
+ * later file was skipped, so one duplicate could take a platform's sensitive guard with it.
  *
  * Why per (platform, section) post-merge: [RuleCompiler.compileRules] enforces priority
- * uniqueness per rule TYPE within a SINGLE file, which is sufficient only because today
- * each platform lives in exactly one asset file. The moment a platform splits across
- * files (the #639 subrepo runtime path) or a remote OTA file ships alongside a bundled
- * one (#192/#416), two files could each declare `doordash.screen` priority 100 and the
- * per-file check would never see it — [Ruleset.matchFirst]'s stable-sort tie-break would
- * then decide recognition by load order, silently. This is the post-merge analog of the
- * canonicalize-time dup check (#639).
+ * uniqueness per rule TYPE within a SINGLE file. Two files for one platform could each declare
+ * `doordash.screen` priority 100, and [Ruleset.matchFirst]'s stable-sort tie-break would then
+ * decide recognition by load order, silently.
  *
- * Why skip the LATER file, not the earlier one (both collision kinds): consistent with
- * the #633 first-file-wins policy. For a rule id, [Ruleset]'s `byId` is last-wins, so a
- * later file re-declaring an id would SHADOW the byId redact lookup
- * ([RuleGeneration.redactFor] / [RuleGeneration.notifRedactFor]) the capture
- * stage uses while priority-ordered [Ruleset.matchFirst] still recognizes with a
- * DIFFERENT rule — the wrong rule's `redact` block resolves and an id-keyed customer-PII
- * node (no marker prefix, invisible to the #624 screen backstop) could ship raw. Keeping
- * the earlier file's rules makes byId and matchFirst agree.
+ * Why the LATER rule loses: [Ruleset]'s `byId` is last-wins, so a later rule re-declaring an id
+ * would SHADOW the byId redact lookup ([RuleGeneration.redactFor] / [RuleGeneration.notifRedactFor])
+ * while priority-ordered [Ruleset.matchFirst] still recognizes with the earlier rule — the wrong
+ * rule's `redact` block would resolve. Keeping the earlier rule makes byId and matchFirst agree.
  *
- * ids come from top-level [CompiledRule.id] only — branches share the parent id and are
- * NOT in `byId`, so a branch never triggers a collision. Both checks are impossible with
- * the current prefix-namespaced single-file-per-platform asset bundles (`doordash.` /
- * `uber.`), so this is a no-op today (byte-inert; [DefaultRulesIntegrationTest] and
- * [ParseOutputGoldenTest] stay green); it hardens the future multi-file subrepo (#639) +
- * untrusted CDN/fork rule path (#192/#416).
- *
- * Pure + top-level so it's unit-testable without an Android Context. The ERROR log names
- * the colliding id/priority + both file paths ONLY — no rule text / no PII (Principle 7).
+ * ids come from top-level [CompiledRule.id] only — branches share the parent id. Both checks are
+ * a no-op for today's prefix-namespaced single-file-per-platform asset bundles. The WARN names the
+ * colliding id/priority and both file paths ONLY — no rule text, no PII (Principle 7).
  *
  * @param files compiled bundles in LOAD ORDER (earlier entries win a collision).
  */
-fun acceptNonCollidingFiles(
+fun dropCollidingRules(
     files: List<Pair<String, JsonRuleInterpreter.CompiledRuleBundle>>,
 ): List<Pair<String, JsonRuleInterpreter.CompiledRuleBundle>> {
-    val claimedBy = HashMap<String, String>() // ruleId → first-claiming file path
+    val idClaimedBy = HashMap<String, String>() // ruleId → first-claiming file path
     val priorityClaimedBy = HashMap<PriorityKey, String>() // (platform, section, priority) → path
-    val accepted = mutableListOf<Pair<String, JsonRuleInterpreter.CompiledRuleBundle>>()
-    for ((path, bundle) in files) {
-        val ids = bundle.screens.map { it.id } +
-            bundle.clicks.map { it.id } +
-            bundle.notifications.map { it.id }
-        val idCollision = ids.firstOrNull { it in claimedBy }
-        if (idCollision != null) {
-            Timber.tag("Rules").e(
-                "JsonRuleInterpreter: rule id '%s' in '%s' already claimed by '%s' — skipping the " +
-                    "later file (cross-file byId redact-lookup shadow, #633)",
-                idCollision, path, claimedBy.getValue(idCollision),
-            )
-            continue
+    return files.map { (path, bundle) ->
+        fun <T> kept(rules: List<CompiledRule<T>>, section: String) = rules.filter { rule ->
+            val earlier = idClaimedBy[rule.id] ?: priorityClaimedBy[priorityKey(rule, section)]
+            if (earlier != null) {
+                Timber.tag("Rules").w(
+                    "JsonRuleInterpreter: %s rule '%s' (priority %d) in '%s' collides with a rule '%s' " +
+                        "already loaded — dropped, the rest of the file loads (#633/#438)",
+                    section, rule.id, rule.priority, path, earlier,
+                )
+            }
+            earlier == null
         }
-        val priorityKeys = bundlePriorityKeys(bundle)
-        val priorityCollision = priorityKeys.firstOrNull { it in priorityClaimedBy }
-        if (priorityCollision != null) {
-            Timber.tag("Rules").e(
-                "JsonRuleInterpreter: %s priority %d for platform '%s' in '%s' already claimed by " +
-                    "'%s' — skipping the later file (post-merge priority uniqueness, #438)",
-                priorityCollision.section, priorityCollision.priority,
-                priorityCollision.platform.wire, path, priorityClaimedBy.getValue(priorityCollision),
-            )
-            continue
+        val result = bundle.copy(
+            screens = kept(bundle.screens, "screens"),
+            clicks = kept(bundle.clicks, "clicks"),
+            notifications = kept(bundle.notifications, "notifications"),
+        )
+        for ((section, rules) in listOf("screens" to result.screens, "clicks" to result.clicks,
+            "notifications" to result.notifications)) {
+            for (rule in rules) {
+                idClaimedBy[rule.id] = path
+                priorityClaimedBy[priorityKey(rule, section)] = path
+            }
         }
-        for (id in ids) claimedBy[id] = path
-        for (key in priorityKeys) priorityClaimedBy[key] = path
-        accepted += path to bundle
+        path to result
     }
-    return accepted
 }

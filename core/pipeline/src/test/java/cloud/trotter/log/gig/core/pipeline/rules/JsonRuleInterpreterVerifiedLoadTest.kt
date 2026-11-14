@@ -61,6 +61,7 @@ class JsonRuleInterpreterVerifiedLoadTest {
 
     @Test
     fun `a validly-signed remote bundle compiles and goes live`() = runTest {
+        interpreter.loadBundled(listOf(TestBundledFloor.uber))
         val sig = TestRulesetSigning.signBase64(goodBundle.toByteArray(Charsets.UTF_8), signingKey.private)
         tryLoad(goodBundle, sig)
 
@@ -70,6 +71,7 @@ class JsonRuleInterpreterVerifiedLoadTest {
 
     @Test
     fun `a tampered remote bundle never compiles and the last-good ruleset is retained`() = runTest {
+        interpreter.loadBundled(listOf(TestBundledFloor.uber))
         // First a good load establishes last-good.
         val sig = TestRulesetSigning.signBase64(goodBundle.toByteArray(Charsets.UTF_8), signingKey.private)
         tryLoad(goodBundle, sig)

@@ -9,16 +9,12 @@ import java.util.IdentityHashMap
 import java.util.Locale
 
 /**
- * Builds one [RuleGeneration] from bundled and remote rules files, or rejects it whole (#1568).
+ * Builds one [RuleGeneration] from the bundled files and any remote files, or rejects it whole (#1568).
  *
- * **Bundled files** keep the per-file policy the APK's own rules have always had: a file that fails to
- * compile is skipped, a non-sensitive rule with an authoring error is skipped, and a file that collides
- * with an earlier one is skipped ([acceptNonCollidingFiles]). They are the floor, and nothing older
- * stands behind them.
- *
- * **Remote files** are all or nothing. A remote file that fails to compile, has a rule the compiler
- * isolated, names no known platform, or carries a rule [RemoteRuleAdmission] refuses, rejects the
- * generation, and the live one stays.
+ * **Every file is all or nothing.** A file that fails to compile or has a rule the compiler isolated
+ * rejects the generation, bundled or remote, and the live one stays; at startup there is no live one,
+ * so the #432 readiness gate stays closed. A remote file that names no known platform, or carries a
+ * rule [RemoteRuleAdmission] refuses, rejects it too.
  *
  * **Protected rules** are the bundled rules whose every compiled branch has the sensitive shape,
  * decided by shape, never by the id. A remote rule with a protected id is dropped with a WARN and the
@@ -30,35 +26,31 @@ import java.util.Locale
  * (2) the remote `overrideable: false` rules; (3) the overrideable rules, remote for each platform a
  * remote file carries and bundled for the rest, plus that platform's protected bundled rules.
  *
- * The #633 id and #438 priority checks then run on the effective generation: a remote rule that
- * collides with a rule already in it is dropped with a WARN, not its file. The #419/#432 coverage
- * check follows: a platform whose screens include remote rules and no sensitive rule rejects the
- * generation; a bundled-only platform without one has its screen rules excluded.
+ * The #633 id and #438 priority checks run per rule on the effective generation: a rule that collides
+ * with one already in it (an earlier bundled file's, or for a remote rule any kept bundled rule) is
+ * dropped with a WARN, not its file. The #419/#432 coverage check follows: a platform whose screens
+ * include remote rules and no sensitive rule rejects the generation; a bundled-only platform without
+ * one has its screen rules excluded.
  */
 internal object RuleGenerationAssembler {
 
-    fun assemble(files: List<RuleFile>, compile: (RuleFile) -> CompiledRuleFile?): GenerationResult {
-        val bundled = mutableListOf<Pair<String, JsonRuleInterpreter.CompiledRuleBundle>>()
-        val remote = mutableListOf<RemoteFile>()
-        for (file in files) {
-            val compiled = compile(file)
-            when (file) {
-                is RuleFile.Bundled -> if (compiled != null) bundled += file.source to compiled.bundle
-                is RuleFile.Remote -> {
-                    if (compiled == null) return rejected("remote '${file.source}' failed to compile")
-                    if (compiled.isolatedRuleIds.isNotEmpty()) {
-                        return rejected(
-                            "remote '${file.source}': compile errors isolated rule(s) ${compiled.isolatedRuleIds}",
-                        )
-                    }
-                    val platform = Platform.fromWire(compiled.platformId.substringBefore('.'))
-                        ?.takeUnless { it == Platform.Unknown }
-                        ?: return rejected("remote '${file.source}': platform_id names no known platform")
-                    remote += RemoteFile(file.source, platform, compiled)
-                }
-            }
+    fun assemble(bundled: List<RuleFile.Bundled>, remoteFiles: List<RuleFile.Remote>): GenerationResult {
+        val bundledCompiled = mutableListOf<Pair<String, JsonRuleInterpreter.CompiledRuleBundle>>()
+        for (file in bundled) {
+            val compiled = compileRuleFile(file.json, file.source)
+            wholeFileRefusal(file, compiled)?.let { return rejected("bundled $it") }
+            bundledCompiled += file.source to compiled!!.bundle
         }
-        val acceptedBundled = acceptNonCollidingFiles(bundled)
+        val remote = mutableListOf<RemoteFile>()
+        for (file in remoteFiles) {
+            val compiled = compileRuleFile(file.json, file.source)
+            wholeFileRefusal(file, compiled)?.let { return rejected("remote $it") }
+            val platform = Platform.fromWire(compiled!!.platformId.substringBefore('.'))
+                ?.takeUnless { it == Platform.Unknown }
+                ?: return rejected("remote '${file.source}': platform_id names no known platform")
+            remote += RemoteFile(file.source, platform, compiled)
+        }
+        val acceptedBundled = dropCollidingRules(bundledCompiled)
         val bundledRules = acceptedBundled.flatMap { (_, b) -> b.screens + b.clicks + b.notifications }
         val protectedIds = bundledRules.filter { it.isSensitiveShape }.map { it.id }.toSet()
 
@@ -131,6 +123,13 @@ internal object RuleGenerationAssembler {
             bundledFiles = acceptedBundled.size,
             remoteFiles = remote.size,
         )
+    }
+
+    private fun wholeFileRefusal(file: RuleFile, compiled: CompiledRuleFile?): String? = when {
+        compiled == null -> "'${file.source}' failed to compile"
+        compiled.isolatedRuleIds.isNotEmpty() ->
+            "'${file.source}': compile errors isolated rule(s) ${compiled.isolatedRuleIds}"
+        else -> null
     }
 
     private fun rejected(reason: String): GenerationResult.Rejected {
