@@ -93,7 +93,8 @@ cannot reach the Play service account, and a release job cannot reach the KMS ke
 A tag ruleset restricts creating, updating and deleting `rules-v*` and `constants-v*` tags. Since 2026-11-14 (#1646)
 the repository's tag ruleset covers every tag, with a bypass for the admin role. The `feed-rules` environment
 requires the developer's approval (own approval allowed), and its deployment policy admits only the two tag
-patterns, so a branch run or a `workflow_dispatch` cannot request it. The `github-pages` environment's policy admits
+patterns, so a run on a branch ref, a branch-ref `workflow_dispatch` included, cannot request it. A dispatch that
+targets an allowed tag still can; the approval is the control for that run. The `github-pages` environment's policy admits
 master plus the same two tag patterns; today it admits master only. The `feed-rules` environment, the two tag
 patterns on `github-pages` and the feeds pool do not exist yet (#1562).
 
@@ -206,14 +207,17 @@ rule-only, corpus-neutral fix made from the phone runs PR CI and one Sol round b
 - **Admin bypass.** The developer's admin token can bypass both the tag ruleset and the `feed-rules` approval. This
   is accepted only with X1 in place; until then an agent session holding that token could tag and approve a
   signing run.
-- **Stolen fuel key.** It can sign a plausible wrong price, for fuel only, for up to 21 days, and with a lasting
-  network position can keep the high-water a day ahead and starve real updates. Records written in that window keep
-  the price, since economics are frozen per record.
+- **Stolen fuel key.** It can sign a plausible wrong price, for fuel only, until the key is rotated out of trust
+  (a new epoch in an app release); each price it signs stays in use as last-good, and the 21-day limit is only when
+  the app labels that price old, never when it stops using it. With a lasting network position it can keep the
+  high-water a day ahead and starve real updates. Records written in that time keep the price, since economics are
+  frozen per record.
 - **Old installs.** After a key compromise, installs that have not updated trust the old epoch; clock admission,
   freshness and plausibility bound what it can do.
 - **Network metadata.** GitHub and its CDN (Fastly) see each phone's IP address and user agent, and the rules
   foreground check tells them when the phone opens a delivery app. PRIVACY.md's network row states it when #640
   lands.
-- **Freshness trusts the wall clock.** A phone set far ahead shows every feed as old; one set more than a day behind
-  refuses new manifests with `ClockBehind`.
+- **Freshness trusts the wall clock.** A phone set far ahead shows every feed as old. Admission uses
+  `max(wall clock, BuildConfig.BUILD_TIME_MS)`, so a manifest issued more than a day after that time is refused with
+  `ClockBehind`: a phone set back is held to its build time, not refused outright.
 - **Hostile signed rules.** X2 and X5 bound what load gates can stop; beyond them the controls are signing and review.
