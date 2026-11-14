@@ -24,6 +24,7 @@ import cloud.trotter.log.gig.core.network.census.UploadResult
 import cloud.trotter.log.gig.domain.capture.CensusEnvelopeSink
 import cloud.trotter.log.gig.domain.census.CensusDeletion
 import cloud.trotter.log.gig.domain.census.CensusUploadScheduler
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -31,6 +32,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -48,7 +50,7 @@ import org.mockito.kotlin.whenever
 import java.io.File
 
 /**
- * #1579: the wipe's three invariants, over #1622's real [CensusDataDeletion] and a transport the test answers.
+ * #1579: [PhoneWipe]'s actor over [WipeFlow], #1622's real [CensusDataDeletion] and a transport the test answers.
  * (A) nothing is deleted unless the wipe holds the census upload lock, and a census run holding it is waited for;
  * (B) enrollment is decided under the lock, an unreadable store counts as enrolled, and the request is stored pending
  * with its retry queued before the network, whatever the dialog's 20 s does; (C) a committed wipe is stored first
@@ -96,9 +98,13 @@ class PhoneWipeTest {
     private val preferences = DevSettingsRepository(DevSettingsDataSource(MemoryPreferences()), true, Dispatchers.Unconfined, "test")
     private val installId = MutableStateFlow<String?>(null)
     private var storeUnreadable = false
+    private var held: Flow<Boolean> = flowOf(false)
     private var credential: suspend () -> CensusCredentialStore.Credential? = { ENROLLED.takeIf { installId.value != null } }
     private val credentials: CensusCredentialStore = mock()
     private val intentFile by lazy { File(tmp.root, WipeIntent.FILE_NAME) }
+    private var intent: () -> WipeIntent = { WipeIntent(intentFile) }
+    /** Completed to let the enrollment read return; null reads at once. */
+    private var enrollmentGate: CompletableDeferred<Unit>? = null
     private val sealer = object : KeystoreSealer() {
         override fun reset() {
             events += "key locked=${lock.mutex.isLocked}"
@@ -111,8 +117,12 @@ class PhoneWipeTest {
     }
 
     private fun TestScope.wipe(): PhoneWipe {
-        val ids: Flow<String?> = flow { if (storeUnreadable) error("unreadable") else emit(installId.value) }
+        val ids: Flow<String?> = flow {
+            enrollmentGate?.await()
+            if (storeUnreadable) error("unreadable") else emit(installId.value)
+        }
         whenever(credentials.installId).thenReturn(ids)
+        whenever(credentials.held).thenReturn(held)
         runBlocking { whenever(credentials.current()).doSuspendableAnswer { credential() } }
         val deletion = CensusDataDeletion(
             credentials, mock<CensusSpool>(), mock<CensusEnvelopeSink>(), mock<PersistentHealthSink>(), preferences,
@@ -122,7 +132,7 @@ class PhoneWipeTest {
             },
             backgroundScope, "test",
         )
-        return PhoneWipe(credentials, deletion, lock, sealer, clearer, WipeIntent(intentFile), backgroundScope)
+        return PhoneWipe(credentials, deletion, preferences, lock, sealer, clearer, intent(), backgroundScope)
     }
 
     /** The wipe runs on the background (application) scope, which advanceUntilIdle does not wait for. */
@@ -131,26 +141,44 @@ class PhoneWipeTest {
         runCurrent()
     }
 
+    private fun TestScope.confirmed(): PhoneWipe = wipe().apply {
+        open()
+        runCurrent()
+        confirm()
+    }
+
     private val wiped = listOf("key locked=true", "clear locked=true committed=true")
 
+    private fun choosing(reason: WipeFlow.Reason, requestOpen: Boolean = false) = WipeFlow.State.Choosing(reason, requestOpen)
+
     @Test fun `a phone with no census ID wipes under the lock without a network call`() = runTest {
-        val wipe = wipe()
-        wipe.start()
+        val wipe = confirmed()
         settle()
 
         assertEquals(wiped, events)
         assertEquals("no census client is created", 0, clients)
-        assertEquals(WipeProgress.Wiping(censusConfirmed = false), wipe.progress.value)
+        assertEquals(WipeFlow.State.Done, wipe.progress.value)
+    }
+
+    @Test fun `Cancel on the confirmation ends the flow with nothing held`() = runTest {
+        val wipe = wipe()
+        wipe.open()
+        runCurrent()
+        assertEquals(WipeFlow.State.Confirming, wipe.progress.value)
+        wipe.cancel()
+        settle()
+        assertEquals(null, wipe.progress.value)
+        assertTrue(events.isEmpty())
+        assertFalse(lock.mutex.isLocked)
     }
 
     @Test fun `a census run holding the lock is waited for, never cleared beside`() = runTest {
         val uploader = Any()
         lock.mutex.lock(uploader)
-        val wipe = wipe()
-        wipe.start()
+        val wipe = confirmed()
         settle(10 * 60_000)
 
-        assertEquals(WipeProgress.WaitingForUpload, wipe.progress.value)
+        assertEquals(WipeFlow.State.WaitingForLock, wipe.progress.value)
         assertTrue("nothing deleted while the upload runs", events.isEmpty())
 
         lock.mutex.unlock(uploader)
@@ -161,12 +189,11 @@ class PhoneWipeTest {
     @Test fun `Cancel while waiting for an upload deletes nothing and takes no lock`() = runTest {
         val uploader = Any()
         lock.mutex.lock(uploader)
-        val wipe = wipe()
-        wipe.start()
+        val wipe = confirmed()
         settle()
-        wipe.dismiss()
+        wipe.cancel()
         settle()
-        assertEquals(WipeProgress.Idle, wipe.progress.value)
+        assertEquals(null, wipe.progress.value)
 
         lock.mutex.unlock(uploader)
         settle()
@@ -174,11 +201,27 @@ class PhoneWipeTest {
         assertFalse(lock.mutex.isLocked)
     }
 
+    @Test fun `Cancel during a suspended enrollment read after the lock is final`() = runTest {
+        enrollmentGate = CompletableDeferred()
+        val wipe = confirmed()
+        settle()
+        assertEquals(WipeFlow.State.ReadingEnrollment, wipe.progress.value)
+        assertTrue(lock.mutex.isLocked)
+
+        wipe.cancel()
+        settle()
+        enrollmentGate!!.complete(Unit) // the read answers after the cancel was accepted
+        settle()
+        assertEquals(null, wipe.progress.value)
+        assertTrue("no wipe after an accepted cancel", events.isEmpty())
+        assertFalse(intentFile.isFile)
+        assertFalse(lock.mutex.isLocked)
+    }
+
     @Test fun `enrollment is read under the lock, so a run that enrols while the wipe waits is asked about`() = runTest {
         val uploader = Any()
         lock.mutex.lock(uploader)
-        val wipe = wipe()
-        wipe.start()
+        confirmed()
         settle()
         installId.value = ENROLLED.installId // the run enrols this phone while the wipe waits
         lock.mutex.unlock(uploader)
@@ -187,14 +230,13 @@ class PhoneWipeTest {
         assertEquals(listOf("delete request") + wiped, events)
     }
 
-    @Test fun `a confirmed deletion shows the confirmation then wipes with the lock held throughout`() = runTest {
+    @Test fun `a confirmed deletion is committed, shown, then wiped with the lock held throughout`() = runTest {
         installId.value = ENROLLED.installId
-        val wipe = wipe()
-        wipe.start()
+        val wipe = confirmed()
         runCurrent()
 
-        assertEquals(WipeProgress.Wiping(censusConfirmed = true), wipe.progress.value)
-        assertTrue("committed before the notice", intentFile.isFile)
+        assertEquals(WipeFlow.State.Wiping(censusConfirmed = true, requestOpen = false), wipe.progress.value)
+        assertTrue("committed before Wiping is shown", intentFile.isFile)
         assertTrue(lock.mutex.isLocked)
         assertEquals(listOf("delete request"), events)
 
@@ -202,21 +244,33 @@ class PhoneWipeTest {
         assertEquals(listOf("delete request") + wiped, events)
     }
 
+    @Test fun `a commitment that can't be written deletes nothing and says so`() = runTest {
+        intent = { WipeIntent(File(tmp.root, "missing/${WipeIntent.FILE_NAME}")) }
+        val wipe = confirmed()
+        settle()
+
+        assertEquals(WipeFlow.State.Failed(WipeFlow.Failure.COMMIT, requestOpen = false), wipe.progress.value)
+        assertTrue("no key and no storage deleted", events.isEmpty())
+        assertFalse(lock.mutex.isLocked)
+        wipe.cancel()
+        settle()
+        assertEquals(null, wipe.progress.value)
+    }
+
     @Test fun `a dialog timeout leaves the request stored pending with its retry run queued`() = runTest {
         installId.value = ENROLLED.installId
         transport.answer = { delay(10 * 60_000); DeleteResult.NotAvailable(404) }
-        val wipe = wipe()
-        wipe.start()
+        val wipe = confirmed()
         settle(PhoneWipe.CENSUS_WAIT_MILLIS + 1)
 
-        assertEquals(WipeProgress.CensusNotConfirmed(WipeProgress.Reason.NO_ANSWER), wipe.progress.value)
+        assertEquals(choosing(WipeFlow.Reason.NO_ANSWER, requestOpen = true), wipe.progress.value)
         assertEquals(CensusDeletion.State.PENDING, preferences.censusDeletion.first()?.state)
         assertEquals("the retry run is queued before the network attempt", 1, scheduler.deletionRuns)
         assertTrue("the request still runs under the wipe's lock", lock.mutex.isLocked)
 
-        wipe.dismiss() // Wait
+        wipe.waitForServer()
         settle(PhoneWipe.CENSUS_WAIT_MILLIS)
-        assertEquals(WipeProgress.Idle, wipe.progress.value)
+        assertEquals(null, wipe.progress.value)
         assertTrue("the lock is kept until the request ends", lock.mutex.isLocked)
 
         settle(10 * 60_000)
@@ -225,65 +279,87 @@ class PhoneWipeTest {
         assertEquals(CensusDeletion.Waiting.NOT_YET, preferences.censusDeletion.first()?.waiting)
     }
 
-    @Test fun `Delete now during a late request hands off to the coordinator that holds the lock`() = runTest {
+    @Test fun `an answer at the very instant of the timeout is still delivered`() = runTest {
+        installId.value = ENROLLED.installId
+        transport.answer = { delay(PhoneWipe.CENSUS_WAIT_MILLIS); DeleteResult.Deleted(1, "2026-11-13") }
+        val wipe = confirmed()
+        settle(PhoneWipe.CENSUS_WAIT_MILLIS)
+        assertEquals(WipeFlow.State.Wiping(censusConfirmed = true, requestOpen = false), wipe.progress.value)
+        settle()
+        assertEquals(listOf("delete request") + wiped, events)
+    }
+
+    @Test fun `Delete now during a late request goes to the actor that holds the lock`() = runTest {
         installId.value = ENROLLED.installId
         transport.answer = { delay(10 * 60_000); DeleteResult.Deleted(1, "2026-11-13") }
-        val wipe = wipe()
-        wipe.start()
+        val wipe = confirmed()
         settle(PhoneWipe.CENSUS_WAIT_MILLIS + 1)
 
-        wipe.wipeNow()
+        wipe.deleteNow()
         runCurrent()
-        assertEquals(WipeProgress.Wiping(censusConfirmed = false), wipe.progress.value)
+        assertEquals(WipeFlow.State.Done, wipe.progress.value)
         assertEquals(listOf("delete request") + wiped, events)
+    }
+
+    @Test fun `a refused clear during a late request keeps the lock until the request ends`() = runTest {
+        installId.value = ENROLLED.installId
+        clearStarts = false
+        transport.answer = { delay(10 * 60_000); DeleteResult.NotAvailable(404) }
+        val wipe = confirmed()
+        settle(PhoneWipe.CENSUS_WAIT_MILLIS + 1)
+        wipe.deleteNow()
+        runCurrent()
+
+        assertEquals(WipeFlow.State.Failed(WipeFlow.Failure.CLEAR, requestOpen = true), wipe.progress.value)
+        assertFalse("the commitment is dropped", intentFile.isFile)
+        assertTrue("never released while the request runs", lock.mutex.isLocked)
+        settle(10 * 60_000)
+        assertFalse(lock.mutex.isLocked)
+        assertEquals(WipeFlow.State.Failed(WipeFlow.Failure.CLEAR, requestOpen = false), wipe.progress.value)
     }
 
     @Test fun `a late confirmation while the choice is shown goes on to the wipe`() = runTest {
         installId.value = ENROLLED.installId
         transport.answer = { delay(PhoneWipe.CENSUS_WAIT_MILLIS + 5_000); DeleteResult.Deleted(1, "2026-11-13") }
-        val wipe = wipe()
-        wipe.start()
+        val wipe = confirmed()
         settle(PhoneWipe.CENSUS_WAIT_MILLIS + 1)
-        assertEquals(WipeProgress.CensusNotConfirmed(WipeProgress.Reason.NO_ANSWER), wipe.progress.value)
+        assertEquals(choosing(WipeFlow.Reason.NO_ANSWER, requestOpen = true), wipe.progress.value)
 
         settle(5_000)
-        assertEquals(WipeProgress.Wiping(censusConfirmed = true), wipe.progress.value)
+        assertEquals(WipeFlow.State.Wiping(censusConfirmed = true, requestOpen = false), wipe.progress.value)
         settle()
         assertEquals(listOf("delete request") + wiped, events)
     }
 
-    @Test fun `a pending answer deletes nothing and names why`() = runTest {
+    @Test fun `a pending answer deletes nothing, names why, and Wait hands the lock back`() = runTest {
         installId.value = ENROLLED.installId
         for ((result, reason) in listOf(
-            DeleteResult.NotAvailable(404) to WipeProgress.Reason.NOT_YET,
-            DeleteResult.TransportFailure("IOException") to WipeProgress.Reason.UNREACHABLE,
-            DeleteResult.Unauthorized(null) to WipeProgress.Reason.UNCONFIRMED,
+            DeleteResult.NotAvailable(404) to WipeFlow.Reason.NOT_YET,
+            DeleteResult.TransportFailure("IOException") to WipeFlow.Reason.UNREACHABLE,
+            DeleteResult.Unauthorized(null) to WipeFlow.Reason.UNCONFIRMED,
         )) {
             events.clear()
             transport.answer = { result }
-            val wipe = wipe()
-            wipe.start()
+            val wipe = confirmed()
             settle()
 
-            assertEquals(WipeProgress.CensusNotConfirmed(reason), wipe.progress.value)
+            assertEquals(choosing(reason), wipe.progress.value)
             assertEquals(listOf("delete request"), events)
             assertTrue("the wipe keeps the lock while the dasher decides", lock.mutex.isLocked)
-            wipe.dismiss()
+            wipe.waitForServer()
             settle()
-            assertEquals(WipeProgress.Idle, wipe.progress.value)
-            assertFalse("Wait hands the lock back to the census runs", lock.mutex.isLocked)
+            assertEquals(null, wipe.progress.value)
+            assertFalse(lock.mutex.isLocked)
         }
     }
 
     @Test fun `an unreadable credential store counts as enrolled, never as not enrolled`() = runTest {
         storeUnreadable = true
         credential = { throw CensusCredentialStore.Transient() }
-        val wipe = wipe()
-        assertTrue(wipe.censusEnrolled())
-        wipe.start()
-        settle()
-
-        assertEquals(WipeProgress.CensusNotConfirmed(WipeProgress.Reason.UNREACHABLE), wipe.progress.value)
+        confirmed().also { wipe ->
+            settle()
+            assertEquals(choosing(WipeFlow.Reason.UNREACHABLE), wipe.progress.value)
+        }
         assertTrue(events.isEmpty())
         assertEquals(CensusDeletion.State.PENDING, preferences.censusDeletion.first()?.state)
     }
@@ -291,29 +367,40 @@ class PhoneWipeTest {
     @Test fun `a census ID that can no longer sign offers Delete now without Wait`() = runTest {
         installId.value = ENROLLED.installId
         credential = { throw CensusCredentialStore.Unusable() }
-        val wipe = wipe()
-        wipe.start()
+        val wipe = confirmed()
         settle()
 
-        val progress = wipe.progress.value as WipeProgress.CensusNotConfirmed
-        assertEquals(WipeProgress.Reason.NOT_POSSIBLE, progress.reason)
+        val progress = wipe.progress.value as WipeFlow.State.Choosing
+        assertEquals(WipeFlow.Reason.NOT_POSSIBLE, progress.reason)
         assertFalse(progress.reason.canWait)
-        wipe.wipeNow()
+        wipe.deleteNow()
         settle()
         assertEquals(wiped, events)
     }
 
     @Test fun `Android refusing the clear reports it, drops the commitment and releases the lock`() = runTest {
         clearStarts = false
-        val wipe = wipe()
-        wipe.start()
+        val wipe = confirmed()
         settle()
 
-        assertEquals(WipeProgress.Failed, wipe.progress.value)
+        assertEquals(WipeFlow.State.Failed(WipeFlow.Failure.CLEAR, requestOpen = false), wipe.progress.value)
         assertFalse(lock.mutex.isLocked)
         assertFalse(intentFile.isFile)
-        wipe.dismiss()
-        assertEquals(WipeProgress.Idle, wipe.progress.value)
+        wipe.cancel()
+        settle()
+        assertEquals(null, wipe.progress.value)
+    }
+
+    @Test fun `the confirmation discloses the census whenever a request could be sent`() = runTest {
+        val wipe = wipe()
+        assertFalse(wipe.censusDisclosed.first())
+        preferences.setCensusUploadEnabled(true) // an upload could enrol the phone before the wipe takes the lock
+        assertTrue(wipe.censusDisclosed.first())
+        preferences.setCensusUploadEnabled(false)
+        held = flowOf(true)
+        assertTrue("a stored identity", wipe().censusDisclosed.first())
+        held = flow { error("unreadable") }
+        assertTrue("an unreadable store", wipe().censusDisclosed.first())
     }
 
     @Test fun `a wipe committed before the process died finishes at the next start, lock first`() = runTest {
@@ -333,12 +420,12 @@ class PhoneWipeTest {
         assertFalse(lock.mutex.isLocked)
     }
 
-    @Test fun `a second start while one runs is ignored`() = runTest {
+    @Test fun `a second confirm while one runs is ignored`() = runTest {
         installId.value = ENROLLED.installId
         transport.answer = { delay(1_000); DeleteResult.Deleted(1, "2026-11-13") }
-        val wipe = wipe()
-        wipe.start()
-        wipe.start()
+        val wipe = confirmed()
+        wipe.confirm()
+        wipe.open()
         settle()
         assertEquals(1, events.count { it == "delete request" })
         assertEquals(1, events.count { it.startsWith("clear") })

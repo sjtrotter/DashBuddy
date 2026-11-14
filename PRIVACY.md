@@ -441,8 +441,8 @@ identity export. Vehicle/default resets preserve these learned preferences.
 - **Delete everything on this phone** (#1579, Settings > Data & privacy; `PhoneWipe`, `WipePhoneDialog`). One
   confirmation says what goes (every shift, delivery and offer, vehicles and plans, settings and consent choices,
   logs, captures) and what stays (exported files, gallery screenshots, any Android backup in the Google account), and,
-  when the phone holds an enrolled census ID (or its census credential store can't be read), that the census server
-  is asked first, with what the server keeps, in the census screen's own words (§6). One process owns the census
+  whenever a census request could be sent (the census is on, a census identity is stored, or the store can't be read),
+  that the census server is asked first, with what the server keeps, in the census screen's own words (§6). One process owns the census
   upload lock for the whole wipe, and nothing is deleted without it: a census upload under way is waited for ("Waiting
   for an upload to finish", with Cancel), never deleted beside. Under the lock it reads whether the phone is enrolled;
   an enrolled or unreadable census ID sends the census deletion request (§6, "What was sent, and deleting it"), which is
@@ -456,7 +456,8 @@ identity export. Vehicle/default resets preserve these learned preferences.
   counts: a confirmation goes on to the wipe. It never says the server deleted anything the server did not confirm.
   With no enrolled census ID it makes no network call. Once the wipe is decided, a commitment file
   (`filesDir/wipe_committed`, excluded from backup and transfer) is written first; if the process dies before Android
-  clears the storage, the next start finishes the wipe before anything else runs (no sensing, workers or uploads). The wipe deletes the census
+  clears the storage, the next start finishes the wipe before anything else runs (no sensing, workers or uploads). If
+  that file can't be written, nothing is deleted and the screen says so. The wipe deletes the census
   Keystore key, then calls Android's own Clear storage for the app (`ActivityManager.clearApplicationUserData`, the
   same operation as Settings > Apps > gig.log > Clear storage): Android stops every gig.log process, service and
   scheduled job, then deletes the app's private storage and its app-specific external storage (the database with

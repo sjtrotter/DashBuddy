@@ -271,6 +271,8 @@
     <string name="wipe_cancel">Cancel</string>
     <string name="wipe_waiting_title">Waiting for an upload to finish</string>
     <string name="wipe_waiting_body">A census upload is running. gig.log deletes nothing until it finishes.</string>
+    <string name="wipe_reading_body">Checking this phone\'s census ID</string>
+    <string name="wipe_failed_commit_body">gig.log couldn\'t save the decision to delete, so nothing was deleted. Try again.</string>
     <string name="wipe_asking_title">Asking the census server</string>
     <string name="wipe_asking_body">Waiting for the census server to confirm it deleted this phone\'s data</string>
     <string name="wipe_running_title">Deleting everything</string>

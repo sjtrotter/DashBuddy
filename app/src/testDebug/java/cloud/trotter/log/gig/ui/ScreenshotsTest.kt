@@ -74,7 +74,8 @@ import cloud.trotter.log.gig.feature.settings.StrategySettingsContent
 import cloud.trotter.log.gig.feature.settings.WipeDialog
 import cloud.trotter.log.gig.feature.settings.WipePhoneDialog
 import cloud.trotter.log.gig.feature.settings.eventReceiptDisclosureParts
-import cloud.trotter.log.gig.core.data.wipe.WipeProgress
+import cloud.trotter.log.gig.core.data.wipe.WipeFlow
+import cloud.trotter.log.gig.feature.settings.WipeActions
 import cloud.trotter.log.gig.ui.bubble.BubbleManager
 import cloud.trotter.log.gig.ui.main.analytics.DatePickerChoice
 import cloud.trotter.log.gig.ui.main.analytics.RecapDatePickerContent
@@ -284,15 +285,15 @@ class ScreenshotsTest(private val theme: String) {
     /** #1579: Delete everything on this phone, enrolled in the census: what goes, the census request first, what stays. */
     @Test fun settingsWipeConfirm() = render("settings/wipe-confirm", window = true, assertion = {
         text(string(SettingsR.string.wipe_confirm_title)).assertExists()
-    }) { WipePhoneDialog(WipeDialog.Confirm(census = true), onConfirm = {}, onWipeNow = {}, onDismiss = {}) }
+    }) { WipePhoneDialog(WipeDialog(WipeFlow.State.Confirming, censusDisclosed = true), WipeActions.NONE) }
 
     /** #1579: the census server can't take deletions yet: Delete now (the server keeps the uploads) or Wait. */
     @Test fun settingsWipeCensusNotConfirmed() = render("settings/wipe-census-not-confirmed", window = true, assertion = {
         text(string(SettingsR.string.wipe_census_title)).assertExists()
     }) {
         WipePhoneDialog(
-            WipeDialog.Running(WipeProgress.CensusNotConfirmed(WipeProgress.Reason.NOT_YET)),
-            onConfirm = {}, onWipeNow = {}, onDismiss = {},
+            WipeDialog(WipeFlow.State.Choosing(WipeFlow.Reason.NOT_YET, requestOpen = false), censusDisclosed = true),
+            WipeActions.NONE,
         )
     }
 

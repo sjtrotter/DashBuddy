@@ -14,68 +14,82 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
-import cloud.trotter.log.gig.core.data.wipe.WipeProgress
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cloud.trotter.log.gig.core.data.wipe.WipeFlow
+import cloud.trotter.log.gig.core.data.wipe.WipeFlow.State
 
 /** The dialog bound to its ViewModel; Settings home hosts it under its Delete everything on this phone row. */
 @Composable
 fun WipePhoneHost(viewModel: WipePhoneViewModel) {
     val dialog by viewModel.dialog.collectAsStateWithLifecycle()
-    WipePhoneDialog(dialog, viewModel::confirm, viewModel::wipeNow, viewModel::dismiss)
+    WipePhoneDialog(
+        dialog,
+        WipeActions(viewModel::confirm, viewModel::cancel, viewModel::deleteNow, viewModel::waitForServer),
+    )
+}
+
+/** The dasher's choices, one per [WipeFlow.Event] they send. */
+data class WipeActions(
+    val onConfirm: () -> Unit,
+    val onCancel: () -> Unit,
+    val onDeleteNow: () -> Unit,
+    val onWait: () -> Unit,
+) {
+    companion object {
+        val NONE = WipeActions({}, {}, {}, {})
+    }
 }
 
 /**
  * #1579: the dialogs of Delete everything on this phone, stateless. The confirmation says what goes and what stays,
- * and for an enrolled phone what the census server keeps. While a census upload finishes the dialog offers only Cancel;
- * while the census server is asked and while the phone is cleared it has no buttons and Back does not close it; an
- * unconfirmed census request offers Delete now or Wait.
+ * and whenever the census server could be asked, what it keeps. While a census upload finishes, or while the phone's
+ * census ID is read, it offers only Cancel; while the census server is asked and while the phone is cleared it has no
+ * buttons and Back does not close it; an unconfirmed census request offers Delete now or Wait.
  */
 @Composable
-fun WipePhoneDialog(
-    dialog: WipeDialog,
-    onConfirm: () -> Unit,
-    onWipeNow: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    when (dialog) {
-        WipeDialog.Closed -> Unit
-        is WipeDialog.Confirm -> ConfirmDialog(dialog.census, onConfirm, onDismiss)
-        is WipeDialog.Running -> when (val progress = dialog.progress) {
-            WipeProgress.Idle -> Unit
-            WipeProgress.WaitingForUpload -> AlertDialog(
-                onDismissRequest = {},
-                properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
-                title = { Text(stringResource(R.string.wipe_waiting_title)) },
-                text = { Busy(R.string.wipe_waiting_body) },
-                confirmButton = {},
-                dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.wipe_cancel)) } },
-            )
-            WipeProgress.AskingCensus -> BusyDialog(R.string.wipe_asking_title, R.string.wipe_asking_body, lead = null)
-            is WipeProgress.Wiping -> BusyDialog(
-                R.string.wipe_running_title,
-                R.string.wipe_running_body,
-                lead = R.string.wipe_census_confirmed.takeIf { progress.censusConfirmed },
-            )
-            is WipeProgress.CensusNotConfirmed -> NotConfirmedDialog(progress.reason, onWipeNow, onDismiss)
-            WipeProgress.Failed -> AlertDialog(
-                onDismissRequest = onDismiss,
-                title = { Text(stringResource(R.string.wipe_failed_title)) },
-                text = { Text(stringResource(R.string.wipe_failed_body)) },
-                confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.wipe_ok)) } },
-            )
-        }
+fun WipePhoneDialog(dialog: WipeDialog, actions: WipeActions) {
+    when (val state = dialog.state) {
+        null, State.Left, State.Releasing -> Unit
+        State.Confirming -> ConfirmDialog(dialog.censusDisclosed, actions)
+        State.WaitingForLock -> CancellableBusy(R.string.wipe_waiting_title, R.string.wipe_waiting_body, actions.onCancel)
+        State.ReadingEnrollment ->
+            CancellableBusy(R.string.wipe_confirm_title, R.string.wipe_reading_body, actions.onCancel)
+        State.Asking -> BusyDialog(R.string.wipe_asking_title, R.string.wipe_asking_body, lead = null)
+        is State.Choosing -> NotConfirmedDialog(state.reason, actions)
+        is State.Committing -> BusyDialog(R.string.wipe_running_title, R.string.wipe_running_body, lead = null)
+        is State.Wiping -> BusyDialog(
+            R.string.wipe_running_title,
+            R.string.wipe_running_body,
+            lead = R.string.wipe_census_confirmed.takeIf { state.censusConfirmed },
+        )
+        State.Done -> BusyDialog(R.string.wipe_running_title, R.string.wipe_running_body, lead = null)
+        is State.Failed -> AlertDialog(
+            onDismissRequest = actions.onCancel,
+            title = { Text(stringResource(R.string.wipe_failed_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        when (state.failure) {
+                            WipeFlow.Failure.COMMIT -> R.string.wipe_failed_commit_body
+                            WipeFlow.Failure.CLEAR -> R.string.wipe_failed_body
+                        },
+                    ),
+                )
+            },
+            confirmButton = { TextButton(onClick = actions.onCancel) { Text(stringResource(R.string.wipe_ok)) } },
+        )
     }
 }
 
 @Composable
-private fun ConfirmDialog(census: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+private fun ConfirmDialog(census: Boolean, actions: WipeActions) {
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = actions.onCancel,
         title = { Text(stringResource(R.string.wipe_confirm_title)) },
         text = {
             Paragraphs(
@@ -91,18 +105,19 @@ private fun ConfirmDialog(census: Boolean, onConfirm: () -> Unit, onDismiss: () 
             )
         },
         confirmButton = {
-            TextButton(onClick = onConfirm) {
+            TextButton(onClick = actions.onConfirm) {
                 Text(stringResource(R.string.wipe_confirm_button), color = MaterialTheme.colorScheme.error)
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.wipe_cancel)) } },
+        dismissButton = { TextButton(onClick = actions.onCancel) { Text(stringResource(R.string.wipe_cancel)) } },
     )
 }
 
 @Composable
-private fun NotConfirmedDialog(reason: WipeProgress.Reason, onWipeNow: () -> Unit, onDismiss: () -> Unit) {
+private fun NotConfirmedDialog(reason: WipeFlow.Reason, actions: WipeActions) {
+    val leave = if (reason.canWait) actions.onWait else actions.onCancel
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = leave,
         title = { Text(stringResource(R.string.wipe_census_title)) },
         text = {
             Paragraphs(
@@ -114,15 +129,28 @@ private fun NotConfirmedDialog(reason: WipeProgress.Reason, onWipeNow: () -> Uni
             )
         },
         confirmButton = {
-            TextButton(onClick = onWipeNow) {
+            TextButton(onClick = actions.onDeleteNow) {
                 Text(stringResource(R.string.wipe_census_delete_now), color = MaterialTheme.colorScheme.error)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = leave) {
                 Text(stringResource(if (reason.canWait) R.string.wipe_census_wait_button else R.string.wipe_cancel))
             }
         },
+    )
+}
+
+/** A step that finishes on its own but can be cancelled; Back and a tap outside do not cancel it. */
+@Composable
+private fun CancellableBusy(@StringRes title: Int, @StringRes body: Int, onCancel: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = {},
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+        title = { Text(stringResource(title)) },
+        text = { Busy(body) },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onCancel) { Text(stringResource(R.string.wipe_cancel)) } },
     )
 }
 
@@ -159,10 +187,10 @@ private fun Paragraphs(lines: List<Int>) {
 }
 
 @StringRes
-private fun WipeProgress.Reason.text(): Int = when (this) {
-    WipeProgress.Reason.NO_ANSWER -> R.string.wipe_census_no_answer
-    WipeProgress.Reason.UNREACHABLE -> R.string.wipe_census_unreachable
-    WipeProgress.Reason.NOT_YET -> R.string.wipe_census_not_yet
-    WipeProgress.Reason.UNCONFIRMED -> R.string.wipe_census_unconfirmed
-    WipeProgress.Reason.NOT_POSSIBLE -> R.string.wipe_census_not_possible
+private fun WipeFlow.Reason.text(): Int = when (this) {
+    WipeFlow.Reason.NO_ANSWER -> R.string.wipe_census_no_answer
+    WipeFlow.Reason.UNREACHABLE -> R.string.wipe_census_unreachable
+    WipeFlow.Reason.NOT_YET -> R.string.wipe_census_not_yet
+    WipeFlow.Reason.UNCONFIRMED -> R.string.wipe_census_unconfirmed
+    WipeFlow.Reason.NOT_POSSIBLE -> R.string.wipe_census_not_possible
 }

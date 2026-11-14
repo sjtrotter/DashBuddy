@@ -53,6 +53,9 @@ class CensusCredentialStore @Inject constructor(
     /** The full enrolled install id — a random handle, not a secret — so the developer can copy it for the server-side trust step (#1185). */
     val installId: Flow<String?> = ds.data.map { if (it[ENROLLED] == true) it[INSTALL_ID] else null }
 
+    /** #1579: whether any census identity is stored, enrolled or not. Reads no secret. */
+    val held: Flow<Boolean> = ds.data.map { it.asMap().isNotEmpty() }
+
     /** Null until enrolled; pending() preserves enrollment idempotency after a lost response. */
     suspend fun current(): Credential? = mutex.withLock { read()?.takeIf { it.enrolled } }
     suspend fun pending(): Credential? = mutex.withLock { read()?.takeUnless { it.enrolled } }

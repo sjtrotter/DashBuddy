@@ -92,6 +92,8 @@
     <string name="wipe_cancel">Cancelar</string>
     <string name="wipe_waiting_title">Esperando a que termine un envío</string>
     <string name="wipe_waiting_body">Hay un envío del censo en curso. gig.log no borra nada hasta que termine.</string>
+    <string name="wipe_reading_body">Comprobando el identificador del censo de este teléfono</string>
+    <string name="wipe_failed_commit_body">gig.log no pudo guardar la decisión de borrar, así que no se borró nada. Vuelve a intentarlo.</string>
     <string name="wipe_asking_title">Consultando al servidor del censo</string>
     <string name="wipe_asking_body">Esperando a que el servidor del censo confirme que borró los datos de este teléfono</string>
     <string name="wipe_running_title">Borrando todo</string>

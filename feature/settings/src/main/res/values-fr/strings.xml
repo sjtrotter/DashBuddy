@@ -92,6 +92,8 @@
     <string name="wipe_cancel">Annuler</string>
     <string name="wipe_waiting_title">En attente de la fin d\'un envoi</string>
     <string name="wipe_waiting_body">Un envoi du recensement est en cours. gig.log ne supprime rien avant qu\'il soit terminé.</string>
+    <string name="wipe_reading_body">Vérification de l\'identifiant du recensement de ce téléphone</string>
+    <string name="wipe_failed_commit_body">gig.log n\'a pas pu enregistrer la décision de supprimer, donc rien n\'a été supprimé. Réessayez.</string>
     <string name="wipe_asking_title">Demande au serveur du recensement</string>
     <string name="wipe_asking_body">En attente de la confirmation du serveur du recensement qu\'il a supprimé les données de ce téléphone</string>
     <string name="wipe_running_title">Suppression de tout</string>
