@@ -2,7 +2,7 @@ package cloud.trotter.log.gig.ui.main.settings
 
 import cloud.trotter.log.gig.core.data.census.contributor.CensusContributor
 import cloud.trotter.log.gig.core.data.census.contributor.ContributorStatus
-import cloud.trotter.log.gig.core.data.census.contributor.DecisionVersion
+import cloud.trotter.log.gig.domain.census.contributor.DecisionVersion
 import cloud.trotter.log.gig.domain.census.contributor.ContributorEntry
 import cloud.trotter.log.gig.domain.census.contributor.ContributorRecord
 import kotlinx.coroutines.flow.flowOf

@@ -3,7 +3,7 @@ package cloud.trotter.log.gig.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cloud.trotter.log.gig.core.data.census.contributor.CensusContributor
-import cloud.trotter.log.gig.core.data.census.contributor.DecisionVersion
+import cloud.trotter.log.gig.domain.census.contributor.DecisionVersion
 import cloud.trotter.log.gig.core.data.census.contributor.GrantRequestOutcome
 import cloud.trotter.log.gig.domain.census.contributor.ContributorEnd
 import cloud.trotter.log.gig.domain.census.contributor.ContributorEntry

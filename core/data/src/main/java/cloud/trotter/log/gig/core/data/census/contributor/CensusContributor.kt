@@ -19,6 +19,7 @@ import cloud.trotter.log.gig.domain.census.contributor.ContributorGate
 import cloud.trotter.log.gig.domain.census.contributor.ContributorGrant
 import cloud.trotter.log.gig.domain.census.contributor.ContributorInvitation
 import cloud.trotter.log.gig.domain.census.contributor.ContributorRecord
+import cloud.trotter.log.gig.domain.census.contributor.DecisionVersion
 import cloud.trotter.log.gig.domain.census.contributor.GrantRefusal
 import cloud.trotter.log.gig.domain.census.contributor.InvitationAnswer
 import cloud.trotter.log.gig.domain.census.contributor.PendingContributorReviews
@@ -64,21 +65,6 @@ data class ContributorStatus(
     val shiftLive: Boolean,
     /** What an Accept pressed now is decided under; the screen passes it to [CensusContributor.acceptAsync]. */
     val version: DecisionVersion,
-)
-
-/**
- * #1625: everything a grant request is decided under, read from stored state when Accept is pressed. A request whose
- * version has changed by the time it would send, or by the time its answer would be stored, is dropped: an answer or
- * Stop moves [generation]; every census consent write (off or on, a decline, a server revoke) moves [consent], the
- * stored sequence; a new endpoint, a new census ID and a new deletion request move the rest. Every part is read from
- * what is stored, so a change and its reversal (off, then on) still leave a different version.
- */
-data class DecisionVersion(
-    val generation: Long,
-    val consent: Long,
-    val endpoint: String,
-    val installId: String?,
-    val deletionRequestedAt: Long?,
 )
 
 /** #1625: how one Accept went. Each says what happened; the 403 answers are also stored on the record. */
@@ -172,7 +158,9 @@ class CensusContributor internal constructor(
             Triple(record to version, consent, live)
         }
             .mapLatest { (recordVersion, consent, live) ->
-                val (record, version) = recordVersion
+                val (stored, version) = recordVersion
+                // A grant that no longer stands (expired, or decided under another version) is not shown as one.
+                val record = if (stored.grant?.standsOn(todayUtc(), version) == false) stored.copy(grant = null) else stored
                 val now = clock.millis()
                 val today = todayUtc()
                 val censusOn = consent == CensusConsent.ON
@@ -278,7 +266,9 @@ class CensusContributor internal constructor(
             applied = true
             when (result) {
                 is GrantResult.Granted ->
-                    record.granted(ContributorGrant(credential.installId, result.grantedDay, result.expiresDay, now), now)
+                    record.granted(
+                        ContributorGrant(credential.installId, result.grantedDay, result.expiresDay, now, pressed), now,
+                    )
                 GrantResult.InstallTooNew -> record.refused(GrantRefusal.INSTALL_TOO_NEW, now)
                 GrantResult.NotEligible -> record.refused(GrantRefusal.NOT_ELIGIBLE, now)
                 else -> record.refused(GrantRefusal.GRANT_REVOKED, now)
@@ -318,14 +308,16 @@ class CensusContributor internal constructor(
     fun stopAsync(): Job = scope.launch { stop() }
 
     /** Not now: no repeat for [ContributorInvitation.NOT_NOW_DAYS] days. */
-    suspend fun notNow() {
-        store.update { it.answered(InvitationAnswer.NOT_NOW, clock.millis()) }
+    suspend fun notNow() = withContext(NonCancellable) {
+        val record = store.update { it.answered(InvitationAnswer.NOT_NOW, clock.millis()) }
+        if (record.reviewsClearPending) clearPendingReviews()
     }
 
     /** No thanks: no invitation again until the dasher accepts from Settings. Recorded as a declined receipt. */
-    suspend fun noThanks() {
+    suspend fun noThanks() = withContext(NonCancellable) {
         val now = clock.millis()
-        store.update { it.answered(InvitationAnswer.NO_THANKS, now, receipt(now, granted = false)) }
+        val record = store.update { it.answered(InvitationAnswer.NO_THANKS, now, receipt(now, granted = false)) }
+        if (record.reviewsClearPending) clearPendingReviews()
     }
 
     /** Stop reviewing: the grant ends on the phone now, recorded as a declined receipt and a No thanks. */
@@ -398,15 +390,24 @@ class CensusContributor internal constructor(
     }
 
     /** True when a live grant stands after the check; a grant that no longer stands is ended with its reason. */
+    /**
+     * True only when a grant stands: stored, before its expiry day, and decided under the current [DecisionVersion]. This
+     * is the check itself, read from stored state, so it needs no watcher; a grant that does not stand is also ended here,
+     * with the reason the screen shows (cleanup).
+     */
     private suspend fun reconcile(): Boolean {
-        val grant = store.record.first().grant ?: return false
+        val (record, current) = versions.first()
+        val grant = record.grant ?: return false
+        if (grant.standsOn(todayUtc(), current)) return true
+        val made = grant.version
         val reason = when {
             settings.censusConsent.first() != CensusConsent.ON -> ContributorEnd.CENSUS_OFF
-            credentials.installId.first() != grant.installId -> ContributorEnd.ID_CHANGED
-            settings.censusDeletion.first()?.let { it.requestedAtMillis >= grant.obtainedAtMillis } == true ->
-                ContributorEnd.DATA_DELETED
-            !grant.liveOn(todayUtc()) -> ContributorEnd.EXPIRED
-            else -> return true
+            made == null -> ContributorEnd.CENSUS_OFF
+            current.installId != made.installId -> ContributorEnd.ID_CHANGED
+            current.deletionRequestedAt != made.deletionRequestedAt -> ContributorEnd.DATA_DELETED
+            current.consent != made.consent || current.endpoint != made.endpoint -> ContributorEnd.CENSUS_OFF
+            current.generation != made.generation -> ContributorEnd.STOPPED
+            else -> ContributorEnd.EXPIRED
         }
         end(grant, reason)
         return false

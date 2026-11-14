@@ -1028,7 +1028,12 @@ is not built yet; the bullets below describe what runs today, and each issue tha
   screen passes the one it showed): `ContributorRecord.generation` (moves on every answer, Stop and end),
   `census_consent_seq` (moves in the same edit as every census switch write: on, off, a decline, a server revoke), the
   endpoint, the census id and the latest deletion request time. It is checked after the deletion wait, before the POST
-  (nothing is sent if it moved) and again before the answer is stored; any change gives `SUPERSEDED`: a grant the server issued after a decline is never stored, so nothing
+  (nothing is sent if it moved) and again before the answer is stored; any change gives `SUPERSEDED`. **A grant stores
+  the version it was granted under (Sol S6/S7):** `ContributorGrant.standsOn(today, current)` (before its expiry day
+  AND `version == ` the current `DecisionVersion`) is what `mayUpload()` and the status read, synchronously from stored
+  state, so a withdrawal no watcher saw (census off then on, a decline right after the grant committed) can never leave
+  a grant live; `answered()` also ends any stored grant in the same write and marks its reviews for clearing, and
+  reconciliation ends a mismatched grant (cleanup, not safety). Before this: a grant the server issued after a decline is never stored, so nothing
   uploads under it, and it lapses on the server (the API has no route for a phone to drop its own grant). **Install
   revoked (S2):** `401 revoked` on the POST or the state GET ends the grant (`INSTALL_REVOKED`), clears pending reviews
   and runs `CensusInstallRevocation` (census off, envelopes invalidated, health reset, credential wiped; the contributor

@@ -622,5 +622,60 @@ class CensusContributorTest {
         assertFalse(store.record.first().reviewsClearPending)
         assertTrue(contributor.mayUpload())
     }
+
+    // ── Sol round 3 ──────────────────────────────────────────────────────────────────────────────────────────────
+
+    /** S6: census off then on with a live grant, before any watcher runs: the grant no longer stands, at once. */
+    @Test fun `a live grant does not survive census off and on, with no watcher`() = runTest {
+        val (contributor, settings) = contributor()
+        enrolled(settings)
+        transport.grantResults += granted()
+        contributor.accept()
+        assertTrue(contributor.mayUpload())
+
+        settings.declineCensus()
+        settings.setCensusUploadEnabled(true)
+
+        assertNotEquals(ContributorEntry.ON, contributor.status.first().entry)
+        assertFalse(contributor.mayUpload())
+        assertNull(store.record.first().grant)
+        assertEquals(ContributorEnd.CENSUS_OFF, store.record.first().ended)
+    }
+
+    /** S7: No thanks right after the grant commits ends it in the same write, with its reviews marked for clearing. */
+    @Test fun `No thanks after the grant commits ends the grant with the clear pending`() = runTest {
+        val (contributor, settings) = contributor()
+        enrolled(settings)
+        transport.grantResults += granted()
+        contributor.accept()
+        failClear = true
+
+        contributor.noThanks()
+
+        val record = store.record.first()
+        assertNull(record.grant)
+        assertEquals(ContributorEnd.STOPPED, record.ended)
+        assertEquals(InvitationAnswer.NO_THANKS, record.answer)
+        assertTrue(record.reviewsClearPending)
+        assertFalse(contributor.mayUpload())
+
+        failClear = false
+        assertFalse(contributor.mayUpload())
+        assertEquals(1, pendingCleared)
+        assertFalse(store.record.first().reviewsClearPending)
+    }
+
+    @Test fun `a stored grant whose version no longer matches never counts, even if left in the record`() = runTest {
+        val (contributor, settings) = contributor()
+        enrolled(settings)
+        transport.grantResults += granted()
+        contributor.accept()
+        // As if an older write had left the grant with another version behind.
+        store.update { it.copy(grant = it.grant!!.copy(version = it.grant!!.version!!.copy(consent = -1))) }
+
+        assertNotEquals(ContributorEntry.ON, contributor.status.first().entry)
+        assertFalse(contributor.mayUpload())
+        assertNull(store.record.first().grant)
+    }
 }
 

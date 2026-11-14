@@ -6,6 +6,23 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 
 /**
+ * #1625: everything a grant request is decided under, read from stored state when Accept is pressed, and stored with
+ * the grant it produced. A grant counts only while its version equals the current one. A request whose
+ * version has changed by the time it would send, or by the time its answer would be stored, is dropped: an answer or
+ * Stop moves [generation]; every census consent write (off or on, a decline, a server revoke) moves [consent], the
+ * stored sequence; a new endpoint, a new census ID and a new deletion request move the rest. Every part is read from
+ * what is stored, so a change and its reversal (off, then on) still leave a different version.
+ */
+@Serializable
+data class DecisionVersion(
+    val generation: Long,
+    val consent: Long,
+    val endpoint: String,
+    val installId: String?,
+    val deletionRequestedAt: Long?,
+)
+
+/**
  * #1625: the server's contributor grant for one census install ID (`POST /v1/contributor/grant`). [grantedDay] and
  * [expiresDay] are the server's UTC days; [expiresDay] is the first day the grant no longer works (30 days on).
  * [obtainedAtMillis] is the phone's clock when the grant arrived, so a later deletion request can be told apart.
@@ -16,7 +33,12 @@ data class ContributorGrant(
     val grantedDay: String,
     val expiresDay: String,
     val obtainedAtMillis: Long,
+    /** What the Accept that produced it was decided under; null (never written by this version) never matches. */
+    val version: DecisionVersion? = null,
 ) {
+    /** The grant counts: today is before its expiry day and nothing it was decided under has changed since. */
+    fun standsOn(todayUtc: LocalDate, current: DecisionVersion): Boolean = liveOn(todayUtc) && version == current
+
     /** Live on [todayUtc] when that day is before [expiresDay]. An unreadable day is not live (fail closed). */
     fun liveOn(todayUtc: LocalDate): Boolean =
         runCatching { todayUtc.isBefore(LocalDate.parse(expiresDay)) }.getOrDefault(false)
@@ -141,8 +163,15 @@ data class ContributorRecord(
         receipt = receipt ?: this.receipt,
     )
 
+    /**
+     * An answer outranks a grant: any grant still stored ends in the same write (as a Stop when it was No thanks or Not
+     * now after a grant), and its reviews are marked for clearing.
+     */
     fun answered(answer: InvitationAnswer, nowMillis: Long, receipt: ConsentReceipt? = null) = copy(
         generation = generation + 1,
+        grant = null,
+        ended = if (grant != null) ContributorEnd.STOPPED else ended,
+        reviewsClearPending = reviewsClearPending || grant != null,
         answer = answer, answeredAtMillis = nowMillis, invitedAtMillis = null, receipt = receipt ?: this.receipt,
     )
 }

@@ -342,7 +342,10 @@ dasher's Stop reviewing, and a state read that answers expired, revoked or none;
 ends it and turns the census off with its ID forgotten, as any census revoke does (`CensusInstallRevocation`). A grant
 request is decided under what was stored when Accept was pressed (the dasher's answers, every census consent change
 including off then on, the census ID and any deletion request); if any of it changed before the request is sent,
-nothing is sent, and a response that arrives after such a change is discarded: the phone never
+nothing is sent, and a response that arrives after such a change is discarded. A stored grant keeps the version it
+was granted under and counts only while that version is still current, so a change made after it was granted (an
+answer, the census turned off and on, a new census ID, a deletion request) ends it whether or not anything was
+watching; an answer also removes it in the same write: the phone never
 stores it, so nothing is sent under it, and it lapses on the server after 30 days (the server offers no way for the
 phone to give a grant back); every end clears the reviews waiting on the phone
 (`PendingContributorReviews`, which holds none until #1626); a clear that fails is marked in the record and run again

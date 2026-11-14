@@ -1120,7 +1120,8 @@ shift. The census-age threshold is the server's own, 8 UTC calendar days since e
 an install the server would refuse; a `403 install_too_new` (a skewed phone clock) is shown as such and asked again 2
 days later. A grant request is decided under a version captured when Accept is pressed (the dasher's answers, a stored sequence
 that moves on every census consent change, the census ID, any deletion request); a request whose version moved sends
-nothing, and a response that arrives after it moved is discarded; a `401 revoked` on a grant route runs the census revoke; the grant ends at the
+nothing, a response that arrives after it moved is discarded, and a stored grant keeps its version and counts only
+while that version is current; a `401 revoked` on a grant route runs the census revoke; the grant ends at the
 start of its expiry day without waiting for another change.
 
 ### §16 The anchor check is a dictionary lookup (census#82)
